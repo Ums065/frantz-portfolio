@@ -12,12 +12,29 @@ interface AuthState {
 
 const AuthContext = createContext<AuthState | null>(null)
 
-function readUser(payload: AuthPayload, action: string): User {
-  const user = payload.user
-  if (!user || typeof user.full_name !== 'string' || typeof user.email !== 'string') {
-    throw new Error(`Unexpected ${action} response from the server.`)
+function isUser(value: unknown): value is User {
+  return !!value
+    && typeof value === 'object'
+    && typeof (value as User).full_name === 'string'
+    && typeof (value as User).email === 'string'
+}
+
+async function fetchCurrentUser(): Promise<User | null> {
+  const payload = await api.get<AuthPayload>('auth/me').catch(() => null)
+  return payload && isUser(payload.user) ? payload.user : null
+}
+
+async function readUser(payload: AuthPayload, action: string): Promise<User> {
+  if (isUser(payload.user)) {
+    return payload.user
   }
-  return user
+
+  const fallback = await fetchCurrentUser()
+  if (fallback) {
+    return fallback
+  }
+
+  throw new Error(`Unexpected ${action} response from the server.`)
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -26,7 +43,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refresh = async () => {
     const d = await api.get<AuthPayload>('auth/me')
-    setUser(d.user ?? null)
+    setUser(isUser(d.user) ? d.user : null)
   }
 
   useEffect(() => {
@@ -37,21 +54,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password: string) => {
     const d = await api.post<AuthPayload>('auth/login', { email, password })
-    const nextUser = readUser(d, 'login')
+    const nextUser = await readUser(d, 'login')
     setUser(nextUser)
     return nextUser
   }
 
   const register = async (full_name: string, email: string, password: string) => {
     const d = await api.post<AuthPayload>('auth/register', { full_name, email, password })
-    const nextUser = readUser(d, 'registration')
+    const nextUser = await readUser(d, 'registration')
     setUser(nextUser)
     return nextUser
   }
 
   const logout = async () => {
-    await api.post('auth/logout', {})
-    setUser(null)
+    try {
+      await api.post('auth/logout', {})
+    } finally {
+      await refresh().catch(() => setUser(null))
+    }
   }
 
   return (

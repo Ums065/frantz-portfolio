@@ -107,9 +107,9 @@ export function useSiteInteractions({ onAuth, onRequest, onSubscribe }: Handlers
 
     /* ---------- Sticky nav + active link ---------- */
     const nav = document.querySelector('.nav')
-    const links = [...document.querySelectorAll<HTMLAnchorElement>('.nav__links a')]
+    const sectionLinks = [...document.querySelectorAll<HTMLAnchorElement>('.nav__links a[data-nav-section]')]
     const indicator = document.querySelector<HTMLElement>('.nav__indicator')
-    const sections = links
+    const sections = sectionLinks
       .map((a) => {
         const href = a.getAttribute('href') || ''
         // Only in-page hash links map to sections; router links (/about) are skipped.
@@ -140,12 +140,13 @@ export function useSiteInteractions({ onAuth, onRequest, onSubscribe }: Handlers
         if (top <= threshold && top > bestTop) { bestTop = top; current = s }
       }
       let activeLink: HTMLAnchorElement | undefined
-      links.forEach((a) => {
+      sectionLinks.forEach((a) => {
         const isActive = !!current && a.getAttribute('href') === '#' + current.id
         a.classList.toggle('active', isActive)
         if (isActive) activeLink = a
       })
-      updateIndicator(activeLink)
+      const routeActive = nav?.querySelector<HTMLAnchorElement>('.nav__links a.active') || undefined
+      updateIndicator(activeLink ?? routeActive)
     }
     window.addEventListener('scroll', onScroll, { passive: true })
     window.addEventListener('resize', onScroll)

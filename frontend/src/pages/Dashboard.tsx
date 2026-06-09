@@ -28,10 +28,22 @@ interface DashboardData {
 
 const isAdmin = (role?: string) => ['admin', 'super_admin', 'editor'].includes(role || '')
 
+const dashboardTabs = [
+  { key: 'overview', label: 'Overview' },
+  { key: 'requests', label: 'My Requests' },
+  { key: 'orders', label: 'My Orders' },
+  { key: 'rsvps', label: 'My RSVPs' },
+  { key: 'saved', label: 'Saved Items' },
+  { key: 'perks', label: 'Perks & Alerts' },
+  { key: 'settings', label: 'Settings' },
+] as const
+
+type DashboardTab = typeof dashboardTabs[number]['key']
+
 export default function Dashboard() {
   const { user, loading, logout, refresh } = useAuth()
   const [data, setData] = useState<DashboardData | null>(null)
-  const [tab, setTab] = useState<'overview' | 'requests' | 'orders' | 'rsvps' | 'saved' | 'perks' | 'settings'>('overview')
+  const [tab, setTab] = useState<DashboardTab>('overview')
   const [name, setName] = useState('')
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
@@ -46,6 +58,7 @@ export default function Dashboard() {
   const fullName = user?.full_name || ''
   const avatarInitial = fullName.trim().charAt(0).toUpperCase() || 'U'
   const displayName = data?.user?.full_name || fullName
+  const activeTabLabel = dashboardTabs.find((item) => item.key === tab)?.label || 'Overview'
 
   useEffect(() => {
     if (!user || isAdmin(user.role)) return
@@ -126,7 +139,57 @@ export default function Dashboard() {
   }
 
   return (
-    <section className="profile-page">
+    <section className="profile-page profile-page--dashboard">
+      <div className="dashboard-hero glass">
+        <div className="dashboard-hero__copy">
+          <div>
+            <p className="eyebrow">Member Dashboard</p>
+            <h1 className="gold-text">Welcome Back</h1>
+            <p className="dashboard-hero__lead">
+              A focused workspace for requests, orders, RSVPs, saved items, and account settings.
+            </p>
+            <div className="dashboard-hero__chips">
+              <span className="dashboard-hero__chip">Active page: Dashboard</span>
+              <span className="dashboard-hero__chip">Active tab: {activeTabLabel}</span>
+              <span className="dashboard-hero__chip">Saved items: {savedTotal}</span>
+            </div>
+          </div>
+        </div>
+        <div className="dashboard-hero__panel">
+          <div className="dashboard-hero__panel-top">
+            <div className="dashboard-hero__avatar" aria-hidden="true">{avatarInitial}</div>
+            <div className="dashboard-hero__panel-copy">
+              <span>Current account</span>
+              <strong>{displayName || user.email}</strong>
+              <p>{user.email}</p>
+            </div>
+          </div>
+          <div className="dashboard-hero__panel-grid">
+            <div>
+              <span>Member ID</span>
+              <strong>{memberId}</strong>
+            </div>
+            <div>
+              <span>Role</span>
+              <strong>{user.role}</strong>
+            </div>
+            <div>
+              <span>Saved</span>
+              <strong>{savedTotal}</strong>
+            </div>
+            <div>
+              <span>Access</span>
+              <strong>{isAdmin(user.role) ? 'Admin' : 'Member'}</strong>
+            </div>
+          </div>
+          <div className="dashboard-hero__actions">
+            <Link className="btn btn--sm btn--solid" to="/store">Shop</Link>
+            <Link className="btn btn--sm" to="/community">Community</Link>
+            <Link className="btn btn--sm" to="/profile">Profile</Link>
+          </div>
+        </div>
+      </div>
+
       <div className="dashboard-shell">
         <aside className="dashboard-side glass">
           <div className="dashboard-side__head">
@@ -136,13 +199,21 @@ export default function Dashboard() {
               <p>{user.email}</p>
             </div>
           </div>
-          <button className={tab === 'overview' ? 'dashboard-nav active' : 'dashboard-nav'} onClick={() => setTab('overview')}>Overview</button>
-          <button className={tab === 'requests' ? 'dashboard-nav active' : 'dashboard-nav'} onClick={() => setTab('requests')}>My Requests</button>
-          <button className={tab === 'orders' ? 'dashboard-nav active' : 'dashboard-nav'} onClick={() => setTab('orders')}>My Orders</button>
-          <button className={tab === 'rsvps' ? 'dashboard-nav active' : 'dashboard-nav'} onClick={() => setTab('rsvps')}>My RSVPs</button>
-          <button className={tab === 'saved' ? 'dashboard-nav active' : 'dashboard-nav'} onClick={() => setTab('saved')}>Saved Items</button>
-          <button className={tab === 'perks' ? 'dashboard-nav active' : 'dashboard-nav'} onClick={() => setTab('perks')}>Perks & Alerts</button>
-          <button className={tab === 'settings' ? 'dashboard-nav active' : 'dashboard-nav'} onClick={() => setTab('settings')}>Settings</button>
+          <div className="dashboard-side__status">
+            <span>Active tab</span>
+            <strong>{activeTabLabel}</strong>
+          </div>
+          {dashboardTabs.map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              className={tab === item.key ? 'dashboard-nav active' : 'dashboard-nav'}
+              aria-pressed={tab === item.key}
+              onClick={() => setTab(item.key)}
+            >
+              {item.label}
+            </button>
+          ))}
           <div className="dashboard-side__foot">
             <Link className="btn btn--sm btn--solid" to="/store">Shop</Link>
             <Link className="btn btn--sm" to="/community">Community</Link>

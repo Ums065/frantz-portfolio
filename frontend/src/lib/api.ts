@@ -4,6 +4,7 @@
 
 const BASE = import.meta.env.VITE_API_BASE ?? 'api'
 let csrfToken = ''
+let csrfBootstrap: Promise<void> | null = null
 
 export interface ApiError {
   error: string
@@ -19,7 +20,22 @@ function storeCsrfToken(data: unknown) {
   }
 }
 
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+async function bootstrapCsrfToken(): Promise<void> {
+  if (!csrfBootstrap) {
+    csrfBootstrap = (async () => {
+      const res = await fetch(`${BASE}/auth/me`, {
+        credentials: 'include',
+      })
+      const data = await res.json().catch(() => ({}))
+      storeCsrfToken(data)
+    })().finally(() => {
+      csrfBootstrap = null
+    })
+  }
+  return csrfBootstrap
+}
+
+async function request<T>(path: string, options: RequestInit = {}, retry = true): Promise<T> {
   const res = await fetch(`${BASE}/${path}`, {
     credentials: 'include',
     headers: {
@@ -31,13 +47,17 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   })
   const data = await res.json().catch(() => ({}))
   storeCsrfToken(data)
+  if (res.status === 419 && retry && path !== 'auth/me') {
+    await bootstrapCsrfToken()
+    return request<T>(path, options, false)
+  }
   if (!res.ok) {
     throw new Error((data as ApiError).error || `Request failed (${res.status})`)
   }
   return data as T
 }
 
-async function upload<T>(path: string, file: File): Promise<T> {
+async function upload<T>(path: string, file: File, retry = true): Promise<T> {
   const fd = new FormData()
   fd.append('file', file)
   // No Content-Type header — the browser sets the multipart boundary.
@@ -49,6 +69,10 @@ async function upload<T>(path: string, file: File): Promise<T> {
   })
   const data = await res.json().catch(() => ({}))
   storeCsrfToken(data)
+  if (res.status === 419 && retry) {
+    await bootstrapCsrfToken()
+    return upload<T>(path, file, false)
+  }
   if (!res.ok) throw new Error((data as ApiError).error || `Upload failed (${res.status})`)
   return data as T
 }

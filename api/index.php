@@ -45,14 +45,14 @@ try {
                 'INSERT INTO users (full_name, email, password_hash) VALUES (?, ?, ?)'
             );
             $stmt->execute([$name, $email, password_hash($pass, PASSWORD_DEFAULT)]);
-            login_user([
+            $user = login_user([
                 'id' => (int) db()->lastInsertId(),
                 'full_name' => $name,
                 'email' => $email,
                 'role' => 'member',
             ]);
 
-            json(['user' => current_user(), 'message' => 'Welcome to the legacy.', 'csrfToken' => csrf_token()], 201);
+            json(['user' => $user, 'message' => 'Welcome to the legacy.', 'csrfToken' => csrf_token()], 201);
         }
 
         case $key === 'POST auth/login': {

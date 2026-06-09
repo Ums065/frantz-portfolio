@@ -1,10 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, NavLink } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { SocialLinks } from './SocialIcons'
 
 const logo = '/assets/fc-logo.png'
 const isAdmin = (role?: string) => ['admin', 'super_admin', 'editor'].includes(role || '')
+
+type NavItem =
+  | { label: string; href: string; kind: 'route'; end?: boolean }
+  | { label: string; href: string; kind: 'anchor' }
 
 /* Shared top chrome: scroll progress bar, fixed nav, vertical social rail,
    and the mobile menu. Used on every page (Home, About, Awards).
@@ -19,18 +23,21 @@ export default function SiteHeader({ home = false }: { home?: boolean }) {
   const initial = fullName.trim().charAt(0).toUpperCase() || 'U'
   const sec = (id: string) => (home ? `#${id}` : `/#${id}`)
 
-  const navLinks: Array<[string, string, boolean]> = [
-    ['Home', home ? '#home' : '/', !home],
-    ['About', '/about', true],
-    ['Projects', '/projects', true],
-    ['Awards', '/awards', true],
-    ['Speaking', sec('speaking'), false],
-    ['Events', '/events', true],
-    ['Media', '/media', true],
-    ['Community', '/community', true],
-    ['Merch', '/store', true],
-    ['News', '/blog', true],
-    ['Contact', sec('contact'), false],
+  const navLinks: NavItem[] = [
+    home
+      ? { label: 'Home', href: '#home', kind: 'anchor' }
+      : { label: 'Home', href: '/', kind: 'route', end: true },
+    { label: 'About', href: '/about', kind: 'route' },
+    { label: 'Projects', href: '/projects', kind: 'route' },
+    { label: 'Awards', href: '/awards', kind: 'route' },
+    { label: 'Speaking', href: sec('speaking'), kind: 'anchor' },
+    { label: 'Events', href: '/events', kind: 'route' },
+    { label: 'Media', href: '/media', kind: 'route' },
+    { label: 'Community', href: '/community', kind: 'route' },
+    ...(user ? [{ label: 'Dashboard', href: '/dashboard', kind: 'route' as const }] : []),
+    { label: 'Merch', href: '/store', kind: 'route' },
+    { label: 'News', href: '/blog', kind: 'route' },
+    { label: 'Contact', href: sec('contact'), kind: 'anchor' },
   ]
 
   useEffect(() => {
@@ -63,11 +70,18 @@ export default function SiteHeader({ home = false }: { home?: boolean }) {
         <div className="nav__inner">
           <Link to="/" className="logo-mono" aria-label="Frantz Coutard home"><img src={logo} alt="FC monogram" /></Link>
           <nav className="nav__links">
-            {navLinks.map(([label, href, isRoute]) =>
-              isRoute ? (
-                <Link key={label} to={href} data-nav>{label}</Link>
+            {navLinks.map((item) =>
+              item.kind === 'route' ? (
+                <NavLink
+                  key={item.label}
+                  to={item.href}
+                  end={item.end}
+                  className={({ isActive }) => (isActive ? 'active' : undefined)}
+                >
+                  {item.label}
+                </NavLink>
               ) : (
-                <a key={label} href={href}>{label}</a>
+                <a key={item.label} href={item.href} data-nav-section>{item.label}</a>
               ),
             )}
             <span className="nav__indicator" aria-hidden="true" />
@@ -122,9 +136,20 @@ export default function SiteHeader({ home = false }: { home?: boolean }) {
       <div className="mobile-menu">
         <button className="close-m" aria-label="Close menu"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth={2}><path d="M6 6l12 12M18 6L6 18" /></svg></button>
         <div className="m-scroll">
-          {navLinks.map(([label, href, isRoute]) => (
-            isRoute ? <Link key={label} to={href}>{label}</Link> : <a key={label} href={href}>{label}</a>
-          ))}
+          {navLinks.map((item) =>
+            item.kind === 'route' ? (
+              <NavLink
+                key={item.label}
+                to={item.href}
+                end={item.end}
+                className={({ isActive }) => (isActive ? 'active' : undefined)}
+              >
+                {item.label}
+              </NavLink>
+            ) : (
+              <a key={item.label} href={item.href} data-nav-section>{item.label}</a>
+            ),
+          )}
           <div className="mcta">
             {user ? (
               <>
