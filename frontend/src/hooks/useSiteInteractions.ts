@@ -258,29 +258,33 @@ export function useSiteInteractions({ onAuth, onRequest, onSubscribe }: Handlers
     ;(window as unknown as { fcToast: (m: string) => void }).fcToast = showToast
 
     /* ---------- Wire data-* buttons back to React ---------- */
-    const authBtns = [...document.querySelectorAll<HTMLElement>('[data-auth]')]
-    const authHandlers = authBtns.map((b) => {
-      const fn = (e: Event) => { e.preventDefault(); onAuth(b.getAttribute('data-auth') as 'login' | 'register') }
-      b.addEventListener('click', fn)
-      return [b, fn] as const
-    })
-    const reqBtns = [...document.querySelectorAll<HTMLElement>('[data-request]')]
-    const reqHandlers = reqBtns.map((b) => {
-      const fn = (e: Event) => { e.preventDefault(); onRequest(b.getAttribute('data-request') || 'Request') }
-      b.addEventListener('click', fn)
-      return [b, fn] as const
-    })
-    const toastBtns = [...document.querySelectorAll<HTMLElement>('[data-toast]')]
-    const toastHandlers = toastBtns.map((b) => {
-      const fn = (e: Event) => { e.preventDefault(); showToast(b.getAttribute('data-toast') || '') }
-      b.addEventListener('click', fn)
-      return [b, fn] as const
-    })
-    cleanups.push(() => {
-      authHandlers.forEach(([b, fn]) => b.removeEventListener('click', fn))
-      reqHandlers.forEach(([b, fn]) => b.removeEventListener('click', fn))
-      toastHandlers.forEach(([b, fn]) => b.removeEventListener('click', fn))
-    })
+    const onDocumentClick = (e: MouseEvent) => {
+      const target = e.target
+      if (!(target instanceof Element)) return
+
+      const authEl = target.closest<HTMLElement>('[data-auth]')
+      if (authEl) {
+        e.preventDefault()
+        const which = authEl.getAttribute('data-auth')
+        if (which === 'login' || which === 'register') onAuth(which)
+        return
+      }
+
+      const reqEl = target.closest<HTMLElement>('[data-request]')
+      if (reqEl) {
+        e.preventDefault()
+        onRequest(reqEl.getAttribute('data-request') || 'Request')
+        return
+      }
+
+      const toastEl = target.closest<HTMLElement>('[data-toast]')
+      if (toastEl) {
+        e.preventDefault()
+        showToast(toastEl.getAttribute('data-toast') || '')
+      }
+    }
+    document.addEventListener('click', onDocumentClick)
+    cleanups.push(() => document.removeEventListener('click', onDocumentClick))
 
     /* ---------- Subscribe form ---------- */
     const subForm = document.getElementById('subscribe-form') as HTMLFormElement | null
