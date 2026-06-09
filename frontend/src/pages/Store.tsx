@@ -1,120 +1,33 @@
 import { Link, NavLink } from 'react-router-dom'
 import { useSeo } from '../hooks/useSeo'
+import { merchCatalogItems } from '../lib/merch'
 import '../styles/store.css'
 
 const LOGO = '/assets/fc-logo.png'
 
-interface Product {
-  category: string
-  name: string
-  priceLabel: string
-  description: string
-  tag?: string
-}
+function MerchCard({ title, image, category, description, status }: typeof merchCatalogItems[number]) {
+  const locked = status !== 'live'
 
-const PRODUCTS: Product[] = [
-  {
-    category: 'Hoodies',
-    name: 'Founder Hoodie - Legacy Black',
-    priceLabel: '$68',
-    description: 'Heavyweight fleece hoodie with the FC emblem and "From Community to Legacy" sleeve detail.',
-    tag: 'Bestseller',
-  },
-  {
-    category: 'Hoodies',
-    name: 'From Community to Legacy Hoodie',
-    priceLabel: '$72',
-    description: 'Premium brushed cotton hoodie with a gold tagline print. Built as a statement piece.',
-  },
-  {
-    category: 'T-Shirts',
-    name: 'Premium Tee - FC Emblem',
-    priceLabel: '$34',
-    description: 'Soft combed cotton tee with a gold FC emblem on the chest. Clean, minimal, everyday wear.',
-  },
-  {
-    category: 'T-Shirts',
-    name: 'Technology For Good Tee',
-    priceLabel: '$32',
-    description: 'A direct reminder of the mission behind the brand - practical, simple, and purpose driven.',
-  },
-  {
-    category: 'T-Shirts',
-    name: 'Visionary Tee',
-    priceLabel: '$30',
-    description: 'Minimal gold-on-black treatment for a sharper look that still stays within the brand palette.',
-  },
-  {
-    category: 'Caps',
-    name: 'Signature Cap - Gold FC',
-    priceLabel: 'TBA',
-    description: 'Structured cap with embroidered monogram and an adjustable strap. Releasing after checkout is ready.',
-    tag: 'Coming Soon',
-  },
-  {
-    category: 'Caps',
-    name: 'Community Builder Cap',
-    priceLabel: 'TBA',
-    description: 'Low-profile cap with tonal embroidery. Locked until the merch flow is live.',
-    tag: 'Coming Soon',
-  },
-  {
-    category: 'Books',
-    name: 'From Nothing to Something - Hardcover',
-    priceLabel: 'TBA',
-    description: 'Signed first edition hardcover focused on the story and blueprint behind the mission.',
-    tag: 'Signed',
-  },
-  {
-    category: 'Books',
-    name: 'The Legacy Blueprint - eBook',
-    priceLabel: 'TBA',
-    description: 'Digital edition planned for launch after the payment integration is complete.',
-    tag: 'Digital',
-  },
-  {
-    category: 'Collectibles',
-    name: 'Limited Edition FC Lapel Pin',
-    priceLabel: 'TBA',
-    description: 'Gold and green enamel pin reserved for a future drop. No purchase actions are enabled here.',
-    tag: 'Limited',
-  },
-  {
-    category: 'Collectibles',
-    name: 'Signed Founders Print',
-    priceLabel: 'TBA',
-    description: 'Museum-quality print for the wall, held for a later release.',
-    tag: 'Limited',
-  },
-]
-
-const FEATURED_LIMIT = 5
-const FEATURED_PRODUCTS = PRODUCTS.slice(0, FEATURED_LIMIT)
-const COMING_SOON_PRODUCTS = PRODUCTS.slice(FEATURED_LIMIT)
-
-const PhLogo = ({ cls = 'ph-logo' }: { cls?: string }) => (
-  <span className={cls}>
-    <img src={LOGO} alt="" />
-  </span>
-)
-
-function ProductCard({ product, locked }: { product: Product; locked?: boolean }) {
   return (
     <article className={`card${locked ? ' locked' : ''}`}>
-      <span className="card__badge">{locked ? 'Coming Soon' : product.tag || 'Preview'}</span>
+      <span className="card__badge">{locked ? 'Coming Soon' : 'Preview'}</span>
       <div className="card__img">
-        <PhLogo />
-        <div className="card__overlay" aria-hidden="true">
-          <span>{locked ? 'Coming Soon' : 'Preview Only'}</span>
-        </div>
+        <img className="card__photo" src={image} alt={title} />
+        {locked && (
+          <div className="card__overlay" aria-hidden="true">
+            <span>Coming Soon</span>
+          </div>
+        )}
       </div>
       <div className="card__body">
-        <div className="card__cat">{product.category}</div>
-        <h3 className="card__name">{product.name}</h3>
-        <p className="card__desc">{product.description}</p>
+        <div className="card__cat">{category}</div>
+        <h3 className="card__name">{title}</h3>
+        <p className="card__desc">{description}</p>
         <div className="card__foot">
-          <span className="card__price">{product.priceLabel}</span>
-          <span className="card__meta">{locked ? 'Locked until checkout is ready' : 'Display only - no cart'}</span>
+          <span className="card__status">
+            {locked ? 'Locked until launch' : 'Synced from the home collection'}
+          </span>
+          <span className="card__meta">{locked ? 'Future drop' : 'Featured now'}</span>
         </div>
       </div>
     </article>
@@ -123,9 +36,12 @@ function ProductCard({ product, locked }: { product: Product; locked?: boolean }
 
 export default function Store() {
   useSeo({
-    title: 'Merch Preview',
-    description: 'Preview-only merch page with five visible products and the rest marked coming soon until checkout is live.',
+    title: 'Merch Collection',
+    description: 'Preview-only merch collection synced from the home page. Five live cards are visible and the rest are marked coming soon.',
   })
+
+  const liveItems = merchCatalogItems.filter((item) => item.status === 'live')
+  const comingSoonItems = merchCatalogItems.filter((item) => item.status !== 'live')
 
   return (
     <div className="store-page merch-preview">
@@ -152,21 +68,21 @@ export default function Store() {
 
       <section className="shop-hero">
         <div className="wrap">
-          <div className="eyebrow">Merch preview only</div>
+          <div className="eyebrow">Synced merch catalog</div>
           <h1>The Collection</h1>
-          <p>Five products are visible now. The rest stay in Coming Soon until payment integration is live.</p>
+          <p>The store reads from the same collection data used on the home page. Five items are live in preview and the rest stay locked until checkout is ready.</p>
           <div className="hero-stats">
             <div className="hero-stat">
-              <strong>{FEATURED_PRODUCTS.length}</strong>
-              <span>Visible products</span>
+              <strong>{liveItems.length}</strong>
+              <span>Visible items</span>
             </div>
             <div className="hero-stat">
-              <strong>{COMING_SOON_PRODUCTS.length}</strong>
+              <strong>{comingSoonItems.length}</strong>
               <span>Coming soon</span>
             </div>
             <div className="hero-stat">
               <strong>No cart</strong>
-              <span>No checkout yet</span>
+              <span>No payment flow yet</span>
             </div>
           </div>
         </div>
@@ -177,14 +93,14 @@ export default function Store() {
           <div className="section__head">
             <div>
               <span className="section__eyebrow">Featured preview</span>
-              <h2>5 products only</h2>
+              <h2>Home collection items</h2>
             </div>
-            <p>These cards are display-only. There is no add to cart, no quick buy, and no payment flow on this page.</p>
+            <p>These are the same collection cards shown on the home page. They are display-only and cannot be added to a cart.</p>
           </div>
 
           <div className="grid">
-            {FEATURED_PRODUCTS.map((product) => (
-              <ProductCard key={product.name} product={product} />
+            {liveItems.map((item) => (
+              <MerchCard key={item.id} {...item} />
             ))}
           </div>
         </section>
@@ -193,14 +109,14 @@ export default function Store() {
           <div className="section__head">
             <div>
               <span className="section__eyebrow">Coming soon</span>
-              <h2>Rest of the collection</h2>
+              <h2>Future merch drops</h2>
             </div>
-            <p>Everything below is locked until we finish the payment integration and release the merch flow.</p>
+            <p>These products are part of the catalog, but they stay locked until the payment integration and purchase flow are live.</p>
           </div>
 
           <div className="grid">
-            {COMING_SOON_PRODUCTS.map((product) => (
-              <ProductCard key={product.name} product={product} locked />
+            {comingSoonItems.map((item) => (
+              <MerchCard key={item.id} {...item} />
             ))}
           </div>
         </section>
@@ -208,10 +124,9 @@ export default function Store() {
         <section className="store-note">
           <div>
             <span className="section__eyebrow">Important</span>
-            <h2>Purchase flow paused</h2>
+            <h2>Preview mode only</h2>
             <p>
-              Nothing on this page can be added to cart or checked out. Once payment is ready, we can wire the merch
-              flow back in without changing the collection structure.
+              The merch catalog is synced across the home and store pages. No add to cart, checkout, or payment actions are available until we wire that in later.
             </p>
           </div>
           <div className="note-actions">

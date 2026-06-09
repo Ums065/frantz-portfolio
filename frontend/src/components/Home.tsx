@@ -6,6 +6,7 @@ import { SocialIcon } from './SocialIcons'
 import { socials } from '../lib/social'
 import { useSeo } from '../hooks/useSeo'
 import { platforms } from '../lib/platforms'
+import { merchPreviewItems } from '../lib/merch'
 import PlatformCard from './PlatformCard'
 
 const logo = '/assets/fc-logo.png'
@@ -22,8 +23,6 @@ const awardSenate = '/assets/award-senate-medal.png'
 const awardCounty = '/assets/award-county-medal.png'
 const awardBusiness = '/assets/award-business-medal.png'
 const gallerySpeaking = '/assets/gallery-speaking-stage.png'
-const merchHoodie = '/assets/merch-hoodie.png'
-const merchTee = '/assets/merch-tee.png'
 const merchCap = '/assets/merch-cap.png'
 const merchCollectible = '/assets/merch-collectible.png'
 
@@ -124,14 +123,6 @@ const galleryItems = [
   { cls: 'cell', tag: 'Press', cap: 'Premium monogram art direction', image: awardBusiness },
   { cls: 'cell wide', tag: 'Community', cap: 'Gold-and-green movement visual', image: abstractNetwork },
 ]
-
-const merchItems = [
-  ['Founder Hoodies', merchHoodie],
-  ['Premium T-Shirts', merchTee],
-  ['Signature Caps', merchCap],
-  ['Books & Resources', signatureWordmark],
-  ['Limited Edition Collectibles', merchCollectible],
-] as const
 
 const partnerItems = [
   { name: 'TrendCatch Network', image: projectTrendcatch },
@@ -541,17 +532,17 @@ export default function Home() {
       <section className="block" id="merch" data-screen-label="Collection">
         <div className="wrap">
           <div className="block__head reveal">
-            <div className="section-title"><span className="ln l" /><h2 className="gold-text">Frantz Coutard Collection</h2><span className="ln r" /></div>
+          <div className="section-title"><span className="ln l" /><h2 className="gold-text">Frantz Coutard Collection</h2><span className="ln r" /></div>
             <p className="sub">Premium merchandise. Purpose driven.</p>
           </div>
           <div className="merch-grid reveal">
-            {merchItems.map(([title, image]) => (
-              <Link className="glass merch" to="/store" key={title}>
+            {merchPreviewItems.map((item) => (
+              <Link className="glass merch" to="/store" key={item.id}>
                 <div className="merch__img">
-                  <img src={image} alt={title} />
+                  <img src={item.image} alt={item.title} />
                 </div>
                 <div className="merch__body">
-                  <h4>{title}</h4>
+                  <h4>{item.title}</h4>
                   <div className="price">Shop Now</div>
                 </div>
               </Link>
