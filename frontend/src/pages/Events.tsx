@@ -33,9 +33,13 @@ export default function Events() {
 
   useEffect(() => {
     window.scrollTo(0, 0)
-    api.get<{ events: EventItem[] }>('events').then((d) => setEvents(d.events)).catch(() => {})
+    api.get<{ events: EventItem[] }>('events')
+      .then((d) => setEvents(Array.isArray(d.events) ? d.events : []))
+      .catch(() => setEvents([]))
     setSavedEvents(loadSavedItems('event').map((item) => item.id))
   }, [])
+
+  const safeEvents = Array.isArray(events) ? events : []
 
   useEffect(() => {
     if (!activeEvent) return
@@ -81,8 +85,8 @@ export default function Events() {
     }
   }
 
-  const upcoming = events.filter((e) => !e.is_past)
-  const past = events.filter((e) => e.is_past)
+  const upcoming = safeEvents.filter((e) => !e.is_past)
+  const past = safeEvents.filter((e) => e.is_past)
 
   const Row = (e: EventItem) => {
     const saved = savedEvents.includes(String(e.id))

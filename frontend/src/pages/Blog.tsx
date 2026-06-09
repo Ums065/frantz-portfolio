@@ -11,13 +11,17 @@ export default function Blog() {
   const [posts, setPosts] = useState<Post[]>([])
   const [savedArticles, setSavedArticles] = useState<string[]>([])
 
-  useSeo({ title: 'Blog & News', description: 'Insights from Frantz Coutard on technology, entrepreneurship, and community â€” plus news shaping local commerce.' })
+  useSeo({ title: 'Blog & News', description: 'Insights from Frantz Coutard on technology, entrepreneurship, and community - plus news shaping local commerce.' })
 
   useEffect(() => {
     window.scrollTo(0, 0)
-    api.get<{ posts: Post[] }>('posts').then((d) => setPosts(d.posts)).catch(() => {})
+    api.get<{ posts: Post[] }>('posts')
+      .then((d) => setPosts(Array.isArray(d.posts) ? d.posts : []))
+      .catch(() => setPosts([]))
     setSavedArticles(loadSavedItems('article').map((item) => item.id))
   }, [])
+
+  const safePosts = Array.isArray(posts) ? posts : []
 
   const toggleArticle = (post: Post) => {
     const next = toggleSavedItem('article', {
@@ -37,7 +41,7 @@ export default function Blog() {
           <div className="eyebrow reveal in">Blog, News &amp; Articles</div>
           <h1 className="page-hero__title gold-text reveal in" style={{ margin: '14px auto 10px' }}>Insights &amp; Stories</h1>
           <p className="page-hero__lead reveal in d1" style={{ margin: '0 auto' }}>
-            Perspectives from Frantz on technology, entrepreneurship, and community â€” plus news that shapes local commerce.
+            Perspectives from Frantz on technology, entrepreneurship, and community - plus news that shapes local commerce.
           </p>
           <div className="page-hero__chips reveal in d2" style={{ justifyContent: 'center', marginTop: 18 }}>
             <span className="chip">{savedArticles.length} saved</span>
@@ -50,7 +54,7 @@ export default function Blog() {
       <section className="block" style={{ paddingTop: 20 }}>
         <div className="wrap">
           <div className="blog-list-grid">
-            {posts.map((p) => {
+            {safePosts.map((p) => {
               const saved = savedArticles.includes(String(p.id))
               return (
                 <article className="glass blog-card reveal" key={p.id}>
@@ -75,7 +79,7 @@ export default function Blog() {
               )
             })}
           </div>
-          {posts.length === 0 && <p style={{ textAlign: 'center', color: 'var(--muted)' }}>No articles yet â€” check back soon.</p>}
+          {safePosts.length === 0 && <p style={{ textAlign: 'center', color: 'var(--muted)' }}>No articles yet - check back soon.</p>}
         </div>
       </section>
     </main>

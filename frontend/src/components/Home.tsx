@@ -155,12 +155,18 @@ export default function Home() {
   useSeo({ title: '', description: 'Founder & CEO of TrendCatch Network and President of TrendCatch Gives Back Inc. Building technology that connects businesses, communities, and opportunity.' })
 
   useEffect(() => {
-    api.get<{ events: EventItem[] }>('events').then((d) => setEvents(d.events)).catch(() => {})
-    api.get<{ posts: Post[] }>('posts').then((d) => setPosts(d.posts)).catch(() => {})
+    api.get<{ events: EventItem[] }>('events')
+      .then((d) => setEvents(Array.isArray(d.events) ? d.events : []))
+      .catch(() => setEvents([]))
+    api.get<{ posts: Post[] }>('posts')
+      .then((d) => setPosts(Array.isArray(d.posts) ? d.posts : []))
+      .catch(() => setPosts([]))
   }, [])
 
-  const featured = posts.find((p) => p.is_featured) || posts[0]
-  const rest = posts.filter((p) => p !== featured).slice(0, 2)
+  const safeEvents = Array.isArray(events) ? events : []
+  const safePosts = Array.isArray(posts) ? posts : []
+  const featured = safePosts.find((p) => p.is_featured) || safePosts[0]
+  const rest = safePosts.filter((p) => p !== featured).slice(0, 2)
 
   return (
     <>
@@ -344,7 +350,7 @@ export default function Home() {
               <h3 className="gold-text">Upcoming Events</h3>
               <div className="tag-line">Where to find Frantz next</div>
               <div className="events-list" style={{ flexGrow: 1 }}>
-                {events.filter((e) => !e.is_past).map((e) => (
+                {safeEvents.filter((e) => !e.is_past).map((e) => (
                   <div className="event" key={e.id}>
                     <div className="date"><div className="m">{monthAbbr(e.event_date)}</div><div className="d">{dayNum(e.event_date)}</div></div>
                     <div><h4>{e.title}</h4><div className="loc">{e.location}</div><div className="role">{e.role}</div></div>

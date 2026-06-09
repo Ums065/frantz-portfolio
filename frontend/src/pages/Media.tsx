@@ -45,12 +45,19 @@ export default function Media() {
 
   useEffect(() => {
     window.scrollTo(0, 0)
-    api.get<{ media: MediaRow[] }>('media').then((d) => setMedia(d.media)).catch(() => setMedia([]))
-    api.get<{ testimonials: TestimonialRow[] }>('testimonials').then((d) => setTestimonials(d.testimonials)).catch(() => setTestimonials([]))
+    api.get<{ media: MediaRow[] }>('media')
+      .then((d) => setMedia(Array.isArray(d.media) ? d.media : []))
+      .catch(() => setMedia([]))
+    api.get<{ testimonials: TestimonialRow[] }>('testimonials')
+      .then((d) => setTestimonials(Array.isArray(d.testimonials) ? d.testimonials : []))
+      .catch(() => setTestimonials([]))
   }, [])
 
-  const items = media.length
-    ? media
+  const safeMedia = Array.isArray(media) ? media : []
+  const safeTestimonials = Array.isArray(testimonials) ? testimonials : []
+
+  const items = safeMedia.length
+    ? safeMedia
     : mediaShowcase.map((item, index) => ({
         id: index + 1,
         title: item.title,
@@ -64,8 +71,8 @@ export default function Media() {
         sort_order: index + 1,
       }))
 
-  const quotes = testimonials.length
-    ? testimonials
+  const quotes = safeTestimonials.length
+    ? safeTestimonials
     : testimonialFallbacks.map((item, index) => ({
         id: index + 1,
         quote: item.quote,
