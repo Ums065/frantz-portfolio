@@ -43,13 +43,16 @@ export default function Dashboard() {
 
   const memberId = useMemo(() => (user ? `FC-${String(user.id).padStart(4, '0')}` : 'FC-0000'), [user])
   const savedTotal = savedArticles.length + savedEvents.length
+  const fullName = user?.full_name || ''
+  const avatarInitial = fullName.trim().charAt(0).toUpperCase() || 'U'
+  const displayName = data?.user?.full_name || fullName
 
   useEffect(() => {
     if (!user || isAdmin(user.role)) return
     api.get<DashboardData>('user/dashboard')
       .then((res) => {
         setData(res)
-        setName(res.user.full_name)
+        setName(res.user?.full_name || '')
       })
       .catch((err) => setError(err instanceof Error ? err.message : 'Could not load dashboard.'))
     setSavedArticles(loadSavedItems('article'))
@@ -127,9 +130,9 @@ export default function Dashboard() {
       <div className="dashboard-shell">
         <aside className="dashboard-side glass">
           <div className="dashboard-side__head">
-            <div className="profile-summary__avatar" aria-hidden="true">{user.full_name.trim().charAt(0).toUpperCase() || 'U'}</div>
+            <div className="profile-summary__avatar" aria-hidden="true">{avatarInitial}</div>
             <div>
-              <h2>{data?.user.full_name || user.full_name}</h2>
+              <h2>{displayName}</h2>
               <p>{user.email}</p>
             </div>
           </div>

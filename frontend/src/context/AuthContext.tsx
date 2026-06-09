@@ -12,13 +12,21 @@ interface AuthState {
 
 const AuthContext = createContext<AuthState | null>(null)
 
+function readUser(payload: AuthPayload, action: string): User {
+  const user = payload.user
+  if (!user || typeof user.full_name !== 'string' || typeof user.email !== 'string') {
+    throw new Error(`Unexpected ${action} response from the server.`)
+  }
+  return user
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
 
   const refresh = async () => {
     const d = await api.get<AuthPayload>('auth/me')
-    setUser(d.user)
+    setUser(d.user ?? null)
   }
 
   useEffect(() => {
@@ -28,15 +36,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const login = async (email: string, password: string) => {
-    const d = await api.post<{ user: User }>('auth/login', { email, password })
-    setUser(d.user)
-    return d.user
+    const d = await api.post<AuthPayload>('auth/login', { email, password })
+    const nextUser = readUser(d, 'login')
+    setUser(nextUser)
+    return nextUser
   }
 
   const register = async (full_name: string, email: string, password: string) => {
-    const d = await api.post<{ user: User }>('auth/register', { full_name, email, password })
-    setUser(d.user)
-    return d.user
+    const d = await api.post<AuthPayload>('auth/register', { full_name, email, password })
+    const nextUser = readUser(d, 'registration')
+    setUser(nextUser)
+    return nextUser
   }
 
   const logout = async () => {

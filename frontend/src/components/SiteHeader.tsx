@@ -15,6 +15,8 @@ export default function SiteHeader({ home = false }: { home?: boolean }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement | null>(null)
   const dashboardHref = user ? (isAdmin(user.role) ? '/admin' : '/dashboard') : '/dashboard'
+  const fullName = user?.full_name || ''
+  const initial = fullName.trim().charAt(0).toUpperCase() || 'U'
   const sec = (id: string) => (home ? `#${id}` : `/#${id}`)
 
   const navLinks: Array<[string, string, boolean]> = [
@@ -81,12 +83,12 @@ export default function SiteHeader({ home = false }: { home?: boolean }) {
                   onClick={() => setMenuOpen((open) => !open)}
                 >
                   <span className="profile-menu__avatar" aria-hidden="true">
-                    {user.full_name.trim().charAt(0).toUpperCase() || 'U'}
+                    {initial}
                   </span>
                 </button>
                 <div className={`profile-menu__dropdown${menuOpen ? ' open' : ''}`}>
                   <div className="profile-menu__meta">
-                    <strong>{user.full_name}</strong>
+                    <strong>{fullName}</strong>
                     <span>{user.email}</span>
                   </div>
                   <Link to={dashboardHref} onClick={closeMenu}>Dashboard</Link>

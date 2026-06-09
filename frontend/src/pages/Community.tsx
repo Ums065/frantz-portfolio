@@ -111,10 +111,10 @@ export default function Community() {
           <div className="community-grid">
             <div className="glass member-card reveal d1">
               <div className="member-card__top">
-                <div className="member-card__seal" aria-hidden="true">{user?.full_name.trim().charAt(0).toUpperCase() || 'U'}</div>
+                <div className="member-card__seal" aria-hidden="true">{(user?.full_name || '').trim().charAt(0).toUpperCase() || 'U'}</div>
                 <div>
                   <span className="member-card__label">Digital Membership Card</span>
-                  <h2>{user ? user.full_name : 'Community Guest'}</h2>
+                  <h2>{user?.full_name || 'Community Guest'}</h2>
                   <p>{user ? user.email : 'Sign in or register to unlock the member dashboard.'}</p>
                 </div>
               </div>

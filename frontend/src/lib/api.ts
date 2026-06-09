@@ -1,8 +1,8 @@
 /* Tiny fetch wrapper around the PHP API.
-   All calls go through /api (Vite proxies it to WAMP Apache,
-   keeping us same-origin so PHP session cookies work). */
+   Use a relative base so it works both at the site root and under a
+   subfolder like /frantz-portfolio/ during local Apache deployment. */
 
-const BASE = import.meta.env.VITE_API_BASE ?? '/api'
+const BASE = import.meta.env.VITE_API_BASE ?? 'api'
 let csrfToken = ''
 
 export interface ApiError {

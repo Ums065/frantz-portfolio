@@ -53,7 +53,8 @@ export function AuthModal({
       const user = mode === 'login'
         ? await login(email, password)
         : await register(name, email, password)
-      setDone(user.full_name.split(' ')[0] || 'Welcome')
+      const firstName = (user.full_name || '').trim().split(/\s+/)[0] || 'Welcome'
+      setDone(firstName)
       setName(''); setEmail(''); setPassword('')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong.')

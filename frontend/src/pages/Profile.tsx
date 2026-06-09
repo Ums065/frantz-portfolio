@@ -29,6 +29,9 @@ export default function Profile() {
     )
   }
 
+  const fullName = user.full_name || ''
+  const initial = fullName.trim().charAt(0).toUpperCase() || 'U'
+
   return (
     <section className="profile-page">
       <div className="profile-card glass">
@@ -36,17 +39,17 @@ export default function Profile() {
         <h1 className="gold-text">Profile</h1>
         <div className="profile-summary">
           <div className="profile-summary__avatar" aria-hidden="true">
-            {user.full_name.trim().charAt(0).toUpperCase() || 'U'}
+            {initial}
           </div>
           <div>
-            <h2>{user.full_name}</h2>
+            <h2>{fullName}</h2>
             <p>{user.email}</p>
           </div>
         </div>
         <div className="profile-grid">
           <div>
             <span>Name</span>
-            <strong>{user.full_name}</strong>
+            <strong>{fullName}</strong>
           </div>
           <div>
             <span>Email</span>
