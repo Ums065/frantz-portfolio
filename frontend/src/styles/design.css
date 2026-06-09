@@ -1448,9 +1448,10 @@ section.block { padding: 96px 0; position: relative; }
 .proj .tag.live { border-color: var(--green-bright); color: var(--green-bright); background: rgba(15,91,58,0.18); }
 
 .stats {
-  padding: 30px 28px;
-  display: grid; grid-template-columns: 1fr 1fr; gap: 26px 22px;
-  align-content: center; align-self: stretch;
+  padding: 22px 22px;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 20px 18px;
+  align-content: start; align-self: start;
+  min-height: 0;
 }
 .stat { display: flex; gap: 14px; align-items: flex-start; }
 .stat .si { width: 34px; height: 34px; flex-shrink: 0; color: var(--gold); }

@@ -16,12 +16,9 @@ export interface Social {
 }
 
 export const socials: Social[] = [
-  { key: 'instagram', label: 'Instagram', handle: '@frantzcoutard', href: '', bg: 'linear-gradient(135deg,#f58529,#dd2a7b,#8134af)', cta: 'Follow' },
-  { key: 'linkedin', label: 'LinkedIn', handle: 'Frantz Coutard', href: '', bg: '#0a66c2', cta: 'Connect' },
-  { key: 'youtube', label: 'YouTube', handle: 'Frantz Coutard', href: '', bg: '#ff0000', cta: 'Subscribe' },
-  { key: 'facebook', label: 'Facebook', handle: 'Frantz Coutard', href: '', bg: '#1877f2', cta: 'Follow' },
-  { key: 'x', label: 'X / Twitter', handle: '@frantzcoutard', href: '', bg: '#000000', cta: 'Follow' },
-  { key: 'tiktok', label: 'TikTok', handle: '@frantzcoutard', href: '', bg: '#000000', cta: 'Follow' },
+  { key: 'instagram', label: 'Instagram', handle: '@sir.coutard', href: 'https://www.instagram.com/sir.coutard/', bg: 'linear-gradient(135deg,#f58529,#dd2a7b,#8134af)', cta: 'Follow' },
+  { key: 'linkedin', label: 'LinkedIn', handle: 'Frantz Coutard', href: 'https://www.linkedin.com/in/frantz-coutard-47271914b/?utm_source=share_via&utm_content=profile&utm_medium=member_ios', bg: '#0a66c2', cta: 'Connect' },
+  { key: 'facebook', label: 'Facebook', handle: 'Frantz Coutard', href: 'https://www.facebook.com/frantz.coutard/', bg: '#1877f2', cta: 'Follow' },
 ]
 
 /* Only platforms with a real URL — used by the header/footer icon rails. */

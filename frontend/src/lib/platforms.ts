@@ -1,5 +1,5 @@
 /* The platform ecosystem Frantz is building - shared by the About page
-   and the Home "What He's Building" highlight section. */
+   and the Home ventures highlight section. */
 
 export interface Platform {
   name: string

@@ -121,25 +121,6 @@ export const projectShowcase: ProjectFeature[] = [
     action: 'Follow future updates',
     href: '/community',
   },
-  {
-    title: 'Sornexium',
-    status: 'In development',
-    summary: 'A legacy platform for preserving identity, memory, and family stories.',
-    detail: 'A future-facing archive concept built to help families protect stories, milestones, and the things that matter most for the next generation.',
-    image: '/assets/project-sornexium.png',
-    highlights: [
-      'Legacy preservation',
-      'Memory archive concept',
-      'Generational storytelling',
-    ],
-    metrics: [
-      { label: 'Focus', value: 'Legacy' },
-      { label: 'Format', value: 'Platform' },
-      { label: 'Status', value: 'Concept' },
-    ],
-    action: 'Follow future updates',
-    href: '/blog',
-  },
 ]
 
 export const mediaShowcase: MediaFeature[] = [

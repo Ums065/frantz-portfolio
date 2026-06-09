@@ -239,17 +239,21 @@
 
 /* ---- Recognition Journey timeline ---- */
 .timeline {
-  display: flex; gap: 8px; overflow-x: auto; padding: 20px 4px 14px;
+  display: flex; gap: 10px; overflow-x: auto; padding: 18px 4px 16px;
   position: relative; scrollbar-width: thin;
+  scrollbar-color: var(--gold) rgba(255,255,255,0.08);
 }
+.timeline::-webkit-scrollbar { height: 8px; }
+.timeline::-webkit-scrollbar-track { background: rgba(255,255,255,0.06); border-radius: 999px; }
+.timeline::-webkit-scrollbar-thumb { background: var(--gold-line); border-radius: 999px; }
 .timeline__rail {
-  position: absolute; left: 0; right: 0; top: 52px; height: 2px;
+  position: absolute; left: 0; right: 0; top: 50px; height: 2px;
   background: var(--gold-line);
 }
 .tl-node {
-  flex: 1 0 130px; min-width: 130px; text-align: center; position: relative;
+  flex: 1 0 140px; min-width: 140px; text-align: center; position: relative;
   display: flex; flex-direction: column; align-items: center; gap: 0;
-  padding-top: 0; background: none; border: none; cursor: pointer;
+  padding: 0 6px 4px; background: none; border: none; cursor: pointer;
   transition: transform .3s var(--ease);
 }
 .tl-node:hover { transform: translateY(-3px); }

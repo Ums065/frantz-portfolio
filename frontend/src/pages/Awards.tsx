@@ -20,7 +20,6 @@ function mapRow(r: AwardRow): Award {
 }
 
 const portrait = '/assets/awards/frantz-coutard.png'
-const abstractNetwork = '/assets/abstract-gold-network.png'
 
 const heroStats = [
   { big: '10+', label: 'Major Recognitions', ico: 'trophy' },
@@ -145,7 +144,7 @@ export default function Awards() {
             <div className="section-title"><span className="ln l" /><h2 className="gold-text">Recognition Journey</h2><span className="ln r" /></div>
             <p className="sub">A growing record of recognition — 2023 to 2026.</p>
           </div>
-          <div className="timeline reveal">
+          <div className="timeline reveal in">
             <div className="timeline__rail" />
             {awards.map((a) => (
               <button className="tl-node" key={a.id} onClick={() => setActive(a)}>
@@ -225,8 +224,8 @@ export default function Awards() {
               <p className="reveal d2" style={{ color: '#ece6d8', fontFamily: 'var(--f-serif)', fontSize: 18 }}>Guided by faith, inspired by family, and driven by purpose — leaving behind something greater than himself.</p>
               <div className="reveal d3 about-cta"><Link className="btn btn--solid" to="/about">Read the Full Story</Link></div>
             </div>
-            <div className="legacy__photo reveal">
-              <img src={abstractNetwork} alt="Building technology that connects communities" />
+            <div className="legacy__photo reveal in">
+              <img src="/assets/Frantz-gallery3.jpeg" alt="Frantz Coutard in a legacy portrait" loading="lazy" />
             </div>
           </div>
         </div>

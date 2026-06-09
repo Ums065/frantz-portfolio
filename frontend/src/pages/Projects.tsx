@@ -6,7 +6,7 @@ import { useSeo } from '../hooks/useSeo'
 export default function Projects() {
   useSeo({
     title: 'Projects',
-    description: "TrendCatch Network, TrendCatch Player Technology, TrendCatch Gives Back, Unlock A Cause, and Sornexium - the flagship projects driving Frantz Coutard's ecosystem.",
+    description: "TrendCatch Network, TrendCatch Player Technology, TrendCatch Gives Back, and Unlock A Cause - the flagship projects driving Frantz Coutard's ecosystem.",
     image: '/assets/project-trendcatch-network.png',
   })
 
@@ -21,13 +21,8 @@ export default function Projects() {
           <div className="eyebrow reveal in">Projects &amp; Innovation</div>
           <h1 className="page-hero__title gold-text reveal in" style={{ margin: '14px auto 10px' }}>The Work in Motion</h1>
           <p className="page-hero__lead reveal in d1" style={{ margin: '0 auto' }}>
-            Five flagship platforms - one ecosystem built around local commerce, community impact, and legacy.
+            Four flagship platforms - one ecosystem built around local commerce, community impact, and legacy.
           </p>
-          <div className="page-hero__chips reveal in d2" style={{ justifyContent: 'center', marginTop: 18 }}>
-            {projectShowcase.map((project) => (
-              <span className="chip" key={project.title}>{project.status}</span>
-            ))}
-          </div>
         </div>
       </section>
 
@@ -58,7 +53,7 @@ export default function Projects() {
             </div>
 
             <aside className="glass stats reveal d2">
-              <div className="stat"><span className="si"><svg viewBox="0 0 34 34" fill="none" stroke="currentColor" strokeWidth={1.5}><path d="M4 17s5-8 13-8 13 8 13 8-5 8-13 8-13-8-13-8z" /><circle cx="17" cy="17" r="3.4" /></svg></span><div><b>5</b><span>Flagship projects</span></div></div>
+              <div className="stat"><span className="si"><svg viewBox="0 0 34 34" fill="none" stroke="currentColor" strokeWidth={1.5}><path d="M4 17s5-8 13-8 13 8 13 8-5 8-13 8-13-8-13-8z" /><circle cx="17" cy="17" r="3.4" /></svg></span><div><b>{projectShowcase.length}</b><span>Flagship projects</span></div></div>
               <div className="stat"><span className="si"><svg viewBox="0 0 34 34" fill="none" stroke="currentColor" strokeWidth={1.5}><path d="M8 24h18M8 18h18M8 12h12" /></svg></span><div><b>2</b><span>Live initiatives</span></div></div>
               <div className="stat"><span className="si"><svg viewBox="0 0 34 34" fill="none" stroke="currentColor" strokeWidth={1.5}><circle cx="17" cy="13" r="6" /><path d="M10 26c1.8-4 4.7-6 7-6s5.2 2 7 6" /></svg></span><div><b>Community</b><span>People first</span></div></div>
               <div className="stat"><span className="si"><svg viewBox="0 0 34 34" fill="none" stroke="currentColor" strokeWidth={1.5}><path d="M10 6v22" /><path d="M10 7h13l-2.5 4 2.5 4H10" fill="currentColor" fillOpacity={0.12} /></svg></span><div><b>Legacy</b><span>Future ready</span></div></div>

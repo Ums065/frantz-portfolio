@@ -150,8 +150,8 @@ export default function About() {
       <section className="block">
         <div className="wrap">
           <div className="block__head reveal">
-            <div className="section-title"><span className="ln l" /><h2 className="gold-text">What He's Building</h2><span className="ln r" /></div>
-            <p className="sub">An ecosystem of platforms designed to empower communities.</p>
+            <div className="section-title"><span className="ln l" /><h2 className="gold-text">WHAT'S IN DEVELOPMENT</h2><span className="ln r" /></div>
+            <p className="sub">Innovative platforms and organizations currently being built to shape the future of local commerce and community engagement.</p>
           </div>
           <div className="platform-grid">
             {platforms.map((p, i) => (
@@ -167,7 +167,7 @@ export default function About() {
       <section className="block block--alt">
         <div className="wrap">
           <div className="block__head reveal">
-            <div className="section-title"><span className="ln l" /><h2 className="gold-text">The Legacy He Is Building</h2><span className="ln r" /></div>
+            <div className="section-title"><span className="ln l" /><h2 className="gold-text">THE VISION</h2><span className="ln r" /></div>
           </div>
           <div className="beliefs reveal">
             {beliefs.map((b) => (

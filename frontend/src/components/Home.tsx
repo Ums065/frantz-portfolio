@@ -17,14 +17,21 @@ const brandMarks = '/assets/brand-marks-grid.jpg'
 const abstractNetwork = '/assets/abstract-gold-network.png'
 const projectTrendcatch = '/assets/project-trendcatch-network.png'
 const projectGivesBack = '/assets/project-gives-back.png'
-const projectSornexium = '/assets/project-sornexium.png'
 const awardPresidential = '/assets/award-presidential-medal.png'
 const awardSenate = '/assets/award-senate-medal.png'
 const awardCounty = '/assets/award-county-medal.png'
-const awardBusiness = '/assets/award-business-medal.png'
 const gallerySpeaking = '/assets/gallery-speaking-stage.png'
 const merchCap = '/assets/merch-cap.png'
 const merchCollectible = '/assets/merch-collectible.png'
+const gallery1 = '/assets/Frantz-gallery1.jpeg'
+const gallery2 = '/assets/Frantz-gallery2.jpeg'
+const gallery3 = '/assets/Frantz-gallery3.jpeg'
+const gallery4 = '/assets/Frantz-gallery4.jpeg'
+const gallery5 = '/assets/Frantz-gallery5.jpeg'
+const gallery6 = '/assets/Frantz-gallery6.jpeg'
+const gallery7 = '/assets/Frantz-gallery7.jpeg'
+const gallery8 = '/assets/Frantz-gallery8.jpeg'
+const gallery9 = '/assets/Frantz-gallery9.jpeg'
 
 const Check = () => (
   <span className="chk">
@@ -83,13 +90,6 @@ const buildProjects: BuildProject[] = [
     media: abstractNetwork,
     mediaClass: 'proj__media--glow',
   },
-  {
-    title: 'Sornexium',
-    copy: 'Preserving identity, memory and legacy for future generations.',
-    tag: 'In Development',
-    media: projectSornexium,
-    mediaClass: 'proj__media--portrait',
-  },
 ]
 
 const awardHighlights = [
@@ -116,12 +116,15 @@ const awardHighlights = [
 ]
 
 const galleryItems = [
-  { cls: 'cell wide', tag: 'Speaking', cap: 'Founder keynote spotlight', image: gallerySpeaking },
-  { cls: 'cell tall', tag: 'Portrait', cap: 'Signature half-face portrait', image: halfFace },
-  { cls: 'cell', tag: 'Awards', cap: 'Recognition medallion suite', image: awardPresidential },
-  { cls: 'cell', tag: 'Brand', cap: 'Official signature system', image: signatureWordmark },
-  { cls: 'cell', tag: 'Press', cap: 'Premium monogram art direction', image: awardBusiness },
-  { cls: 'cell wide', tag: 'Community', cap: 'Gold-and-green movement visual', image: abstractNetwork },
+  { cls: 'cell wide', tag: 'Gallery 01', cap: 'Founder keynote spotlight', image: gallery1 },
+  { cls: 'cell tall', tag: 'Gallery 02', cap: 'Portrait and presence', image: gallery2 },
+  { cls: 'cell', tag: 'Gallery 03', cap: 'Public recognition moment', image: gallery3 },
+  { cls: 'cell', tag: 'Gallery 04', cap: 'Signature brand detail', image: gallery4 },
+  { cls: 'cell wide', tag: 'Gallery 05', cap: 'Community-first spotlight', image: gallery5 },
+  { cls: 'cell', tag: 'Gallery 06', cap: 'Media and press frame', image: gallery6 },
+  { cls: 'cell', tag: 'Gallery 07', cap: 'Movement and outreach', image: gallery7 },
+  { cls: 'cell tall', tag: 'Gallery 08', cap: 'Founder portrait study', image: gallery8 },
+  { cls: 'cell', tag: 'Gallery 09', cap: 'Legacy visual close-up', image: gallery9 },
 ]
 
 const partnerItems = [
@@ -167,7 +170,6 @@ export default function Home() {
         <div className="hero__portrait"><img src={halfFace} alt="Frantz Coutard portrait" /></div>
         <div className="hero__content">
           <div className="hero__mono"><img src={logo} alt="" /></div>
-          <div className="hero__sig">Frantz Coutard</div>
           <h1 className="hero__name">Frantz Coutard</h1>
           <div className="hero__roles">
             <span>Technology Innovator</span><span className="dot">&bull;</span>
@@ -274,8 +276,8 @@ export default function Home() {
         <div className="wrap">
           <div className="block__head reveal">
             <div className="ceo-badge gold-shimmer">CEO &amp; Founder</div>
-            <div className="section-title"><span className="ln l" /><h2 className="gold-text">What He&rsquo;s Building</h2><span className="ln r" /></div>
-            <p className="sub">One founder, an entire ecosystem of platforms built to empower communities.</p>
+            <div className="section-title"><span className="ln l" /><h2 className="gold-text">THE VENTURES</h2><span className="ln r" /></div>
+            <p className="sub">Building technology, education, and community-driven platforms designed to create opportunity and lasting impact.</p>
           </div>
           <div className="platform-grid">
             {platforms.map((p, i) => (
@@ -442,7 +444,7 @@ export default function Home() {
           <div className="gallery reveal">
             {galleryItems.map((c, i) => (
               <div className={c.cls} data-cap={c.cap} key={i}>
-                <img src={c.image} alt={c.cap} />
+                <img src={c.image} alt={c.cap} loading="lazy" decoding="async" />
                 <span className="tagk">{c.tag}</span>
                 <div className="cap">{c.cap}</div>
               </div>
