@@ -1,8 +1,9 @@
 /* Tiny fetch wrapper around the PHP API.
-   Use a relative base so it works both at the site root and under a
-   subfolder like /frantz-portfolio/ during local Apache deployment. */
+   Base is root-absolute (/api) so requests resolve to /api/... from any
+   client-side route rather than relative to the current page. Override via
+   VITE_API_BASE for a subfolder deployment (e.g. /frantz-portfolio/api). */
 
-const BASE = import.meta.env.VITE_API_BASE ?? 'api'
+const BASE = (import.meta.env.VITE_API_BASE ?? '/api').replace(/\/+$/, '')
 let csrfToken = ''
 let csrfBootstrap: Promise<void> | null = null
 
