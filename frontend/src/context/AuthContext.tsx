@@ -7,17 +7,12 @@ interface AuthState {
   refresh: () => Promise<void>
   login: (email: string, password: string) => Promise<AuthActionResult>
   register: (full_name: string, email: string, password: string) => Promise<AuthActionResult>
-  verifyEmail: (email: string, otp: string) => Promise<User>
-  resendVerification: (email: string) => Promise<string>
   logout: () => Promise<void>
 }
 
 interface AuthActionResult {
   user: User | null
   message?: string
-  verificationRequired?: boolean
-  verificationEmail?: string
-  verificationEmailSent?: boolean
 }
 
 const AuthContext = createContext<AuthState | null>(null)
@@ -39,9 +34,6 @@ function describeAuthPayload(payload: AuthPayload) {
     userType: user === null ? 'null' : typeof user,
     userKeys: userObject ? Object.keys(userObject) : [],
     hasCsrfToken: typeof payload.csrfToken === 'string' && payload.csrfToken.length > 0,
-    verificationRequired: payload.verification_required === true,
-    verificationEmail: typeof payload.verification_email === 'string' ? payload.verification_email : '',
-    verificationEmailSent: payload.verification_email_sent !== false,
   }
 }
 
@@ -51,16 +43,6 @@ async function fetchCurrentUser(): Promise<User | null> {
 }
 
 async function readAuthResult(payload: AuthPayload, action: string): Promise<AuthActionResult> {
-  if (payload.verification_required) {
-    return {
-      user: null,
-      verificationRequired: true,
-      verificationEmail: payload.verification_email ?? '',
-      verificationEmailSent: payload.verification_email_sent !== false,
-      message: payload.message ?? 'Check your inbox for the verification code.',
-    }
-  }
-
   if (isUser(payload.user)) {
     return {
       user: payload.user,
@@ -97,10 +79,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = async (email: string, password: string) => {
     const d = await api.post<AuthPayload>('auth/login', { email, password })
     const result = await readAuthResult(d, 'login')
-    if (result.verificationRequired) {
-      setUser(null)
-      return result
-    }
     setUser(result.user)
     return result
   }
@@ -108,30 +86,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const register = async (full_name: string, email: string, password: string) => {
     const d = await api.post<AuthPayload>('auth/register', { full_name, email, password })
     const result = await readAuthResult(d, 'registration')
-    if (result.verificationRequired) {
-      setUser(null)
-      return result
-    }
     setUser(result.user)
     return result
-  }
-
-  const verifyEmail = async (email: string, otp: string) => {
-    const d = await api.post<AuthPayload>('auth/verify-email', { email, otp })
-    const result = await readAuthResult(d, 'verification')
-    if (result.verificationRequired || !result.user) {
-      throw new Error(result.message ?? 'Verification is required.')
-    }
-    setUser(result.user)
-    return result.user
-  }
-
-  const resendVerification = async (email: string) => {
-    const d = await api.post<AuthPayload>('auth/resend-verification', { email })
-    if (typeof d.message === 'string' && d.message.trim() !== '') {
-      return d.message
-    }
-    return 'Verification code sent.'
   }
 
   const logout = async () => {
@@ -144,7 +100,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, refresh, login, register, verifyEmail, resendVerification, logout }}>
+    <AuthContext.Provider value={{ user, loading, refresh, login, register, logout }}>
       {children}
     </AuthContext.Provider>
   )

@@ -29,6 +29,7 @@ try {
     switch (true) {
 
         /* ---------------- AUTH ---------------- */
+        // Temporary bypass: direct register/login is enabled and verification is disabled.
         case $key === 'POST auth/register': {
             $b    = body();
             $name = field($b, 'full_name') ?: field($b, 'name');
@@ -56,7 +57,7 @@ try {
                         'UPDATE users
                          SET full_name = ?,
                              password_hash = ?,
-                             email_verified_at = NULL,
+                             email_verified_at = NOW(),
                              email_verification_otp_hash = NULL,
                              email_verification_otp_expires_at = NULL,
                              email_verification_otp_sent_at = NULL,
@@ -76,22 +77,25 @@ try {
                             email_verification_otp_expires_at,
                             email_verification_otp_sent_at,
                             email_verification_otp_attempts
-                         ) VALUES (?, ?, ?, NULL, NULL, NULL, NULL, 0)'
+                         ) VALUES (?, ?, ?, NOW(), NULL, NULL, NULL, 0)'
                     );
                     $insert->execute([$name, $email, $passwordHash]);
                     $userId = (int) $pdo->lastInsertId();
                 }
 
-                $sent = issue_email_verification_otp($userId, $email, $name);
+                $fresh = $pdo->prepare('SELECT * FROM users WHERE id = ? LIMIT 1');
+                $fresh->execute([$userId]);
+                $registeredUser = $fresh->fetch();
+                if (!$registeredUser) {
+                    throw new RuntimeException('Unable to load registered user.');
+                }
+
                 $pdo->commit();
+                $registeredUser = login_user($registeredUser);
 
                 json([
-                    'verification_required' => true,
-                    'verification_email' => $email,
-                    'verification_email_sent' => $sent,
-                    'message' => $sent
-                        ? 'Check your inbox for the verification code.'
-                        : 'Your account was created, but we could not deliver the verification code right now. You can resend it from the verification screen.',
+                    'user' => $registeredUser,
+                    'message' => 'Account created successfully.',
                     'csrfToken' => csrf_token(),
                 ], 201);
             } catch (Throwable $e) {
@@ -99,7 +103,7 @@ try {
                     $pdo->rollBack();
                 }
                 json([
-                    'error' => app_debug() ? $e->getMessage() : 'Unable to create the verification record right now.',
+                    'error' => app_debug() ? $e->getMessage() : 'Unable to create the account right now.',
                 ], 500);
             }
         }
@@ -118,167 +122,49 @@ try {
                 json(['error' => 'Invalid email or password.'], 401);
             }
 
-            if (empty($u['email_verified_at'])) {
-                $pdo->beginTransaction();
-                try {
-                    $sent = issue_email_verification_otp((int) $u['id'], (string) $u['email'], (string) $u['full_name']);
-                    $pdo->commit();
-                    json([
-                        'verification_required' => true,
-                        'verification_email' => $u['email'],
-                        'verification_email_sent' => $sent,
-                        'message' => $sent
-                            ? 'Your email is not verified. We sent a new code to your inbox.'
-                            : 'Your email is not verified, but we could not deliver a new code right now. Use resend after checking your mail settings.',
-                        'csrfToken' => csrf_token(),
-                    ]);
-                } catch (Throwable $e) {
-                    if ($pdo->inTransaction()) {
-                        $pdo->rollBack();
-                    }
-                    json([
-                        'error' => app_debug() ? $e->getMessage() : 'Unable to create the verification record right now.',
-                    ], 500);
-                }
-            }
-
-            $u = login_user($u);
-            json(['user' => $u, 'message' => 'Welcome back.', 'csrfToken' => csrf_token()]);
-        }
-
-        case $key === 'POST auth/verify-email': {
-            $b     = body();
-            $email = require_email(field($b, 'email'));
-            $otp   = preg_replace('/\D+/', '', field($b, 'otp'));
-
-            if (strlen($otp) !== 6) {
-                json(['error' => 'Enter the 6-digit verification code.'], 422);
-            }
-
-            $pdo = db();
-            $stmt = $pdo->prepare('SELECT * FROM users WHERE email = ? LIMIT 1');
-            $stmt->execute([$email]);
-            $u = $stmt->fetch();
-
-            if (!$u) {
-                json(['error' => 'Account not found.'], 404);
-            }
-            if (!empty($u['email_verified_at'])) {
-                json(['error' => 'Email is already verified. Please log in.'], 409);
-            }
-            if (empty($u['email_verification_otp_hash']) || empty($u['email_verification_otp_expires_at'])) {
-                json(['error' => 'No verification code is active. Request a new one.'], 410);
-            }
-
-            $expiresAt = strtotime((string) $u['email_verification_otp_expires_at']);
-            if ($expiresAt !== false && $expiresAt < time()) {
-                $clear = $pdo->prepare(
-                    'UPDATE users
-                     SET email_verification_otp_hash = NULL,
-                         email_verification_otp_expires_at = NULL,
-                         email_verification_otp_sent_at = NULL,
-                         email_verification_otp_attempts = 0
-                     WHERE id = ?'
-                );
-                $clear->execute([$u['id']]);
-                json(['error' => 'This verification code has expired. Request a new one.'], 410);
-            }
-
-            if (!password_verify($otp, (string) $u['email_verification_otp_hash'])) {
-                if ((int) $u['email_verification_otp_attempts'] >= 4) {
-                    $clear = $pdo->prepare(
-                        'UPDATE users
-                         SET email_verification_otp_hash = NULL,
-                             email_verification_otp_expires_at = NULL,
-                             email_verification_otp_sent_at = NULL,
-                             email_verification_otp_attempts = 0
-                         WHERE id = ?'
-                    );
-                    $clear->execute([$u['id']]);
-                    json(['error' => 'Too many invalid attempts. Request a new code.'], 429);
-                }
-
-                $attempt = $pdo->prepare(
-                    'UPDATE users
-                     SET email_verification_otp_attempts = email_verification_otp_attempts + 1
-                     WHERE id = ?'
-                );
-                $attempt->execute([$u['id']]);
-                json(['error' => 'Invalid verification code.'], 401);
-            }
-
             $pdo->beginTransaction();
             try {
-                $mark = $pdo->prepare(
+                $markVerified = $pdo->prepare(
                     'UPDATE users
-                     SET email_verified_at = NOW(),
+                     SET email_verified_at = COALESCE(email_verified_at, NOW()),
                          email_verification_otp_hash = NULL,
                          email_verification_otp_expires_at = NULL,
                          email_verification_otp_sent_at = NULL,
                          email_verification_otp_attempts = 0
                      WHERE id = ?'
                 );
-                $mark->execute([$u['id']]);
+                $markVerified->execute([$u['id']]);
 
                 $fresh = $pdo->prepare('SELECT * FROM users WHERE id = ? LIMIT 1');
                 $fresh->execute([$u['id']]);
-                $verifiedUser = $fresh->fetch();
-                if (!$verifiedUser) {
-                    throw new RuntimeException('Unable to load verified user.');
+                $activeUser = $fresh->fetch();
+                if (!$activeUser) {
+                    throw new RuntimeException('Unable to load authenticated user.');
                 }
 
                 $pdo->commit();
-                $verifiedUser = login_user($verifiedUser);
-                json([
-                    'user' => $verifiedUser,
-                    'message' => 'Email verified successfully.',
-                    'csrfToken' => csrf_token(),
-                ]);
+                $activeUser = login_user($activeUser);
+                json(['user' => $activeUser, 'message' => 'Welcome back.', 'csrfToken' => csrf_token()]);
             } catch (Throwable $e) {
                 if ($pdo->inTransaction()) {
                     $pdo->rollBack();
                 }
                 json([
-                    'error' => app_debug() ? $e->getMessage() : 'Unable to verify email right now.',
+                    'error' => app_debug() ? $e->getMessage() : 'Unable to log in right now.',
                 ], 500);
             }
         }
 
+        case $key === 'POST auth/verify-email': {
+            json([
+                'error' => 'Email verification is temporarily disabled. Please register or log in directly.',
+            ], 410);
+        }
+
         case $key === 'POST auth/resend-verification': {
-            $b     = body();
-            $email = require_email(field($b, 'email'));
-
-            $pdo = db();
-            $stmt = $pdo->prepare('SELECT * FROM users WHERE email = ? LIMIT 1');
-            $stmt->execute([$email]);
-            $u = $stmt->fetch();
-
-            if (!$u) {
-                json(['error' => 'Account not found.'], 404);
-            }
-            if (!empty($u['email_verified_at'])) {
-                json(['error' => 'This email is already verified. Please log in.'], 409);
-            }
-
-            $pdo->beginTransaction();
-            try {
-                $sent = issue_email_verification_otp((int) $u['id'], (string) $u['email'], (string) $u['full_name']);
-                $pdo->commit();
-                json([
-                    'verification_email_sent' => $sent,
-                    'message' => $sent
-                        ? 'A new verification code has been sent.'
-                        : 'We saved a new verification code, but the email could not be delivered right now. Please resend after checking mail settings.',
-                    'csrfToken' => csrf_token(),
-                ]);
-            } catch (Throwable $e) {
-                if ($pdo->inTransaction()) {
-                    $pdo->rollBack();
-                }
-                json([
-                    'error' => app_debug() ? $e->getMessage() : 'Unable to create the verification record right now.',
-                ], 500);
-            }
+            json([
+                'error' => 'Email verification is temporarily disabled. Please register or log in directly.',
+            ], 410);
         }
 
         case $key === 'POST auth/admin-login': {
