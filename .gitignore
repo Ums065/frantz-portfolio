@@ -1,0 +1,23 @@
+# ---- Secrets / environment ----
+.env
+api/.env
+frontend/.env
+*.local
+
+# Keep the templates tracked
+!.env.example
+!api/.env.example
+!frontend/.env.example
+
+# ---- Node / frontend ----
+node_modules/
+frontend/node_modules/
+frontend/dist/
+*.log
+npm-debug.log*
+
+# ---- OS / editor ----
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

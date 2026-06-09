@@ -1,0 +1,26 @@
+# Project root entry point for Apache.
+# This serves the built React app from frontend/dist while leaving /api
+# requests to the PHP router in api/.
+
+Options -Indexes
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+
+  # Root URL should open the built SPA.
+  RewriteRule ^$ frontend/dist/index.html [L]
+
+  # Leave the API alone so api/.htaccess can route it to index.php.
+  RewriteRule ^api(/.*)?$ - [L]
+
+  # Serve build assets from frontend/dist.
+  RewriteRule ^assets/(.*)$ frontend/dist/assets/$1 [L]
+
+  # Serve real files and folders as-is.
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+
+  # SPA fallback for client-side routes.
+  RewriteRule ^ frontend/dist/index.html [L]
+</IfModule>

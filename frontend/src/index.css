@@ -1,0 +1,8 @@
+/* Bespoke design system (ported from the approved mockup).
+   @import must precede the Tailwind directives per CSS spec. */
+@import './styles/design.css';
+@import './styles/pages.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;

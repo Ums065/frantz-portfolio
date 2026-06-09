@@ -1,0 +1,26 @@
+# ============================================================
+# SPA fallback for the built React app (frontend/dist).
+# Vite copies this file into dist/ on `npm run build`.
+# It makes client-side routes (/about, /awards, /blog, /events, …)
+# work on direct hits and page refresh when Apache serves the build.
+# ============================================================
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+
+  # If you deploy the build under a subfolder instead of the domain root,
+  # uncomment and set this (e.g. RewriteBase /frantz-portfolio/frontend/dist/).
+  # RewriteBase /
+
+  # Serve real files and directories as-is (JS, CSS, images, uploads…).
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+
+  # Never hijack API calls (the PHP API is served separately).
+  RewriteCond %{REQUEST_URI} ^/api/ [OR]
+  RewriteCond %{REQUEST_URI} /api/
+  RewriteRule ^ - [L]
+
+  # Everything else → the SPA entry point.
+  RewriteRule ^ index.html [L]
+</IfModule>

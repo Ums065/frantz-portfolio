@@ -1,0 +1,7 @@
+RewriteEngine On
+RewriteBase /frantz-portfolio/api/
+
+# Route everything (that isn't a real file/dir) to the front controller.
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*)$ index.php?r=$1 [QSA,L]

@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <defs>
+    <linearGradient id="fcGold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F6D98A"></stop>
+      <stop offset="0.4" stop-color="#E7BD5E"></stop>
+      <stop offset="0.65" stop-color="#C9A84C"></stop>
+      <stop offset="1" stop-color="#8B6914"></stop>
+    </linearGradient>
+    <linearGradient id="fcGoldStroke" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#F6D98A"></stop>
+      <stop offset="1" stop-color="#8B6914"></stop>
+    </linearGradient>
+  </defs>
+  <circle cx="60" cy="60" r="57" fill="#0c0b08" stroke="url(#fcGoldStroke)" stroke-width="2.5"></circle>
+  <circle cx="60" cy="60" r="50" fill="none" stroke="#1A5C2A" stroke-width="2.4"></circle>
+  <circle cx="60" cy="60" r="46" fill="none" stroke="url(#fcGoldStroke)" stroke-width="1.2" stroke-opacity="0.6"></circle>
+  <text x="60" y="61" text-anchor="middle" dominant-baseline="central" font-family="Cinzel, Georgia, serif" font-weight="700" font-size="46" letter-spacing="-2" fill="url(#fcGold)">FC</text>
+</svg>
