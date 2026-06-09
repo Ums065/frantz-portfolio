@@ -19,6 +19,19 @@ function isUser(value: unknown): value is User {
     && typeof (value as User).email === 'string'
 }
 
+function describeAuthPayload(payload: AuthPayload) {
+  const user = payload.user
+  const userObject = user && typeof user === 'object' ? (user as unknown as Record<string, unknown>) : null
+
+  return {
+    hasUser: isUser(user),
+    payloadKeys: Object.keys(payload),
+    userType: user === null ? 'null' : typeof user,
+    userKeys: userObject ? Object.keys(userObject) : [],
+    hasCsrfToken: typeof payload.csrfToken === 'string' && payload.csrfToken.length > 0,
+  }
+}
+
 async function fetchCurrentUser(): Promise<User | null> {
   const payload = await api.get<AuthPayload>('auth/me').catch(() => null)
   return payload && isUser(payload.user) ? payload.user : null
@@ -29,11 +42,14 @@ async function readUser(payload: AuthPayload, action: string): Promise<User> {
     return payload.user
   }
 
+  console.error(`[auth] ${action} response did not include a valid user`, describeAuthPayload(payload))
+
   const fallback = await fetchCurrentUser()
   if (fallback) {
     return fallback
   }
 
+  console.error(`[auth] ${action} fallback auth/me did not return a valid user`, describeAuthPayload(payload))
   throw new Error(`Unexpected ${action} response from the server.`)
 }
 

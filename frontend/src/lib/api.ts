@@ -14,6 +14,33 @@ interface ApiEnvelope {
   csrfToken?: string
 }
 
+function parseResponseBody(raw: string): unknown {
+  const trimmed = raw.trim()
+  if (!trimmed) return {}
+  try {
+    return JSON.parse(trimmed)
+  } catch {
+    return trimmed
+  }
+}
+
+function extractErrorMessage(data: unknown, fallback: string): string {
+  if (typeof data === 'string' && data.trim()) {
+    return data.slice(0, 500)
+  }
+  if (data && typeof data === 'object' && 'error' in data && typeof (data as ApiError).error === 'string') {
+    return (data as ApiError).error
+  }
+  return fallback
+}
+
+function summarizeBody(data: unknown): unknown {
+  if (typeof data === 'string') {
+    return data.slice(0, 1000)
+  }
+  return data
+}
+
 function storeCsrfToken(data: unknown) {
   if (data && typeof data === 'object' && 'csrfToken' in data && typeof (data as ApiEnvelope).csrfToken === 'string') {
     csrfToken = (data as ApiEnvelope).csrfToken || ''
@@ -36,6 +63,7 @@ async function bootstrapCsrfToken(): Promise<void> {
 }
 
 async function request<T>(path: string, options: RequestInit = {}, retry = true): Promise<T> {
+  const method = (options.method ?? 'GET').toString().toUpperCase()
   const res = await fetch(`${BASE}/${path}`, {
     credentials: 'include',
     headers: {
@@ -45,14 +73,21 @@ async function request<T>(path: string, options: RequestInit = {}, retry = true)
     },
     ...options,
   })
-  const data = await res.json().catch(() => ({}))
+  const raw = await res.text()
+  const data = parseResponseBody(raw)
   storeCsrfToken(data)
   if (res.status === 419 && retry && path !== 'auth/me') {
     await bootstrapCsrfToken()
     return request<T>(path, options, false)
   }
   if (!res.ok) {
-    throw new Error((data as ApiError).error || `Request failed (${res.status})`)
+    console.error('[api] request failed', {
+      method,
+      path,
+      status: res.status,
+      body: summarizeBody(data),
+    })
+    throw new Error(extractErrorMessage(data, `Request failed (${res.status})`))
   }
   return data as T
 }
@@ -67,13 +102,22 @@ async function upload<T>(path: string, file: File, retry = true): Promise<T> {
     headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : undefined,
     body: fd,
   })
-  const data = await res.json().catch(() => ({}))
+  const raw = await res.text()
+  const data = parseResponseBody(raw)
   storeCsrfToken(data)
   if (res.status === 419 && retry) {
     await bootstrapCsrfToken()
     return upload<T>(path, file, false)
   }
-  if (!res.ok) throw new Error((data as ApiError).error || `Upload failed (${res.status})`)
+  if (!res.ok) {
+    console.error('[api] upload failed', {
+      method: 'POST',
+      path,
+      status: res.status,
+      body: summarizeBody(data),
+    })
+    throw new Error(extractErrorMessage(data, `Upload failed (${res.status})`))
+  }
   return data as T
 }
 
