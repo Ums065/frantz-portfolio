@@ -138,6 +138,7 @@ export interface User {
   full_name: string
   email: string
   role: string
+  email_verified_at?: string | null
   created_at: string
 }
 
@@ -307,4 +308,7 @@ export interface InventoryRow {
 export interface AuthPayload {
   user: User | null
   csrfToken?: string
+  message?: string
+  verification_required?: boolean
+  verification_email?: string
 }

@@ -25,8 +25,12 @@ The Vite dev server **proxies `/api`** to the PHP API, so the browser is same-or
 3. **Environment config (`.env`)** — already created with WAMP defaults:
    - `api/.env` — DB host/name/user/pass, session, CORS, APP_DEBUG.
      Copy from `api/.env.example` if missing. **Edit `DB_*` here to change the DB connection.**
+   - `api/.env` also needs the SMTP variables for email verification:
+     `MAIL_FROM_ADDRESS`, `MAIL_FROM_NAME`, `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`,
+     `MAIL_PASSWORD`, `MAIL_ENCRYPTION`, `MAIL_TIMEOUT_SECONDS`, `MAIL_ALLOW_PHP_FALLBACK`.
    - `frontend/.env` — `VITE_API_BASE` (defaults to `/api`).
    - Both `.env` files are git-ignored; the `.env.example` templates are tracked.
+   - If your database already existed before this change, run `db/add-email-verification-columns.sql` once.
 4. **Install frontend deps** (already done):
    ```
    cd frontend
@@ -46,7 +50,7 @@ Admin dashboard: **http://localhost:5173/admin**
 - Create an admin from `db/create-admin-user.sql`, or promote an existing user in MySQL.
 
 ## What works (real, DB-backed)
-- **Register / Login / Logout** — PHP session auth, passwords hashed (bcrypt).
+- **Register / Email verify / Login / Logout** — new users receive an OTP by email and must verify before login.
 - **Newsletter subscribe** (footer) — saved to `subscribers`.
 - **All "Request / Apply" forms** (Speaking, Media Kit, Interview, Pin, Giveaway,
   Broker, Mentorship, Sponsor, Invite, Partner…) — saved to `requests`.
@@ -74,8 +78,10 @@ mail transport (WAMP sendmail or an SMTP relay/service).
 ## API endpoints (quick reference)
 | Method | Route | Purpose |
 |--------|-------|---------|
-| POST | `auth/register` | create member + session |
-| POST | `auth/login` | login |
+| POST | `auth/register` | create member + send verification code |
+| POST | `auth/verify-email` | verify OTP + create session |
+| POST | `auth/resend-verification` | resend verification code |
+| POST | `auth/login` | login or send verification code if email is unverified |
 | POST | `auth/logout` | logout |
 | GET  | `auth/me` | current user |
 | GET  | `events` / `posts` / `awards` | public content |

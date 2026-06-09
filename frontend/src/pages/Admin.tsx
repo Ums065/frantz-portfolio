@@ -51,14 +51,25 @@ export default function Admin() {
     refreshData()
   }
 
-  if (loading) return <div style={wrapS}><p style={{ color: 'var(--muted)' }}>Loading…</p></div>
+  if (loading) {
+    return (
+      <div className="admin-page" style={wrapS}>
+        <div className="admin-loading glass">
+          <span className="admin-kicker">Admin Dashboard</span>
+          <h1 className="gold-text" style={{ fontFamily: 'var(--f-serif)', fontSize: 30, marginTop: 8 }}>Loading secure workspace</h1>
+          <p style={{ color: 'var(--muted)', marginTop: 10, lineHeight: 1.65 }}>Verifying session and fetching live data...</p>
+        </div>
+      </div>
+    )
+  }
 
   if (!isAdmin(user?.role)) {
     return (
-      <div style={wrapS}>
-        <div className="glass" style={{ maxWidth: 380, margin: '80px auto', padding: 36, borderRadius: 16 }}>
-          <h2 className="gold-text" style={{ fontFamily: 'var(--f-serif)', marginBottom: 6 }}>Admin Login</h2>
-          <p style={{ color: 'var(--muted)', fontSize: 14, marginBottom: 20 }}>Sign in with an administrator account.</p>
+      <div className="admin-page" style={wrapS}>
+        <div className="admin-login glass" style={{ maxWidth: 380, margin: '80px auto', padding: 36, borderRadius: 16 }}>
+          <span className="admin-kicker">Restricted access</span>
+          <h2 className="gold-text" style={{ fontFamily: 'var(--f-serif)', margin: '6px 0 8px' }}>Admin Login</h2>
+          <p style={{ color: 'var(--muted)', fontSize: 14, marginBottom: 20, lineHeight: 1.65 }}>Sign in with an administrator account.</p>
           <form onSubmit={doLogin}>
             <div className="field"><label>Email</label>
               <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="admin@frantzcoutard.com" /></div>
@@ -91,12 +102,15 @@ export default function Admin() {
   ] as const
 
   return (
-    <div style={wrapS}>
-      <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-        <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '28px 0', borderBottom: '1px solid var(--line)', marginBottom: 28 }}>
+    <div className="admin-page" style={wrapS}>
+      <div className="admin-shell" style={{ maxWidth: 1240, margin: '0 auto' }}>
+        <header className="admin-header glass" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '28px 28px 24px', borderBottom: '1px solid var(--line)', marginBottom: 18 }}>
           <div>
-            <h1 className="gold-text" style={{ fontFamily: 'var(--f-serif)', fontSize: 26 }}>Admin Dashboard</h1>
-            <p style={{ color: 'var(--muted)', fontSize: 13 }}>Signed in as {user?.full_name} · {user?.role}</p>
+            <span className="admin-kicker">Admin Dashboard</span>
+            <h1 className="gold-text" style={{ fontFamily: 'var(--f-serif)', fontSize: 30, marginTop: 6 }}>Command Center</h1>
+            <p style={{ color: 'var(--muted)', fontSize: 13, maxWidth: 640, lineHeight: 1.6 }}>
+              Signed in as {user?.full_name} | {user?.role}. Manage requests, orders, content, and inventory from one secure console.
+            </p>
           </div>
           <div style={{ display: 'flex', gap: 10 }}>
             <a className="btn btn--sm" href="/">View Site</a>
@@ -104,7 +118,14 @@ export default function Admin() {
           </div>
         </header>
 
-        <div style={{ display: 'flex', gap: 8, marginBottom: 22, flexWrap: 'wrap' }}>
+        <div className="admin-stats">
+          <div className="admin-stat glass"><span>Requests</span><strong>{data?.requests.length ?? 0}</strong><p>Forms awaiting review</p></div>
+          <div className="admin-stat glass"><span>Orders</span><strong>{data?.orders?.length ?? 0}</strong><p>Commerce records</p></div>
+          <div className="admin-stat glass"><span>Members</span><strong>{data?.members.length ?? 0}</strong><p>Approved accounts</p></div>
+          <div className="admin-stat glass"><span>Contacts</span><strong>{data?.contacts.length ?? 0}</strong><p>Inbound messages</p></div>
+        </div>
+
+        <div className="admin-tabs" style={{ display: 'flex', gap: 8, marginBottom: 22, flexWrap: 'wrap' }}>
           {tabs.map(([key, label]) => (
             <button key={key} className={tab === key ? 'btn btn--sm btn--solid' : 'btn btn--sm'} onClick={() => setTab(key)}>{label}</button>
           ))}
@@ -1172,7 +1193,7 @@ function Table({ head, children }: { head: string[]; children: React.ReactNode }
   )
 }
 
-const wrapS: React.CSSProperties = { minHeight: '100vh', background: 'var(--bg)', color: 'var(--white)', padding: '0 24px 60px', fontFamily: 'var(--f-body)' }
+const wrapS: React.CSSProperties = { minHeight: '100vh', color: 'var(--white)', padding: '0 24px 60px', fontFamily: 'var(--f-body)' }
 const thS: React.CSSProperties = { textAlign: 'left', padding: '14px 16px', color: 'var(--gold-light)', fontWeight: 600, borderBottom: '1px solid var(--line)', textTransform: 'uppercase', fontSize: 11, letterSpacing: '.06em' }
 const tdS: React.CSSProperties = { padding: '13px 16px', verticalAlign: 'top', color: '#d8d3c6' }
 const rowS: React.CSSProperties = { borderBottom: '1px solid rgba(201,168,76,0.08)' }

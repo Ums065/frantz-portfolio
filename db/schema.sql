@@ -15,6 +15,11 @@ CREATE TABLE IF NOT EXISTS users (
   email         VARCHAR(160) NOT NULL UNIQUE,
   password_hash VARCHAR(255) NOT NULL,
   role          ENUM('member','vip','editor','admin','super_admin') NOT NULL DEFAULT 'member',
+  email_verified_at TIMESTAMP NULL DEFAULT NULL,
+  email_verification_otp_hash VARCHAR(255) DEFAULT NULL,
+  email_verification_otp_expires_at TIMESTAMP NULL DEFAULT NULL,
+  email_verification_otp_sent_at TIMESTAMP NULL DEFAULT NULL,
+  email_verification_otp_attempts INT NOT NULL DEFAULT 0,
   created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 
