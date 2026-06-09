@@ -189,10 +189,19 @@ export default function Media() {
             <div className="section-title"><span className="ln l" /><h2 className="gold-text">Photo &amp; Video Library</h2><span className="ln r" /></div>
             <p className="sub">A fast visual index for editorial use.</p>
           </div>
-          <div className="gallery reveal">
-            {items.slice(0, 6).map((item, index) => (
-              <div className={`cell${index === 0 ? ' wide' : ''}${index === 1 ? ' tall' : ''}`} data-cap={item.title} key={item.id}>
-                <img src={item.image || '/assets/abstract-gold-network.png'} alt={item.title} />
+          <div className="gallery gallery--uniform reveal">
+            {items.slice(0, 6).map((item) => (
+              <div
+                className="cell"
+                data-cap={item.title}
+                data-lightbox-src={item.image || '/assets/abstract-gold-network.png'}
+                data-lightbox-cap={item.title}
+                data-lightbox-alt={item.title}
+                key={item.id}
+                role="button"
+                tabIndex={0}
+              >
+                <img src={item.image || '/assets/abstract-gold-network.png'} alt={item.title} loading="lazy" decoding="async" />
                 <span className="tagk">{item.type}</span>
                 <div className="cap">{item.title}</div>
               </div>

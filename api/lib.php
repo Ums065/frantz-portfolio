@@ -279,11 +279,63 @@ function mail_allow_php_fallback(): bool
     return filter_var(env('MAIL_ALLOW_PHP_FALLBACK', 'false'), FILTER_VALIDATE_BOOLEAN);
 }
 
+function mail_verify_peer(): bool
+{
+    return filter_var(env('MAIL_VERIFY_PEER', 'false'), FILTER_VALIDATE_BOOLEAN);
+}
+
 function mail_smtp_configured(): bool
 {
     return trim((string) env('MAIL_HOST', '')) !== ''
         && trim((string) env('MAIL_USERNAME', '')) !== ''
         && (string) env('MAIL_PASSWORD', '') !== '';
+}
+
+function mail_normalize_password(string $password): string
+{
+    return preg_replace('/\s+/', '', trim($password)) ?? trim($password);
+}
+
+function mail_smtp_crypto_method(): int
+{
+    $method = 0;
+    foreach ([
+        'STREAM_CRYPTO_METHOD_TLSv1_3_CLIENT',
+        'STREAM_CRYPTO_METHOD_TLSv1_2_CLIENT',
+        'STREAM_CRYPTO_METHOD_TLS_CLIENT',
+    ] as $const) {
+        if (defined($const)) {
+            $method |= constant($const);
+        }
+    }
+
+    return $method !== 0 ? $method : STREAM_CRYPTO_METHOD_TLS_CLIENT;
+}
+
+function mail_smtp_candidates(string $host, int $port, string $encryption): array
+{
+    $host = trim($host);
+    $encryption = strtolower(trim($encryption));
+    $candidates = [];
+
+    if ($host !== '' && $port > 0) {
+        $candidates[] = [$host, $port, $encryption];
+    }
+
+    if (str_contains(strtolower($host), 'gmail.com')) {
+        if ($port === 587 && $encryption === 'tls') {
+            $candidates[] = [$host, 465, 'ssl'];
+        } elseif ($port === 465 && $encryption === 'ssl') {
+            $candidates[] = [$host, 587, 'tls'];
+        }
+    }
+
+    return array_values(array_unique($candidates, SORT_REGULAR));
+}
+
+function mail_smtp_log_failure(string $stage, string $detail): void
+{
+    error_log('[mail][' . $stage . '] ' . $detail);
 }
 
 function mail_encode_header(string $value): string
@@ -368,68 +420,86 @@ function send_mail_message(string $to, string $subject, string $bodyText): bool
     $bodyText = rtrim($bodyText);
     $fromAddress = mail_from_address();
     $fromName = mail_from_name();
+    $smtpErrors = [];
 
     try {
         if (mail_smtp_configured()) {
             $host = trim((string) env('MAIL_HOST', ''));
             $port = (int) env('MAIL_PORT', '587');
             $username = trim((string) env('MAIL_USERNAME', ''));
-            $password = (string) env('MAIL_PASSWORD', '');
+            $password = mail_normalize_password((string) env('MAIL_PASSWORD', ''));
             $encryption = strtolower(trim((string) env('MAIL_ENCRYPTION', 'tls')));
             $timeout = mail_timeout_seconds();
-            $transport = ($encryption === 'ssl' && $port > 0)
-                ? sprintf('ssl://%s:%d', $host, $port)
-                : sprintf('tcp://%s:%d', $host, $port);
+            $headers = [
+                'From: ' . mail_encode_header($fromName) . ' <' . $fromAddress . '>',
+                'To: <' . $to . '>',
+                'Subject: ' . mail_encode_header($subject),
+                'MIME-Version: 1.0',
+                'Content-Type: text/plain; charset=UTF-8',
+                'Content-Transfer-Encoding: 8bit',
+            ];
+            $messageBody = implode("\r\n", $headers) . "\r\n\r\n" . mail_prepare_body($bodyText);
 
-            $socket = @stream_socket_client($transport, $errno, $errstr, $timeout);
-            if (!$socket) {
-                throw new RuntimeException('SMTP connection failed: ' . ($errstr !== '' ? $errstr : 'unknown error'));
-            }
+            foreach (mail_smtp_candidates($host, $port, $encryption) as [$candidateHost, $candidatePort, $candidateEncryption]) {
+                $transport = ($candidateEncryption === 'ssl' && $candidatePort > 0)
+                    ? sprintf('ssl://%s:%d', $candidateHost, $candidatePort)
+                    : sprintf('tcp://%s:%d', $candidateHost, $candidatePort);
+                $context = stream_context_create([
+                    'ssl' => [
+                        'verify_peer' => mail_verify_peer(),
+                        'verify_peer_name' => mail_verify_peer(),
+                        'allow_self_signed' => !mail_verify_peer(),
+                        'SNI_enabled' => true,
+                        'peer_name' => $candidateHost,
+                    ],
+                ]);
+                $socket = @stream_socket_client($transport, $errno, $errstr, $timeout, STREAM_CLIENT_CONNECT, $context);
+                if (!$socket) {
+                    $reason = sprintf('%s:%d (%s) connection failed: %s', $candidateHost, $candidatePort, $candidateEncryption, $errstr !== '' ? $errstr : 'unknown error');
+                    $smtpErrors[] = $reason;
+                    mail_smtp_log_failure('smtp', $reason);
+                    continue;
+                }
 
-            try {
-                stream_set_timeout($socket, $timeout);
-                $helo = $_SERVER['SERVER_NAME'] ?? 'localhost';
-                mail_smtp_expect($socket, [220], 'SMTP greeting');
-                mail_smtp_send($socket, 'EHLO ' . $helo, [250], 'SMTP EHLO');
+                try {
+                    stream_set_timeout($socket, $timeout);
+                    $helo = $_SERVER['SERVER_NAME'] ?? 'localhost';
+                    mail_smtp_expect($socket, [220], 'SMTP greeting');
+                    mail_smtp_send($socket, 'EHLO ' . $helo, [250], 'SMTP EHLO');
 
-                if ($encryption !== 'ssl' && $encryption !== 'none') {
-                    mail_smtp_send($socket, 'STARTTLS', [220], 'SMTP STARTTLS');
-                    if (!stream_socket_enable_crypto($socket, true, STREAM_CRYPTO_METHOD_TLS_CLIENT)) {
-                        throw new RuntimeException('SMTP TLS negotiation failed.');
+                    if ($candidateEncryption !== 'ssl' && $candidateEncryption !== 'none') {
+                        mail_smtp_send($socket, 'STARTTLS', [220], 'SMTP STARTTLS');
+                        if (!stream_socket_enable_crypto($socket, true, mail_smtp_crypto_method())) {
+                            throw new RuntimeException('SMTP TLS negotiation failed.');
+                        }
+                        mail_smtp_send($socket, 'EHLO ' . $helo, [250], 'SMTP EHLO after STARTTLS');
                     }
-                    mail_smtp_send($socket, 'EHLO ' . $helo, [250], 'SMTP EHLO after STARTTLS');
+
+                    if ($username !== '') {
+                        mail_smtp_send($socket, 'AUTH LOGIN', [334], 'SMTP AUTH LOGIN');
+                        mail_smtp_send($socket, base64_encode($username), [334], 'SMTP AUTH USERNAME');
+                        mail_smtp_send($socket, base64_encode($password), [235], 'SMTP AUTH PASSWORD');
+                    }
+
+                    mail_smtp_send($socket, 'MAIL FROM:<' . $fromAddress . '>', [250], 'SMTP MAIL FROM');
+                    mail_smtp_send($socket, 'RCPT TO:<' . $to . '>', [250, 251], 'SMTP RCPT TO');
+                    mail_smtp_send($socket, 'DATA', [354], 'SMTP DATA');
+
+                    $message = $messageBody . "\r\n.";
+                    if (fwrite($socket, $message . "\r\n") === false) {
+                        throw new RuntimeException('SMTP message write failed.');
+                    }
+                    mail_smtp_expect($socket, [250], 'SMTP message delivery');
+                    mail_smtp_send($socket, 'QUIT', [221], 'SMTP QUIT');
+                    return true;
+                } catch (Throwable $e) {
+                    $reason = sprintf('%s:%d (%s) %s', $candidateHost, $candidatePort, $candidateEncryption, $e->getMessage());
+                    $smtpErrors[] = $reason;
+                    mail_smtp_log_failure('smtp', $reason);
+                } finally {
+                    fclose($socket);
                 }
-
-                if ($username !== '') {
-                    mail_smtp_send($socket, 'AUTH LOGIN', [334], 'SMTP AUTH LOGIN');
-                    mail_smtp_send($socket, base64_encode($username), [334], 'SMTP AUTH USERNAME');
-                    mail_smtp_send($socket, base64_encode($password), [235], 'SMTP AUTH PASSWORD');
-                }
-
-                mail_smtp_send($socket, 'MAIL FROM:<' . $fromAddress . '>', [250], 'SMTP MAIL FROM');
-                mail_smtp_send($socket, 'RCPT TO:<' . $to . '>', [250, 251], 'SMTP RCPT TO');
-                mail_smtp_send($socket, 'DATA', [354], 'SMTP DATA');
-
-                $headers = [
-                    'From: ' . mail_encode_header($fromName) . ' <' . $fromAddress . '>',
-                    'To: <' . $to . '>',
-                    'Subject: ' . mail_encode_header($subject),
-                    'MIME-Version: 1.0',
-                    'Content-Type: text/plain; charset=UTF-8',
-                    'Content-Transfer-Encoding: 8bit',
-                ];
-
-                $message = implode("\r\n", $headers) . "\r\n\r\n" . mail_prepare_body($bodyText) . "\r\n.";
-                if (fwrite($socket, $message . "\r\n") === false) {
-                    throw new RuntimeException('SMTP message write failed.');
-                }
-                mail_smtp_expect($socket, [250], 'SMTP message delivery');
-                mail_smtp_send($socket, 'QUIT', [221], 'SMTP QUIT');
-            } finally {
-                fclose($socket);
             }
-
-            return true;
         }
 
         if (mail_allow_php_fallback()) {
@@ -440,11 +510,13 @@ function send_mail_message(string $to, string $subject, string $bodyText): bool
             return @mail($to, $subject, $bodyText, $headers);
         }
 
+        if (!empty($smtpErrors)) {
+            mail_smtp_log_failure('smtp-all', implode(' || ', $smtpErrors));
+        }
+
         return false;
     } catch (\Throwable $e) {
-        if (function_exists('app_debug') && app_debug()) {
-            error_log('[mail] ' . $e->getMessage());
-        }
+        mail_smtp_log_failure('mail', $e->getMessage());
         return false;
     }
 }
@@ -475,7 +547,7 @@ function send_verification_code_mail(string $email, string $name, string $otp): 
     return send_mail_message($email, 'Verify your email address', verification_code_body($name, $otp));
 }
 
-function issue_email_verification_otp(int $userId, string $email, string $name): string
+function issue_email_verification_otp(int $userId, string $email, string $name): bool
 {
     $otp = generate_verification_otp();
     $expiry = date('Y-m-d H:i:s', time() + 600);
@@ -489,11 +561,7 @@ function issue_email_verification_otp(int $userId, string $email, string $name):
     );
     $stmt->execute([password_hash($otp, PASSWORD_DEFAULT), $expiry, $userId]);
 
-    if (!send_verification_code_mail($email, $name, $otp)) {
-        throw new RuntimeException('Unable to send verification email.');
-    }
-
-    return $otp;
+    return send_verification_code_mail($email, $name, $otp);
 }
 
 /**

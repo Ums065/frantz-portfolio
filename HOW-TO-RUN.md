@@ -27,7 +27,8 @@ The Vite dev server **proxies `/api`** to the PHP API, so the browser is same-or
      Copy from `api/.env.example` if missing. **Edit `DB_*` here to change the DB connection.**
    - `api/.env` also needs the SMTP variables for email verification:
      `MAIL_FROM_ADDRESS`, `MAIL_FROM_NAME`, `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`,
-     `MAIL_PASSWORD`, `MAIL_ENCRYPTION`, `MAIL_TIMEOUT_SECONDS`, `MAIL_ALLOW_PHP_FALLBACK`.
+     `MAIL_PASSWORD`, `MAIL_ENCRYPTION`, `MAIL_TIMEOUT_SECONDS`, `MAIL_VERIFY_PEER`,
+     `MAIL_ALLOW_PHP_FALLBACK`.
    - `frontend/.env` — `VITE_API_BASE` (defaults to `/api`).
    - Both `.env` files are git-ignored; the `.env.example` templates are tracked.
    - If your database already existed before this change, run `db/add-email-verification-columns.sql` once.

@@ -311,4 +311,5 @@ export interface AuthPayload {
   message?: string
   verification_required?: boolean
   verification_email?: string
+  verification_email_sent?: boolean
 }

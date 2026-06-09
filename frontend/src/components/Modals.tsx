@@ -91,7 +91,11 @@ export function AuthModal({
 
   const handleAuthResult = async (result: AuthResult) => {
     if (result.verificationRequired) {
-      openVerificationStep(result.verificationEmail || email, result.message)
+      const verificationMessage = result.message
+        || (result.verificationEmailSent === false
+          ? 'We created your account, but could not deliver the verification code right now. Please try Resend code after checking your email settings.'
+          : undefined)
+      openVerificationStep(result.verificationEmail || email, verificationMessage)
       setPassword('')
       return
     }

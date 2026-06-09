@@ -82,13 +82,16 @@ try {
                     $userId = (int) $pdo->lastInsertId();
                 }
 
-                issue_email_verification_otp($userId, $email, $name);
+                $sent = issue_email_verification_otp($userId, $email, $name);
                 $pdo->commit();
 
                 json([
                     'verification_required' => true,
                     'verification_email' => $email,
-                    'message' => 'Check your inbox for the verification code.',
+                    'verification_email_sent' => $sent,
+                    'message' => $sent
+                        ? 'Check your inbox for the verification code.'
+                        : 'Your account was created, but we could not deliver the verification code right now. You can resend it from the verification screen.',
                     'csrfToken' => csrf_token(),
                 ], 201);
             } catch (Throwable $e) {
@@ -96,7 +99,7 @@ try {
                     $pdo->rollBack();
                 }
                 json([
-                    'error' => app_debug() ? $e->getMessage() : 'Unable to send verification email.',
+                    'error' => app_debug() ? $e->getMessage() : 'Unable to create the verification record right now.',
                 ], 500);
             }
         }
@@ -118,12 +121,15 @@ try {
             if (empty($u['email_verified_at'])) {
                 $pdo->beginTransaction();
                 try {
-                    issue_email_verification_otp((int) $u['id'], (string) $u['email'], (string) $u['full_name']);
+                    $sent = issue_email_verification_otp((int) $u['id'], (string) $u['email'], (string) $u['full_name']);
                     $pdo->commit();
                     json([
                         'verification_required' => true,
                         'verification_email' => $u['email'],
-                        'message' => 'Your email is not verified. We sent a new code to your inbox.',
+                        'verification_email_sent' => $sent,
+                        'message' => $sent
+                            ? 'Your email is not verified. We sent a new code to your inbox.'
+                            : 'Your email is not verified, but we could not deliver a new code right now. Use resend after checking your mail settings.',
                         'csrfToken' => csrf_token(),
                     ]);
                 } catch (Throwable $e) {
@@ -131,7 +137,7 @@ try {
                         $pdo->rollBack();
                     }
                     json([
-                        'error' => app_debug() ? $e->getMessage() : 'Unable to send verification email.',
+                        'error' => app_debug() ? $e->getMessage() : 'Unable to create the verification record right now.',
                     ], 500);
                 }
             }
@@ -256,10 +262,13 @@ try {
 
             $pdo->beginTransaction();
             try {
-                issue_email_verification_otp((int) $u['id'], (string) $u['email'], (string) $u['full_name']);
+                $sent = issue_email_verification_otp((int) $u['id'], (string) $u['email'], (string) $u['full_name']);
                 $pdo->commit();
                 json([
-                    'message' => 'A new verification code has been sent.',
+                    'verification_email_sent' => $sent,
+                    'message' => $sent
+                        ? 'A new verification code has been sent.'
+                        : 'We saved a new verification code, but the email could not be delivered right now. Please resend after checking mail settings.',
                     'csrfToken' => csrf_token(),
                 ]);
             } catch (Throwable $e) {
@@ -267,7 +276,7 @@ try {
                     $pdo->rollBack();
                 }
                 json([
-                    'error' => app_debug() ? $e->getMessage() : 'Unable to resend verification code.',
+                    'error' => app_debug() ? $e->getMessage() : 'Unable to create the verification record right now.',
                 ], 500);
             }
         }

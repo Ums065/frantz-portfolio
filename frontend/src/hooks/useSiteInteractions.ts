@@ -256,6 +256,7 @@ export function useSiteInteractions({ onAuth, onRequest, onSubscribe }: Handlers
       toastTimer = window.setTimeout(() => toast.classList.remove('show'), 3400)
     }
     ;(window as unknown as { fcToast: (m: string) => void }).fcToast = showToast
+    let openGalleryLightbox: ((cell: HTMLElement) => void) | null = null
 
     /* ---------- Wire data-* buttons back to React ---------- */
     const onDocumentClick = (e: MouseEvent) => {
@@ -281,6 +282,14 @@ export function useSiteInteractions({ onAuth, onRequest, onSubscribe }: Handlers
       if (toastEl) {
         e.preventDefault()
         showToast(toastEl.getAttribute('data-toast') || '')
+        return
+      }
+
+      const galleryCell = target.closest<HTMLElement>('.gallery .cell')
+      if (galleryCell) {
+        e.preventDefault()
+        openGalleryLightbox?.(galleryCell)
+        return
       }
     }
     document.addEventListener('click', onDocumentClick)
@@ -301,21 +310,68 @@ export function useSiteInteractions({ onAuth, onRequest, onSubscribe }: Handlers
     /* ---------- Media gallery lightbox ---------- */
     const lightbox = document.getElementById('lightbox')
     if (lightbox) {
+      const lbImg = document.getElementById('lightbox-image') as HTMLImageElement | null
       const lbCap = document.getElementById('lightbox-cap')
-      const openLb = (cap: string) => { if (lbCap) lbCap.textContent = cap; lightbox.classList.add('open'); document.body.style.overflow = 'hidden' }
-      const closeLb = () => { lightbox.classList.remove('open'); document.body.style.overflow = '' }
-      const cells = [...document.querySelectorAll<HTMLElement>('.gallery .cell')]
-      const cellHandlers = cells.map((c) => {
-        const fn = () => openLb(c.getAttribute('data-cap') || '')
-        c.addEventListener('click', fn)
-        return [c, fn] as const
-      })
+      const openLb = (cell: HTMLElement) => {
+        const img = cell.querySelector<HTMLImageElement>('img')
+        const src = cell.getAttribute('data-lightbox-src') || img?.currentSrc || img?.src || ''
+        const alt = cell.getAttribute('data-lightbox-alt') || img?.alt || cell.getAttribute('data-cap') || ''
+        const cap = cell.getAttribute('data-lightbox-cap') || cell.getAttribute('data-cap') || alt
+
+        if (!src) return
+
+        if (lbImg) {
+          lbImg.hidden = false
+          lbImg.classList.remove('is-loaded')
+          lbImg.alt = alt
+          lbImg.removeAttribute('src')
+          lbImg.addEventListener('load', () => lbImg.classList.add('is-loaded'), { once: true })
+          lbImg.addEventListener('error', () => {
+            lbImg.hidden = true
+            lbImg.classList.remove('is-loaded')
+          }, { once: true })
+          lbImg.src = src
+          if (lbImg.complete && lbImg.naturalWidth > 0) lbImg.classList.add('is-loaded')
+        }
+
+        if (lbCap) lbCap.textContent = cap
+        lightbox.classList.add('open')
+        document.body.style.overflow = 'hidden'
+      }
+      openGalleryLightbox = openLb
+      const closeLb = () => {
+        lightbox.classList.remove('open')
+        document.body.style.overflow = ''
+        if (lbImg) {
+          lbImg.classList.remove('is-loaded')
+          lbImg.removeAttribute('src')
+          lbImg.hidden = true
+          lbImg.alt = ''
+        }
+        if (lbCap) lbCap.textContent = ''
+      }
       lightbox.querySelectorAll('[data-close-lightbox]').forEach((b) => b.addEventListener('click', closeLb))
       const onLbClick = (e: Event) => { if (e.target === lightbox) closeLb() }
+      const onEsc = (e: KeyboardEvent) => {
+        if (e.key === 'Escape' && lightbox.classList.contains('open')) closeLb()
+      }
       lightbox.addEventListener('click', onLbClick)
+      window.addEventListener('keydown', onEsc)
+      const onDocumentKeyDown = (e: KeyboardEvent) => {
+        const target = e.target
+        if (!(target instanceof Element)) return
+        const galleryCell = target.closest<HTMLElement>('.gallery .cell')
+        if (!galleryCell) return
+        if (e.key !== 'Enter' && e.key !== ' ') return
+        e.preventDefault()
+        openLb(galleryCell)
+      }
+      document.addEventListener('keydown', onDocumentKeyDown)
       cleanups.push(() => {
-        cellHandlers.forEach(([c, fn]) => c.removeEventListener('click', fn))
         lightbox.removeEventListener('click', onLbClick)
+        window.removeEventListener('keydown', onEsc)
+        document.removeEventListener('keydown', onDocumentKeyDown)
+        openGalleryLightbox = null
       })
     }
 

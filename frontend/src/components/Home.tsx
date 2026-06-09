@@ -116,14 +116,14 @@ const awardHighlights = [
 ]
 
 const galleryItems = [
-  { cls: 'cell wide', tag: 'Gallery 01', cap: 'Founder keynote spotlight', image: gallery1 },
-  { cls: 'cell tall', tag: 'Gallery 02', cap: 'Portrait and presence', image: gallery2 },
+  { cls: 'cell', tag: 'Gallery 01', cap: 'Founder keynote spotlight', image: gallery1 },
+  { cls: 'cell', tag: 'Gallery 02', cap: 'Portrait and presence', image: gallery2 },
   { cls: 'cell', tag: 'Gallery 03', cap: 'Public recognition moment', image: gallery3 },
   { cls: 'cell', tag: 'Gallery 04', cap: 'Signature brand detail', image: gallery4 },
-  { cls: 'cell wide', tag: 'Gallery 05', cap: 'Community-first spotlight', image: gallery5 },
+  { cls: 'cell', tag: 'Gallery 05', cap: 'Community-first spotlight', image: gallery5 },
   { cls: 'cell', tag: 'Gallery 06', cap: 'Media and press frame', image: gallery6 },
   { cls: 'cell', tag: 'Gallery 07', cap: 'Movement and outreach', image: gallery7 },
-  { cls: 'cell tall', tag: 'Gallery 08', cap: 'Founder portrait study', image: gallery8 },
+  { cls: 'cell', tag: 'Gallery 08', cap: 'Founder portrait study', image: gallery8 },
   { cls: 'cell', tag: 'Gallery 09', cap: 'Legacy visual close-up', image: gallery9 },
 ]
 
@@ -441,9 +441,18 @@ export default function Home() {
             <div className="section-title"><span className="ln l" /><h2 className="gold-text">Media Gallery</h2><span className="ln r" /></div>
             <p className="sub">Moments from the movement - speaking, community, and impact.</p>
           </div>
-          <div className="gallery reveal">
+          <div className="gallery gallery--uniform reveal">
             {galleryItems.map((c, i) => (
-              <div className={c.cls} data-cap={c.cap} key={i}>
+              <div
+                className={c.cls}
+                data-cap={c.cap}
+                data-lightbox-src={c.image}
+                data-lightbox-cap={c.cap}
+                data-lightbox-alt={c.cap}
+                key={i}
+                role="button"
+                tabIndex={0}
+              >
                 <img src={c.image} alt={c.cap} loading="lazy" decoding="async" />
                 <span className="tagk">{c.tag}</span>
                 <div className="cap">{c.cap}</div>

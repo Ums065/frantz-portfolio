@@ -17,6 +17,7 @@ interface AuthActionResult {
   message?: string
   verificationRequired?: boolean
   verificationEmail?: string
+  verificationEmailSent?: boolean
 }
 
 const AuthContext = createContext<AuthState | null>(null)
@@ -40,6 +41,7 @@ function describeAuthPayload(payload: AuthPayload) {
     hasCsrfToken: typeof payload.csrfToken === 'string' && payload.csrfToken.length > 0,
     verificationRequired: payload.verification_required === true,
     verificationEmail: typeof payload.verification_email === 'string' ? payload.verification_email : '',
+    verificationEmailSent: payload.verification_email_sent !== false,
   }
 }
 
@@ -54,6 +56,7 @@ async function readAuthResult(payload: AuthPayload, action: string): Promise<Aut
       user: null,
       verificationRequired: true,
       verificationEmail: payload.verification_email ?? '',
+      verificationEmailSent: payload.verification_email_sent !== false,
       message: payload.message ?? 'Check your inbox for the verification code.',
     }
   }
