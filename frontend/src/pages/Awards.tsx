@@ -19,7 +19,7 @@ function mapRow(r: AwardRow): Award {
   }
 }
 
-const portrait = '/assets/awards/frantz-coutard.png'
+const portrait = '/assets/awards/frantz-coutard.webp'
 
 const heroStats = [
   { big: '10+', label: 'Major Recognitions', ico: 'trophy' },
@@ -60,7 +60,7 @@ function AwardCard({ award, onOpen }: { award: Award; onOpen: (a: Award) => void
   return (
     <article className="glass award-card reveal">
       <button className="award-card__frame" onClick={() => onOpen(award)} aria-label={`View ${award.name}`}>
-        <img src={award.image} alt={award.name} loading="lazy" />
+        <img src={award.image} alt={award.name} loading="lazy" decoding="async" />
         <span className="award-card__year">{award.year}</span>
       </button>
       <div className="award-card__body">
@@ -104,7 +104,7 @@ export default function Awards() {
       {/* ---------- Hero ---------- */}
       <section className="awards-hero">
         <div className="awards-hero__photo">
-          <img src={portrait} alt="Frantz Coutard" />
+          <img src={portrait} alt="Frantz Coutard" loading="eager" decoding="async" />
         </div>
         <div className="wrap awards-hero__inner">
           <div className="awards-hero__copy">
@@ -225,7 +225,7 @@ export default function Awards() {
               <div className="reveal d3 about-cta"><Link className="btn btn--solid" to="/about">Read the Full Story</Link></div>
             </div>
             <div className="legacy__photo reveal in">
-              <img src="/assets/Frantz-gallery3.jpeg" alt="Frantz Coutard in a legacy portrait" loading="lazy" />
+              <img src="/assets/Frantz-gallery3.webp" alt="Frantz Coutard in a legacy portrait" loading="lazy" decoding="async" />
             </div>
           </div>
         </div>

@@ -1,8 +1,8 @@
-const merchHoodie = '/assets/merch-hoodie.png'
-const merchTee = '/assets/merch-tee.png'
-const merchCap = '/assets/merch-cap.png'
-const merchCollectible = '/assets/merch-collectible.png'
-const brandSignature = '/assets/brand-signature-white.jpg'
+const merchHoodie = '/assets/merch-hoodie.webp'
+const merchTee = '/assets/merch-tee.webp'
+const merchCap = '/assets/merch-cap.webp'
+const merchCollectible = '/assets/merch-collectible.webp'
+const brandSignature = '/assets/brand-signature-white.webp'
 
 export interface MerchPreviewItem {
   id: string

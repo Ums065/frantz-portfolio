@@ -26,7 +26,7 @@ export default function Community() {
   useSeo({
     title: 'Community',
     description: 'Member benefits, founder updates, private content, and community announcements for Frantz Coutard supporters.',
-    image: '/assets/brand-marks-grid.jpg',
+    image: '/assets/brand-marks-grid.webp',
   })
 
   useEffect(() => {

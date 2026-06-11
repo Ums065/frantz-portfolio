@@ -21,3 +21,10 @@ npm-debug.log*
 Thumbs.db
 .vscode/
 .idea/
+
+
+.tmp/
+chrome-profile/
+edge-profile/
+*.dmp
+chrome-profile2/

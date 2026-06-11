@@ -27,7 +27,7 @@ export const awards: Award[] = [
     short: 'Featured for revolutionizing local advertising through TrendCatch Digital Advertising.',
     detail:
       'Featured in Queens Chamber Member News for revolutionizing local advertising through TrendCatch Digital Advertising — highlighting an innovative approach to affordable advertising for local businesses and a vision for a stronger local business ecosystem. An important milestone in the evolution of what would become TrendCatch Network.',
-    image: `${A}/queens-chamber.png`,
+    image: `${A}/queens-chamber.webp`,
   },
   {
     id: 'presidential-lifetime',
@@ -38,7 +38,7 @@ export const awards: Award[] = [
     short: 'One of the nation’s highest volunteer service honors, for lifelong community service.',
     detail:
       'Awarded through AmeriCorps and the Office of the President of the United States — one of the nation’s highest volunteer service recognitions, honoring a lifelong commitment to community service, leadership, volunteerism, and efforts to strengthen communities through innovation and civic engagement.',
-    image: `${A}/presidential-lifetime.png`,
+    image: `${A}/presidential-lifetime.webp`,
     featured: true,
   },
   {
@@ -50,7 +50,7 @@ export const awards: Award[] = [
     short: 'Recognized for entrepreneurship, innovation, and improving lives across Long Island and New York.',
     detail:
       'Recognized for entrepreneurship, innovation, leadership, and dedication to improving the lives of residents throughout Long Island and New York. The citation highlights a commitment to helping small businesses gain visibility, creating opportunities through technology, and strengthening local economies.',
-    image: `${A}/ny-assembly.png`,
+    image: `${A}/ny-assembly.webp`,
     featured: true,
   },
   {
@@ -62,7 +62,7 @@ export const awards: Award[] = [
     short: 'For dedicated leadership, public service, and commitment to community advancement.',
     detail:
       'Awarded by Nassau County Executive Bruce Blakeman in recognition of dedicated leadership, public service, and commitment to community advancement — honoring contributions to local communities and efforts to improve the lives of others through service and leadership.',
-    image: `${A}/nassau-executive.png`,
+    image: `${A}/nassau-executive.webp`,
   },
   {
     id: 'nassau-cultural',
@@ -73,7 +73,7 @@ export const awards: Award[] = [
     short: 'Honoring contributions to cultural diversity and the Haitian and Creole communities.',
     detail:
       'Honored by Nassau County Executive Bruce Blakeman for contributions to cultural diversity, community engagement, and support of the Haitian and Creole communities — acknowledging a role in promoting community unity, cultural awareness, and public engagement.',
-    image: `${A}/nassau-cultural.png`,
+    image: `${A}/nassau-cultural.webp`,
   },
   {
     id: 'nassau-legislature',
@@ -84,7 +84,7 @@ export const awards: Award[] = [
     short: 'For outstanding leadership and contributions to the Haitian community.',
     detail:
       'Recognized for outstanding leadership and contributions to the Haitian community. Presented during the Jazz Créole Festival in recognition of community service, advocacy, and efforts that positively impacted residents throughout Nassau County.',
-    image: `${A}/nassau-legislature.png`,
+    image: `${A}/nassau-legislature.webp`,
   },
   {
     id: 'kedner-stiven',
@@ -95,7 +95,7 @@ export const awards: Award[] = [
     short: 'For outstanding leadership and commitment to the Haitian-American community.',
     detail:
       'Awarded for outstanding leadership and unwavering commitment to the Haitian-American community — honoring efforts to inspire others, create opportunities, support community development, and advocate for positive social impact.',
-    image: `${A}/kedner-stiven.png`,
+    image: `${A}/kedner-stiven.webp`,
   },
   {
     id: 'mlk-visionary',
@@ -105,7 +105,7 @@ export const awards: Award[] = [
     short: 'For visionary leadership, innovation, and community advancement.',
     detail:
       'Awarded in recognition of visionary leadership, innovation, community advancement, and commitment to the principles championed by Dr. Martin Luther King Jr. — celebrating work empowering communities through technology, entrepreneurship, economic opportunity, and social impact, and recognizing leadership that contributes to unity, progress, equality, and community transformation.',
-    image: `${A}/mlk-visionary.png`,
+    image: `${A}/mlk-visionary.webp`,
     featured: true,
   },
   {
@@ -117,7 +117,7 @@ export const awards: Award[] = [
     short: 'Federal recognition for entrepreneurial achievement and community leadership.',
     detail:
       'Recognized by the United States Senate, presented by U.S. Senator Charles E. Schumer, for entrepreneurial achievement, community leadership, and receiving the Dr. Martin Luther King Jr. Visionary Award. This federal recognition acknowledges impact on local communities through innovation, entrepreneurship, and public service.',
-    image: `${A}/us-senate.png`,
+    image: `${A}/us-senate.webp`,
     featured: true,
   },
   {
@@ -129,7 +129,7 @@ export const awards: Award[] = [
     short: 'A permanent public record honoring entrepreneurship, technology, and community impact.',
     detail:
       'Officially honored by the New York State Assembly through Legislative Resolution No. 998 — a permanent public record recognizing TrendCatch Digital Advertising, TrendCatch Network, TrendCatch Player Technology, Unlock A Cause, Workforce Development Initiatives, and Community Empowerment Programs, and a dedication to empowering underserved communities.',
-    image: `${A}/ny-resolution-998.png`,
+    image: `${A}/ny-resolution-998.webp`,
     featured: true,
   },
 ]
@@ -143,4 +143,4 @@ export const timeline = awards.map((a) => ({
   id: a.id,
 }))
 
-export const portrait = `${A}/frantz-coutard.png`
+export const portrait = `${A}/frantz-coutard.webp`

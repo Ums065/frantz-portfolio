@@ -1,0 +1,2090 @@
+<?php
+
+declare(strict_types=1);
+
+function new_school_upsert_user_account(string $fullName, string $email, string $password, string $role): array
+{
+    $pdo = db();
+    $stmt = $pdo->prepare('SELECT * FROM users WHERE email = ? LIMIT 1');
+    $stmt->execute([$email]);
+    $existing = $stmt->fetch();
+    $passwordHash = password_hash($password, PASSWORD_DEFAULT);
+
+    if ($existing) {
+        if (in_array((string) $existing['role'], ['admin', 'super_admin', 'editor'], true)) {
+            json(['error' => 'That email is already reserved for an administrator account.'], 409);
+        }
+
+        $update = $pdo->prepare(
+            'UPDATE users
+             SET full_name = ?,
+                 password_hash = ?,
+                 role = ?,
+                 email_verified_at = COALESCE(email_verified_at, NOW()),
+                 email_verification_otp_hash = NULL,
+                 email_verification_otp_expires_at = NULL,
+                 email_verification_otp_sent_at = NULL,
+                 email_verification_otp_attempts = 0
+             WHERE id = ?'
+        );
+        $update->execute([$fullName, $passwordHash, $role, $existing['id']]);
+
+        $fresh = $pdo->prepare('SELECT * FROM users WHERE id = ? LIMIT 1');
+        $fresh->execute([(int) $existing['id']]);
+        $user = $fresh->fetch();
+        if (!$user) {
+            json(['error' => 'Unable to load the saved account.'], 500);
+        }
+        return $user;
+    }
+
+    $insert = $pdo->prepare(
+        'INSERT INTO users (
+            full_name,
+            email,
+            password_hash,
+            role,
+            email_verified_at,
+            email_verification_otp_hash,
+            email_verification_otp_expires_at,
+            email_verification_otp_sent_at,
+            email_verification_otp_attempts
+         ) VALUES (?, ?, ?, ?, NOW(), NULL, NULL, NULL, 0)'
+    );
+    $insert->execute([$fullName, $email, $passwordHash, $role]);
+
+    $fresh = $pdo->prepare('SELECT * FROM users WHERE id = ? LIMIT 1');
+    $fresh->execute([(int) $pdo->lastInsertId()]);
+    $user = $fresh->fetch();
+    if (!$user) {
+        json(['error' => 'Unable to create the account.'], 500);
+    }
+    return $user;
+}
+
+function new_school_build_student_context(array $student): array
+{
+    $refreshed = new_school_refresh_student_status((int) $student['id']);
+    if ($refreshed) {
+        $student = $refreshed;
+    }
+
+    $studentId = (int) $student['id'];
+    $interviews = new_school_fetch_student_interviews($studentId);
+    $interviewCount = count($interviews);
+    $submission = new_school_fetch_submission_by_student_id($studentId);
+    $winner = new_school_fetch_winner_by_student_id($studentId);
+
+    return [
+        'student' => $student,
+        'parent' => new_school_fetch_parent_by_student_id($studentId),
+        'interview_count' => $interviewCount,
+        'interviews' => $interviews,
+        'approvals' => new_school_fetch_student_approvals($studentId),
+        'submission' => $submission,
+        'winner' => $winner,
+        'notifications' => new_school_fetch_notifications_for_scope([$studentId], ['student', 'parent'], 12),
+        'status_tracker' => new_school_status_tracker($student, $interviewCount),
+        'submission_locked' => new_school_submission_is_locked($student, $interviewCount),
+        'can_submit' => !new_school_submission_is_locked($student, $interviewCount),
+    ];
+}
+
+function new_school_student_status_summary(array $students): array
+{
+    $summary = [
+        'students_total' => count($students),
+        'parent_pending' => 0,
+        'parent_approved' => 0,
+        'school_pending' => 0,
+        'school_approved' => 0,
+        'teacher_pending' => 0,
+        'teacher_approved' => 0,
+        'eligible_to_submit' => 0,
+        'submitted' => 0,
+        'interviews_total' => 0,
+    ];
+
+    foreach ($students as $student) {
+        $interviews = (int) ($student['interview_count'] ?? 0);
+        $summary['interviews_total'] += $interviews;
+
+        if (($student['parent_consent_status'] ?? '') === 'approved') {
+            $summary['parent_approved']++;
+        } else {
+            $summary['parent_pending']++;
+        }
+
+        if (($student['school_approval_status'] ?? '') === 'approved') {
+            $summary['school_approved']++;
+        } else {
+            $summary['school_pending']++;
+        }
+
+        if (($student['teacher_approval_status'] ?? '') === 'approved') {
+            $summary['teacher_approved']++;
+        } else {
+            $summary['teacher_pending']++;
+        }
+
+        if (
+            $interviews >= 10
+            && ($student['parent_consent_status'] ?? '') === 'approved'
+            && ($student['school_approval_status'] ?? '') === 'approved'
+            && ($student['teacher_approval_status'] ?? '') === 'approved'
+        ) {
+            $summary['eligible_to_submit']++;
+        }
+
+        if ((int) ($student['has_submission'] ?? 0) > 0 || in_array((string) ($student['submission_status'] ?? ''), ['submitted', 'complete'], true)) {
+            $summary['submitted']++;
+        }
+    }
+
+    return $summary;
+}
+
+function new_school_rows_to_csv(array $rows): string
+{
+    if ($rows === []) {
+        return '';
+    }
+
+    $headers = array_keys($rows[0]);
+    $handle = fopen('php://temp', 'r+');
+    if ($handle === false) {
+        return '';
+    }
+
+    fputcsv($handle, $headers);
+    foreach ($rows as $row) {
+        $line = [];
+        foreach ($headers as $header) {
+            $value = $row[$header] ?? '';
+            if (is_array($value)) {
+                $value = json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            }
+            $line[] = (string) $value;
+        }
+        fputcsv($handle, $line);
+    }
+
+    rewind($handle);
+    $csv = stream_get_contents($handle);
+    fclose($handle);
+
+    return is_string($csv) ? $csv : '';
+}
+
+function new_school_handle_route(string $method, string $route): bool
+{
+    $body = body();
+    $user = current_user();
+    $key = $method . ' ' . $route;
+
+    switch (true) {
+        case $key === 'GET new-school/overview': {
+            $schools = array_map(
+                static fn(array $school): array => [
+                    'id' => (int) $school['id'],
+                    'school_name' => (string) $school['school_name'],
+                    'school_district' => (string) $school['school_district'],
+                    'status' => (string) $school['status'],
+                ],
+                new_school_fetch_all_schools()
+            );
+
+            $winners = db()->query(
+                'SELECT w.id, w.place, w.scholarship_amount, w.announced_at, w.published_at,
+                        s.full_name AS student_name, s.grade_level, sc.school_name, sub.score, sub.rank_position
+                 FROM new_school_winners w
+                 INNER JOIN new_school_students s ON s.id = w.student_id
+                 INNER JOIN new_school_submissions sub ON sub.id = w.submission_id
+                 LEFT JOIN new_school_schools sc ON sc.id = s.school_id
+                 ORDER BY w.created_at DESC'
+            )->fetchAll();
+
+            json([
+                'challenge' => [
+                    'title' => 'Leave It Better Than You Found It',
+                    'subtitle' => '2026 Community Business Impact Challenge',
+                    'deadline' => '2026-08-25',
+                    'website' => 'FrantzCoutard.com',
+                ],
+                'summary' => new_school_public_summary(),
+                'leaderboards' => new_school_public_leaderboards(),
+                'schools' => $schools,
+                'winners' => $winners,
+                'workflow' => [
+                    ['step' => 1, 'title' => 'Student registration', 'detail' => 'Students ages 14-19 create a challenge profile on the site.'],
+                    ['step' => 2, 'title' => 'Parent consent', 'detail' => 'A QR code opens the parent approval flow on a phone.'],
+                    ['step' => 3, 'title' => 'School verification', 'detail' => 'School staff confirms enrollment and confirms the parent link.'],
+                    ['step' => 4, 'title' => 'Teacher approval', 'detail' => 'The teacher monitors progress and approves participation.'],
+                    ['step' => 5, 'title' => 'Ten interviews', 'detail' => 'Each student logs 10 local businesses before final submission unlocks.'],
+                    ['step' => 6, 'title' => 'Final submission', 'detail' => 'The student uploads a short video and one-page written solution.'],
+                    ['step' => 7, 'title' => 'Winner review', 'detail' => 'Admin scores submissions and publishes the scholarship winners.'],
+                ],
+                'rules' => [
+                    'Students must be ages 14-19.',
+                    'Parent or guardian consent is required.',
+                    'School and teacher approval must be complete before final submission.',
+                    'A student must log 10 business interviews.',
+                    'Every approval stores time, name, and digital signature.',
+                ],
+                'prizes' => [
+                    ['place' => 'First', 'amount' => 2500, 'label' => 'Scholarship Award'],
+                    ['place' => 'Second', 'amount' => 1500, 'label' => 'Scholarship Award'],
+                    ['place' => 'Third', 'amount' => 1000, 'label' => 'Scholarship Award'],
+                ],
+                'submission_requirements' => [
+                    'Video length up to 1 minute and 30 seconds',
+                    'One-page written summary',
+                    'Business name, owner name, address, phone, date of visit',
+                    'Challenge identified, proposed solution, and expected impact',
+                ],
+                'user' => $user,
+            ]);
+        }
+
+        case $key === 'GET new-school/dashboard': {
+            $user = require_login();
+
+            if ($user['role'] === 'student') {
+                $student = new_school_fetch_student_by_user_id((int) $user['id']);
+                if (!$student) {
+                    json(['error' => 'Student profile not found.'], 404);
+                }
+                json(array_merge([
+                    'role' => 'student',
+                    'user' => $user,
+                ], new_school_build_student_context($student)));
+            }
+
+            if ($user['role'] === 'parent') {
+                $parent = new_school_fetch_parent_by_user_id((int) $user['id']);
+                if (!$parent) {
+                    json(['error' => 'Parent profile not found.'], 404);
+                }
+                $student = new_school_fetch_student_by_id((int) $parent['student_id']);
+                if (!$student) {
+                    json(['error' => 'Student profile not found.'], 404);
+                }
+                json([
+                    'role' => 'parent',
+                    'user' => $user,
+                    'parent' => $parent,
+                    'student_context' => new_school_build_student_context($student),
+                ]);
+            }
+
+            if ($user['role'] === 'school') {
+                $school = new_school_fetch_school_by_user_id((int) $user['id']);
+                if (!$school) {
+                    json(['error' => 'School profile not found.'], 404);
+                }
+                $students = new_school_fetch_students_for_school($school);
+                $studentIds = array_map(static fn(array $row): int => (int) $row['id'], $students);
+                json([
+                    'role' => 'school',
+                    'user' => $user,
+                    'school' => $school,
+                    'summary' => new_school_student_status_summary($students),
+                    'students' => $students,
+                    'businesses' => new_school_fetch_businesses_by_student_ids($studentIds),
+                    'approvals' => new_school_fetch_approvals_by_student_ids($studentIds),
+                    'submissions' => new_school_fetch_submissions_by_student_ids($studentIds),
+                    'winners' => new_school_fetch_winners_by_student_ids($studentIds),
+                    'notifications' => new_school_fetch_notifications_for_scope($studentIds, ['school'], 12),
+                    'leaderboards' => new_school_public_leaderboards(),
+                ]);
+            }
+
+            if ($user['role'] === 'teacher') {
+                $teacher = new_school_fetch_teacher_by_user_id((int) $user['id']);
+                if (!$teacher) {
+                    json(['error' => 'Teacher profile not found.'], 404);
+                }
+                $students = new_school_fetch_students_for_teacher($teacher);
+                $studentIds = array_map(static fn(array $row): int => (int) $row['id'], $students);
+                json([
+                    'role' => 'teacher',
+                    'user' => $user,
+                    'teacher' => $teacher,
+                    'summary' => new_school_student_status_summary($students),
+                    'students' => $students,
+                    'businesses' => new_school_fetch_businesses_by_student_ids($studentIds),
+                    'approvals' => new_school_fetch_approvals_by_student_ids($studentIds),
+                    'submissions' => new_school_fetch_submissions_by_student_ids($studentIds),
+                    'winners' => new_school_fetch_winners_by_student_ids($studentIds),
+                    'notifications' => new_school_fetch_notifications_for_scope($studentIds, ['teacher'], 12),
+                    'leaderboards' => new_school_public_leaderboards(),
+                ]);
+            }
+
+            if (in_array($user['role'], ['admin', 'super_admin', 'editor'], true)) {
+                json([
+                    'role' => 'admin',
+                    'user' => $user,
+                    'summary' => new_school_public_summary(),
+                    'leaderboards' => new_school_public_leaderboards(),
+                ]);
+            }
+
+            json(['error' => 'Unsupported account role for this dashboard.'], 403);
+        }
+
+        case preg_match('#^GET new-school/parent/([a-f0-9]+)$#i', $route, $m) === 1: {
+            $student = new_school_fetch_student_by_token($m[1]);
+            if (!$student) {
+                json(['error' => 'Invalid parent consent link.'], 404);
+            }
+            json([
+                'token' => $m[1],
+                'student' => $student,
+                'parent' => new_school_fetch_parent_by_student_id((int) $student['id']),
+                'status_tracker' => new_school_status_tracker($student, new_school_student_interview_count((int) $student['id'])),
+            ]);
+        }
+
+        case $method === 'POST' && preg_match('#^new-school/notifications/(\d+)/read$#', $route, $m) === 1: {
+            $user = require_login();
+            $notificationId = (int) $m[1];
+            $notification = new_school_fetch_notification_by_id($notificationId);
+            if (!$notification) {
+                json(['error' => 'Notification not found.'], 404);
+            }
+            if (!new_school_notification_can_access($user, $notification)) {
+                json(['error' => 'You cannot update this notification.'], 403);
+            }
+
+            $pdo = db();
+            $update = $pdo->prepare(
+                'UPDATE new_school_notifications
+                 SET is_read = 1,
+                     read_at = COALESCE(read_at, NOW()),
+                     updated_at = NOW()
+                 WHERE id = ?'
+            );
+            $update->execute([$notificationId]);
+
+            json([
+                'message' => 'Notification marked as read.',
+                'notification' => new_school_fetch_notification_by_id($notificationId),
+            ]);
+        }
+
+        case $key === 'POST new-school/student/register': {
+            $fullName = field($body, 'full_name');
+            $username = field($body, 'student_username');
+            $email = require_email(field($body, 'email'));
+            $password = field($body, 'password');
+            $age = (int) ($body['age'] ?? 0);
+            $dob = field($body, 'date_of_birth');
+            $phone = field($body, 'phone_number');
+            $homeAddress = field($body, 'home_address');
+            $schoolName = field($body, 'school_name');
+            $gradeLevel = field($body, 'grade_level');
+            $parentName = field($body, 'parent_name');
+            $parentPhone = field($body, 'parent_phone');
+            $parentEmail = require_email(field($body, 'parent_email'));
+
+            if ($fullName === '') json(['error' => 'Student full name is required.'], 422);
+            if ($username === '') json(['error' => 'Student username is required.'], 422);
+            if ($password === '' || strlen($password) < 6) json(['error' => 'Password must be at least 6 characters.'], 422);
+            if ($age < 14 || $age > 19) json(['error' => 'Students must be ages 14 to 19.'], 422);
+            if ($dob === '') json(['error' => 'Date of birth is required.'], 422);
+            if ($phone === '' || $homeAddress === '' || $schoolName === '' || $gradeLevel === '') {
+                json(['error' => 'Student contact and school details are required.'], 422);
+            }
+            if ($parentName === '' || $parentPhone === '' || $parentEmail === '') {
+                json(['error' => 'Parent contact details are required.'], 422);
+            }
+
+            $dateOfBirth = date_create($dob);
+            if (!$dateOfBirth) {
+                json(['error' => 'Date of birth is invalid.'], 422);
+            }
+
+            $pdo = db();
+            $checkUsername = $pdo->prepare('SELECT id FROM new_school_students WHERE student_username = ? LIMIT 1');
+            $checkUsername->execute([$username]);
+            $usernameTaken = $checkUsername->fetchColumn();
+
+            $currentUser = $pdo->prepare('SELECT * FROM users WHERE email = ? LIMIT 1');
+            $currentUser->execute([$email]);
+            $existingUser = $currentUser->fetch();
+            if ($usernameTaken && (!$existingUser || (int) $existingUser['id'] !== (int) $usernameTaken)) {
+                json(['error' => 'That student username is already in use.'], 409);
+            }
+
+            $user = new_school_upsert_user_account($fullName, $email, $password, 'student');
+            $school = new_school_fetch_school_by_name($schoolName);
+            $studentStmt = $pdo->prepare('SELECT * FROM new_school_students WHERE user_id = ? LIMIT 1');
+            $studentStmt->execute([(int) $user['id']]);
+            $existingStudent = $studentStmt->fetch();
+
+            $participantId = $existingStudent ? (string) $existingStudent['participant_id'] : new_school_generate_participant_id();
+            $qrToken = $existingStudent ? (string) $existingStudent['qr_token'] : new_school_generate_qr_token();
+            $qrUrl = $existingStudent ? (string) $existingStudent['qr_url'] : new_school_qr_url($qrToken);
+            $schoolId = $school ? (int) $school['id'] : null;
+
+            if ($existingStudent) {
+                $update = $pdo->prepare(
+                    'UPDATE new_school_students
+                     SET school_id = ?,
+                         full_name = ?,
+                         student_username = ?,
+                         age = ?,
+                         date_of_birth = ?,
+                         email = ?,
+                         phone_number = ?,
+                         home_address = ?,
+                         school_name = ?,
+                         grade_level = ?,
+                         parent_name = ?,
+                         parent_phone = ?,
+                         parent_email = ?,
+                         updated_at = NOW()
+                     WHERE id = ?'
+                );
+                $update->execute([
+                    $schoolId,
+                    $fullName,
+                    $username,
+                    $age,
+                    $dateOfBirth->format('Y-m-d'),
+                    $email,
+                    $phone,
+                    $homeAddress,
+                    $schoolName,
+                    $gradeLevel,
+                    $parentName,
+                    $parentPhone,
+                    $parentEmail,
+                    (int) $existingStudent['id'],
+                ]);
+                $studentId = (int) $existingStudent['id'];
+            } else {
+                $insert = $pdo->prepare(
+                    'INSERT INTO new_school_students (
+                        user_id, school_id, teacher_id, participant_id, qr_token, qr_url,
+                        full_name, student_username, age, date_of_birth, email, phone_number,
+                        home_address, school_name, grade_level, parent_name, parent_phone, parent_email,
+                        parent_consent_status, school_approval_status, teacher_approval_status, submission_status, overall_status
+                     ) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "pending", "pending", "pending", "locked", "student_registered")'
+                );
+                $insert->execute([
+                    (int) $user['id'],
+                    $schoolId,
+                    $participantId,
+                    $qrToken,
+                    $qrUrl,
+                    $fullName,
+                    $username,
+                    $age,
+                    $dateOfBirth->format('Y-m-d'),
+                    $email,
+                    $phone,
+                    $homeAddress,
+                    $schoolName,
+                    $gradeLevel,
+                    $parentName,
+                    $parentPhone,
+                    $parentEmail,
+                ]);
+                $studentId = (int) $pdo->lastInsertId();
+            }
+
+            $student = new_school_refresh_student_status($studentId);
+            if (!$student) {
+                json(['error' => 'Student registration failed.'], 500);
+            }
+
+            $studentSchool = $school ? (string) $school['school_name'] : $schoolName;
+            new_school_add_notification(
+                $studentId,
+                'student',
+                'registration',
+                'Student registration complete',
+                'Your challenge profile is ready. Use the QR link to open the parent consent flow.',
+                ['participant_id' => $participantId, 'school_name' => $studentSchool, 'qr_url' => $qrUrl]
+            );
+            new_school_add_notification(
+                $studentId,
+                'parent',
+                'registration',
+                'Parent consent link ready',
+                'The QR consent link is ready for ' . $fullName . '.',
+                ['participant_id' => $participantId, 'school_name' => $studentSchool, 'qr_url' => $qrUrl]
+            );
+            new_school_add_notification(
+                $studentId,
+                'admin',
+                'registration',
+                'New student registered',
+                $fullName . ' registered for the New School challenge.',
+                ['participant_id' => $participantId, 'school_name' => $studentSchool]
+            );
+
+            json([
+                'message' => 'Student registered successfully.',
+                'user' => login_user($user),
+                'student' => $student,
+                'qr_token' => $qrToken,
+                'qr_url' => $qrUrl,
+                'participant_id' => $participantId,
+                'status_tracker' => new_school_status_tracker($student, new_school_student_interview_count($studentId)),
+            ], $existingStudent ? 200 : 201);
+        }
+
+        case $key === 'POST new-school/parent/consent': {
+            $token = field($body, 'token') ?: field($body, 'qr_token');
+            $parentFullName = field($body, 'parent_full_name');
+            $relationship = field($body, 'relationship_to_student');
+            $phone = field($body, 'phone_number');
+            $email = require_email(field($body, 'email'));
+            $homeAddress = field($body, 'home_address');
+            $governmentIdUrl = field($body, 'government_id_url');
+            $consentChecked = !empty($body['consent_checked']);
+            $signature = field($body, 'digital_signature');
+            $password = field($body, 'password');
+
+            if ($token === '') json(['error' => 'QR token is required.'], 422);
+            $student = new_school_fetch_student_by_token($token);
+            if (!$student) json(['error' => 'Invalid QR token.'], 404);
+            if ($parentFullName === '' || $relationship === '' || $phone === '' || $homeAddress === '' || $signature === '') {
+                json(['error' => 'Parent consent form is incomplete.'], 422);
+            }
+            if (!$consentChecked) {
+                json(['error' => 'Consent must be confirmed.'], 422);
+            }
+            if ($password === '' || strlen($password) < 6) {
+                json(['error' => 'Parent account password must be at least 6 characters.'], 422);
+            }
+
+            $user = new_school_upsert_user_account($parentFullName, $email, $password, 'parent');
+            $pdo = db();
+            $studentId = (int) $student['id'];
+            $existing = $pdo->prepare('SELECT * FROM new_school_parents WHERE student_id = ? LIMIT 1');
+            $existing->execute([$studentId]);
+            $existingParent = $existing->fetch();
+
+            if ($existingParent) {
+                $update = $pdo->prepare(
+                    'UPDATE new_school_parents
+                     SET user_id = ?,
+                         parent_full_name = ?,
+                         relationship_to_student = ?,
+                         phone_number = ?,
+                         email = ?,
+                         home_address = ?,
+                         government_id_url = ?,
+                         consent_checked = 1,
+                         digital_signature = ?,
+                         approved_at = NOW(),
+                         consented_at = NOW(),
+                         updated_at = NOW()
+                     WHERE id = ?'
+                );
+                $update->execute([
+                    (int) $user['id'],
+                    $parentFullName,
+                    $relationship,
+                    $phone,
+                    $email,
+                    $homeAddress,
+                    $governmentIdUrl !== '' ? $governmentIdUrl : null,
+                    $signature,
+                    (int) $existingParent['id'],
+                ]);
+            } else {
+                $insert = $pdo->prepare(
+                    'INSERT INTO new_school_parents (
+                        user_id, student_id, parent_full_name, relationship_to_student,
+                        phone_number, email, home_address, government_id_url, consent_checked,
+                        digital_signature, approved_at, consented_at
+                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, NOW(), NOW())'
+                );
+                $insert->execute([
+                    (int) $user['id'],
+                    $studentId,
+                    $parentFullName,
+                    $relationship,
+                    $phone,
+                    $email,
+                    $homeAddress,
+                    $governmentIdUrl !== '' ? $governmentIdUrl : null,
+                    $signature,
+                ]);
+            }
+
+            $studentUpdate = $pdo->prepare(
+                'UPDATE new_school_students
+                 SET parent_name = ?, parent_phone = ?, parent_email = ?, parent_consent_status = "approved"
+                 WHERE id = ?'
+            );
+            $studentUpdate->execute([$parentFullName, $phone, $email, $studentId]);
+
+            $student = new_school_refresh_student_status($studentId);
+            if (!$student) {
+                json(['error' => 'Unable to update parent consent.'], 500);
+            }
+
+            new_school_add_notification(
+                $studentId,
+                'student',
+                'parent_consent',
+                'Parent consent approved',
+                'Your parent or guardian approved your participation.',
+                ['participant_id' => (string) $student['participant_id']]
+            );
+            new_school_add_notification(
+                $studentId,
+                'parent',
+                'parent_consent',
+                'Consent saved',
+                'Your consent record was saved for ' . $student['full_name'] . '.',
+                ['participant_id' => (string) $student['participant_id']]
+            );
+            new_school_add_notification(
+                $studentId,
+                'school',
+                'parent_consent',
+                'Parent consent approved',
+                $student['full_name'] . ' has approved parent consent.',
+                ['participant_id' => (string) $student['participant_id']]
+            );
+            new_school_add_notification(
+                $studentId,
+                'teacher',
+                'parent_consent',
+                'Parent consent approved',
+                $student['full_name'] . ' is ready for school verification.',
+                ['participant_id' => (string) $student['participant_id']]
+            );
+            new_school_add_notification(
+                $studentId,
+                'admin',
+                'parent_consent',
+                'Parent consent approved',
+                $student['full_name'] . ' completed the parent consent step.',
+                ['participant_id' => (string) $student['participant_id']]
+            );
+
+            json([
+                'message' => 'Parent consent approved.',
+                'user' => login_user($user),
+                'parent' => new_school_fetch_parent_by_student_id($studentId),
+                'student' => $student,
+                'status_tracker' => new_school_status_tracker($student, new_school_student_interview_count($studentId)),
+            ], 201);
+        }
+
+        case $key === 'POST new-school/school/register': {
+            $schoolName = field($body, 'school_name');
+            $schoolAddress = field($body, 'school_address');
+            $schoolDistrict = field($body, 'school_district');
+            $mainPhone = field($body, 'main_phone');
+            $principalName = field($body, 'principal_name');
+            $administratorName = field($body, 'administrator_name');
+            $administratorEmail = require_email(field($body, 'administrator_email'));
+            $administratorPhone = field($body, 'administrator_phone');
+            $password = field($body, 'password');
+
+            if ($schoolName === '' || $schoolAddress === '' || $schoolDistrict === '' || $mainPhone === '' || $principalName === '' || $administratorName === '' || $administratorPhone === '') {
+                json(['error' => 'All school profile fields are required.'], 422);
+            }
+            if ($password === '' || strlen($password) < 6) {
+                json(['error' => 'Password must be at least 6 characters.'], 422);
+            }
+
+            $pdo = db();
+            $existingSchool = new_school_fetch_school_by_name($schoolName);
+            $user = new_school_upsert_user_account($administratorName, $administratorEmail, $password, 'school');
+
+            if ($existingSchool && (int) $existingSchool['user_id'] !== (int) $user['id']) {
+                json(['error' => 'A school with that name is already registered.'], 409);
+            }
+
+            if ($existingSchool) {
+                $update = $pdo->prepare(
+                    'UPDATE new_school_schools
+                     SET user_id = ?,
+                         school_address = ?,
+                         school_district = ?,
+                         main_phone = ?,
+                         principal_name = ?,
+                         administrator_name = ?,
+                         administrator_email = ?,
+                         administrator_phone = ?,
+                         status = "registered",
+                         updated_at = NOW()
+                     WHERE id = ?'
+                );
+                $update->execute([
+                    (int) $user['id'],
+                    $schoolAddress,
+                    $schoolDistrict,
+                    $mainPhone,
+                    $principalName,
+                    $administratorName,
+                    $administratorEmail,
+                    $administratorPhone,
+                    (int) $existingSchool['id'],
+                ]);
+                $schoolId = (int) $existingSchool['id'];
+            } else {
+                $insert = $pdo->prepare(
+                    'INSERT INTO new_school_schools (
+                        user_id, school_name, school_address, school_district, main_phone,
+                        principal_name, administrator_name, administrator_email, administrator_phone, status
+                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, "registered")'
+                );
+                $insert->execute([
+                    (int) $user['id'],
+                    $schoolName,
+                    $schoolAddress,
+                    $schoolDistrict,
+                    $mainPhone,
+                    $principalName,
+                    $administratorName,
+                    $administratorEmail,
+                    $administratorPhone,
+                ]);
+                $schoolId = (int) $pdo->lastInsertId();
+            }
+
+            new_school_add_notification(
+                null,
+                'admin',
+                'school_registration',
+                'School registered',
+                $schoolName . ' completed the school registration flow.',
+                ['school_name' => $schoolName, 'administrator_email' => $administratorEmail]
+            );
+
+            json([
+                'message' => 'School registered successfully.',
+                'user' => login_user($user),
+                'school' => new_school_fetch_school_by_id($schoolId),
+            ], $existingSchool ? 200 : 201);
+        }
+
+        case $key === 'POST new-school/teacher/register': {
+            $teacherFullName = field($body, 'teacher_full_name');
+            $schoolId = (int) ($body['school_id'] ?? 0);
+            $schoolName = field($body, 'school_name');
+            $schoolEmail = require_email(field($body, 'school_email'));
+            $phoneNumber = field($body, 'phone_number');
+            $roleDepartment = field($body, 'role_department');
+            $gradeLevel = field($body, 'grade_level_supported');
+            $password = field($body, 'password');
+
+            if ($teacherFullName === '' || $schoolEmail === '' || $phoneNumber === '' || $roleDepartment === '' || $gradeLevel === '') {
+                json(['error' => 'Teacher profile fields are required.'], 422);
+            }
+            if ($password === '' || strlen($password) < 6) {
+                json(['error' => 'Password must be at least 6 characters.'], 422);
+            }
+
+            $school = $schoolId > 0 ? new_school_fetch_school_by_id($schoolId) : ($schoolName !== '' ? new_school_fetch_school_by_name($schoolName) : null);
+            if (!$school) {
+                json(['error' => 'A valid school is required for teacher registration.'], 422);
+            }
+
+            $user = new_school_upsert_user_account($teacherFullName, $schoolEmail, $password, 'teacher');
+            $pdo = db();
+            $existingTeacher = $pdo->prepare('SELECT * FROM new_school_teachers WHERE user_id = ? LIMIT 1');
+            $existingTeacher->execute([(int) $user['id']]);
+            $teacher = $existingTeacher->fetch();
+
+            if ($teacher) {
+                $update = $pdo->prepare(
+                    'UPDATE new_school_teachers
+                     SET school_id = ?,
+                         teacher_full_name = ?,
+                         school_email = ?,
+                         phone_number = ?,
+                         role_department = ?,
+                         grade_level_supported = ?,
+                         status = "registered",
+                         updated_at = NOW()
+                     WHERE id = ?'
+                );
+                $update->execute([
+                    (int) $school['id'],
+                    $teacherFullName,
+                    $schoolEmail,
+                    $phoneNumber,
+                    $roleDepartment,
+                    $gradeLevel,
+                    (int) $teacher['id'],
+                ]);
+                $teacherId = (int) $teacher['id'];
+            } else {
+                $insert = $pdo->prepare(
+                    'INSERT INTO new_school_teachers (
+                        user_id, school_id, teacher_full_name, school_email, phone_number, role_department, grade_level_supported, status
+                     ) VALUES (?, ?, ?, ?, ?, ?, ?, "registered")'
+                );
+                $insert->execute([
+                    (int) $user['id'],
+                    (int) $school['id'],
+                    $teacherFullName,
+                    $schoolEmail,
+                    $phoneNumber,
+                    $roleDepartment,
+                    $gradeLevel,
+                ]);
+                $teacherId = (int) $pdo->lastInsertId();
+            }
+
+            new_school_add_notification(
+                null,
+                'admin',
+                'teacher_registration',
+                'Teacher registered',
+                $teacherFullName . ' joined ' . $school['school_name'] . '.',
+                ['teacher_name' => $teacherFullName, 'school_name' => (string) $school['school_name']]
+            );
+
+            json([
+                'message' => 'Teacher registered successfully.',
+                'user' => login_user($user),
+                'teacher' => new_school_fetch_teacher_by_user_id((int) $user['id']),
+                'school' => $school,
+            ], $teacher ? 200 : 201);
+        }
+
+        case $key === 'POST new-school/school/approve': {
+            $user = require_login();
+            if (!in_array($user['role'], ['school', 'admin', 'super_admin', 'editor'], true)) {
+                json(['error' => 'School approval requires a school account.'], 403);
+            }
+
+            $studentId = (int) ($body['student_id'] ?? 0);
+            if ($studentId <= 0 && field($body, 'participant_id') !== '') {
+                $student = new_school_fetch_student_by_participant_id(field($body, 'participant_id'));
+                $studentId = $student ? (int) $student['id'] : 0;
+            } else {
+                $student = $studentId > 0 ? new_school_fetch_student_by_id($studentId) : null;
+            }
+            if (!$student) {
+                json(['error' => 'Student not found.'], 404);
+            }
+
+            $schoolStaffName = field($body, 'school_staff_name');
+            $role = field($body, 'role');
+            $schoolEmail = require_email(field($body, 'school_email'));
+            $approvalStatus = field($body, 'approval_status') ?: 'approved';
+            $notes = field($body, 'notes');
+            $signature = field($body, 'digital_signature');
+
+            if ($schoolStaffName === '' || $role === '' || $schoolEmail === '' || $signature === '') {
+                json(['error' => 'School approval form is incomplete.'], 422);
+            }
+            if (!in_array($approvalStatus, ['approved', 'rejected', 'pending'], true)) {
+                json(['error' => 'Invalid approval status.'], 422);
+            }
+            if (($student['parent_consent_status'] ?? '') !== 'approved') {
+                json(['error' => 'Parent consent must be approved before school approval.'], 422);
+            }
+
+            $school = $user['role'] === 'school' ? new_school_fetch_school_by_user_id((int) $user['id']) : null;
+            if ($school && (int) $student['school_id'] > 0 && (int) $student['school_id'] !== (int) $school['id']) {
+                json(['error' => 'This student does not belong to your school.'], 403);
+            }
+            if ($school && (int) $student['school_id'] === 0 && strcasecmp((string) $student['school_name'], (string) $school['school_name']) === 0) {
+                $link = db()->prepare('UPDATE new_school_students SET school_id = ? WHERE id = ?');
+                $link->execute([(int) $school['id'], (int) $student['id']]);
+                $student['school_id'] = (int) $school['id'];
+            }
+            if ($school && strcasecmp((string) $student['school_name'], (string) $school['school_name']) !== 0) {
+                json(['error' => 'This student does not match your school name.'], 403);
+            }
+
+            $pdo = db();
+            $recordedAt = date('Y-m-d H:i:s');
+            $approvedAt = $approvalStatus === 'approved' ? $recordedAt : null;
+            $approvalStmt = $pdo->prepare(
+                'INSERT INTO new_school_approvals (
+                    student_id, approval_type, reviewer_user_id, reviewer_name, reviewer_email, reviewer_role,
+                    status, notes, digital_signature, approved_at, recorded_at
+                 ) VALUES (?, "school", ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 ON DUPLICATE KEY UPDATE
+                    reviewer_user_id = VALUES(reviewer_user_id),
+                    reviewer_name = VALUES(reviewer_name),
+                    reviewer_email = VALUES(reviewer_email),
+                    reviewer_role = VALUES(reviewer_role),
+                    status = VALUES(status),
+                    notes = VALUES(notes),
+                    digital_signature = VALUES(digital_signature),
+                    approved_at = VALUES(approved_at),
+                    recorded_at = VALUES(recorded_at),
+                    updated_at = NOW()'
+            );
+            $approvalStmt->execute([
+                (int) $student['id'],
+                (int) $user['id'],
+                $schoolStaffName,
+                $schoolEmail,
+                $role,
+                $approvalStatus,
+                $notes ?: null,
+                $signature,
+                $approvedAt,
+                $recordedAt,
+            ]);
+
+            $studentUpdate = $pdo->prepare(
+                'UPDATE new_school_students
+                 SET school_approval_status = ?
+                 WHERE id = ?'
+            );
+            $studentUpdate->execute([$approvalStatus, (int) $student['id']]);
+
+            $student = new_school_refresh_student_status((int) $student['id']);
+            new_school_add_notification(
+                (int) $student['id'],
+                'student',
+                'school_approval',
+                'School approval ' . $approvalStatus,
+                'Your school has ' . $approvalStatus . ' your participation.',
+                ['participant_id' => (string) $student['participant_id'], 'approval_status' => $approvalStatus]
+            );
+            new_school_add_notification(
+                (int) $student['id'],
+                'teacher',
+                'school_approval',
+                'School approval ' . $approvalStatus,
+                $student['full_name'] . ' has been ' . $approvalStatus . ' by school staff.',
+                ['participant_id' => (string) $student['participant_id'], 'approval_status' => $approvalStatus]
+            );
+            new_school_add_notification(
+                (int) $student['id'],
+                'admin',
+                'school_approval',
+                'School approval ' . $approvalStatus,
+                $student['full_name'] . ' has been ' . $approvalStatus . ' by school staff.',
+                ['participant_id' => (string) $student['participant_id'], 'approval_status' => $approvalStatus]
+            );
+            json([
+                'message' => 'School approval saved.',
+                'student' => $student,
+                'approval' => new_school_fetch_student_approvals((int) $student['id'])['school'],
+            ]);
+        }
+
+        case $key === 'POST new-school/teacher/approve': {
+            $user = require_login();
+            if (!in_array($user['role'], ['teacher', 'admin', 'super_admin', 'editor'], true)) {
+                json(['error' => 'Teacher approval requires a teacher account.'], 403);
+            }
+
+            $studentId = (int) ($body['student_id'] ?? 0);
+            if ($studentId <= 0 && field($body, 'participant_id') !== '') {
+                $student = new_school_fetch_student_by_participant_id(field($body, 'participant_id'));
+                $studentId = $student ? (int) $student['id'] : 0;
+            } else {
+                $student = $studentId > 0 ? new_school_fetch_student_by_id($studentId) : null;
+            }
+            if (!$student) {
+                json(['error' => 'Student not found.'], 404);
+            }
+
+            $teacherName = field($body, 'teacher_name');
+            $teacherEmail = require_email(field($body, 'teacher_email'));
+            $approvalStatus = field($body, 'approval_status') ?: 'approved';
+            $notes = field($body, 'notes');
+            $signature = field($body, 'digital_signature');
+
+            if ($teacherName === '' || $teacherEmail === '' || $signature === '') {
+                json(['error' => 'Teacher approval form is incomplete.'], 422);
+            }
+            if (!in_array($approvalStatus, ['approved', 'rejected', 'pending'], true)) {
+                json(['error' => 'Invalid approval status.'], 422);
+            }
+            if (($student['parent_consent_status'] ?? '') !== 'approved') {
+                json(['error' => 'Parent consent must be approved before teacher approval.'], 422);
+            }
+            if (($student['school_approval_status'] ?? '') !== 'approved') {
+                json(['error' => 'School approval must be approved before teacher approval.'], 422);
+            }
+
+            $teacher = $user['role'] === 'teacher' ? new_school_fetch_teacher_by_user_id((int) $user['id']) : null;
+            if ($teacher && (int) $student['teacher_id'] > 0 && (int) $student['teacher_id'] !== (int) $teacher['id']) {
+                json(['error' => 'This student is assigned to a different teacher.'], 403);
+            }
+            if ($teacher && (int) $student['teacher_id'] === 0 && (int) $student['school_id'] === (int) $teacher['school_id']) {
+                $link = db()->prepare('UPDATE new_school_students SET teacher_id = ? WHERE id = ?');
+                $link->execute([(int) $teacher['id'], (int) $student['id']]);
+                $student['teacher_id'] = (int) $teacher['id'];
+            }
+            if ($teacher && (int) $student['school_id'] !== (int) $teacher['school_id']) {
+                json(['error' => 'This student does not belong to your school.'], 403);
+            }
+
+            $pdo = db();
+            $recordedAt = date('Y-m-d H:i:s');
+            $approvedAt = $approvalStatus === 'approved' ? $recordedAt : null;
+            $approvalStmt = $pdo->prepare(
+                'INSERT INTO new_school_approvals (
+                    student_id, approval_type, reviewer_user_id, reviewer_name, reviewer_email, reviewer_role,
+                    status, notes, digital_signature, approved_at, recorded_at
+                 ) VALUES (?, "teacher", ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 ON DUPLICATE KEY UPDATE
+                    reviewer_user_id = VALUES(reviewer_user_id),
+                    reviewer_name = VALUES(reviewer_name),
+                    reviewer_email = VALUES(reviewer_email),
+                    reviewer_role = VALUES(reviewer_role),
+                    status = VALUES(status),
+                    notes = VALUES(notes),
+                    digital_signature = VALUES(digital_signature),
+                    approved_at = VALUES(approved_at),
+                    recorded_at = VALUES(recorded_at),
+                    updated_at = NOW()'
+            );
+            $approvalStmt->execute([
+                (int) $student['id'],
+                (int) $user['id'],
+                $teacherName,
+                $teacherEmail,
+                field($body, 'role') ?: ($teacher['role_department'] ?? null),
+                $approvalStatus,
+                $notes ?: null,
+                $signature,
+                $approvedAt,
+                $recordedAt,
+            ]);
+
+            $studentUpdate = $pdo->prepare(
+                'UPDATE new_school_students
+                 SET teacher_approval_status = ?
+                 WHERE id = ?'
+            );
+            $studentUpdate->execute([$approvalStatus, (int) $student['id']]);
+
+            $student = new_school_refresh_student_status((int) $student['id']);
+            new_school_add_notification(
+                (int) $student['id'],
+                'student',
+                'teacher_approval',
+                'Teacher approval ' . $approvalStatus,
+                'Your teacher has ' . $approvalStatus . ' your participation.',
+                ['participant_id' => (string) $student['participant_id'], 'approval_status' => $approvalStatus]
+            );
+            new_school_add_notification(
+                (int) $student['id'],
+                'school',
+                'teacher_approval',
+                'Teacher approval ' . $approvalStatus,
+                $student['full_name'] . ' has been ' . $approvalStatus . ' by teacher review.',
+                ['participant_id' => (string) $student['participant_id'], 'approval_status' => $approvalStatus]
+            );
+            new_school_add_notification(
+                (int) $student['id'],
+                'admin',
+                'teacher_approval',
+                'Teacher approval ' . $approvalStatus,
+                $student['full_name'] . ' has been ' . $approvalStatus . ' by teacher review.',
+                ['participant_id' => (string) $student['participant_id'], 'approval_status' => $approvalStatus]
+            );
+            json([
+                'message' => 'Teacher approval saved.',
+                'student' => $student,
+                'approval' => new_school_fetch_student_approvals((int) $student['id'])['teacher'],
+            ]);
+        }
+
+        case $key === 'GET new-school/businesses': {
+            $user = require_login();
+
+            if ($user['role'] === 'student') {
+                $student = new_school_fetch_student_by_user_id((int) $user['id']);
+                if (!$student) {
+                    json(['error' => 'Student profile not found.'], 404);
+                }
+                json(array_merge([
+                    'role' => 'student',
+                    'user' => $user,
+                ], new_school_build_student_context($student)));
+            }
+
+            if ($user['role'] === 'parent') {
+                $parent = new_school_fetch_parent_by_user_id((int) $user['id']);
+                if (!$parent) {
+                    json(['error' => 'Parent profile not found.'], 404);
+                }
+                $student = new_school_fetch_student_by_id((int) $parent['student_id']);
+                if (!$student) {
+                    json(['error' => 'Student profile not found.'], 404);
+                }
+                json(array_merge([
+                    'role' => 'parent',
+                    'user' => $user,
+                ], new_school_build_student_context($student)));
+            }
+
+            if ($user['role'] === 'teacher') {
+                $teacher = new_school_fetch_teacher_by_user_id((int) $user['id']);
+                if (!$teacher) {
+                    json(['error' => 'Teacher profile not found.'], 404);
+                }
+                $studentId = (int) ($_GET['student_id'] ?? 0);
+                if ($studentId > 0) {
+                    $student = new_school_fetch_student_by_id($studentId);
+                    if (!$student) {
+                        json(['error' => 'Student not found.'], 404);
+                    }
+                    if ((int) $student['teacher_id'] !== (int) $teacher['id'] && (int) $student['school_id'] !== (int) $teacher['school_id']) {
+                        json(['error' => 'This student is not assigned to your teacher account.'], 403);
+                    }
+                    json(array_merge([
+                        'role' => 'teacher',
+                        'user' => $user,
+                        'teacher' => $teacher,
+                    ], new_school_build_student_context($student)));
+                }
+                json([
+                    'role' => 'teacher',
+                    'user' => $user,
+                    'teacher' => $teacher,
+                    'students' => new_school_fetch_students_for_teacher($teacher),
+                    'summary' => new_school_student_status_summary(new_school_fetch_students_for_teacher($teacher)),
+                ]);
+            }
+
+            if ($user['role'] === 'school') {
+                $school = new_school_fetch_school_by_user_id((int) $user['id']);
+                if (!$school) {
+                    json(['error' => 'School profile not found.'], 404);
+                }
+                $studentId = (int) ($_GET['student_id'] ?? 0);
+                if ($studentId > 0) {
+                    $student = new_school_fetch_student_by_id($studentId);
+                    if (!$student) {
+                        json(['error' => 'Student not found.'], 404);
+                    }
+                    if ((int) $student['school_id'] !== (int) $school['id'] && strcasecmp((string) $student['school_name'], (string) $school['school_name']) !== 0) {
+                        json(['error' => 'This student is not assigned to your school account.'], 403);
+                    }
+                    json(array_merge([
+                        'role' => 'school',
+                        'user' => $user,
+                        'school' => $school,
+                    ], new_school_build_student_context($student)));
+                }
+                $students = new_school_fetch_students_for_school($school);
+                json([
+                    'role' => 'school',
+                    'user' => $user,
+                    'school' => $school,
+                    'students' => $students,
+                    'summary' => new_school_student_status_summary($students),
+                ]);
+            }
+
+            if (in_array($user['role'], ['admin', 'super_admin', 'editor'], true)) {
+                json([
+                    'role' => 'admin',
+                    'user' => $user,
+                    'students' => db()->query(
+                        'SELECT s.*, u.full_name AS user_full_name, u.email AS user_email,
+                                (SELECT COUNT(*) FROM new_school_business_interviews bi WHERE bi.student_id = s.id) AS interview_count,
+                                (SELECT COUNT(*) FROM new_school_submissions sub WHERE sub.student_id = s.id) AS has_submission
+                         FROM new_school_students s
+                         INNER JOIN users u ON u.id = s.user_id
+                         ORDER BY s.created_at DESC'
+                    )->fetchAll(),
+                ]);
+            }
+
+            json(['error' => 'Unsupported account role for business tracking.'], 403);
+        }
+
+        case $key === 'POST new-school/business': {
+            $user = require_login();
+            $student = null;
+            $studentId = (int) ($body['student_id'] ?? 0);
+
+            if ($user['role'] === 'student') {
+                $student = new_school_fetch_student_by_user_id((int) $user['id']);
+            } elseif ($user['role'] === 'parent') {
+                $parent = new_school_fetch_parent_by_user_id((int) $user['id']);
+                $student = $parent ? new_school_fetch_student_by_id((int) $parent['student_id']) : null;
+            } elseif ($studentId > 0) {
+                $student = new_school_fetch_student_by_id($studentId);
+            }
+
+            if (!$student) {
+                json(['error' => 'Student profile not found.'], 404);
+            }
+
+            if ($user['role'] === 'teacher') {
+                $teacher = new_school_fetch_teacher_by_user_id((int) $user['id']);
+                if (!$teacher || ((int) $student['teacher_id'] !== (int) $teacher['id'] && (int) $student['school_id'] !== (int) $teacher['school_id'])) {
+                    json(['error' => 'This student is not assigned to your teacher account.'], 403);
+                }
+            }
+
+            if ($user['role'] === 'school') {
+                $school = new_school_fetch_school_by_user_id((int) $user['id']);
+                if (!$school || ((int) $student['school_id'] !== (int) $school['id'] && strcasecmp((string) $student['school_name'], (string) $school['school_name']) !== 0)) {
+                    json(['error' => 'This student is not assigned to your school account.'], 403);
+                }
+            }
+
+            $businessName = field($body, 'business_name');
+            $ownerName = field($body, 'owner_name');
+            $businessPhone = field($body, 'business_phone');
+            $businessAddress = field($body, 'business_address');
+            $businessCategory = field($body, 'business_category');
+            $dateOfVisit = field($body, 'date_of_visit');
+            $mainChallenge = field($body, 'main_challenge');
+            $studentNotes = field($body, 'student_notes');
+            $visitNumber = (int) ($body['visit_number'] ?? 0);
+
+            if ($businessName === '' || $ownerName === '' || $businessPhone === '' || $businessAddress === '' || $businessCategory === '' || $dateOfVisit === '' || $mainChallenge === '' || $studentNotes === '') {
+                json(['error' => 'Business interview fields are incomplete.'], 422);
+            }
+            if (!date_create($dateOfVisit)) {
+                json(['error' => 'Date of visit is invalid.'], 422);
+            }
+
+            $interviewCount = new_school_student_interview_count((int) $student['id']);
+            if ($visitNumber <= 0) {
+                $visitNumber = $interviewCount + 1;
+            }
+            if ($visitNumber < 1 || $visitNumber > 10) {
+                json(['error' => 'Visit number must be between 1 and 10.'], 422);
+            }
+            $existingInterview = db()->prepare('SELECT * FROM new_school_business_interviews WHERE student_id = ? AND visit_number = ? LIMIT 1');
+            $existingInterview->execute([(int) $student['id'], $visitNumber]);
+            $interviewRow = $existingInterview->fetch();
+            if (!$interviewRow && $interviewCount >= 10) {
+                json(['error' => 'The student already has 10 completed interviews.'], 422);
+            }
+
+            $values = [
+                (int) $student['id'],
+                $visitNumber,
+                $businessName,
+                $ownerName,
+                $businessPhone,
+                $businessAddress,
+                $businessCategory,
+                $dateOfVisit,
+                !empty($body['has_website']) ? 1 : 0,
+                !empty($body['has_google_profile']) ? 1 : 0,
+                !empty($body['uses_social_media']) ? 1 : 0,
+                !empty($body['uses_digital_signage']) ? 1 : 0,
+                !empty($body['offers_rewards']) ? 1 : 0,
+                !empty($body['has_online_ordering']) ? 1 : 0,
+                !empty($body['has_delivery_options']) ? 1 : 0,
+                $mainChallenge,
+                $studentNotes,
+            ];
+
+            $pdo = db();
+            if ($interviewRow) {
+                $update = $pdo->prepare(
+                    'UPDATE new_school_business_interviews
+                     SET business_name = ?, owner_name = ?, business_phone = ?, business_address = ?, business_category = ?,
+                         date_of_visit = ?, has_website = ?, has_google_profile = ?, uses_social_media = ?, uses_digital_signage = ?,
+                         offers_rewards = ?, has_online_ordering = ?, has_delivery_options = ?, main_challenge = ?, student_notes = ?,
+                         updated_at = NOW()
+                     WHERE id = ?'
+                );
+                $update->execute([
+                    $businessName,
+                    $ownerName,
+                    $businessPhone,
+                    $businessAddress,
+                    $businessCategory,
+                    $dateOfVisit,
+                    !empty($body['has_website']) ? 1 : 0,
+                    !empty($body['has_google_profile']) ? 1 : 0,
+                    !empty($body['uses_social_media']) ? 1 : 0,
+                    !empty($body['uses_digital_signage']) ? 1 : 0,
+                    !empty($body['offers_rewards']) ? 1 : 0,
+                    !empty($body['has_online_ordering']) ? 1 : 0,
+                    !empty($body['has_delivery_options']) ? 1 : 0,
+                    $mainChallenge,
+                    $studentNotes,
+                    (int) $interviewRow['id'],
+                ]);
+                $interviewId = (int) $interviewRow['id'];
+            } else {
+                $insert = $pdo->prepare(
+                    'INSERT INTO new_school_business_interviews (
+                        student_id, visit_number, business_name, owner_name, business_phone, business_address, business_category,
+                        date_of_visit, has_website, has_google_profile, uses_social_media, uses_digital_signage, offers_rewards,
+                        has_online_ordering, has_delivery_options, main_challenge, student_notes
+                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                );
+                $insert->execute($values);
+                $interviewId = (int) $pdo->lastInsertId();
+            }
+
+            $student = new_school_refresh_student_status((int) $student['id']);
+            $businessStmt = $pdo->prepare('SELECT * FROM new_school_business_interviews WHERE id = ? LIMIT 1');
+            $businessStmt->execute([$interviewId]);
+            $business = $businessStmt->fetch();
+            $updatedInterviewCount = new_school_student_interview_count((int) $student['id']);
+            new_school_add_notification(
+                (int) $student['id'],
+                'student',
+                'business_interview',
+                'Business interview saved',
+                'Visit ' . $business['visit_number'] . ' for ' . $business['business_name'] . ' has been saved.',
+                ['participant_id' => (string) $student['participant_id'], 'visit_number' => (int) $business['visit_number']]
+            );
+            new_school_add_notification(
+                (int) $student['id'],
+                'teacher',
+                'business_interview',
+                'Business interview updated',
+                $student['full_name'] . ' has recorded business visit ' . $business['visit_number'] . '.',
+                ['participant_id' => (string) $student['participant_id'], 'visit_number' => (int) $business['visit_number']]
+            );
+            new_school_add_notification(
+                (int) $student['id'],
+                'school',
+                'business_interview',
+                'Business interview updated',
+                $student['full_name'] . ' has recorded business visit ' . $business['visit_number'] . '.',
+                ['participant_id' => (string) $student['participant_id'], 'visit_number' => (int) $business['visit_number']]
+            );
+            new_school_add_notification(
+                (int) $student['id'],
+                'admin',
+                'business_interview',
+                'Business interview updated',
+                $student['full_name'] . ' has recorded business visit ' . $business['visit_number'] . '.',
+                ['participant_id' => (string) $student['participant_id'], 'visit_number' => (int) $business['visit_number']]
+            );
+            if ($updatedInterviewCount === 10) {
+                new_school_add_notification(
+                    (int) $student['id'],
+                    'student',
+                    'business_milestone',
+                    'All 10 interviews complete',
+                    'You have completed the 10 required business interviews.',
+                    ['participant_id' => (string) $student['participant_id']]
+                );
+                new_school_add_notification(
+                    (int) $student['id'],
+                    'teacher',
+                    'business_milestone',
+                    'All 10 interviews complete',
+                    $student['full_name'] . ' has completed all 10 interviews.',
+                    ['participant_id' => (string) $student['participant_id']]
+                );
+                new_school_add_notification(
+                    (int) $student['id'],
+                    'admin',
+                    'business_milestone',
+                    'All 10 interviews complete',
+                    $student['full_name'] . ' has completed all 10 interviews.',
+                    ['participant_id' => (string) $student['participant_id']]
+                );
+            }
+            json([
+                'message' => 'Business interview saved.',
+                'business' => $business,
+                'student' => $student,
+                'interview_count' => $updatedInterviewCount,
+            ], $interviewRow ? 200 : 201);
+        }
+
+        case $key === 'POST new-school/submission': {
+            $user = require_login();
+            $student = null;
+
+            if ($user['role'] === 'student') {
+                $student = new_school_fetch_student_by_user_id((int) $user['id']);
+            } elseif ($user['role'] === 'parent') {
+                $parent = new_school_fetch_parent_by_user_id((int) $user['id']);
+                $student = $parent ? new_school_fetch_student_by_id((int) $parent['student_id']) : null;
+            } elseif (in_array($user['role'], ['admin', 'super_admin', 'editor'], true) && (int) ($body['student_id'] ?? 0) > 0) {
+                $student = new_school_fetch_student_by_id((int) $body['student_id']);
+            }
+
+            if (!$student) {
+                json(['error' => 'Student profile not found.'], 404);
+            }
+
+            if (new_school_submission_is_locked($student, new_school_student_interview_count((int) $student['id']))) {
+                json(['error' => 'This student is not yet eligible to submit.'], 422);
+            }
+
+            $problemIdentified = field($body, 'problem_identified');
+            $whyItMatters = field($body, 'why_it_matters');
+            $proposedSolution = field($body, 'proposed_solution');
+            $howItHelps = field($body, 'how_it_helps');
+            $expectedImpact = field($body, 'expected_impact');
+            $videoUrl = field($body, 'video_url');
+            $writtenUrl = field($body, 'written_url');
+            $sourceBusinessId = (int) ($body['source_business_id'] ?? 0);
+
+            if ($problemIdentified === '' || $whyItMatters === '' || $proposedSolution === '' || $howItHelps === '' || $expectedImpact === '') {
+                json(['error' => 'Submission fields are incomplete.'], 422);
+            }
+            if ($videoUrl === '' || $writtenUrl === '') {
+                json(['error' => 'Both video and written uploads are required.'], 422);
+            }
+
+            if ($sourceBusinessId > 0) {
+                $checkBusiness = db()->prepare('SELECT id FROM new_school_business_interviews WHERE id = ? AND student_id = ? LIMIT 1');
+                $checkBusiness->execute([$sourceBusinessId, (int) $student['id']]);
+                if (!$checkBusiness->fetchColumn()) {
+                    json(['error' => 'Selected business does not belong to this student.'], 422);
+                }
+            } else {
+                $fallback = db()->prepare('SELECT id FROM new_school_business_interviews WHERE student_id = ? ORDER BY visit_number DESC LIMIT 1');
+                $fallback->execute([(int) $student['id']]);
+                $sourceBusinessId = (int) $fallback->fetchColumn();
+            }
+
+            $pdo = db();
+            $existing = $pdo->prepare('SELECT * FROM new_school_submissions WHERE student_id = ? LIMIT 1');
+            $existing->execute([(int) $student['id']]);
+            $submission = $existing->fetch();
+
+            if ($submission) {
+                if (in_array((string) $submission['status'], ['approved', 'winner'], true)) {
+                    json(['error' => 'This submission has already been finalized.'], 409);
+                }
+                $update = $pdo->prepare(
+                    'UPDATE new_school_submissions
+                     SET source_business_id = ?,
+                         problem_identified = ?,
+                         why_it_matters = ?,
+                         proposed_solution = ?,
+                         how_it_helps = ?,
+                         expected_impact = ?,
+                         video_url = ?,
+                         written_url = ?,
+                         submission_date = NOW(),
+                         status = "submitted",
+                         updated_at = NOW()
+                     WHERE id = ?'
+                );
+                $update->execute([
+                    $sourceBusinessId > 0 ? $sourceBusinessId : null,
+                    $problemIdentified,
+                    $whyItMatters,
+                    $proposedSolution,
+                    $howItHelps,
+                    $expectedImpact,
+                    $videoUrl,
+                    $writtenUrl,
+                    (int) $submission['id'],
+                ]);
+                $submissionId = (int) $submission['id'];
+            } else {
+                $insert = $pdo->prepare(
+                    'INSERT INTO new_school_submissions (
+                        student_id, source_business_id, problem_identified, why_it_matters, proposed_solution, how_it_helps,
+                        expected_impact, video_url, written_url, submission_date, status
+                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), "submitted")'
+                );
+                $insert->execute([
+                    (int) $student['id'],
+                    $sourceBusinessId > 0 ? $sourceBusinessId : null,
+                    $problemIdentified,
+                    $whyItMatters,
+                    $proposedSolution,
+                    $howItHelps,
+                    $expectedImpact,
+                    $videoUrl,
+                    $writtenUrl,
+                ]);
+                $submissionId = (int) $pdo->lastInsertId();
+            }
+
+            $student = new_school_refresh_student_status((int) $student['id']);
+            new_school_add_notification(
+                (int) $student['id'],
+                'student',
+                'submission',
+                'Final submission saved',
+                'Your project submission has been saved and is ready for review.',
+                ['participant_id' => (string) $student['participant_id']]
+            );
+            new_school_add_notification(
+                (int) $student['id'],
+                'parent',
+                'submission',
+                'Final submission saved',
+                $student['full_name'] . ' has saved the final project submission.',
+                ['participant_id' => (string) $student['participant_id']]
+            );
+            new_school_add_notification(
+                (int) $student['id'],
+                'teacher',
+                'submission',
+                'Final submission saved',
+                $student['full_name'] . ' has submitted the final project.',
+                ['participant_id' => (string) $student['participant_id']]
+            );
+            new_school_add_notification(
+                (int) $student['id'],
+                'school',
+                'submission',
+                'Final submission saved',
+                $student['full_name'] . ' has submitted the final project.',
+                ['participant_id' => (string) $student['participant_id']]
+            );
+            new_school_add_notification(
+                (int) $student['id'],
+                'admin',
+                'submission',
+                'Final submission saved',
+                $student['full_name'] . ' has submitted the final project.',
+                ['participant_id' => (string) $student['participant_id']]
+            );
+            json([
+                'message' => 'Submission saved.',
+                'submission' => new_school_fetch_submission_by_student_id((int) $student['id']),
+                'student' => $student,
+            ]);
+        }
+
+        case $key === 'POST new-school/upload': {
+            if (empty($_FILES['file']) || ($_FILES['file']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+                json(['error' => 'No file uploaded.'], 422);
+            }
+
+            $file = $_FILES['file'];
+            $mime = function_exists('mime_content_type') ? mime_content_type($file['tmp_name']) : ($file['type'] ?? '');
+            $videoMimes = [
+                'video/mp4' => 'mp4',
+                'video/webm' => 'webm',
+                'video/quicktime' => 'mov',
+                'video/x-matroska' => 'mkv',
+            ];
+            $documentMimes = [
+                'application/pdf' => 'pdf',
+                'application/msword' => 'doc',
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document' => 'docx',
+                'image/jpeg' => 'jpg',
+                'image/png' => 'png',
+                'image/webp' => 'webp',
+                'text/plain' => 'txt',
+            ];
+
+            $extension = null;
+            $maxSize = 0;
+            if (isset($videoMimes[$mime])) {
+                $extension = $videoMimes[$mime];
+                $maxSize = 120 * 1024 * 1024;
+            } elseif (isset($documentMimes[$mime])) {
+                $extension = $documentMimes[$mime];
+                $maxSize = 15 * 1024 * 1024;
+            }
+
+            if ($extension === null) {
+                json(['error' => 'Unsupported file type.'], 422);
+            }
+            if ((int) ($file['size'] ?? 0) > $maxSize) {
+                json(['error' => $maxSize >= 100 * 1024 * 1024 ? 'Video must be 120MB or smaller.' : 'File must be 15MB or smaller.'], 422);
+            }
+
+            $dir = __DIR__ . '/uploads/new_school';
+            if (!is_dir($dir) && !mkdir($dir, 0775, true) && !is_dir($dir)) {
+                json(['error' => 'Could not create upload directory.'], 500);
+            }
+
+            $prefix = str_starts_with((string) $mime, 'video/') ? 'video' : 'doc';
+            $name = 'ns-' . $prefix . '-' . bin2hex(random_bytes(8)) . '.' . $extension;
+            if (!move_uploaded_file($file['tmp_name'], $dir . '/' . $name)) {
+                json(['error' => 'Failed to save the uploaded file.'], 500);
+            }
+
+            json([
+                'url' => '/api/uploads/new_school/' . $name,
+                'mime' => $mime,
+                'message' => 'Uploaded.',
+            ], 201);
+        }
+
+        case $key === 'GET admin/new-school/summary': {
+            require_admin();
+            $students = db()->query(
+                'SELECT s.*, u.full_name AS user_full_name, u.email AS user_email,
+                        (SELECT COUNT(*) FROM new_school_business_interviews bi WHERE bi.student_id = s.id) AS interview_count,
+                        (SELECT COUNT(*) FROM new_school_submissions sub WHERE sub.student_id = s.id) AS has_submission
+                 FROM new_school_students s
+                 INNER JOIN users u ON u.id = s.user_id
+                 ORDER BY s.created_at DESC'
+            )->fetchAll();
+
+            $submissions = db()->query(
+                'SELECT sub.*, s.full_name AS student_name, s.grade_level, s.participant_id, u.email AS student_email,
+                        b.business_name AS source_business_name, b.owner_name AS source_owner_name
+                 FROM new_school_submissions sub
+                 INNER JOIN new_school_students s ON s.id = sub.student_id
+                 INNER JOIN users u ON u.id = s.user_id
+                 LEFT JOIN new_school_business_interviews b ON b.id = sub.source_business_id
+                 ORDER BY sub.updated_at DESC'
+            )->fetchAll();
+
+            $winners = db()->query(
+                'SELECT w.*, s.full_name AS student_name, s.grade_level, s.participant_id, u.email AS student_email,
+                        sub.score, sub.rank_position
+                 FROM new_school_winners w
+                 INNER JOIN new_school_students s ON s.id = w.student_id
+                 INNER JOIN users u ON u.id = s.user_id
+                 INNER JOIN new_school_submissions sub ON sub.id = w.submission_id
+                 ORDER BY w.created_at DESC'
+            )->fetchAll();
+
+            $parents = db()->query(
+                'SELECT p.*, s.full_name AS student_name, s.grade_level, s.participant_id, s.school_name, s.parent_consent_status,
+                        u.email AS student_email
+                 FROM new_school_parents p
+                 INNER JOIN new_school_students s ON s.id = p.student_id
+                 INNER JOIN users u ON u.id = s.user_id
+                 ORDER BY p.updated_at DESC, p.created_at DESC'
+            )->fetchAll();
+
+            $approvals = db()->query(
+                'SELECT a.*, s.full_name AS student_name, s.grade_level, s.participant_id, s.school_name, s.parent_consent_status,
+                        s.school_approval_status, s.teacher_approval_status, u.email AS student_email,
+                        rv.full_name AS reviewer_user_name, rv.email AS reviewer_user_email
+                 FROM new_school_approvals a
+                 INNER JOIN new_school_students s ON s.id = a.student_id
+                 INNER JOIN users u ON u.id = s.user_id
+                 LEFT JOIN users rv ON rv.id = a.reviewer_user_id
+                 ORDER BY a.updated_at DESC, a.created_at DESC'
+            )->fetchAll();
+
+            $businesses = db()->query(
+                'SELECT bi.*, s.full_name AS student_name, s.grade_level, s.participant_id, s.school_name, u.email AS student_email
+                 FROM new_school_business_interviews bi
+                 INNER JOIN new_school_students s ON s.id = bi.student_id
+                 INNER JOIN users u ON u.id = s.user_id
+                 ORDER BY bi.created_at DESC'
+            )->fetchAll();
+
+            $notifications = db()->query(
+                'SELECT n.*, s.full_name AS student_name, s.participant_id, s.school_name
+                 FROM new_school_notifications n
+                 LEFT JOIN new_school_students s ON s.id = n.student_id
+                 ORDER BY n.created_at DESC
+                 LIMIT 50'
+            )->fetchAll();
+
+            json([
+                'summary' => new_school_public_summary(),
+                'student_summary' => new_school_student_status_summary($students),
+                'leaderboards' => new_school_public_leaderboards(),
+                'schools' => new_school_fetch_all_schools(),
+                'students' => $students,
+                'parents' => $parents,
+                'approvals' => $approvals,
+                'businesses' => $businesses,
+                'submissions' => $submissions,
+                'winners' => $winners,
+                'notifications' => $notifications,
+            ]);
+        }
+
+        case $key === 'GET admin/new-school/export': {
+            require_admin();
+            $type = strtolower(trim((string) ($_GET['type'] ?? 'students')));
+
+            if ($type === 'schools') {
+                $rows = db()->query(
+                    'SELECT sc.id, sc.school_name, sc.school_address, sc.school_district, sc.main_phone, sc.principal_name,
+                            sc.administrator_name, sc.administrator_email, sc.administrator_phone, sc.status, sc.created_at, sc.updated_at,
+                            (SELECT COUNT(*) FROM new_school_students st WHERE st.school_id = sc.id OR st.school_name = sc.school_name) AS students_count,
+                            (SELECT COUNT(*) FROM new_school_teachers t WHERE t.school_id = sc.id) AS teachers_count
+                     FROM new_school_schools sc
+                     ORDER BY sc.school_name ASC'
+                )->fetchAll();
+                $csv = new_school_rows_to_csv($rows);
+                json(['filename' => 'new-school-schools.csv', 'rows' => $rows, 'csv' => $csv]);
+            }
+
+            if ($type === 'teachers') {
+                $rows = db()->query(
+                    'SELECT t.id, t.teacher_full_name, t.school_email, t.phone_number, t.role_department, t.grade_level_supported,
+                            t.status, t.created_at, t.updated_at,
+                            s.school_name, s.school_district, s.administrator_email AS school_administrator_email,
+                            u.email AS login_email
+                     FROM new_school_teachers t
+                     LEFT JOIN new_school_schools s ON s.id = t.school_id
+                     LEFT JOIN users u ON u.id = t.user_id
+                     ORDER BY t.created_at DESC'
+                )->fetchAll();
+                $csv = new_school_rows_to_csv($rows);
+                json(['filename' => 'new-school-teachers.csv', 'rows' => $rows, 'csv' => $csv]);
+            }
+
+            if ($type === 'parents') {
+                $rows = db()->query(
+                    'SELECT p.id, p.student_id, s.full_name AS student_name, s.participant_id, s.grade_level, s.school_name,
+                            p.parent_full_name, p.relationship_to_student, p.phone_number, p.email, p.home_address,
+                            p.consent_checked, p.approved_at, p.consented_at, p.digital_signature, p.created_at, p.updated_at,
+                            s.parent_consent_status AS student_parent_status,
+                            u.email AS student_email
+                     FROM new_school_parents p
+                     INNER JOIN new_school_students s ON s.id = p.student_id
+                     INNER JOIN users u ON u.id = s.user_id
+                     ORDER BY p.updated_at DESC, p.created_at DESC'
+                )->fetchAll();
+                $csv = new_school_rows_to_csv($rows);
+                json(['filename' => 'new-school-parents.csv', 'rows' => $rows, 'csv' => $csv]);
+            }
+
+            if ($type === 'notifications') {
+                $rows = db()->query(
+                    'SELECT n.id, n.student_id, s.full_name AS student_name, s.participant_id, s.school_name,
+                            n.recipient_role, n.notification_type, n.title, n.message, n.payload_json, n.is_read, n.read_at,
+                            n.created_at, n.updated_at
+                     FROM new_school_notifications n
+                     LEFT JOIN new_school_students s ON s.id = n.student_id
+                     ORDER BY n.created_at DESC'
+                )->fetchAll();
+                foreach ($rows as &$row) {
+                    $payload = $row['payload_json'] ?? null;
+                    if (is_string($payload) && $payload !== '') {
+                        $decoded = json_decode($payload, true);
+                        $row['payload'] = is_array($decoded) ? $decoded : null;
+                    } else {
+                        $row['payload'] = null;
+                    }
+                }
+                unset($row);
+                $csv = new_school_rows_to_csv($rows);
+                json(['filename' => 'new-school-notifications.csv', 'rows' => $rows, 'csv' => $csv]);
+            }
+
+            if ($type === 'submissions') {
+                $rows = db()->query(
+                    'SELECT sub.id, sub.student_id, s.full_name AS student_name, s.grade_level, s.participant_id, u.email AS student_email,
+                            sub.problem_identified, sub.why_it_matters, sub.proposed_solution, sub.how_it_helps, sub.expected_impact,
+                            sub.video_url, sub.written_url, sub.status, sub.score, sub.rank_position, sub.submission_date, sub.updated_at
+                     FROM new_school_submissions sub
+                     INNER JOIN new_school_students s ON s.id = sub.student_id
+                     INNER JOIN users u ON u.id = s.user_id
+                     ORDER BY sub.updated_at DESC'
+                )->fetchAll();
+                $csv = new_school_rows_to_csv($rows);
+                json(['filename' => 'new-school-submissions.csv', 'rows' => $rows, 'csv' => $csv]);
+            }
+
+            if ($type === 'winners') {
+                $rows = db()->query(
+                    'SELECT w.id, w.place, w.scholarship_amount, w.announced_at, w.published_at,
+                            s.full_name AS student_name, s.grade_level, s.participant_id, u.email AS student_email,
+                            sub.status, sub.score, sub.rank_position
+                     FROM new_school_winners w
+                     INNER JOIN new_school_students s ON s.id = w.student_id
+                     INNER JOIN users u ON u.id = s.user_id
+                     INNER JOIN new_school_submissions sub ON sub.id = w.submission_id
+                     ORDER BY w.created_at DESC'
+                )->fetchAll();
+                $csv = new_school_rows_to_csv($rows);
+                json(['filename' => 'new-school-winners.csv', 'rows' => $rows, 'csv' => $csv]);
+            }
+
+            if ($type === 'businesses') {
+                $rows = db()->query(
+                    'SELECT bi.id, bi.student_id, s.full_name AS student_name, s.grade_level, s.participant_id, u.email AS student_email,
+                            bi.visit_number, bi.business_name, bi.owner_name, bi.business_phone, bi.business_address, bi.business_category,
+                            bi.date_of_visit, bi.has_website, bi.has_google_profile, bi.uses_social_media, bi.uses_digital_signage,
+                            bi.offers_rewards, bi.has_online_ordering, bi.has_delivery_options, bi.main_challenge, bi.student_notes,
+                            bi.created_at, bi.updated_at
+                     FROM new_school_business_interviews bi
+                     INNER JOIN new_school_students s ON s.id = bi.student_id
+                     INNER JOIN users u ON u.id = s.user_id
+                     ORDER BY bi.created_at DESC'
+                )->fetchAll();
+                $csv = new_school_rows_to_csv($rows);
+                json(['filename' => 'new-school-businesses.csv', 'rows' => $rows, 'csv' => $csv]);
+            }
+
+            if ($type === 'approvals') {
+                $rows = db()->query(
+                    'SELECT a.id, a.student_id, s.full_name AS student_name, s.grade_level, s.participant_id, u.email AS student_email,
+                            a.approval_type, a.reviewer_name, a.reviewer_email, a.reviewer_role, a.status, a.notes,
+                            a.digital_signature, a.approved_at, a.created_at, a.updated_at
+                     FROM new_school_approvals a
+                     INNER JOIN new_school_students s ON s.id = a.student_id
+                     INNER JOIN users u ON u.id = s.user_id
+                     ORDER BY a.updated_at DESC'
+                )->fetchAll();
+                $csv = new_school_rows_to_csv($rows);
+                json(['filename' => 'new-school-approvals.csv', 'rows' => $rows, 'csv' => $csv]);
+            }
+
+            $rows = db()->query(
+                'SELECT s.id, s.participant_id, s.student_username, s.full_name, s.email, s.phone_number, s.home_address,
+                        s.school_name, s.grade_level, s.parent_name, s.parent_phone, s.parent_email,
+                        s.parent_consent_status, s.school_approval_status, s.teacher_approval_status, s.submission_status,
+                        s.overall_status, s.created_at, s.updated_at,
+                        u.email AS login_email,
+                        (SELECT COUNT(*) FROM new_school_business_interviews bi WHERE bi.student_id = s.id) AS interview_count,
+                        (SELECT COUNT(*) FROM new_school_submissions sub WHERE sub.student_id = s.id) AS submission_count
+                 FROM new_school_students s
+                 INNER JOIN users u ON u.id = s.user_id
+                 ORDER BY s.created_at DESC'
+            )->fetchAll();
+            $csv = new_school_rows_to_csv($rows);
+            json(['filename' => 'new-school-students.csv', 'rows' => $rows, 'csv' => $csv]);
+        }
+
+        case $method === 'PUT' && preg_match('#^admin/new-school/submission/(\d+)$#', $route, $m) === 1: {
+            require_admin();
+            $submissionId = (int) $m[1];
+            $status = field($body, 'status') ?: 'submitted';
+            $notes = field($body, 'reviewer_notes');
+            $score = $body['score'] ?? null;
+            $rankPosition = (int) ($body['rank_position'] ?? 0);
+            $place = field($body, 'place');
+            $scholarshipAmount = (float) ($body['scholarship_amount'] ?? 0);
+
+            if (!in_array($status, ['draft', 'submitted', 'approved', 'rejected', 'winner'], true)) {
+                json(['error' => 'Invalid submission status.'], 422);
+            }
+            if ($status === 'winner' && ($place === '' || $scholarshipAmount <= 0)) {
+                json(['error' => 'Winner entries require a place and scholarship amount.'], 422);
+            }
+
+            $pdo = db();
+            $submissionStmt = $pdo->prepare('SELECT * FROM new_school_submissions WHERE id = ? LIMIT 1');
+            $submissionStmt->execute([$submissionId]);
+            $submission = $submissionStmt->fetch();
+            if (!$submission) {
+                json(['error' => 'Submission not found.'], 404);
+            }
+
+            $pdo->beginTransaction();
+            try {
+                $reviewer = require_admin();
+                $reviewedAt = date('Y-m-d H:i:s');
+                $update = $pdo->prepare(
+                    'UPDATE new_school_submissions
+                     SET status = ?, reviewer_notes = ?, score = ?, rank_position = ?, reviewed_by_user_id = ?, reviewed_at = ?, updated_at = NOW()
+                     WHERE id = ?'
+                );
+                $update->execute([
+                    $status,
+                    $notes ?: null,
+                    $score !== null && $score !== '' ? (float) $score : null,
+                    $rankPosition > 0 ? $rankPosition : null,
+                    (int) $reviewer['id'],
+                    $reviewedAt,
+                    $submissionId,
+                ]);
+
+                $winner = null;
+                if ($status === 'winner') {
+                    $student = new_school_fetch_student_by_id((int) $submission['student_id']);
+                    $winnerStmt = $pdo->prepare(
+                        'INSERT INTO new_school_winners (
+                            student_id, submission_id, place, scholarship_amount, announced_at, published_at
+                         ) VALUES (?, ?, ?, ?, NOW(), NOW())
+                         ON DUPLICATE KEY UPDATE
+                            student_id = VALUES(student_id),
+                            place = VALUES(place),
+                            scholarship_amount = VALUES(scholarship_amount),
+                            announced_at = VALUES(announced_at),
+                            published_at = VALUES(published_at)'
+                    );
+                    $winnerStmt->execute([
+                        (int) $submission['student_id'],
+                        $submissionId,
+                        $place,
+                        $scholarshipAmount,
+                    ]);
+                    $winner = new_school_fetch_winner_by_student_id((int) $submission['student_id']);
+
+                    $subUpdate = $pdo->prepare('UPDATE new_school_submissions SET status = "winner", updated_at = NOW() WHERE id = ?');
+                    $subUpdate->execute([$submissionId]);
+                    if ($student) {
+                        new_school_refresh_student_status((int) $student['id']);
+                    }
+                } elseif (in_array($status, ['approved', 'rejected'], true)) {
+                    $subUpdate = $pdo->prepare('DELETE FROM new_school_winners WHERE submission_id = ?');
+                    $subUpdate->execute([$submissionId]);
+                    $student = new_school_fetch_student_by_id((int) $submission['student_id']);
+                    if ($student) {
+                        new_school_refresh_student_status((int) $student['id']);
+                    }
+                }
+
+                $pdo->commit();
+                $studentRecord = new_school_fetch_student_by_id((int) $submission['student_id']);
+                if ($studentRecord) {
+                    $statusLabel = $status === 'winner' ? 'winner' : $status;
+                    new_school_add_notification(
+                        (int) $studentRecord['id'],
+                        'student',
+                        'submission_review',
+                        'Submission ' . $statusLabel,
+                        'Your final project submission has been ' . $statusLabel . '.',
+                        ['participant_id' => (string) $studentRecord['participant_id'], 'status' => $status]
+                    );
+                    new_school_add_notification(
+                        (int) $studentRecord['id'],
+                        'parent',
+                        'submission_review',
+                        'Submission ' . $statusLabel,
+                        $studentRecord['full_name'] . "'s final submission has been " . $statusLabel . '.',
+                        ['participant_id' => (string) $studentRecord['participant_id'], 'status' => $status]
+                    );
+                    new_school_add_notification(
+                        (int) $studentRecord['id'],
+                        'teacher',
+                        'submission_review',
+                        'Submission ' . $statusLabel,
+                        $studentRecord['full_name'] . "'s final submission has been " . $statusLabel . '.',
+                        ['participant_id' => (string) $studentRecord['participant_id'], 'status' => $status]
+                    );
+                    new_school_add_notification(
+                        (int) $studentRecord['id'],
+                        'school',
+                        'submission_review',
+                        'Submission ' . $statusLabel,
+                        $studentRecord['full_name'] . "'s final submission has been " . $statusLabel . '.',
+                        ['participant_id' => (string) $studentRecord['participant_id'], 'status' => $status]
+                    );
+                    new_school_add_notification(
+                        (int) $studentRecord['id'],
+                        'admin',
+                        'submission_review',
+                        'Submission ' . $statusLabel,
+                        $studentRecord['full_name'] . "'s final submission has been " . $statusLabel . '.',
+                        ['participant_id' => (string) $studentRecord['participant_id'], 'status' => $status]
+                    );
+                }
+                json([
+                    'message' => 'Submission updated.',
+                    'submission' => new_school_fetch_submission_by_student_id((int) $submission['student_id']),
+                    'winner' => $winner,
+                ]);
+            } catch (Throwable $e) {
+                if ($pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
+                json(['error' => app_debug() ? $e->getMessage() : 'Unable to update submission.'], 500);
+            }
+        }
+
+        case $key === 'POST admin/new-school/winners/publish': {
+            require_admin();
+            $winners = $body['winners'] ?? [];
+            if (!is_array($winners) || $winners === []) {
+                json(['error' => 'Winners array is required.'], 422);
+            }
+
+            $pdo = db();
+            $pdo->beginTransaction();
+            try {
+                $published = [];
+                foreach ($winners as $winnerRow) {
+                    if (!is_array($winnerRow)) {
+                        continue;
+                    }
+                    $submissionId = (int) ($winnerRow['submission_id'] ?? 0);
+                    $place = field($winnerRow, 'place');
+                    $amount = (float) ($winnerRow['scholarship_amount'] ?? 0);
+                    if ($submissionId <= 0 || $place === '' || $amount <= 0) {
+                        continue;
+                    }
+
+                    $submissionStmt = $pdo->prepare('SELECT * FROM new_school_submissions WHERE id = ? LIMIT 1');
+                    $submissionStmt->execute([$submissionId]);
+                    $submission = $submissionStmt->fetch();
+                    if (!$submission) {
+                        continue;
+                    }
+
+                    $pdo->prepare('UPDATE new_school_submissions SET status = "winner", rank_position = COALESCE(rank_position, ?), updated_at = NOW() WHERE id = ?')
+                        ->execute([(int) ($winnerRow['rank_position'] ?? 0) ?: null, $submissionId]);
+
+                    $pdo->prepare(
+                        'INSERT INTO new_school_winners (
+                            student_id, submission_id, place, scholarship_amount, announced_at, published_at
+                         ) VALUES (?, ?, ?, ?, NOW(), NOW())
+                         ON DUPLICATE KEY UPDATE
+                            student_id = VALUES(student_id),
+                            place = VALUES(place),
+                            scholarship_amount = VALUES(scholarship_amount),
+                            announced_at = VALUES(announced_at),
+                            published_at = VALUES(published_at)'
+                    )->execute([
+                        (int) $submission['student_id'],
+                        $submissionId,
+                        $place,
+                        $amount,
+                    ]);
+
+                    $studentRecord = new_school_refresh_student_status((int) $submission['student_id']);
+                    if ($studentRecord) {
+                        new_school_add_notification(
+                            (int) $studentRecord['id'],
+                            'student',
+                            'winner_published',
+                            'You won ' . $place . ' place',
+                            'Your project was published as a winner in ' . $place . ' place.',
+                            ['participant_id' => (string) $studentRecord['participant_id'], 'place' => $place, 'amount' => $amount]
+                        );
+                        new_school_add_notification(
+                            (int) $studentRecord['id'],
+                            'parent',
+                            'winner_published',
+                            'Winner announced',
+                            $studentRecord['full_name'] . ' earned ' . $place . ' place in the challenge.',
+                            ['participant_id' => (string) $studentRecord['participant_id'], 'place' => $place, 'amount' => $amount]
+                        );
+                        new_school_add_notification(
+                            (int) $studentRecord['id'],
+                            'teacher',
+                            'winner_published',
+                            'Winner announced',
+                            $studentRecord['full_name'] . ' earned ' . $place . ' place in the challenge.',
+                            ['participant_id' => (string) $studentRecord['participant_id'], 'place' => $place, 'amount' => $amount]
+                        );
+                        new_school_add_notification(
+                            (int) $studentRecord['id'],
+                            'school',
+                            'winner_published',
+                            'Winner announced',
+                            $studentRecord['full_name'] . ' earned ' . $place . ' place in the challenge.',
+                            ['participant_id' => (string) $studentRecord['participant_id'], 'place' => $place, 'amount' => $amount]
+                        );
+                        new_school_add_notification(
+                            (int) $studentRecord['id'],
+                            'admin',
+                            'winner_published',
+                            'Winner announced',
+                            $studentRecord['full_name'] . ' earned ' . $place . ' place in the challenge.',
+                            ['participant_id' => (string) $studentRecord['participant_id'], 'place' => $place, 'amount' => $amount]
+                        );
+                    }
+                    $published[] = [
+                        'submission_id' => $submissionId,
+                        'student_id' => (int) $submission['student_id'],
+                        'place' => $place,
+                        'scholarship_amount' => $amount,
+                    ];
+                }
+                $pdo->commit();
+                json(['message' => 'Winners published.', 'winners' => $published]);
+            } catch (Throwable $e) {
+                if ($pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
+                json(['error' => app_debug() ? $e->getMessage() : 'Unable to publish winners.'], 500);
+            }
+        }
+
+        default:
+            return false;
+    }
+}

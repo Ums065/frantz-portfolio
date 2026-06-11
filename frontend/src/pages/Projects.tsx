@@ -7,7 +7,7 @@ export default function Projects() {
   useSeo({
     title: 'Projects',
     description: "TrendCatch Network, TrendCatch Player Technology, TrendCatch Gives Back, and Unlock A Cause - the flagship projects driving Frantz Coutard's ecosystem.",
-    image: '/assets/project-trendcatch-network.png',
+    image: '/assets/project-trendcatch-network.webp',
   })
 
   useEffect(() => {
@@ -32,7 +32,9 @@ export default function Projects() {
             <div className="proj-row">
               {projectShowcase.map((project, index) => (
                 <article className={`glass proj reveal d${(index % 3) + 1}`} key={project.title}>
-                  <div className="proj__media" style={{ backgroundImage: `url(${project.image})` }} />
+                  <div className="proj__media">
+                    <img src={project.image} alt="" loading="lazy" decoding="async" />
+                  </div>
                   <h3>{project.title}</h3>
                   <p>{project.detail}</p>
                   <span className={`tag${project.status.toLowerCase().includes('live') ? ' live' : ''}`.trim()}>{project.status}</span>

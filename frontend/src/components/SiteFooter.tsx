@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import { SocialLinks } from './SocialIcons'
 
-const logo = '/assets/fc-logo.png'
+const logo = '/assets/fc-monogram.svg'
 
 /* Shared footer used across pages. The subscribe form id (`subscribe-form`)
    is wired by useSiteInteractions to the API. */
@@ -37,6 +37,7 @@ export default function SiteFooter() {
               <li><Link to="/events">Events</Link></li>
               <li><Link to="/media">Media</Link></li>
               <li><Link to="/community">Community</Link></li>
+              <li><Link to="/new-school">Challenge</Link></li>
               <li><Link to="/store">Merchandise</Link></li>
               <li><Link to="/blog">Blog &amp; News</Link></li>
             </ul>

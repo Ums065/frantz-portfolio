@@ -4,7 +4,7 @@ import { api, type Post } from '../lib/api'
 import { loadSavedItems, toggleSavedItem } from '../lib/memberStorage'
 import { useSeo } from '../hooks/useSeo'
 
-const cover = '/assets/abstract-gold-network.png'
+const cover = '/assets/abstract-gold-network.webp'
 const fmt = (d: string) => new Date(d + 'T00:00:00').toLocaleString('en-US', { month: 'short', year: 'numeric' })
 
 export default function Blog() {
@@ -58,7 +58,7 @@ export default function Blog() {
               const saved = savedArticles.includes(String(p.id))
               return (
                 <article className="glass blog-card reveal" key={p.id}>
-                  <div className="blog-card__img"><img src={p.cover_image || cover} alt="" /></div>
+                  <div className="blog-card__img"><img src={p.cover_image || cover} alt="" loading="lazy" decoding="async" /></div>
                   <div className="blog-card__body">
                     <div className="kicker"><span className="cat">{p.category}</span><span>&bull;</span><span>{fmt(p.published_at)}</span></div>
                     <h3>{p.title}</h3>

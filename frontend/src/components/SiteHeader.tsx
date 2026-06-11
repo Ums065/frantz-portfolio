@@ -3,7 +3,7 @@ import { Link, NavLink } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { SocialLinks } from './SocialIcons'
 
-const logo = '/assets/fc-logo.png'
+const logo = '/assets/fc-monogram.svg'
 const isAdmin = (role?: string) => ['admin', 'super_admin', 'editor'].includes(role || '')
 
 type NavItem =
@@ -34,6 +34,7 @@ export default function SiteHeader({ home = false }: { home?: boolean }) {
     { label: 'Events', href: '/events', kind: 'route' },
     { label: 'Media', href: '/media', kind: 'route' },
     { label: 'Community', href: '/community', kind: 'route' },
+    { label: 'Challenge', href: '/new-school', kind: 'route' },
     ...(user ? [{ label: 'Dashboard', href: '/dashboard', kind: 'route' as const }] : []),
     { label: 'Merch', href: '/store', kind: 'route' },
     { label: 'News', href: '/blog', kind: 'route' },

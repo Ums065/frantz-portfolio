@@ -2,6 +2,7 @@
    @import must precede the Tailwind directives per CSS spec. */
 @import './styles/design.css';
 @import './styles/pages.css';
+@import './styles/new-school.css';
 
 @tailwind base;
 @tailwind components;

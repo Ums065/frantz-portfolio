@@ -3,7 +3,7 @@ import { useSeo } from '../hooks/useSeo'
 import { merchCatalogItems } from '../lib/merch'
 import '../styles/store.css'
 
-const LOGO = '/assets/fc-logo.png'
+const LOGO = '/assets/fc-monogram.svg'
 
 function MerchCard({ title, image, category, description, status }: typeof merchCatalogItems[number]) {
   const locked = status !== 'live'
@@ -12,7 +12,7 @@ function MerchCard({ title, image, category, description, status }: typeof merch
     <article className={`card${locked ? ' locked' : ''}`}>
       <span className="card__badge">{locked ? 'Coming Soon' : 'Preview'}</span>
       <div className="card__img">
-        <img className="card__photo" src={image} alt={title} />
+        <img className="card__photo" src={image} alt={title} loading="lazy" decoding="async" />
         {locked && (
           <div className="card__overlay" aria-hidden="true">
             <span>Coming Soon</span>

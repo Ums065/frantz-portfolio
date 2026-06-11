@@ -4,7 +4,7 @@ import { api, type PostDetail } from '../lib/api'
 import { isSavedItem, toggleSavedItem } from '../lib/memberStorage'
 import { useSeo } from '../hooks/useSeo'
 
-const cover = '/assets/abstract-gold-network.png'
+const cover = '/assets/abstract-gold-network.webp'
 const fmt = (d: string) => new Date(d + 'T00:00:00').toLocaleString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
 
 export default function BlogPost() {
@@ -71,7 +71,7 @@ export default function BlogPost() {
                   </button>
                 </div>
                 <div className="legacy__photo" style={{ aspectRatio: '16/7', marginBottom: 30 }}>
-                  <img src={post.cover_image || cover} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <img src={post.cover_image || cover} alt="" loading="eager" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </div>
                 <div className="post-article__body">
                   {(post.body || post.excerpt).split('\n\n').map((para, i) => <p key={i}>{para}</p>)}

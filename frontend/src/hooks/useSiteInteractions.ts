@@ -19,6 +19,9 @@ export function useSiteInteractions({ onAuth, onRequest, onSubscribe }: Handlers
   useEffect(() => {
     const cleanups: Array<() => void> = []
     let raf = 0
+    let refreshRaf = 0
+    let sectionLinks: HTMLAnchorElement[] = []
+    let sections: HTMLElement[] = []
 
     /* ---------- Gold particle constellation ---------- */
     const canvas = document.getElementById('particles') as HTMLCanvasElement | null
@@ -30,7 +33,10 @@ export function useSiteInteractions({ onAuth, onRequest, onSubscribe }: Handlers
       const mouse = { x: -9999, y: -9999 }
 
       const buildParticles = () => {
-        const count = Math.min(120, Math.round((w * h) / 12000))
+        const compact = window.innerWidth < 768
+        const limit = compact ? 48 : 90
+        const density = compact ? 18000 : 14000
+        const count = Math.min(limit, Math.max(18, Math.round((w * h) / density)))
         particles = []
         for (let i = 0; i < count; i++) {
           particles.push({
@@ -107,15 +113,18 @@ export function useSiteInteractions({ onAuth, onRequest, onSubscribe }: Handlers
 
     /* ---------- Sticky nav + active link ---------- */
     const nav = document.querySelector('.nav')
-    const sectionLinks = [...document.querySelectorAll<HTMLAnchorElement>('.nav__links a[data-nav-section]')]
     const indicator = document.querySelector<HTMLElement>('.nav__indicator')
-    const sections = sectionLinks
-      .map((a) => {
-        const href = a.getAttribute('href') || ''
-        // Only in-page hash links map to sections; router links (/about) are skipped.
-        return href.startsWith('#') ? document.querySelector(href) : null
-      })
-      .filter(Boolean) as HTMLElement[]
+
+    const refreshSectionAnchors = () => {
+      sectionLinks = [...document.querySelectorAll<HTMLAnchorElement>('.nav__links a[data-nav-section]')]
+      sections = sectionLinks
+        .map((a) => {
+          const href = a.getAttribute('href') || ''
+          // Only in-page hash links map to sections; router links (/about) are skipped.
+          return href.startsWith('#') ? document.querySelector(href) : null
+        })
+        .filter(Boolean) as HTMLElement[]
+    }
     const updateIndicator = (link: HTMLAnchorElement | undefined) => {
       if (!indicator || !link) return
       const navBox = link.parentElement?.getBoundingClientRect()
@@ -150,11 +159,12 @@ export function useSiteInteractions({ onAuth, onRequest, onSubscribe }: Handlers
     }
     window.addEventListener('scroll', onScroll, { passive: true })
     window.addEventListener('resize', onScroll)
+    refreshSectionAnchors()
     onScroll()
     // Re-position once fonts/layout settle (web-font load shifts link widths).
     const settle1 = window.setTimeout(onScroll, 300)
     const settle2 = window.setTimeout(onScroll, 900)
-    if (document.fonts?.ready) document.fonts.ready.then(onScroll).catch(() => {})
+    if (document.fonts?.ready) document.fonts.ready.then(() => { refreshSectionAnchors(); onScroll() }).catch(() => {})
     cleanups.push(() => {
       window.removeEventListener('scroll', onScroll)
       window.removeEventListener('resize', onScroll)
@@ -173,17 +183,45 @@ export function useSiteInteractions({ onAuth, onRequest, onSubscribe }: Handlers
     // Content fetched after mount (blog posts, events, awards) adds `.reveal`
     // nodes the initial scan never saw — observe them as they appear so they
     // don't stay stuck at opacity:0.
+    const tagSections = () => {
+      let idx = 0
+      document.querySelectorAll('section.block .block__head').forEach((head) => {
+        if (head.querySelector('.sec-index')) return
+        idx++
+        const tag = document.createElement('div')
+        tag.className = 'sec-index reveal'
+        tag.textContent = String(idx).padStart(2, '0')
+        head.insertBefore(tag, head.firstChild)
+        io.observe(tag)
+      })
+    }
+    tagSections()
+
     const mo = new MutationObserver((muts) => {
+      let sawNewContent = false
       for (const mut of muts) {
         mut.addedNodes.forEach((n) => {
           if (!(n instanceof HTMLElement)) return
           if (n.classList.contains('reveal')) io.observe(n)
           n.querySelectorAll?.('.reveal').forEach((el) => io.observe(el))
+          sawNewContent = true
+        })
+      }
+      if (sawNewContent) {
+        cancelAnimationFrame(refreshRaf)
+        refreshRaf = requestAnimationFrame(() => {
+          tagSections()
+          refreshSectionAnchors()
+          onScroll()
         })
       }
     })
     mo.observe(document.body, { childList: true, subtree: true })
-    cleanups.push(() => { io.disconnect(); mo.disconnect() })
+    cleanups.push(() => {
+      cancelAnimationFrame(refreshRaf)
+      io.disconnect()
+      mo.disconnect()
+    })
 
     /* ---------- Scroll progress ---------- */
     const progress = document.getElementById('scrollProgress')
@@ -195,18 +233,6 @@ export function useSiteInteractions({ onAuth, onRequest, onSubscribe }: Handlers
     window.addEventListener('scroll', updateProgress, { passive: true })
     updateProgress()
     cleanups.push(() => window.removeEventListener('scroll', updateProgress))
-
-    /* ---------- Editorial section indices ---------- */
-    let idx = 0
-    document.querySelectorAll('section.block .block__head').forEach((head) => {
-      if (head.querySelector('.sec-index')) return
-      idx++
-      const tag = document.createElement('div')
-      tag.className = 'sec-index reveal'
-      tag.textContent = String(idx).padStart(2, '0')
-      head.insertBefore(tag, head.firstChild)
-      io.observe(tag)
-    })
 
     /* ---------- Count-up stats ---------- */
     const countIO = new IntersectionObserver(

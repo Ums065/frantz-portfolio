@@ -9,29 +9,29 @@ import { platforms } from '../lib/platforms'
 import { merchPreviewItems } from '../lib/merch'
 import PlatformCard from './PlatformCard'
 
-const logo = '/assets/fc-logo.png'
-const portrait = '/assets/frantz-portrait.png'
-const halfFace = '/assets/frantz-half-face.png'
-const signatureWordmark = '/assets/brand-signature-white.jpg'
-const brandMarks = '/assets/brand-marks-grid.jpg'
-const abstractNetwork = '/assets/abstract-gold-network.png'
-const projectTrendcatch = '/assets/project-trendcatch-network.png'
-const projectGivesBack = '/assets/project-gives-back.png'
-const awardPresidential = '/assets/award-presidential-medal.png'
-const awardSenate = '/assets/award-senate-medal.png'
-const awardCounty = '/assets/award-county-medal.png'
-const gallerySpeaking = '/assets/gallery-speaking-stage.png'
-const merchCap = '/assets/merch-cap.png'
-const merchCollectible = '/assets/merch-collectible.png'
-const gallery1 = '/assets/Frantz-gallery1.jpeg'
-const gallery2 = '/assets/Frantz-gallery2.jpeg'
-const gallery3 = '/assets/Frantz-gallery3.jpeg'
-const gallery4 = '/assets/Frantz-gallery4.jpeg'
-const gallery5 = '/assets/Frantz-gallery5.jpeg'
-const gallery6 = '/assets/Frantz-gallery6.jpeg'
-const gallery7 = '/assets/Frantz-gallery7.jpeg'
-const gallery8 = '/assets/Frantz-gallery8.jpeg'
-const gallery9 = '/assets/Frantz-gallery9.jpeg'
+const logo = '/assets/fc-monogram.svg'
+const portrait = '/assets/frantz-portrait.webp'
+const halfFace = portrait
+const signatureWordmark = '/assets/brand-signature-white.webp'
+const brandMarks = '/assets/brand-marks-grid.webp'
+const abstractNetwork = '/assets/abstract-gold-network.webp'
+const projectTrendcatch = '/assets/project-trendcatch-network.webp'
+const projectGivesBack = '/assets/project-gives-back.webp'
+const awardPresidential = '/assets/award-presidential-medal.webp'
+const awardSenate = '/assets/award-senate-medal.webp'
+const awardCounty = '/assets/award-county-medal.webp'
+const gallerySpeaking = '/assets/gallery-speaking-stage.webp'
+const merchCap = '/assets/merch-cap.webp'
+const merchCollectible = '/assets/merch-collectible.webp'
+const gallery1 = '/assets/Frantz-gallery1.webp'
+const gallery2 = '/assets/Frantz-gallery2.webp'
+const gallery3 = '/assets/Frantz-gallery3.webp'
+const gallery4 = '/assets/Frantz-gallery4.webp'
+const gallery5 = '/assets/Frantz-gallery5.webp'
+const gallery6 = '/assets/Frantz-gallery6.webp'
+const gallery7 = '/assets/Frantz-gallery7.webp'
+const gallery8 = '/assets/Frantz-gallery8.webp'
+const gallery9 = '/assets/Frantz-gallery9.webp'
 
 const Check = () => (
   <span className="chk">
@@ -56,7 +56,7 @@ interface BuildProject {
   link?: string
 }
 
-const projectUnlock = '/assets/project-unlock-cause.png'
+const projectUnlock = '/assets/project-unlock-cause.webp'
 
 const buildProjects: BuildProject[] = [
   {
@@ -89,6 +89,14 @@ const buildProjects: BuildProject[] = [
     tag: 'In Development',
     media: abstractNetwork,
     mediaClass: 'proj__media--glow',
+  },
+  {
+    title: 'New School Functionality',
+    copy: 'A challenge registration system for students, parents, schools, and teachers with QR consent, interview tracking, and scholarship submissions.',
+    tag: 'In Development',
+    media: projectTrendcatch,
+    mediaClass: 'proj__media--network',
+    link: '/new-school',
   },
 ]
 
@@ -165,11 +173,11 @@ export default function Home() {
   return (
     <>
       <section className="hero" id="home">
-        <div className="hero__ghost"><img src={portrait} alt="" /></div>
+        <div className="hero__ghost"><img src={portrait} alt="" decoding="async" /></div>
         <canvas id="particles" />
-        <div className="hero__portrait"><img src={halfFace} alt="Frantz Coutard portrait" /></div>
+        <div className="hero__portrait"><img src={halfFace} alt="Frantz Coutard portrait" decoding="async" /></div>
         <div className="hero__content">
-          <div className="hero__mono"><img src={logo} alt="" /></div>
+          <div className="hero__mono"><img src={logo} alt="" decoding="async" /></div>
           <h1 className="hero__name">Frantz Coutard</h1>
           <div className="hero__roles">
             <span>Technology Innovator</span><span className="dot">&bull;</span>
@@ -202,6 +210,7 @@ export default function Home() {
           <div className="hero__ctas">
             <button className="btn" data-toast="Vision reel coming soon.">Watch the Vision</button>
             <button className="btn btn--solid" onClick={() => document.getElementById('speaking')?.scrollIntoView()}>Book Frantz to Speak</button>
+            <Link className="btn" to="/new-school">Open New School</Link>
             <button className="btn" data-auth="register">
               <span className="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><circle cx="9" cy="8" r="3.2" /><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6" /><path d="M17 8h5M19.5 5.5v5" /></svg></span>Join the Community
             </button>
@@ -245,15 +254,24 @@ export default function Home() {
             <div className="proj-row">
               {buildProjects.map((project, index) => (
                 <article className={`glass proj reveal d${index + 1}`} key={project.title}>
-                  <div className={`proj__media ${project.mediaClass}`} style={{ backgroundImage: `url(${project.media})` }} />
+                  <div className={`proj__media ${project.mediaClass}`}>
+                    <img src={project.media} alt="" loading="lazy" decoding="async" />
+                  </div>
                   <h3>{project.title}</h3>
                   <p>{project.copy}</p>
                   <span className={`tag ${project.tagClass ?? ''}`.trim()}>{project.tag}</span>
                   {project.link && (
-                    <a className="proj__link" href={project.link} target="_blank" rel="noopener noreferrer">
-                      Visit {project.title}
-                      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth={2}><path d="M7 17L17 7M9 7h8v8" /></svg>
-                    </a>
+                    project.link.startsWith('/') ? (
+                      <Link className="proj__link" to={project.link}>
+                        Visit {project.title}
+                        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth={2}><path d="M7 17L17 7M9 7h8v8" /></svg>
+                      </Link>
+                    ) : (
+                      <a className="proj__link" href={project.link} target="_blank" rel="noopener noreferrer">
+                        Visit {project.title}
+                        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth={2}><path d="M7 17L17 7M9 7h8v8" /></svg>
+                      </a>
+                    )
                   )}
                 </article>
               ))}
@@ -291,7 +309,7 @@ export default function Home() {
         <div className="wrap">
           <div className="legacy-grid" style={{ marginBottom: 80 }}>
             <div className="legacy__photo legacy__photo--square reveal">
-              <img src="/assets/Frantz.PNG" alt="Frantz Coutard portrait" />
+              <img src="/assets/Frantz.webp" alt="Frantz Coutard portrait" loading="lazy" decoding="async" />
             </div>
             <div className="legacy">
               <h2 className="reveal gold-text">From Community<span className="l2">To Legacy</span></h2>
@@ -312,7 +330,7 @@ export default function Home() {
               {awardHighlights.map((a) => (
                 <div className="award" key={a.title}>
                   <span className="award-photo">
-                    <img src={a.image} alt="" />
+                    <img src={a.image} alt="" loading="lazy" decoding="async" />
                     <span className="am medal"><svg viewBox="0 0 54 54" fill="none" stroke="currentColor" strokeWidth={1.5} style={{ width: 18, height: 18, color: 'var(--gold)' }}><circle cx="27" cy="22" r="13" /><path d="M22 37l-3 9 8-4 8 4-3-9" /></svg></span>
                   </span>
                   <div><h4>{a.title}</h4><p>{a.copy}</p></div>
@@ -477,7 +495,7 @@ export default function Home() {
           <div className="blog-grid">
             {featured && (
               <article className="glass post feature reveal d1">
-                <div className="post__img"><img src={featured.cover_image || abstractNetwork} alt="" /></div>
+                <div className="post__img"><img src={featured.cover_image || abstractNetwork} alt="" loading="lazy" decoding="async" /></div>
                 <div className="post__body">
                   <div className="kicker"><span className="cat">{featured.category}</span><span>&bull;</span><span>{fmtMonthYear(featured.published_at)}</span></div>
                   <h3>{featured.title}</h3>
@@ -488,7 +506,7 @@ export default function Home() {
             )}
             {rest.map((p, i) => (
               <article className={`glass post reveal d${i + 2}`} key={p.id}>
-                <div className="post__img"><img src={p.cover_image || (i === 0 ? signatureWordmark : brandMarks)} alt="" /></div>
+                <div className="post__img"><img src={p.cover_image || (i === 0 ? signatureWordmark : brandMarks)} alt="" loading="lazy" decoding="async" /></div>
                 <div className="post__body">
                   <div className="kicker"><span className="cat">{p.category}</span><span>&bull;</span><span>{fmtMonthYear(p.published_at)}</span></div>
                   <h3>{p.title}</h3>
@@ -550,7 +568,7 @@ export default function Home() {
             {merchPreviewItems.map((item) => (
               <Link className="glass merch" to="/store" key={item.id}>
                 <div className="merch__img">
-                  <img src={item.image} alt={item.title} />
+                  <img src={item.image} alt={item.title} loading="lazy" decoding="async" />
                 </div>
                 <div className="merch__body">
                   <h4>{item.title}</h4>
@@ -657,7 +675,7 @@ export default function Home() {
           <div className="partners-row reveal">
             {partnerItems.map((p) => (
               <div className="partner partner--visual" key={p.name}>
-                <img src={p.image} alt={p.name} />
+                <img src={p.image} alt={p.name} loading="lazy" decoding="async" />
                 <span>{p.name}</span>
               </div>
             ))}

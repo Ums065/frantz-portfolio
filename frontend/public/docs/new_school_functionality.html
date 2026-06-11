@@ -1,0 +1,1892 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>new_school functionality</title>
+  <style>
+    @page {
+      size: letter;
+      margin: 0.55in;
+    }
+
+    :root {
+      --bg: #0b0b0b;
+      --bg-2: #11110e;
+      --gold: #c9a84c;
+      --gold-light: #f5d48a;
+      --gold-dark: #8a6a2f;
+      --ivory: #f5efe6;
+      --paper: #f7f1e7;
+      --ink: #17130b;
+      --muted: #6f675b;
+      --line: rgba(201, 168, 76, 0.24);
+      --line-strong: rgba(201, 168, 76, 0.45);
+      --soft-shadow: 0 20px 60px rgba(0, 0, 0, 0.08);
+      --gold-grad: linear-gradient(180deg, #f6e2a8 0%, #ebc96b 38%, #c9a84c 62%, #8a6a2f 100%);
+      --serif: Georgia, "Times New Roman", serif;
+      --sans: Arial, Helvetica, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(201, 168, 76, 0.08), transparent 30%),
+        linear-gradient(180deg, #efe8da 0%, #f6f1e7 100%);
+      font-family: var(--sans);
+      line-height: 1.45;
+    }
+
+    .document {
+      width: 100%;
+    }
+
+    .page {
+      break-after: page;
+      page-break-after: always;
+      min-height: 10.2in;
+      position: relative;
+      display: flex;
+    }
+
+    .page:last-child {
+      break-after: auto;
+      page-break-after: auto;
+    }
+
+    .sheet {
+      width: 100%;
+      min-height: 100%;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: rgba(255, 252, 245, 0.92);
+      box-shadow: var(--soft-shadow);
+      padding: 26px 28px 22px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .cover {
+      background:
+        radial-gradient(circle at 18% 8%, rgba(245, 212, 138, 0.18), transparent 22%),
+        radial-gradient(circle at 80% 18%, rgba(201, 168, 76, 0.18), transparent 26%),
+        linear-gradient(180deg, #12110d 0%, #0a0a0a 100%);
+      color: var(--ivory);
+      border-color: rgba(201, 168, 76, 0.32);
+    }
+
+    .cover .muted,
+    .cover .small,
+    .cover .footer,
+    .cover .section-kicker,
+    .cover .mini {
+      color: #d8d0bf;
+    }
+
+    .cover .title {
+      color: #fff;
+    }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 14px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      font-weight: 700;
+      color: var(--gold-light);
+      background: rgba(201, 168, 76, 0.08);
+      white-space: nowrap;
+    }
+
+    .brand-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--gold-light);
+      font-size: 10px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      font-weight: 700;
+    }
+
+    .brand-mark {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      border: 1px solid rgba(201, 168, 76, 0.48);
+      background: var(--gold-grad);
+      color: #140f06;
+      font-family: var(--serif);
+      font-weight: 700;
+      font-size: 18px;
+      letter-spacing: 0.04em;
+      box-shadow: 0 12px 26px rgba(0, 0, 0, 0.25);
+      flex-shrink: 0;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: 1.08fr 0.92fr;
+      gap: 28px;
+      align-items: center;
+      flex: 1;
+      margin-top: 10px;
+    }
+
+    .hero-copy {
+      padding-right: 8px;
+    }
+
+    .eyebrow {
+      font-size: 11px;
+      letter-spacing: 0.24em;
+      text-transform: uppercase;
+      color: var(--gold-light);
+      font-weight: 700;
+      margin-bottom: 14px;
+    }
+
+    .title {
+      font-family: var(--serif);
+      font-size: clamp(34px, 5vw, 64px);
+      line-height: 0.95;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      margin: 0;
+    }
+
+    .subtitle {
+      margin: 12px 0 16px;
+      font-family: var(--serif);
+      font-size: 19px;
+      line-height: 1.45;
+      color: var(--gold-light);
+      letter-spacing: 0.05em;
+    }
+
+    .lede {
+      margin: 0;
+      font-size: 13.5px;
+      line-height: 1.8;
+      max-width: 86ch;
+    }
+
+    .cover-panel {
+      border: 1px solid rgba(201, 168, 76, 0.26);
+      border-radius: 20px;
+      padding: 22px;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02));
+      display: grid;
+      gap: 16px;
+    }
+
+    .stats {
+      display: grid;
+      gap: 12px;
+    }
+
+    .stat {
+      border-radius: 14px;
+      border: 1px solid rgba(201, 168, 76, 0.22);
+      background: rgba(255, 255, 255, 0.04);
+      padding: 14px 16px;
+    }
+
+    .stat strong {
+      display: block;
+      font-family: var(--serif);
+      font-size: 18px;
+      letter-spacing: 0.04em;
+      color: var(--gold-light);
+      margin-bottom: 4px;
+    }
+
+    .stat span {
+      display: block;
+      font-size: 12px;
+      line-height: 1.5;
+      color: #d8d0bf;
+    }
+
+    .cover-strip {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    .cover-strip .pill {
+      border-color: rgba(201, 168, 76, 0.36);
+      background: rgba(201, 168, 76, 0.08);
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: rgba(201, 168, 76, 0.06);
+      font-size: 10.5px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--gold-dark);
+      font-weight: 700;
+    }
+
+    .cover-rail {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 18px;
+    }
+
+    .rail-card {
+      padding: 14px 16px;
+      border-radius: 14px;
+      border: 1px solid rgba(201, 168, 76, 0.22);
+      background: rgba(255, 255, 255, 0.03);
+      min-height: 96px;
+    }
+
+    .rail-card h3 {
+      margin: 0 0 8px;
+      font-family: var(--serif);
+      font-size: 14px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: #fff;
+    }
+
+    .rail-card p {
+      margin: 0;
+      font-size: 11.5px;
+      line-height: 1.55;
+      color: #d7d0c1;
+    }
+
+    .footer {
+      margin-top: auto;
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: flex-end;
+      padding-top: 18px;
+      border-top: 1px solid rgba(201, 168, 76, 0.16);
+      font-size: 10.5px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .footer strong {
+      color: var(--gold-dark);
+    }
+
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 18px;
+      margin-bottom: 16px;
+    }
+
+    .section-kicker {
+      font-size: 10px;
+      letter-spacing: 0.24em;
+      text-transform: uppercase;
+      color: var(--gold-dark);
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .section-title {
+      margin: 0;
+      font-family: var(--serif);
+      font-size: 24px;
+      line-height: 1.1;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .section-subtitle {
+      margin: 10px 0 0;
+      font-size: 13px;
+      line-height: 1.75;
+      color: var(--muted);
+      max-width: 90ch;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .grid-4 {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .card {
+      border-radius: 16px;
+      border: 1px solid var(--line);
+      background: linear-gradient(180deg, #fffdf7, #f8f3e9);
+      padding: 16px 16px 14px;
+    }
+
+    .card h3 {
+      margin: 0 0 10px;
+      font-family: var(--serif);
+      font-size: 16px;
+      line-height: 1.2;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: #1a1409;
+    }
+
+    .card p {
+      margin: 0;
+      font-size: 12.5px;
+      line-height: 1.7;
+      color: #453e31;
+    }
+
+    .bullets {
+      margin: 0;
+      padding-left: 18px;
+      color: #453e31;
+      font-size: 12.5px;
+      line-height: 1.72;
+    }
+
+    .bullets li {
+      margin: 0 0 7px;
+    }
+
+    .mini {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      font-weight: 700;
+      color: var(--gold-dark);
+      margin-bottom: 8px;
+    }
+
+    .callout {
+      border-radius: 16px;
+      border: 1px solid rgba(201, 168, 76, 0.28);
+      background: linear-gradient(180deg, rgba(201, 168, 76, 0.08), rgba(255, 255, 255, 0.82));
+      padding: 14px 16px;
+      font-size: 12.5px;
+      line-height: 1.65;
+      color: #3a3327;
+    }
+
+    .callout strong {
+      color: #1a1409;
+    }
+
+    .table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11.5px;
+      line-height: 1.55;
+    }
+
+    .table th,
+    .table td {
+      border-bottom: 1px solid rgba(201, 168, 76, 0.18);
+      padding: 8px 8px 8px 0;
+      vertical-align: top;
+      text-align: left;
+    }
+
+    .table th {
+      color: var(--gold-dark);
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      font-weight: 700;
+    }
+
+    .table td {
+      color: #3b3429;
+    }
+
+    .table tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .tight th,
+    .tight td {
+      padding-top: 6px;
+      padding-bottom: 6px;
+    }
+
+    .workflow {
+      display: grid;
+      gap: 14px;
+    }
+
+    .diagram {
+      border-radius: 18px;
+      border: 1px solid var(--line);
+      background:
+        radial-gradient(circle at top left, rgba(201, 168, 76, 0.08), transparent 20%),
+        linear-gradient(180deg, #14120d, #0b0b0b);
+      padding: 16px 14px 10px;
+      color: var(--ivory);
+    }
+
+    .diagram-title {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      margin: 0 0 10px;
+      font-size: 10.5px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--gold-light);
+      font-weight: 700;
+    }
+
+    .diagram svg {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+
+    .status-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .status {
+      border-radius: 14px;
+      border: 1px solid rgba(201, 168, 76, 0.20);
+      background: rgba(255, 255, 255, 0.84);
+      padding: 10px 12px;
+      font-size: 11.3px;
+      color: #382f23;
+      min-height: 54px;
+    }
+
+    .status strong {
+      display: block;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--gold-dark);
+      margin-bottom: 5px;
+    }
+
+    .two-col-notes {
+      display: grid;
+      grid-template-columns: 1.02fr 0.98fr;
+      gap: 14px;
+      margin-top: 14px;
+    }
+
+    .note-stack {
+      display: grid;
+      gap: 10px;
+    }
+
+    .note {
+      border-radius: 14px;
+      border: 1px solid rgba(201, 168, 76, 0.18);
+      background: rgba(255, 255, 255, 0.78);
+      padding: 11px 12px;
+      font-size: 11.5px;
+      line-height: 1.6;
+      color: #3d3528;
+    }
+
+    .note strong {
+      display: block;
+      margin-bottom: 5px;
+      color: #1b150a;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.11em;
+    }
+
+    .metric-row {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .metric {
+      border-radius: 14px;
+      border: 1px solid rgba(201, 168, 76, 0.22);
+      background: rgba(255, 255, 255, 0.04);
+      padding: 12px 14px;
+      text-align: center;
+    }
+
+    .metric strong {
+      display: block;
+      font-family: var(--serif);
+      font-size: 14px;
+      color: var(--gold-light);
+      letter-spacing: 0.04em;
+      margin-bottom: 4px;
+      text-transform: uppercase;
+    }
+
+    .metric span {
+      display: block;
+      color: #d6cfbf;
+      font-size: 11px;
+      line-height: 1.45;
+    }
+
+    .role-chip-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 14px;
+    }
+
+    .role-chip {
+      padding: 7px 11px;
+      border-radius: 999px;
+      border: 1px solid rgba(201, 168, 76, 0.24);
+      background: rgba(201, 168, 76, 0.06);
+      font-size: 10.5px;
+      text-transform: uppercase;
+      letter-spacing: 0.09em;
+      color: var(--gold-dark);
+      font-weight: 700;
+    }
+
+    .small {
+      font-size: 10.8px;
+      line-height: 1.6;
+      color: var(--muted);
+    }
+
+    .mt-8 { margin-top: 8px; }
+    .mt-10 { margin-top: 10px; }
+    .mt-12 { margin-top: 12px; }
+    .mt-14 { margin-top: 14px; }
+    .mt-16 { margin-top: 16px; }
+    .mb-0 { margin-bottom: 0; }
+
+    .divider {
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(201, 168, 76, 0.38), transparent);
+      margin: 14px 0;
+    }
+
+    .page-number {
+      color: var(--muted);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    .cover .page-number {
+      color: #d7d0c0;
+    }
+
+    .role-grid {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .role-card {
+      border: 1px solid var(--line);
+      background: linear-gradient(180deg, #fffdf7, #f7f1e8);
+      border-radius: 14px;
+      padding: 12px;
+      min-height: 126px;
+    }
+
+    .role-card strong {
+      display: block;
+      font-family: var(--serif);
+      font-size: 12px;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: #1b150a;
+      margin-bottom: 8px;
+    }
+
+    .role-card span {
+      display: block;
+      font-size: 11px;
+      line-height: 1.55;
+      color: #453e31;
+    }
+
+    .report-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .report-card {
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: linear-gradient(180deg, #fffdf7, #f8f3ea);
+      padding: 14px;
+    }
+
+    .report-card strong {
+      display: block;
+      color: var(--gold-dark);
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    .report-card h4 {
+      margin: 0 0 8px;
+      font-family: var(--serif);
+      font-size: 14px;
+      line-height: 1.25;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: #1a1409;
+    }
+
+    .report-card p {
+      margin: 0;
+      font-size: 11.8px;
+      line-height: 1.65;
+      color: #453e31;
+    }
+
+    .tech-grid {
+      display: grid;
+      grid-template-columns: 1.08fr 0.92fr;
+      gap: 14px;
+    }
+
+    .code-list {
+      display: grid;
+      gap: 8px;
+      margin: 0;
+      padding-left: 16px;
+      color: #453e31;
+      font-size: 12px;
+      line-height: 1.6;
+    }
+
+    .code-list li {
+      margin: 0;
+    }
+
+    .table-wrap {
+      overflow: hidden;
+      border-radius: 14px;
+      border: 1px solid rgba(201, 168, 76, 0.18);
+      background: rgba(255, 255, 255, 0.8);
+      padding: 10px 10px 4px;
+    }
+
+    .stack-list {
+      display: grid;
+      gap: 8px;
+      margin: 0;
+      padding-left: 18px;
+      color: #3d3528;
+      font-size: 12.2px;
+      line-height: 1.6;
+    }
+
+    .stack-list li {
+      margin: 0;
+    }
+
+    .headline {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .headline .bar {
+      flex: 1;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(201, 168, 76, 0.45), transparent);
+    }
+
+    .headline .text {
+      font-size: 10px;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: var(--gold-dark);
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .prize-row {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .prize {
+      border-radius: 16px;
+      border: 1px solid rgba(201, 168, 76, 0.22);
+      background: linear-gradient(180deg, rgba(201, 168, 76, 0.08), rgba(255, 255, 255, 0.9));
+      padding: 14px 16px;
+      text-align: center;
+    }
+
+    .prize strong {
+      display: block;
+      font-family: var(--serif);
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 6px;
+      color: #1a1409;
+    }
+
+    .prize span {
+      display: block;
+      font-size: 11px;
+      line-height: 1.5;
+      color: #453e31;
+    }
+
+    .timeline {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .timeline .step {
+      border-radius: 14px;
+      border: 1px solid rgba(201, 168, 76, 0.20);
+      background: rgba(255, 255, 255, 0.82);
+      padding: 11px 12px;
+      min-height: 86px;
+    }
+
+    .timeline .step strong {
+      display: block;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--gold-dark);
+      margin-bottom: 6px;
+    }
+
+    .timeline .step span {
+      display: block;
+      font-size: 11px;
+      line-height: 1.5;
+      color: #3d3528;
+    }
+
+    .page .sheet .page-body {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .cover .footer {
+      border-top-color: rgba(201, 168, 76, 0.24);
+    }
+
+    .cover .sheet {
+      background: transparent;
+      border-color: rgba(201, 168, 76, 0.34);
+    }
+
+    @media print {
+      body {
+        background: white;
+      }
+
+      .page {
+        margin: 0;
+      }
+
+      .sheet {
+        box-shadow: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="document">
+    <section class="page">
+      <div class="sheet cover">
+        <div class="topbar">
+          <div class="brand-chip">
+            <div class="brand-mark">FC</div>
+            <div>
+              <div>FrantzCoutard.com</div>
+              <div class="small">Prepared June 2026</div>
+            </div>
+          </div>
+          <div class="badge">Developer-ready module spec</div>
+        </div>
+
+        <div class="hero">
+          <div class="hero-copy">
+            <div class="eyebrow">Leave It Better Than You Found It</div>
+            <h1 class="title">new_school functionality</h1>
+            <div class="subtitle">Community Business Impact Challenge</div>
+            <p class="lede">
+              This document converts the three client messages into one build-ready
+              blueprint for the current FrantzCoutard.com site. It defines the
+              participant flow, required data capture, consent and approval gates,
+              business interview tracking, final submission rules, dashboards,
+              admin controls, and the technical approach for the existing
+              React + PHP + MySQL stack.
+            </p>
+
+            <div class="metric-row">
+              <div class="metric">
+                <strong>Ages 14-19</strong>
+                <span>Students only, with parent or guardian consent required.</span>
+              </div>
+              <div class="metric">
+                <strong>10 interviews</strong>
+                <span>Every student must log ten local business visits before submission.</span>
+              </div>
+              <div class="metric">
+                <strong>$5,000 total</strong>
+                <span>First, second, and third place scholarship awards.</span>
+              </div>
+            </div>
+
+            <div class="cover-strip">
+              <div class="pill">Parent QR consent</div>
+              <div class="pill">School approval</div>
+              <div class="pill">Teacher approval</div>
+              <div class="pill">Admin review</div>
+              <div class="pill">Winner publishing</div>
+            </div>
+          </div>
+
+          <aside class="cover-panel">
+            <div>
+              <div class="mini" style="color: var(--gold-light);">What this module does</div>
+              <div class="small" style="color:#d7d0c1; font-size:12px; line-height:1.7;">
+                It acts as a gated workflow engine for the challenge. Students
+                register, parents approve through a QR code, schools and teachers
+                verify participation, students record ten business interviews, and
+                the system unlocks the final video and written submission only when
+                all prerequisites are complete.
+              </div>
+            </div>
+
+            <div class="stats">
+              <div class="stat">
+                <strong>Challenge timeline</strong>
+                <span>Winners announced on August 25, 2026 at FrantzCoutard.com.</span>
+              </div>
+              <div class="stat">
+                <strong>Public promise</strong>
+                <span>Leave it better than you found it. The challenge focuses on real local problems and practical solutions.</span>
+              </div>
+              <div class="stat">
+                <strong>Current site fit</strong>
+                <span>Built to match the existing site structure, dashboard patterns, and admin flow already in the portfolio project.</span>
+              </div>
+            </div>
+
+            <div class="cover-rail">
+              <div class="rail-card">
+                <h3>Student</h3>
+                <p>Registers, collects business evidence, and submits the final project.</p>
+              </div>
+              <div class="rail-card">
+                <h3>Parent</h3>
+                <p>Confirms legal consent and approves the student through QR flow.</p>
+              </div>
+              <div class="rail-card">
+                <h3>School / Teacher</h3>
+                <p>Verifies eligibility, monitors progress, and supports participation.</p>
+              </div>
+            </div>
+          </aside>
+        </div>
+
+        <div class="footer">
+          <div><strong>Module:</strong> new_school functionality</div>
+          <div class="page-number">Page 1 / 10</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="page">
+      <div class="sheet">
+        <div class="page-body">
+          <div class="section-head">
+            <div>
+              <div class="section-kicker">1. Challenge analysis</div>
+              <h2 class="section-title">Program overview and stakeholders</h2>
+              <p class="section-subtitle">
+                The three client messages describe one system: a school-based
+                challenge portal that turns community discovery into a structured
+                project workflow. The site needs to capture people, approvals,
+                evidence, submissions, and winners in one controlled flow.
+              </p>
+            </div>
+          </div>
+
+          <div class="grid-2">
+            <div class="card">
+              <h3>Challenge mission</h3>
+              <p>
+                Students interview ten local businesses, identify the most important
+                challenge they discover, and propose a practical solution that can
+                help the business grow, improve visibility, increase sales, strengthen
+                customer engagement, improve operations, or better serve the community.
+              </p>
+              <div class="divider"></div>
+              <ul class="bullets">
+                <li>Students must be between 14 and 19 years old.</li>
+                <li>Parent or guardian consent is required before participation is active.</li>
+                <li>Participants must register through FrantzCoutard.com.</li>
+                <li>The public message of the program is "Leave It Better Than You Found It".</li>
+                <li>The challenge is designed to build leadership, communication, and problem-solving skills.</li>
+              </ul>
+            </div>
+
+            <div class="card">
+              <h3>Stakeholder map</h3>
+              <table class="table tight">
+                <tr>
+                  <th>Stakeholder</th>
+                  <th>Role in the system</th>
+                </tr>
+                <tr>
+                  <td>Student</td>
+                  <td>Registers, gets a participant ID and QR code, logs ten businesses, and submits the project.</td>
+                </tr>
+                <tr>
+                  <td>Parent / Guardian</td>
+                  <td>Creates an account from the QR flow and confirms legal consent, signature, and approval.</td>
+                </tr>
+                <tr>
+                  <td>School</td>
+                  <td>Confirms the student attends the school and validates that the parent consent is real.</td>
+                </tr>
+                <tr>
+                  <td>Teacher</td>
+                  <td>Monitors student progress, confirms participation, and tracks completion inside the school context.</td>
+                </tr>
+                <tr>
+                  <td>Admin</td>
+                  <td>Reviews submissions, exports data, and selects winners.</td>
+                </tr>
+                <tr>
+                  <td>Public</td>
+                  <td>Views the challenge page, rules, prize details, and winner announcement.</td>
+                </tr>
+              </table>
+            </div>
+          </div>
+
+          <div class="grid-3 mt-14">
+            <div class="card">
+              <h3>Business goal</h3>
+              <p>
+                Turn a school challenge into a measurable community impact workflow
+                by capturing real business interviews, real approval evidence, and
+                real project outcomes.
+              </p>
+            </div>
+            <div class="card">
+              <h3>Website goal</h3>
+              <p>
+                Add a new school-focused module to the current site without breaking
+                the existing brand language or dashboard patterns.
+              </p>
+            </div>
+            <div class="card">
+              <h3>Data goal</h3>
+              <p>
+                Store every registration, approval, interview, and submission with
+                timestamps, names, signatures, and status history.
+              </p>
+            </div>
+          </div>
+
+          <div class="role-chip-row">
+            <div class="role-chip">Problem solving</div>
+            <div class="role-chip">Community engagement</div>
+            <div class="role-chip">Business awareness</div>
+            <div class="role-chip">Student leadership</div>
+            <div class="role-chip">Teacher reporting</div>
+            <div class="role-chip">Admin review</div>
+          </div>
+        </div>
+
+        <div class="footer">
+          <div><strong>Focus:</strong> requirements analysis for the new_school module</div>
+          <div class="page-number">Page 2 / 10</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="page">
+      <div class="sheet">
+        <div class="page-body">
+          <div class="section-head">
+            <div>
+              <div class="section-kicker">2. Workflow</div>
+              <h2 class="section-title">Workflow and gating logic</h2>
+              <p class="section-subtitle">
+                The system is a gated pipeline. Each stage unlocks the next one only
+                when the previous stage is complete and stored with the correct
+                approval or evidence record.
+              </p>
+            </div>
+          </div>
+
+          <div class="workflow">
+            <div class="diagram">
+              <div class="diagram-title">
+                <span>Workflow diagram</span>
+                <span>one direction from registration to winner publishing</span>
+              </div>
+
+              <svg viewBox="0 0 860 690" role="img" aria-label="Workflow diagram for new_school functionality">
+                <defs>
+                  <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
+                    <path d="M0,0 L10,5 L0,10 z" fill="#c9a84c"></path>
+                  </marker>
+                  <style>
+                    .box { fill: #10100d; stroke: #c9a84c; stroke-width: 1.5; }
+                    .line { stroke: #c9a84c; stroke-width: 2; marker-end: url(#arrow); }
+                    .step { font: 700 14px Arial, Helvetica, sans-serif; fill: #f7f1e7; letter-spacing: 0.06em; text-transform: uppercase; }
+                    .label { font: 12px Arial, Helvetica, sans-serif; fill: #d8d0bf; }
+                    .num { font: 700 18px Arial, Helvetica, sans-serif; fill: #f5d48a; }
+                  </style>
+                </defs>
+
+                <rect class="box" x="55" y="20" width="750" height="64" rx="16"></rect>
+                <text class="num" x="90" y="48">1</text>
+                <text class="step" x="130" y="40">Student registers</text>
+                <text class="label" x="130" y="61">Collect student profile, school, grade, parent contact, username, and password.</text>
+
+                <line class="line" x1="430" y1="84" x2="430" y2="108"></line>
+
+                <rect class="box" x="55" y="108" width="750" height="64" rx="16"></rect>
+                <text class="num" x="90" y="136">2</text>
+                <text class="step" x="130" y="128">QR code created</text>
+                <text class="label" x="130" y="149">Generate a unique participant ID and a unique QR code tied to the student profile.</text>
+
+                <line class="line" x1="430" y1="172" x2="430" y2="196"></line>
+
+                <rect class="box" x="55" y="196" width="750" height="64" rx="16"></rect>
+                <text class="num" x="90" y="224">3</text>
+                <text class="step" x="130" y="216">Parent consent via QR</text>
+                <text class="label" x="130" y="237">Parent scans the QR code, creates an account, and signs the consent form.</text>
+
+                <line class="line" x1="430" y1="260" x2="430" y2="284"></line>
+
+                <rect class="box" x="55" y="284" width="750" height="64" rx="16"></rect>
+                <text class="num" x="90" y="312">4</text>
+                <text class="step" x="130" y="304">School approval</text>
+                <text class="label" x="130" y="325">School verifies that the student belongs to the school and the parent consent is valid.</text>
+
+                <line class="line" x1="430" y1="348" x2="430" y2="372"></line>
+
+                <rect class="box" x="55" y="372" width="750" height="64" rx="16"></rect>
+                <text class="num" x="90" y="400">5</text>
+                <text class="step" x="130" y="392">Teacher approval</text>
+                <text class="label" x="130" y="413">Teacher confirms participation, monitors progress, and receives student tracking.</text>
+
+                <line class="line" x1="430" y1="436" x2="430" y2="460"></line>
+
+                <rect class="box" x="55" y="460" width="750" height="64" rx="16"></rect>
+                <text class="num" x="90" y="488">6</text>
+                <text class="step" x="130" y="480">Ten business interviews</text>
+                <text class="label" x="130" y="501">Student records ten completed local business entries with notes and challenge insights.</text>
+
+                <line class="line" x1="430" y1="524" x2="430" y2="548"></line>
+
+                <rect class="box" x="55" y="548" width="750" height="64" rx="16"></rect>
+                <text class="num" x="90" y="576">7</text>
+                <text class="step" x="130" y="568">Final submission unlocks</text>
+                <text class="label" x="130" y="589">Video, written summary, problem statement, solution, and impact can now be uploaded.</text>
+
+                <line class="line" x1="430" y1="612" x2="430" y2="636"></line>
+
+                <rect class="box" x="55" y="636" width="750" height="64" rx="16"></rect>
+                <text class="num" x="90" y="664">8</text>
+                <text class="step" x="130" y="656">Admin review and winners</text>
+                <text class="label" x="130" y="677">Admin approves or rejects submissions, scores entries, and publishes the winners.</text>
+              </svg>
+            </div>
+
+            <div class="grid-2">
+              <div class="card">
+                <h3>Critical status chain</h3>
+                <div class="status-grid">
+                  <div class="status"><strong>1</strong>Student Registered</div>
+                  <div class="status"><strong>2</strong>Parent Consent Pending</div>
+                  <div class="status"><strong>3</strong>Parent Consent Approved</div>
+                  <div class="status"><strong>4</strong>School Approval Pending</div>
+                  <div class="status"><strong>5</strong>School Approval Approved</div>
+                  <div class="status"><strong>6</strong>Teacher Approval Pending</div>
+                  <div class="status"><strong>7</strong>Teacher Approval Approved</div>
+                  <div class="status"><strong>8</strong>Eligible To Submit</div>
+                  <div class="status"><strong>9</strong>Submission Complete</div>
+                </div>
+              </div>
+
+              <div class="card">
+                <h3>Gate rules</h3>
+                <ul class="bullets">
+                  <li>Students cannot submit until parent consent is approved.</li>
+                  <li>Students cannot submit until school approval is approved.</li>
+                  <li>Students cannot submit until teacher approval is approved.</li>
+                  <li>Students cannot submit until ten completed business interviews are entered.</li>
+                  <li>Every consent and approval record must store name, date, time, and signature.</li>
+                  <li>Every student must have one unique QR code connected to their profile.</li>
+                  <li>Parent information must be captured only through the student QR flow.</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="footer">
+          <div><strong>Rule:</strong> each stage unlocks the next only after the required record exists</div>
+          <div class="page-number">Page 3 / 10</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="page">
+      <div class="sheet">
+        <div class="page-body">
+          <div class="section-head">
+            <div>
+              <div class="section-kicker">3. Registration</div>
+              <h2 class="section-title">Student registration and parent consent</h2>
+              <p class="section-subtitle">
+                The student creates the first record. Parent data is not typed into the
+                student form; it is captured only after the QR code is scanned and the
+                parent completes the consent flow.
+              </p>
+            </div>
+          </div>
+
+          <div class="grid-2">
+            <div class="card">
+              <h3>Student registration fields</h3>
+              <table class="table tight">
+                <tr>
+                  <th>Field</th>
+                  <th>Requirement</th>
+                </tr>
+                <tr><td>Student full name</td><td>Required</td></tr>
+                <tr><td>Age</td><td>Required, must be between 14 and 19</td></tr>
+                <tr><td>Date of birth</td><td>Required for validation and audit</td></tr>
+                <tr><td>Email</td><td>Required</td></tr>
+                <tr><td>Phone number</td><td>Required</td></tr>
+                <tr><td>Home address</td><td>Required</td></tr>
+                <tr><td>School name</td><td>Required</td></tr>
+                <tr><td>Grade level</td><td>Required</td></tr>
+                <tr><td>Parent / guardian name</td><td>Captured for matching, not final consent</td></tr>
+                <tr><td>Parent phone number</td><td>Captured for matching, not final consent</td></tr>
+                <tr><td>Parent email</td><td>Captured for matching, not final consent</td></tr>
+                <tr><td>Username / password</td><td>Required login credentials</td></tr>
+              </table>
+              <p class="small mt-10">
+                Output from this step: participant ID, student dashboard access, QR code,
+                and the initial status of Student Registered.
+              </p>
+            </div>
+
+            <div class="card">
+              <h3>Parent consent via QR code</h3>
+              <table class="table tight">
+                <tr>
+                  <th>Field</th>
+                  <th>Requirement</th>
+                </tr>
+                <tr><td>Parent full name</td><td>Required</td></tr>
+                <tr><td>Relationship to student</td><td>Required</td></tr>
+                <tr><td>Phone number</td><td>Required</td></tr>
+                <tr><td>Email</td><td>Required</td></tr>
+                <tr><td>Home address</td><td>Required</td></tr>
+                <tr><td>Government ID upload</td><td>Optional</td></tr>
+                <tr><td>Consent checkbox</td><td>Required</td></tr>
+                <tr><td>Digital signature</td><td>Required</td></tr>
+                <tr><td>Date and time</td><td>Required</td></tr>
+              </table>
+              <div class="callout mt-12">
+                <strong>Consent statements that must be accepted:</strong>
+                I confirm I am the parent or legal guardian. I give permission for my
+                child to participate. I understand my child will interview local
+                businesses. I understand school verification is required.
+              </div>
+            </div>
+          </div>
+
+          <div class="grid-2 mt-14">
+            <div class="card">
+              <h3>Parent approval output</h3>
+              <ul class="bullets">
+                <li>Student dashboard status changes to Parent Consent Approved.</li>
+                <li>Parent record becomes linked to the student record by QR token.</li>
+                <li>Approval stores the signer name, timestamp, and signature.</li>
+                <li>Consent record should be audit-friendly and exportable for admin review.</li>
+              </ul>
+            </div>
+            <div class="card">
+              <h3>Why this flow matters</h3>
+              <p>
+                This avoids manual parent intake and forces the approval to happen
+                from the student-specific QR code, which gives the system a clean
+                relationship between student, parent, and consent audit trail.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div class="footer">
+          <div><strong>Output:</strong> student dashboard, participant ID, and unique QR code</div>
+          <div class="page-number">Page 4 / 10</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="page">
+      <div class="sheet">
+        <div class="page-body">
+          <div class="section-head">
+            <div>
+              <div class="section-kicker">4. School setup</div>
+              <h2 class="section-title">School registration, school approval, and teacher onboarding</h2>
+              <p class="section-subtitle">
+                Schools and teachers are separate roles, but they are connected by the
+                school record. School staff validate the student, and teachers monitor
+                the student progress inside that school context.
+              </p>
+            </div>
+          </div>
+
+          <div class="grid-2">
+            <div class="card">
+              <h3>School registration fields</h3>
+              <table class="table tight">
+                <tr>
+                  <th>Field</th>
+                  <th>Requirement</th>
+                </tr>
+                <tr><td>School name</td><td>Required</td></tr>
+                <tr><td>School address</td><td>Required</td></tr>
+                <tr><td>School district</td><td>Required</td></tr>
+                <tr><td>Main phone number</td><td>Required</td></tr>
+                <tr><td>Principal name</td><td>Required</td></tr>
+                <tr><td>Administrator name</td><td>Required</td></tr>
+                <tr><td>Administrator email</td><td>Required</td></tr>
+                <tr><td>Administrator phone number</td><td>Required</td></tr>
+                <tr><td>School account login</td><td>Required</td></tr>
+              </table>
+              <div class="callout mt-12">
+                <strong>School dashboard must show:</strong>
+                registered students, pending parent consent, pending school approval,
+                pending teacher approval, approved students, submitted projects, and
+                winners from that school.
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>School approval fields</h3>
+              <table class="table tight">
+                <tr>
+                  <th>Field</th>
+                  <th>Requirement</th>
+                </tr>
+                <tr><td>School staff name</td><td>Required</td></tr>
+                <tr><td>Role</td><td>Required</td></tr>
+                <tr><td>School email</td><td>Required</td></tr>
+                <tr><td>Approval status</td><td>Required</td></tr>
+                <tr><td>Notes</td><td>Required if any issue exists</td></tr>
+                <tr><td>Digital signature</td><td>Required</td></tr>
+                <tr><td>Date and time</td><td>Required</td></tr>
+              </table>
+
+              <div class="divider"></div>
+
+              <h3>Teacher registration fields</h3>
+              <table class="table tight">
+                <tr>
+                  <th>Field</th>
+                  <th>Requirement</th>
+                </tr>
+                <tr><td>Teacher full name</td><td>Required</td></tr>
+                <tr><td>School name</td><td>Required</td></tr>
+                <tr><td>School email</td><td>Required</td></tr>
+                <tr><td>Phone number</td><td>Required</td></tr>
+                <tr><td>Role / department</td><td>Required</td></tr>
+                <tr><td>Grade level supported</td><td>Required</td></tr>
+                <tr><td>Teacher login</td><td>Required</td></tr>
+              </table>
+            </div>
+          </div>
+
+          <div class="grid-2 mt-14">
+            <div class="card">
+              <h3>Teacher approval fields</h3>
+              <table class="table tight">
+                <tr>
+                  <th>Field</th>
+                  <th>Requirement</th>
+                </tr>
+                <tr><td>Teacher name</td><td>Required</td></tr>
+                <tr><td>Teacher email</td><td>Required</td></tr>
+                <tr><td>Student name</td><td>Required</td></tr>
+                <tr><td>Approval status</td><td>Required</td></tr>
+                <tr><td>Notes</td><td>Optional, but recommended</td></tr>
+                <tr><td>Date and time</td><td>Required</td></tr>
+              </table>
+            </div>
+            <div class="card">
+              <h3>Teacher dashboard must show</h3>
+              <ul class="bullets">
+                <li>Students assigned to teacher</li>
+                <li>Parent consent status</li>
+                <li>School approval status</li>
+                <li>Student progress</li>
+                <li>Business interviews submitted</li>
+                <li>Final project submission status</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <div class="footer">
+          <div><strong>Relationship:</strong> school approval and teacher approval are separate gates</div>
+          <div class="page-number">Page 5 / 10</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="page">
+      <div class="sheet">
+        <div class="page-body">
+          <div class="section-head">
+            <div>
+              <div class="section-kicker">5. Evidence capture</div>
+              <h2 class="section-title">Student business interview module</h2>
+              <p class="section-subtitle">
+                This is the core evidence layer of the challenge. Each student must
+                record ten local businesses, with enough context to explain what was
+                discovered and what opportunity exists for improvement.
+              </p>
+            </div>
+          </div>
+
+          <div class="grid-2">
+            <div class="card">
+              <h3>Interview prompts from the client</h3>
+              <ul class="bullets">
+                <li>Does the business have a website?</li>
+                <li>Does the business have a Google Business Profile?</li>
+                <li>Does the business actively use social media?</li>
+                <li>Does the business use digital signage?</li>
+                <li>Does the business offer coupons or rewards programs?</li>
+                <li>Can customers order online?</li>
+                <li>Does the business have its own ordering platform?</li>
+                <li>Does the business rely solely on third-party delivery apps?</li>
+                <li>What is the biggest challenge facing the business?</li>
+                <li>What opportunities are being missed?</li>
+              </ul>
+            </div>
+
+            <div class="card">
+              <h3>Required business entry fields</h3>
+              <table class="table tight">
+                <tr>
+                  <th>Field</th>
+                  <th>Requirement</th>
+                </tr>
+                <tr><td>Business name</td><td>Required</td></tr>
+                <tr><td>Owner / manager name</td><td>Required</td></tr>
+                <tr><td>Business phone number</td><td>Required</td></tr>
+                <tr><td>Business address</td><td>Required</td></tr>
+                <tr><td>Business category</td><td>Required</td></tr>
+                <tr><td>Date of visit</td><td>Required</td></tr>
+                <tr><td>Website yes / no</td><td>Required</td></tr>
+                <tr><td>Google Business Profile yes / no</td><td>Required</td></tr>
+                <tr><td>Social media yes / no</td><td>Required</td></tr>
+                <tr><td>Digital signage yes / no</td><td>Required</td></tr>
+                <tr><td>Coupons or rewards yes / no</td><td>Required</td></tr>
+                <tr><td>Online ordering yes / no</td><td>Required</td></tr>
+                <tr><td>Delivery options yes / no</td><td>Required</td></tr>
+                <tr><td>Main challenge identified</td><td>Required</td></tr>
+                <tr><td>Student notes</td><td>Required</td></tr>
+              </table>
+            </div>
+          </div>
+
+          <div class="grid-2 mt-14">
+            <div class="card">
+              <h3>Business interview output</h3>
+              <ul class="bullets">
+                <li>Each entry should save a complete interview snapshot with date and location context.</li>
+                <li>Business records should be editable until the student final submission is locked.</li>
+                <li>The system should count completed entries and show progress toward 10 / 10.</li>
+                <li>Student notes should capture both the pain point and the missed opportunity.</li>
+              </ul>
+            </div>
+            <div class="card">
+              <h3>Unlock rule</h3>
+              <p>
+                The final submission step remains locked until all ten business
+                interviews are completed and approved by the system as valid records.
+              </p>
+              <div class="callout mt-12">
+                <strong>Why this matters:</strong> the challenge is not just about
+                writing a solution. It is about evidence-based discovery from ten
+                real businesses in the student's neighborhood.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="footer">
+          <div><strong>Rule:</strong> 10 completed business entries are required before final submission unlocks</div>
+          <div class="page-number">Page 6 / 10</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="page">
+      <div class="sheet">
+        <div class="page-body">
+          <div class="section-head">
+            <div>
+              <div class="section-kicker">6. Final review</div>
+              <h2 class="section-title">Final submission and admin review</h2>
+              <p class="section-subtitle">
+                Once all approvals and business interviews are complete, the student
+                can submit the final project package. Admin review closes the loop,
+                scores entries, and publishes the winners.
+              </p>
+            </div>
+          </div>
+
+          <div class="grid-2">
+            <div class="card">
+              <h3>Final submission fields</h3>
+              <table class="table tight">
+                <tr>
+                  <th>Field</th>
+                  <th>Requirement</th>
+                </tr>
+                <tr><td>Problem identified</td><td>Required</td></tr>
+                <tr><td>Why it matters</td><td>Required</td></tr>
+                <tr><td>Proposed solution</td><td>Required</td></tr>
+                <tr><td>How it helps the business</td><td>Required</td></tr>
+                <tr><td>Expected impact</td><td>Required</td></tr>
+                <tr><td>Business name</td><td>Required for one-page summary</td></tr>
+                <tr><td>Business owner name</td><td>Required for one-page summary</td></tr>
+                <tr><td>Business address</td><td>Required for one-page summary</td></tr>
+                <tr><td>Business phone number</td><td>Required for one-page summary</td></tr>
+                <tr><td>Date of visit</td><td>Required for one-page summary</td></tr>
+                <tr><td>Video upload</td><td>Required, max 1 minute 30 seconds</td></tr>
+                <tr><td>Written file upload</td><td>Required, max one page</td></tr>
+                <tr><td>Submission date</td><td>Required</td></tr>
+              </table>
+            </div>
+
+            <div class="card">
+              <h3>Submission rules</h3>
+              <ul class="bullets">
+                <li>The written submission must fit on one page.</li>
+                <li>The video must be no longer than 1 minute and 30 seconds.</li>
+                <li>Students cannot submit unless all three approvals are approved.</li>
+                <li>Students cannot submit unless ten business interviews exist.</li>
+                <li>Every submission should be tied to the student profile and participant ID.</li>
+                <li>Admin must be able to approve or reject submissions and leave notes.</li>
+              </ul>
+
+              <div class="divider"></div>
+
+              <h3>Admin review actions</h3>
+              <ul class="bullets">
+                <li>View student profile, parent consent, school approval, and teacher approval.</li>
+                <li>View all business entries submitted by the student.</li>
+                <li>Export data to CSV.</li>
+                <li>Select first, second, and third place winners.</li>
+                <li>Publish winners to FrantzCoutard.com.</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="mt-14">
+            <div class="headline">
+              <div class="bar"></div>
+              <div class="text">Prize structure and public announcement</div>
+              <div class="bar"></div>
+            </div>
+            <div class="prize-row">
+              <div class="prize">
+                <strong>First Place</strong>
+                <span>$2,500 scholarship award</span>
+              </div>
+              <div class="prize">
+                <strong>Second Place</strong>
+                <span>$1,500 scholarship award</span>
+              </div>
+              <div class="prize">
+                <strong>Third Place</strong>
+                <span>$1,000 scholarship award</span>
+              </div>
+            </div>
+            <div class="callout mt-12">
+              <strong>Winner announcement:</strong> August 25, 2026 on FrantzCoutard.com.
+              The total scholarship pool is $5,000.
+            </div>
+          </div>
+        </div>
+
+        <div class="footer">
+          <div><strong>Goal:</strong> review, score, publish, and announce winners on August 25, 2026</div>
+          <div class="page-number">Page 7 / 10</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="page">
+      <div class="sheet">
+        <div class="page-body">
+          <div class="section-head">
+            <div>
+              <div class="section-kicker">7. Dashboard map</div>
+              <h2 class="section-title">Public pages and dashboard overview</h2>
+              <p class="section-subtitle">
+                The website needs both public-facing challenge pages and logged-in
+                dashboards so every role can see the exact information they need.
+              </p>
+            </div>
+          </div>
+
+          <div class="role-grid">
+            <div class="role-card">
+              <strong>Homepage</strong>
+              <span>Hero section with the challenge message, scholarship value, and register free call to action.</span>
+            </div>
+            <div class="role-card">
+              <strong>Challenge page</strong>
+              <span>Overview, who can participate, how it works, prize details, rules, consent requirements, FAQ, and register button.</span>
+            </div>
+            <div class="role-card">
+              <strong>Student registration</strong>
+              <span>Student intake form, login creation, QR generation, dashboard, and status tracker.</span>
+            </div>
+            <div class="role-card">
+              <strong>Parent consent</strong>
+              <span>QR entry point, account creation, consent checkbox, digital signature, and approval timestamp.</span>
+            </div>
+            <div class="role-card">
+              <strong>School / teacher</strong>
+              <span>School registration, teacher registration, approval views, and student monitoring tools.</span>
+            </div>
+            <div class="role-card">
+              <strong>Admin</strong>
+              <span>Overview metrics, approvals, submissions, exports, winners, and publication control.</span>
+            </div>
+          </div>
+
+          <div class="grid-2 mt-14">
+            <div class="card">
+              <h3>Student dashboard</h3>
+              <ul class="bullets">
+                <li>Participant ID and QR code</li>
+                <li>Status tracker for each approval gate</li>
+                <li>Business interview progress counter</li>
+                <li>Final submission lock state</li>
+                <li>Submission complete confirmation</li>
+              </ul>
+            </div>
+            <div class="card">
+              <h3>Parent dashboard</h3>
+              <ul class="bullets">
+                <li>Consent record</li>
+                <li>Approval status</li>
+                <li>Date and time of approval</li>
+                <li>Student linkage</li>
+                <li>Optional identity document reference if supplied</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="grid-2 mt-14">
+            <div class="card">
+              <h3>School dashboard</h3>
+              <ul class="bullets">
+                <li>Registered students from that school</li>
+                <li>Pending parent consent</li>
+                <li>Pending school approval</li>
+                <li>Pending teacher approval</li>
+                <li>Approved students and submitted projects</li>
+                <li>Winners from that school</li>
+              </ul>
+            </div>
+            <div class="card">
+              <h3>Admin dashboard</h3>
+              <ul class="bullets">
+                <li>Total students, parents, schools, teachers, businesses, and submissions</li>
+                <li>Consent and approval pending counts</li>
+                <li>Export to CSV</li>
+                <li>Submission approval or rejection</li>
+                <li>Winner selection and winner publishing</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <div class="footer">
+          <div><strong>Pages required:</strong> public pages, registration pages, dashboard pages, and winner announcement page</div>
+          <div class="page-number">Page 8 / 10</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="page">
+      <div class="sheet">
+        <div class="page-body">
+          <div class="section-head">
+            <div>
+              <div class="section-kicker">8. Teacher focus</div>
+              <h2 class="section-title">Teacher dashboard requirements</h2>
+              <p class="section-subtitle">
+                The teacher dashboard is the monitoring and motivation layer for the
+                challenge. It should help teachers see progress, identify gaps, and
+                compete for the educator award.
+              </p>
+            </div>
+          </div>
+
+          <div class="report-grid">
+            <div class="report-card">
+              <strong>Profile</strong>
+              <h4>Teacher profile</h4>
+              <p>Teacher name, school name, email, phone number, role or department, and grade level supported.</p>
+            </div>
+            <div class="report-card">
+              <strong>Tracking</strong>
+              <h4>Student tracking</h4>
+              <p>Total students registered, students pending parent consent, students approved by parent, students approved by school, students with teacher approval, and students eligible to submit.</p>
+            </div>
+            <div class="report-card">
+              <strong>Evidence</strong>
+              <h4>Business interview tracking</h4>
+              <p>Total business interviews entered, interviews completed per student, students with all 10 interviews completed, and business categories collected.</p>
+            </div>
+            <div class="report-card">
+              <strong>Submission</strong>
+              <h4>Project submission tracking</h4>
+              <p>Video submitted, written summary submitted, final submission status, submission date, and student ranking status.</p>
+            </div>
+            <div class="report-card">
+              <strong>Score</strong>
+              <h4>Community impact score</h4>
+              <p>Teacher score based on registration completion, consent completion, school verification, business interviews, project submissions, finalists, and winners.</p>
+            </div>
+            <div class="report-card">
+              <strong>Competition</strong>
+              <h4>Leaderboards</h4>
+              <p>Teacher leaderboard, school leaderboard, and student scholarship leaderboard.</p>
+            </div>
+            <div class="report-card">
+              <strong>Award</strong>
+              <h4>Teacher award section</h4>
+              <p>Progress toward the Community Leadership Educator Award and the Teacher Excellence Vacation Experience prize package.</p>
+            </div>
+            <div class="report-card">
+              <strong>Reports</strong>
+              <h4>Export center</h4>
+              <p>Export student list, parent consent status, business interview data, project submission data, and teacher score report.</p>
+            </div>
+          </div>
+
+          <div class="grid-2 mt-14">
+            <div class="card">
+              <h3>Notifications teachers should receive</h3>
+              <ul class="bullets">
+                <li>Parent consent pending</li>
+                <li>School approval pending</li>
+                <li>Student missing interviews</li>
+                <li>Student submission deadline reminder</li>
+                <li>Award ranking updates</li>
+              </ul>
+            </div>
+            <div class="card">
+              <h3>Teacher award package</h3>
+              <p>
+                The teacher award section should show progress toward the Community
+                Leadership Educator Award. Prize package: roundtrip airfare, hotel
+                accommodations, ground transportation, recognition experience, and
+                the Community Leadership Educator Award.
+              </p>
+              <div class="callout mt-12">
+                <strong>Main goal:</strong> help teachers monitor students, increase
+                participation, track impact, and compete for the educator award.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="footer">
+          <div><strong>Teacher focus:</strong> monitoring, motivation, reporting, and award competition</div>
+          <div class="page-number">Page 9 / 10</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="page">
+      <div class="sheet">
+        <div class="page-body">
+          <div class="section-head">
+            <div>
+              <div class="section-kicker">9. Technical plan</div>
+              <h2 class="section-title">How this fits the current site</h2>
+              <p class="section-subtitle">
+                The new_school module should be added to the current FrantzCoutard.com
+                architecture instead of being built as a separate product. That keeps
+                the brand, session model, and admin patterns consistent.
+              </p>
+            </div>
+          </div>
+
+          <div class="tech-grid">
+            <div class="card">
+              <h3>Recommended implementation approach</h3>
+              <ul class="stack-list">
+                <li>Add a new school module in the React frontend with pages for student registration, parent consent, school registration, teacher registration, dashboards, and admin review.</li>
+                <li>Extend the PHP API with new routes for registration, QR token validation, approvals, dashboard summaries, interview entries, submissions, exports, and winner publishing.</li>
+                <li>Add MySQL tables for students, parents, schools, teachers, approvals, business interviews, submissions, notifications, QR tokens, and winners.</li>
+                <li>Reuse the current site auth/session approach so the new module feels native to the existing portal.</li>
+                <li>Use the current upload pattern for files such as consent signatures, student videos, and written submissions.</li>
+              </ul>
+
+              <div class="divider"></div>
+
+              <h3>Suggested API routes</h3>
+              <table class="table tight">
+                <tr>
+                  <th>Route</th>
+                  <th>Purpose</th>
+                </tr>
+                <tr><td>POST new-school/student/register</td><td>Create student profile and participant QR token</td></tr>
+                <tr><td>POST new-school/parent/consent</td><td>Store parent approval from the QR flow</td></tr>
+                <tr><td>POST new-school/school/register</td><td>Create school account</td></tr>
+                <tr><td>POST new-school/teacher/register</td><td>Create teacher account</td></tr>
+                <tr><td>POST new-school/business</td><td>Save one business interview record</td></tr>
+                <tr><td>POST new-school/submission</td><td>Save final video and written submission</td></tr>
+                <tr><td>GET new-school/dashboard/*</td><td>Return role-based dashboard data</td></tr>
+                <tr><td>GET / PUT admin/new-school/*</td><td>Admin review, approvals, exports, and winners</td></tr>
+              </table>
+            </div>
+
+            <div class="card">
+              <h3>Suggested database entities</h3>
+              <table class="table tight">
+                <tr>
+                  <th>Table</th>
+                  <th>Stores</th>
+                </tr>
+                <tr><td>new_school_students</td><td>Student profile, school, grade, status, QR token, participant ID</td></tr>
+                <tr><td>new_school_parents</td><td>Parent record, relationship, contact details, signature, approval time</td></tr>
+                <tr><td>new_school_schools</td><td>School account and school identity fields</td></tr>
+                <tr><td>new_school_teachers</td><td>Teacher account and school assignment</td></tr>
+                <tr><td>new_school_approvals</td><td>School and teacher approvals with notes and timestamps</td></tr>
+                <tr><td>new_school_business_interviews</td><td>Ten business visits per student and interview answers</td></tr>
+                <tr><td>new_school_submissions</td><td>Final video, written file, solution text, and score status</td></tr>
+                <tr><td>new_school_notifications</td><td>Pending, reminder, and award messages</td></tr>
+                <tr><td>new_school_winners</td><td>Final ranking and prize publication records</td></tr>
+              </table>
+
+              <div class="divider"></div>
+
+              <h3>Acceptance criteria</h3>
+              <ul class="stack-list">
+                <li>Student cannot submit without parent, school, and teacher approval.</li>
+                <li>Student cannot submit without ten completed business interviews.</li>
+                <li>Every approval stores name, date, time, and signature.</li>
+                <li>Parent information is captured only through the QR flow.</li>
+                <li>Admin can export data, choose winners, and publish the result page.</li>
+                <li>Teacher dashboard shows progress, rankings, and award status.</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="timeline mt-14">
+            <div class="step">
+              <strong>Phase 1</strong>
+              <span>Build data model, QR token flow, and registration pages.</span>
+            </div>
+            <div class="step">
+              <strong>Phase 2</strong>
+              <span>Add school and teacher dashboards, approvals, and business interview entry.</span>
+            </div>
+            <div class="step">
+              <strong>Phase 3</strong>
+              <span>Add final submission upload, admin review tools, CSV exports, and rankings.</span>
+            </div>
+            <div class="step">
+              <strong>Phase 4</strong>
+              <span>Publish winners on August 25, 2026 and connect the public challenge page.</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="footer">
+          <div><strong>Outcome:</strong> a native new_school module that matches the current site stack</div>
+          <div class="page-number">Page 10 / 10</div>
+        </div>
+      </div>
+    </section>
+  </div>
+</body>
+</html>

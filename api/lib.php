@@ -158,6 +158,680 @@ function inventory_status_label(int $stock, int $threshold): string
     return 'in';
 }
 
+function new_school_generate_participant_id(): string
+{
+    return 'NS-' . date('Y') . '-' . strtoupper(bin2hex(random_bytes(3)));
+}
+
+function new_school_generate_qr_token(): string
+{
+    return bin2hex(random_bytes(16));
+}
+
+function new_school_qr_url(string $token): string
+{
+    return '/new-school/parent/' . rawurlencode($token);
+}
+
+function new_school_submission_is_locked(array $student, int $interviewCount): bool
+{
+    return !(
+        ($student['parent_consent_status'] ?? '') === 'approved'
+        && ($student['school_approval_status'] ?? '') === 'approved'
+        && ($student['teacher_approval_status'] ?? '') === 'approved'
+        && $interviewCount >= 10
+    );
+}
+
+function new_school_overall_status(array $student, int $interviewCount): string
+{
+    if (($student['submission_status'] ?? '') === 'complete') {
+        return 'submission_complete';
+    }
+    if (($student['submission_status'] ?? '') === 'submitted') {
+        return 'submission_submitted';
+    }
+    if (($student['parent_consent_status'] ?? '') !== 'approved') {
+        return 'parent_consent_pending';
+    }
+    if (($student['school_approval_status'] ?? '') !== 'approved') {
+        return 'school_approval_pending';
+    }
+    if (($student['teacher_approval_status'] ?? '') !== 'approved') {
+        return 'teacher_approval_pending';
+    }
+    if ($interviewCount < 10) {
+        return 'interviews_pending';
+    }
+    return 'eligible_to_submit';
+}
+
+function new_school_status_tracker(array $student, int $interviewCount): array
+{
+    return [
+        ['label' => 'Student Registered', 'complete' => true],
+        ['label' => 'Parent Consent', 'complete' => ($student['parent_consent_status'] ?? '') === 'approved'],
+        ['label' => 'School Approval', 'complete' => ($student['school_approval_status'] ?? '') === 'approved'],
+        ['label' => 'Teacher Approval', 'complete' => ($student['teacher_approval_status'] ?? '') === 'approved'],
+        ['label' => '10 Business Interviews', 'complete' => $interviewCount >= 10],
+        ['label' => 'Eligible To Submit', 'complete' => $interviewCount >= 10
+            && ($student['parent_consent_status'] ?? '') === 'approved'
+            && ($student['school_approval_status'] ?? '') === 'approved'
+            && ($student['teacher_approval_status'] ?? '') === 'approved'],
+        ['label' => 'Final Submission', 'complete' => in_array((string) ($student['submission_status'] ?? ''), ['submitted', 'complete', 'winner'], true)],
+    ];
+}
+
+function new_school_fetch_student_by_user_id(int $userId): ?array
+{
+    $stmt = db()->prepare(
+        'SELECT s.*, u.full_name AS user_full_name, u.email AS user_email
+         FROM new_school_students s
+         INNER JOIN users u ON u.id = s.user_id
+         WHERE s.user_id = ?
+         LIMIT 1'
+    );
+    $stmt->execute([$userId]);
+    $student = $stmt->fetch();
+    return $student ?: null;
+}
+
+function new_school_fetch_student_by_token(string $token): ?array
+{
+    $stmt = db()->prepare(
+        'SELECT s.*, u.full_name AS user_full_name, u.email AS user_email
+         FROM new_school_students s
+         INNER JOIN users u ON u.id = s.user_id
+         WHERE s.qr_token = ?
+         LIMIT 1'
+    );
+    $stmt->execute([$token]);
+    $student = $stmt->fetch();
+    return $student ?: null;
+}
+
+function new_school_fetch_student_by_id(int $studentId): ?array
+{
+    $stmt = db()->prepare(
+        'SELECT s.*, u.full_name AS user_full_name, u.email AS user_email
+         FROM new_school_students s
+         INNER JOIN users u ON u.id = s.user_id
+         WHERE s.id = ?
+         LIMIT 1'
+    );
+    $stmt->execute([$studentId]);
+    $student = $stmt->fetch();
+    return $student ?: null;
+}
+
+function new_school_fetch_student_by_participant_id(string $participantId): ?array
+{
+    $stmt = db()->prepare(
+        'SELECT s.*, u.full_name AS user_full_name, u.email AS user_email
+         FROM new_school_students s
+         INNER JOIN users u ON u.id = s.user_id
+         WHERE s.participant_id = ?
+         LIMIT 1'
+    );
+    $stmt->execute([$participantId]);
+    $student = $stmt->fetch();
+    return $student ?: null;
+}
+
+function new_school_fetch_school_by_user_id(int $userId): ?array
+{
+    $stmt = db()->prepare(
+        'SELECT * FROM new_school_schools WHERE user_id = ? LIMIT 1'
+    );
+    $stmt->execute([$userId]);
+    $school = $stmt->fetch();
+    return $school ?: null;
+}
+
+function new_school_fetch_school_by_id(int $schoolId): ?array
+{
+    $stmt = db()->prepare('SELECT * FROM new_school_schools WHERE id = ? LIMIT 1');
+    $stmt->execute([$schoolId]);
+    $school = $stmt->fetch();
+    return $school ?: null;
+}
+
+function new_school_fetch_school_by_name(string $schoolName): ?array
+{
+    $stmt = db()->prepare('SELECT * FROM new_school_schools WHERE school_name = ? LIMIT 1');
+    $stmt->execute([$schoolName]);
+    $school = $stmt->fetch();
+    return $school ?: null;
+}
+
+function new_school_fetch_teacher_by_user_id(int $userId): ?array
+{
+    $stmt = db()->prepare(
+        'SELECT t.*, s.school_name AS linked_school_name
+         FROM new_school_teachers t
+         INNER JOIN new_school_schools s ON s.id = t.school_id
+         WHERE t.user_id = ?
+         LIMIT 1'
+    );
+    $stmt->execute([$userId]);
+    $teacher = $stmt->fetch();
+    return $teacher ?: null;
+}
+
+function new_school_fetch_teacher_by_id(int $teacherId): ?array
+{
+    $stmt = db()->prepare(
+        'SELECT t.*, s.school_name AS linked_school_name
+         FROM new_school_teachers t
+         INNER JOIN new_school_schools s ON s.id = t.school_id
+         WHERE t.id = ?
+         LIMIT 1'
+    );
+    $stmt->execute([$teacherId]);
+    $teacher = $stmt->fetch();
+    return $teacher ?: null;
+}
+
+function new_school_fetch_parent_by_student_id(int $studentId): ?array
+{
+    $stmt = db()->prepare(
+        'SELECT * FROM new_school_parents WHERE student_id = ? LIMIT 1'
+    );
+    $stmt->execute([$studentId]);
+    $parent = $stmt->fetch();
+    return $parent ?: null;
+}
+
+function new_school_fetch_parent_by_user_id(int $userId): ?array
+{
+    $stmt = db()->prepare(
+        'SELECT p.*, s.full_name AS student_full_name, s.school_name AS student_school_name, s.participant_id
+         FROM new_school_parents p
+         INNER JOIN new_school_students s ON s.id = p.student_id
+         WHERE p.user_id = ?
+         LIMIT 1'
+    );
+    $stmt->execute([$userId]);
+    $parent = $stmt->fetch();
+    return $parent ?: null;
+}
+
+function new_school_student_interview_count(int $studentId): int
+{
+    $stmt = db()->prepare('SELECT COUNT(*) FROM new_school_business_interviews WHERE student_id = ?');
+    $stmt->execute([$studentId]);
+    return (int) $stmt->fetchColumn();
+}
+
+function new_school_fetch_student_interviews(int $studentId): array
+{
+    $stmt = db()->prepare(
+        'SELECT *
+         FROM new_school_business_interviews
+         WHERE student_id = ?
+         ORDER BY visit_number ASC, created_at ASC'
+    );
+    $stmt->execute([$studentId]);
+    return $stmt->fetchAll();
+}
+
+function new_school_fetch_student_approvals(int $studentId): array
+{
+    $stmt = db()->prepare(
+        'SELECT *
+         FROM new_school_approvals
+         WHERE student_id = ?
+         ORDER BY approval_type ASC'
+    );
+    $stmt->execute([$studentId]);
+    $rows = $stmt->fetchAll();
+    $map = ['school' => null, 'teacher' => null];
+    foreach ($rows as $row) {
+        $map[(string) $row['approval_type']] = $row;
+    }
+    return $map;
+}
+
+function new_school_placeholder_list(int $count): string
+{
+    return implode(',', array_fill(0, max(1, $count), '?'));
+}
+
+function new_school_fetch_businesses_by_student_ids(array $studentIds): array
+{
+    $studentIds = array_values(array_filter(array_map('intval', $studentIds), static fn(int $id): bool => $id > 0));
+    if ($studentIds === []) {
+        return [];
+    }
+
+    $stmt = db()->prepare(
+        'SELECT bi.*, s.full_name AS student_name, s.participant_id, s.grade_level, s.school_name, u.email AS student_email
+         FROM new_school_business_interviews bi
+         INNER JOIN new_school_students s ON s.id = bi.student_id
+         INNER JOIN users u ON u.id = s.user_id
+         WHERE bi.student_id IN (' . new_school_placeholder_list(count($studentIds)) . ')
+         ORDER BY bi.student_id ASC, bi.visit_number ASC, bi.created_at ASC'
+    );
+    $stmt->execute($studentIds);
+    return $stmt->fetchAll();
+}
+
+function new_school_fetch_submissions_by_student_ids(array $studentIds): array
+{
+    $studentIds = array_values(array_filter(array_map('intval', $studentIds), static fn(int $id): bool => $id > 0));
+    if ($studentIds === []) {
+        return [];
+    }
+
+    $stmt = db()->prepare(
+        'SELECT sub.*, s.full_name AS student_name, s.participant_id, s.grade_level, s.school_name, u.email AS student_email,
+                b.business_name AS source_business_name, b.owner_name AS source_owner_name, b.business_category AS source_business_category,
+                rv.full_name AS reviewer_name, rv.email AS reviewer_email
+         FROM new_school_submissions sub
+         INNER JOIN new_school_students s ON s.id = sub.student_id
+         INNER JOIN users u ON u.id = s.user_id
+         LEFT JOIN new_school_business_interviews b ON b.id = sub.source_business_id
+         LEFT JOIN users rv ON rv.id = sub.reviewed_by_user_id
+         WHERE sub.student_id IN (' . new_school_placeholder_list(count($studentIds)) . ')
+         ORDER BY COALESCE(sub.reviewed_at, sub.submission_date, sub.updated_at) DESC, sub.created_at DESC'
+    );
+    $stmt->execute($studentIds);
+    return $stmt->fetchAll();
+}
+
+function new_school_fetch_approvals_by_student_ids(array $studentIds): array
+{
+    $studentIds = array_values(array_filter(array_map('intval', $studentIds), static fn(int $id): bool => $id > 0));
+    if ($studentIds === []) {
+        return [];
+    }
+
+    $stmt = db()->prepare(
+        'SELECT a.*, s.full_name AS student_name, s.participant_id, s.grade_level, s.school_name, u.email AS student_email
+         FROM new_school_approvals a
+         INNER JOIN new_school_students s ON s.id = a.student_id
+         INNER JOIN users u ON u.id = s.user_id
+         WHERE a.student_id IN (' . new_school_placeholder_list(count($studentIds)) . ')
+         ORDER BY a.updated_at DESC, a.created_at DESC'
+    );
+    $stmt->execute($studentIds);
+    return $stmt->fetchAll();
+}
+
+function new_school_fetch_parents_by_student_ids(array $studentIds): array
+{
+    $studentIds = array_values(array_filter(array_map('intval', $studentIds), static fn(int $id): bool => $id > 0));
+    if ($studentIds === []) {
+        return [];
+    }
+
+    $stmt = db()->prepare(
+        'SELECT p.*, s.full_name AS student_name, s.participant_id, s.school_name, s.grade_level, s.parent_consent_status,
+                u.email AS student_email
+         FROM new_school_parents p
+         INNER JOIN new_school_students s ON s.id = p.student_id
+         INNER JOIN users u ON u.id = s.user_id
+         WHERE p.student_id IN (' . new_school_placeholder_list(count($studentIds)) . ')
+         ORDER BY p.updated_at DESC, p.created_at DESC'
+    );
+    $stmt->execute($studentIds);
+    return $stmt->fetchAll();
+}
+
+function new_school_fetch_winners_by_student_ids(array $studentIds): array
+{
+    $studentIds = array_values(array_filter(array_map('intval', $studentIds), static fn(int $id): bool => $id > 0));
+    if ($studentIds === []) {
+        return [];
+    }
+
+    $stmt = db()->prepare(
+        'SELECT w.*, s.full_name AS student_name, s.participant_id, s.grade_level, s.school_name, u.email AS student_email,
+                sub.score, sub.rank_position, sub.status AS submission_status
+         FROM new_school_winners w
+         INNER JOIN new_school_students s ON s.id = w.student_id
+         INNER JOIN users u ON u.id = s.user_id
+         INNER JOIN new_school_submissions sub ON sub.id = w.submission_id
+         WHERE w.student_id IN (' . new_school_placeholder_list(count($studentIds)) . ')
+         ORDER BY w.created_at DESC'
+    );
+    $stmt->execute($studentIds);
+    return $stmt->fetchAll();
+}
+
+function new_school_fetch_notifications_for_scope(array $studentIds, array $roles, int $limit = 12): array
+{
+    $studentIds = array_values(array_filter(array_map('intval', $studentIds), static fn(int $id): bool => $id > 0));
+    $roles = array_values(array_filter(array_map('strval', $roles), static fn(string $role): bool => $role !== ''));
+
+    if ($studentIds === [] && $roles === []) {
+        return [];
+    }
+
+    $clauses = [];
+    $params = [];
+
+    if ($studentIds !== []) {
+        $clauses[] = 'n.student_id IN (' . new_school_placeholder_list(count($studentIds)) . ')';
+        $params = array_merge($params, $studentIds);
+    }
+
+    if ($roles !== []) {
+        $clauses[] = 'n.recipient_role IN (' . new_school_placeholder_list(count($roles)) . ')';
+        $params = array_merge($params, $roles);
+    }
+
+    $clauses[] = "n.recipient_role = 'all'";
+
+    $stmt = db()->prepare(
+        'SELECT n.*, s.full_name AS student_name, s.participant_id, s.school_name
+         FROM new_school_notifications n
+         LEFT JOIN new_school_students s ON s.id = n.student_id
+         WHERE ' . implode(' OR ', $clauses) . '
+         ORDER BY n.created_at DESC
+         LIMIT ' . max(1, $limit)
+    );
+    $stmt->execute($params);
+    $rows = $stmt->fetchAll();
+
+    foreach ($rows as &$row) {
+        $payload = $row['payload_json'] ?? null;
+        if (is_string($payload) && $payload !== '') {
+            $decoded = json_decode($payload, true);
+            $row['payload'] = is_array($decoded) ? $decoded : null;
+        } else {
+            $row['payload'] = null;
+        }
+    }
+    unset($row);
+
+    return $rows;
+}
+
+function new_school_add_notification(?int $studentId, string $recipientRole, string $type, string $title, string $message, array $payload = []): void
+{
+    $stmt = db()->prepare(
+        'INSERT INTO new_school_notifications (
+            student_id, recipient_role, notification_type, title, message, payload_json
+         ) VALUES (?, ?, ?, ?, ?, ?)'
+    );
+    $stmt->execute([
+        $studentId,
+        $recipientRole,
+        $type,
+        $title,
+        $message,
+        $payload !== [] ? json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : null,
+    ]);
+}
+
+function new_school_fetch_notification_by_id(int $notificationId): ?array
+{
+    $stmt = db()->prepare(
+        'SELECT n.*, s.full_name AS student_name, s.participant_id, s.school_name
+         FROM new_school_notifications n
+         LEFT JOIN new_school_students s ON s.id = n.student_id
+         WHERE n.id = ?
+         LIMIT 1'
+    );
+    $stmt->execute([$notificationId]);
+    $notification = $stmt->fetch();
+    return $notification ?: null;
+}
+
+function new_school_notification_can_access(array $user, array $notification): bool
+{
+    if (in_array((string) ($user['role'] ?? ''), ['admin', 'super_admin', 'editor'], true)) {
+        return true;
+    }
+
+    $recipientRole = (string) ($notification['recipient_role'] ?? '');
+    if (!in_array($recipientRole, ['student', 'parent', 'school', 'teacher', 'all'], true)) {
+        return false;
+    }
+
+    $studentId = (int) ($notification['student_id'] ?? 0);
+    if ($studentId <= 0) {
+        return false;
+    }
+
+    $role = (string) ($user['role'] ?? '');
+    if ($role === 'student') {
+        if (!in_array($recipientRole, ['student', 'all'], true)) {
+            return false;
+        }
+        $student = new_school_fetch_student_by_user_id((int) $user['id']);
+        return $student && (int) $student['id'] === $studentId;
+    }
+
+    if ($role === 'parent') {
+        if (!in_array($recipientRole, ['parent', 'all'], true)) {
+            return false;
+        }
+        $parent = new_school_fetch_parent_by_user_id((int) $user['id']);
+        return $parent && (int) $parent['student_id'] === $studentId;
+    }
+
+    if ($role === 'school') {
+        if (!in_array($recipientRole, ['school', 'all'], true)) {
+            return false;
+        }
+        $school = new_school_fetch_school_by_user_id((int) $user['id']);
+        if (!$school) {
+            return false;
+        }
+        $student = new_school_fetch_student_by_id($studentId);
+        return $student && (
+            (int) ($student['school_id'] ?? 0) === (int) $school['id']
+            || (string) ($student['school_name'] ?? '') === (string) ($school['school_name'] ?? '')
+        );
+    }
+
+    if ($role === 'teacher') {
+        if (!in_array($recipientRole, ['teacher', 'all'], true)) {
+            return false;
+        }
+        $teacher = new_school_fetch_teacher_by_user_id((int) $user['id']);
+        if (!$teacher) {
+            return false;
+        }
+        $student = new_school_fetch_student_by_id($studentId);
+        return $student && (
+            (int) ($student['teacher_id'] ?? 0) === (int) $teacher['id']
+            || (int) ($student['school_id'] ?? 0) === (int) $teacher['school_id']
+            || (string) ($student['school_name'] ?? '') === (string) ($teacher['linked_school_name'] ?? '')
+        );
+    }
+
+    return false;
+}
+
+function new_school_fetch_submission_by_student_id(int $studentId): ?array
+{
+    $stmt = db()->prepare(
+        'SELECT s.*, b.business_name AS source_business_name, b.owner_name AS source_owner_name, b.business_address AS source_business_address,
+                b.business_phone AS source_business_phone, b.date_of_visit AS source_date_of_visit, b.business_category AS source_business_category,
+                rv.full_name AS reviewer_name, rv.email AS reviewer_email
+         FROM new_school_submissions s
+         LEFT JOIN new_school_business_interviews b ON b.id = s.source_business_id
+         LEFT JOIN users rv ON rv.id = s.reviewed_by_user_id
+         WHERE s.student_id = ?
+         LIMIT 1'
+    );
+    $stmt->execute([$studentId]);
+    $submission = $stmt->fetch();
+    return $submission ?: null;
+}
+
+function new_school_fetch_students_by_school_id(int $schoolId): array
+{
+    $stmt = db()->prepare(
+        'SELECT s.*, u.full_name AS user_full_name, u.email AS user_email,
+                (SELECT COUNT(*) FROM new_school_business_interviews bi WHERE bi.student_id = s.id) AS interview_count,
+                (SELECT COUNT(*) FROM new_school_submissions sub WHERE sub.student_id = s.id) AS has_submission
+         FROM new_school_students s
+         INNER JOIN users u ON u.id = s.user_id
+         WHERE s.school_id = ?
+         ORDER BY s.created_at DESC'
+    );
+    $stmt->execute([$schoolId]);
+    return $stmt->fetchAll();
+}
+
+function new_school_fetch_students_by_teacher_id(int $teacherId): array
+{
+    $stmt = db()->prepare(
+        'SELECT s.*, u.full_name AS user_full_name, u.email AS user_email,
+                (SELECT COUNT(*) FROM new_school_business_interviews bi WHERE bi.student_id = s.id) AS interview_count,
+                (SELECT COUNT(*) FROM new_school_submissions sub WHERE sub.student_id = s.id) AS has_submission
+         FROM new_school_students s
+         INNER JOIN users u ON u.id = s.user_id
+         WHERE s.teacher_id = ?
+         ORDER BY s.created_at DESC'
+    );
+    $stmt->execute([$teacherId]);
+    return $stmt->fetchAll();
+}
+
+function new_school_fetch_all_schools(): array
+{
+    return db()->query(
+        'SELECT id, school_name, school_address, school_district, main_phone, principal_name, administrator_name, administrator_email, administrator_phone, status, created_at
+         FROM new_school_schools
+         ORDER BY school_name ASC'
+    )->fetchAll();
+}
+
+function new_school_fetch_students_for_school(array $school): array
+{
+    $stmt = db()->prepare(
+        'SELECT s.*, u.full_name AS user_full_name, u.email AS user_email,
+                (SELECT COUNT(*) FROM new_school_business_interviews bi WHERE bi.student_id = s.id) AS interview_count,
+                (SELECT COUNT(*) FROM new_school_submissions sub WHERE sub.student_id = s.id) AS has_submission
+         FROM new_school_students s
+         INNER JOIN users u ON u.id = s.user_id
+         WHERE s.school_id = ? OR s.school_name = ?
+         ORDER BY s.created_at DESC'
+    );
+    $stmt->execute([(int) $school['id'], (string) $school['school_name']]);
+    return $stmt->fetchAll();
+}
+
+function new_school_fetch_students_for_teacher(array $teacher): array
+{
+    $stmt = db()->prepare(
+        'SELECT s.*, u.full_name AS user_full_name, u.email AS user_email,
+                (SELECT COUNT(*) FROM new_school_business_interviews bi WHERE bi.student_id = s.id) AS interview_count,
+                (SELECT COUNT(*) FROM new_school_submissions sub WHERE sub.student_id = s.id) AS has_submission
+         FROM new_school_students s
+         INNER JOIN users u ON u.id = s.user_id
+         WHERE s.teacher_id = ? OR s.school_id = ? OR s.school_name = ?
+         ORDER BY s.created_at DESC'
+    );
+    $stmt->execute([(int) $teacher['id'], (int) $teacher['school_id'], (string) ($teacher['linked_school_name'] ?? '')]);
+    return $stmt->fetchAll();
+}
+
+function new_school_public_leaderboards(): array
+{
+    return [
+        'schools' => db()->query(
+            'SELECT sc.id, sc.school_name AS label,
+                    COUNT(DISTINCT st.id) AS students,
+                    SUM(CASE WHEN st.parent_consent_status = "approved" THEN 1 ELSE 0 END) AS parent_approved,
+                    SUM(CASE WHEN st.school_approval_status = "approved" THEN 1 ELSE 0 END) AS school_approved,
+                    SUM(CASE WHEN st.teacher_approval_status = "approved" THEN 1 ELSE 0 END) AS teacher_approved,
+                    COUNT(DISTINCT sub.id) AS submissions
+             FROM new_school_schools sc
+             LEFT JOIN new_school_students st ON st.school_id = sc.id
+             LEFT JOIN new_school_submissions sub ON sub.student_id = st.id
+             GROUP BY sc.id, sc.school_name
+             ORDER BY submissions DESC, teacher_approved DESC, students DESC
+             LIMIT 10'
+        )->fetchAll(),
+        'teachers' => db()->query(
+            'SELECT t.id, t.teacher_full_name AS label,
+                    COUNT(DISTINCT st.id) AS students,
+                    SUM(CASE WHEN st.parent_consent_status = "approved" THEN 1 ELSE 0 END) AS parent_approved,
+                    SUM(CASE WHEN st.school_approval_status = "approved" THEN 1 ELSE 0 END) AS school_approved,
+                    SUM(CASE WHEN st.teacher_approval_status = "approved" THEN 1 ELSE 0 END) AS teacher_approved,
+                    COUNT(DISTINCT sub.id) AS submissions
+             FROM new_school_teachers t
+             LEFT JOIN new_school_students st ON st.teacher_id = t.id
+             LEFT JOIN new_school_submissions sub ON sub.student_id = st.id
+             GROUP BY t.id, t.teacher_full_name
+             ORDER BY submissions DESC, teacher_approved DESC, students DESC
+             LIMIT 10'
+        )->fetchAll(),
+        'students' => db()->query(
+            'SELECT s.id, s.full_name AS label, s.grade_level,
+                    (SELECT COUNT(*) FROM new_school_business_interviews bi WHERE bi.student_id = s.id) AS interview_count,
+                    (SELECT COUNT(*) FROM new_school_submissions sub WHERE sub.student_id = s.id) AS submitted
+             FROM new_school_students s
+             ORDER BY interview_count DESC, submitted DESC, s.created_at DESC
+             LIMIT 10'
+        )->fetchAll(),
+    ];
+}
+
+function new_school_fetch_winner_by_student_id(int $studentId): ?array
+{
+    $stmt = db()->prepare(
+        'SELECT * FROM new_school_winners WHERE student_id = ? LIMIT 1'
+    );
+    $stmt->execute([$studentId]);
+    $winner = $stmt->fetch();
+    return $winner ?: null;
+}
+
+function new_school_refresh_student_status(int $studentId): ?array
+{
+    $student = new_school_fetch_student_by_id($studentId);
+    if (!$student) {
+        return null;
+    }
+
+    $interviewCount = new_school_student_interview_count($studentId);
+    $submission = new_school_fetch_submission_by_student_id($studentId);
+
+    $submissionStatus = 'locked';
+    if ($submission) {
+        $submissionStatus = in_array((string) $submission['status'], ['approved', 'winner'], true) ? 'complete' : 'submitted';
+    } elseif (
+        ($student['parent_consent_status'] ?? '') === 'approved'
+        && ($student['school_approval_status'] ?? '') === 'approved'
+        && ($student['teacher_approval_status'] ?? '') === 'approved'
+        && $interviewCount >= 10
+    ) {
+        $submissionStatus = 'eligible';
+    }
+
+    $overall = new_school_overall_status(array_merge($student, ['submission_status' => $submissionStatus]), $interviewCount);
+
+    $stmt = db()->prepare(
+        'UPDATE new_school_students
+         SET submission_status = ?, overall_status = ?, updated_at = NOW()
+         WHERE id = ?'
+    );
+    $stmt->execute([$submissionStatus, $overall, $studentId]);
+
+    return new_school_fetch_student_by_id($studentId);
+}
+
+function new_school_public_summary(): array
+{
+    $count = static fn(string $sql): int => (int) db()->query($sql)->fetchColumn();
+    return [
+        'students' => $count('SELECT COUNT(*) FROM new_school_students'),
+        'parents' => $count('SELECT COUNT(*) FROM new_school_parents'),
+        'schools' => $count('SELECT COUNT(*) FROM new_school_schools'),
+        'teachers' => $count('SELECT COUNT(*) FROM new_school_teachers'),
+        'businesses' => $count('SELECT COUNT(*) FROM new_school_business_interviews'),
+        'submissions' => $count('SELECT COUNT(*) FROM new_school_submissions'),
+        'winners' => $count('SELECT COUNT(*) FROM new_school_winners'),
+    ];
+}
+
 function user_access_rank(?array $user): int
 {
     if (!$user) {

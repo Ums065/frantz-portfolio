@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useAuth } from '../context/AuthContext'
+import { useAuth, type RegistrationRole } from '../context/AuthContext'
 import { api } from '../lib/api'
 
 const CloseIcon = () => (
@@ -9,7 +9,7 @@ const CloseIcon = () => (
 )
 
 const Mono = () => (
-  <div className="mmono"><img src="/assets/fc-logo.png" alt="FC" /></div>
+  <div className="mmono"><img src="/assets/fc-monogram.svg" alt="FC" decoding="async" /></div>
 )
 
 const OkIcon = () => (
@@ -20,6 +20,113 @@ const OkIcon = () => (
     </svg>
   </div>
 )
+
+const registerRoleOptions: Array<{
+  value: RegistrationRole
+  label: string
+  description: string
+}> = [
+  { value: 'community', label: 'Community', description: 'Basic site access' },
+  { value: 'student', label: 'Student', description: 'Challenge participant' },
+  { value: 'parent', label: 'Parent', description: 'QR consent flow' },
+  { value: 'school', label: 'School', description: 'School admin access' },
+  { value: 'teacher', label: 'Teacher', description: 'Teacher dashboard access' },
+]
+
+const registerRoleMeta: Record<RegistrationRole, { title: string; subtitle: string; helper: string; button: string }> = {
+  community: {
+    title: 'Join the Community',
+    subtitle: 'Create a standard site account to stay connected.',
+    helper: 'Choose Student, Parent, School, or Teacher if you want the challenge-specific registration flow.',
+    button: 'Create Account',
+  },
+  student: {
+    title: 'Student Registration',
+    subtitle: 'Register for the Community Business Impact Challenge.',
+    helper: 'Students must be 14-19 and complete parent, school, and teacher approval before submission opens.',
+    button: 'Register Student',
+  },
+  parent: {
+    title: 'Parent Consent',
+    subtitle: 'Use the QR token from the student profile to finish consent.',
+    helper: 'Parent records are linked to the student QR flow and store consent approval details.',
+    button: 'Save Consent',
+  },
+  school: {
+    title: 'School Registration',
+    subtitle: 'Register your school for challenge oversight and approvals.',
+    helper: 'School administrators can review registered students, approvals, and submissions after onboarding.',
+    button: 'Register School',
+  },
+  teacher: {
+    title: 'Teacher Registration',
+    subtitle: 'Create a teacher account under your school.',
+    helper: 'Teachers monitor student progress, interviews, submissions, and awards.',
+    button: 'Register Teacher',
+  },
+}
+
+type RegisterFormState = {
+  role: RegistrationRole
+  fullName: string
+  email: string
+  password: string
+  confirmPassword: string
+  studentUsername: string
+  age: string
+  dateOfBirth: string
+  phoneNumber: string
+  homeAddress: string
+  schoolName: string
+  gradeLevel: string
+  parentName: string
+  parentPhone: string
+  parentEmail: string
+  qrToken: string
+  relationshipToStudent: string
+  governmentIdUrl: string
+  digitalSignature: string
+  schoolAddress: string
+  schoolDistrict: string
+  mainPhone: string
+  principalName: string
+  administratorPhone: string
+  roleDepartment: string
+  gradeLevelSupported: string
+  consentChecked: boolean
+}
+
+const createRegisterForm = (): RegisterFormState => ({
+  role: 'community',
+  fullName: '',
+  email: '',
+  password: '',
+  confirmPassword: '',
+  studentUsername: '',
+  age: '',
+  dateOfBirth: '',
+  phoneNumber: '',
+  homeAddress: '',
+  schoolName: '',
+  gradeLevel: '',
+  parentName: '',
+  parentPhone: '',
+  parentEmail: '',
+  qrToken: '',
+  relationshipToStudent: '',
+  governmentIdUrl: '',
+  digitalSignature: '',
+  schoolAddress: '',
+  schoolDistrict: '',
+  mainPhone: '',
+  principalName: '',
+  administratorPhone: '',
+  roleDepartment: '',
+  gradeLevelSupported: '',
+  consentChecked: false,
+})
+
+type RegisterTextFieldKey = Exclude<keyof RegisterFormState, 'role' | 'consentChecked'>
 
 /* ============================ AUTH MODAL ============================ */
 export function AuthModal({
@@ -32,9 +139,7 @@ export function AuthModal({
 }) {
   const { login, register } = useAuth()
   type AuthResult = Awaited<ReturnType<typeof login>>
-  const [name, setName] = useState('')
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
+  const [form, setForm] = useState<RegisterFormState>(createRegisterForm())
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [done, setDone] = useState<string | null>(null)
@@ -43,9 +148,7 @@ export function AuthModal({
     if (open) {
       setError('')
       setDone(null)
-      setName('')
-      setEmail('')
-      setPassword('')
+      setForm(createRegisterForm())
     }
     document.body.style.overflow = open ? 'hidden' : ''
   }, [open, mode])
@@ -59,9 +162,7 @@ export function AuthModal({
   const finishSuccess = (fullName: string) => {
     const firstName = (fullName || '').trim().split(/\s+/)[0] || 'Welcome'
     setDone(firstName)
-    setName('')
-    setEmail('')
-    setPassword('')
+    setForm(createRegisterForm())
   }
 
   const handleAuthResult = async (result: AuthResult) => {
@@ -72,14 +173,118 @@ export function AuthModal({
     finishSuccess(result.user.full_name)
   }
 
+  const updateField = <K extends keyof RegisterFormState>(key: K, value: RegisterFormState[K]) => {
+    setForm((current) => ({ ...current, [key]: value }))
+  }
+
+  const renderTextField = (
+    key: RegisterTextFieldKey,
+    label: string,
+    options: {
+      as?: 'input' | 'textarea'
+      type?: string
+      placeholder?: string
+      full?: boolean
+      rows?: number
+      required?: boolean
+      autoComplete?: string
+      min?: number
+      max?: number
+      step?: number | string
+    } = {},
+  ) => {
+    const fieldClass = `field${options.full ? ' field--full' : ''}`
+    const value = form[key]
+
+    return (
+      <div className={fieldClass}>
+        <label>{label}</label>
+        {options.as === 'textarea' ? (
+          <textarea
+            className="fld-area"
+            rows={options.rows ?? 4}
+            required={options.required ?? true}
+            placeholder={options.placeholder}
+            value={value}
+            onChange={(e) => updateField(key, e.target.value as RegisterFormState[typeof key])}
+          />
+        ) : (
+          <input
+            type={options.type ?? 'text'}
+            required={options.required ?? true}
+            placeholder={options.placeholder}
+            autoComplete={options.autoComplete}
+            min={options.min}
+            max={options.max}
+            step={options.step}
+            value={value}
+            onChange={(e) => updateField(key, e.target.value as RegisterFormState[typeof key])}
+          />
+        )}
+      </div>
+    )
+  }
+
+  const renderCheckbox = (label: string, helper: string) => (
+    <div className="field field--check field--full">
+      <input
+        id="auth-register-consent"
+        type="checkbox"
+        checked={form.consentChecked}
+        required
+        onChange={(e) => updateField('consentChecked', e.target.checked)}
+      />
+      <label htmlFor="auth-register-consent">
+        <span>{label}</span>
+        <small>{helper}</small>
+      </label>
+    </div>
+  )
+
+  const roleMeta = registerRoleMeta[form.role]
+  const title = mode === 'login' ? 'Welcome Back' : roleMeta.title
+  const subtitle = mode === 'login' ? 'Sign in to your community account.' : roleMeta.subtitle
+  const submitLabel = mode === 'login' ? 'Login' : roleMeta.button
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
     setBusy(true)
     setError('')
     try {
+      if (mode === 'register' && form.password !== form.confirmPassword) {
+        throw new Error('Passwords do not match.')
+      }
+
       const result = mode === 'login'
-        ? await login(email, password)
-        : await register(name, email, password)
+        ? await login(form.email, form.password)
+        : await register({
+          role: form.role,
+          fullName: form.fullName,
+          email: form.email,
+          password: form.password,
+          studentUsername: form.studentUsername,
+          age: form.age,
+          dateOfBirth: form.dateOfBirth,
+          phoneNumber: form.phoneNumber,
+          homeAddress: form.homeAddress,
+          schoolName: form.schoolName,
+          gradeLevel: form.gradeLevel,
+          parentName: form.parentName,
+          parentPhone: form.parentPhone,
+          parentEmail: form.parentEmail,
+          qrToken: form.qrToken,
+          relationshipToStudent: form.relationshipToStudent,
+          governmentIdUrl: form.governmentIdUrl,
+          digitalSignature: form.digitalSignature || form.fullName,
+          schoolAddress: form.schoolAddress,
+          schoolDistrict: form.schoolDistrict,
+          mainPhone: form.mainPhone,
+          principalName: form.principalName,
+          administratorPhone: form.administratorPhone,
+          roleDepartment: form.roleDepartment,
+          gradeLevelSupported: form.gradeLevelSupported,
+          consentChecked: form.consentChecked,
+        })
       await handleAuthResult(result)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong.')
@@ -88,14 +293,9 @@ export function AuthModal({
     }
   }
 
-  const stepTitle = mode === 'login' ? 'Welcome Back' : 'Join the Community'
-  const stepSubtitle = mode === 'login'
-    ? 'Sign in to your community account.'
-    : 'Create your account and continue right away.'
-
   return (
     <div className={`modal-overlay${open ? ' open' : ''}`} onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal">
+      <div className={`modal${mode === 'register' ? ' modal--register' : ''}`}>
         <button className="close" onClick={onClose} aria-label="Close"><CloseIcon /></button>
         <Mono />
 
@@ -108,26 +308,116 @@ export function AuthModal({
           </div>
         ) : (
           <div>
-            <h3 className="gold-text">{stepTitle}</h3>
-            <p className="msub">{stepSubtitle}</p>
-            <form onSubmit={submit}>
-              {mode === 'register' && (
-                <div className="field">
-                  <label>Full Name</label>
-                  <input type="text" required placeholder="Your name" value={name} onChange={(e) => setName(e.target.value)} />
-                </div>
+            <h3 className="gold-text">{title}</h3>
+            <p className="msub">{subtitle}</p>
+            <form onSubmit={submit} className={mode === 'register' ? 'auth-form auth-form--register' : 'auth-form'}>
+              {mode === 'register' ? (
+                <>
+                  <div className="field field--full">
+                    <label>User Type</label>
+                    <select
+                      value={form.role}
+                      onChange={(e) => updateField('role', e.target.value as RegistrationRole)}
+                    >
+                      {registerRoleOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <p className="auth-note">{roleMeta.helper}</p>
+
+                  <div className="auth-grid">
+                    {form.role === 'community' && (
+                      <>
+                        {renderTextField('fullName', 'Full Name', { full: true, placeholder: 'Your name', autoComplete: 'name' })}
+                        {renderTextField('email', 'Email Address', { type: 'email', full: true, placeholder: 'you@example.com', autoComplete: 'email' })}
+                        {renderTextField('password', 'Password', { type: 'password', placeholder: 'Create a password', autoComplete: 'new-password' })}
+                        {renderTextField('confirmPassword', 'Confirm Password', { type: 'password', placeholder: 'Repeat the password', autoComplete: 'new-password' })}
+                      </>
+                    )}
+
+                    {form.role === 'student' && (
+                      <>
+                        {renderTextField('fullName', 'Student Full Name', { full: true, placeholder: 'Student full name', autoComplete: 'name' })}
+                        {renderTextField('studentUsername', 'Student Username', { placeholder: 'Choose a username' })}
+                        {renderTextField('age', 'Age', { type: 'number', placeholder: '14-19', min: 14, max: 19 })}
+                        {renderTextField('dateOfBirth', 'Date of Birth', { type: 'date' })}
+                        {renderTextField('email', 'Student Email', { type: 'email', full: true, placeholder: 'student@example.com', autoComplete: 'email' })}
+                        {renderTextField('phoneNumber', 'Phone Number', { type: 'tel', placeholder: 'Student phone number', autoComplete: 'tel' })}
+                        {renderTextField('schoolName', 'School Name', { placeholder: 'Current school name' })}
+                        {renderTextField('gradeLevel', 'Grade Level', { placeholder: 'Example: 9th Grade' })}
+                        {renderTextField('homeAddress', 'Home Address', { as: 'textarea', full: true, placeholder: 'Street address, city, state, zip', rows: 3 })}
+                        {renderTextField('parentName', 'Parent / Guardian Name', { placeholder: 'Parent or guardian' })}
+                        {renderTextField('parentPhone', 'Parent Phone Number', { type: 'tel', placeholder: 'Parent contact number', autoComplete: 'tel' })}
+                        {renderTextField('parentEmail', 'Parent Email Address', { type: 'email', placeholder: 'parent@example.com', autoComplete: 'email' })}
+                        {renderTextField('password', 'Password', { type: 'password', placeholder: 'Create a password', autoComplete: 'new-password' })}
+                        {renderTextField('confirmPassword', 'Confirm Password', { type: 'password', placeholder: 'Repeat the password', autoComplete: 'new-password' })}
+                        {renderCheckbox('I confirm I am a student ages 14-19.', 'This account will be linked to parent consent, school approval, and teacher approval.')}
+                      </>
+                    )}
+
+                    {form.role === 'parent' && (
+                      <>
+                        {renderTextField('qrToken', 'Student QR Token', { full: true, placeholder: 'Scan or paste the QR token' })}
+                        {renderTextField('fullName', 'Parent Full Name', { full: true, placeholder: 'Parent or guardian name', autoComplete: 'name' })}
+                        {renderTextField('relationshipToStudent', 'Relationship To Student', { placeholder: 'Mother, father, guardian' })}
+                        {renderTextField('phoneNumber', 'Phone Number', { type: 'tel', placeholder: 'Parent phone number', autoComplete: 'tel' })}
+                        {renderTextField('email', 'Email Address', { type: 'email', placeholder: 'parent@example.com', autoComplete: 'email' })}
+                        {renderTextField('homeAddress', 'Home Address', { as: 'textarea', full: true, placeholder: 'Street address, city, state, zip', rows: 3 })}
+                        {renderTextField('governmentIdUrl', 'Government ID URL', { full: true, type: 'url', placeholder: 'Optional ID link', required: false })}
+                        {renderTextField('digitalSignature', 'Digital Signature', { full: true, placeholder: 'Type your full name as signature' })}
+                        {renderCheckbox('I confirm I am the parent or legal guardian.', 'This consent grants permission for the student to participate in the challenge.')}
+                        {renderTextField('password', 'Password', { type: 'password', placeholder: 'Create a password', autoComplete: 'new-password' })}
+                        {renderTextField('confirmPassword', 'Confirm Password', { type: 'password', placeholder: 'Repeat the password', autoComplete: 'new-password' })}
+                      </>
+                    )}
+
+                    {form.role === 'school' && (
+                      <>
+                        {renderTextField('schoolName', 'School Name', { full: true, placeholder: 'Official school name', autoComplete: 'organization' })}
+                        {renderTextField('schoolAddress', 'School Address', { as: 'textarea', full: true, placeholder: 'School street address', rows: 3 })}
+                        {renderTextField('schoolDistrict', 'School District', { placeholder: 'District name' })}
+                        {renderTextField('mainPhone', 'Main Phone Number', { type: 'tel', placeholder: 'Main school phone', autoComplete: 'tel' })}
+                        {renderTextField('principalName', 'Principal Name', { placeholder: 'Principal full name' })}
+                        {renderTextField('fullName', 'Administrator Name', { placeholder: 'School administrator name', autoComplete: 'name' })}
+                        {renderTextField('email', 'Administrator Email', { type: 'email', placeholder: 'administrator@example.com', autoComplete: 'email' })}
+                        {renderTextField('administratorPhone', 'Administrator Phone', { type: 'tel', placeholder: 'Administrator phone number', autoComplete: 'tel' })}
+                        {renderTextField('password', 'Password', { type: 'password', placeholder: 'Create a password', autoComplete: 'new-password' })}
+                        {renderTextField('confirmPassword', 'Confirm Password', { type: 'password', placeholder: 'Repeat the password', autoComplete: 'new-password' })}
+                      </>
+                    )}
+
+                    {form.role === 'teacher' && (
+                      <>
+                        {renderTextField('fullName', 'Teacher Full Name', { full: true, placeholder: 'Teacher full name', autoComplete: 'name' })}
+                        {renderTextField('schoolName', 'School Name', { placeholder: 'School name' })}
+                        {renderTextField('email', 'School Email', { type: 'email', placeholder: 'teacher@school.edu', autoComplete: 'email' })}
+                        {renderTextField('phoneNumber', 'Phone Number', { type: 'tel', placeholder: 'Teacher phone number', autoComplete: 'tel' })}
+                        {renderTextField('roleDepartment', 'Role / Department', { placeholder: 'Example: Social Studies' })}
+                        {renderTextField('gradeLevelSupported', 'Grade Level Supported', { placeholder: 'Example: 9th Grade' })}
+                        {renderTextField('password', 'Password', { type: 'password', placeholder: 'Create a password', autoComplete: 'new-password' })}
+                        {renderTextField('confirmPassword', 'Confirm Password', { type: 'password', placeholder: 'Repeat the password', autoComplete: 'new-password' })}
+                      </>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="field">
+                    <label>Email</label>
+                    <input type="email" required placeholder="you@example.com" autoComplete="email" value={form.email} onChange={(e) => updateField('email', e.target.value)} />
+                  </div>
+                  <div className="field">
+                    <label>Password</label>
+                    <input type="password" required placeholder="Enter your password" autoComplete="current-password" value={form.password} onChange={(e) => updateField('password', e.target.value)} />
+                  </div>
+                </>
               )}
-              <div className="field">
-                <label>Email</label>
-                <input type="email" required placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} />
-              </div>
-              <div className="field">
-                <label>Password</label>
-                <input type="password" required placeholder="Create a password" value={password} onChange={(e) => setPassword(e.target.value)} />
-              </div>
               {error && <p className="msub" style={{ color: '#e08a8a' }}>{error}</p>}
               <button type="submit" className="btn btn--solid" disabled={busy}>
-                {busy ? (mode === 'login' ? 'Signing in...' : 'Creating...') : (mode === 'login' ? 'Login' : 'Register Now')}
+                {busy ? (mode === 'login' ? 'Signing in...' : 'Submitting...') : submitLabel}
               </button>
             </form>
             {mode === 'login' ? (

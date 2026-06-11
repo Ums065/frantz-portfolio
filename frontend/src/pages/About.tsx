@@ -4,9 +4,7 @@ import { useSeo } from '../hooks/useSeo'
 import { platforms } from '../lib/platforms'
 import PlatformCard from '../components/PlatformCard'
 
-const portrait = '/assets/awards/frantz-coutard.png'
-const halfFace = '/assets/frantz-half-face.png'
-
+const portrait = '/assets/awards/frantz-coutard.webp'
 const beliefs = [
   'Technology should empower people.',
   'Communities should have access to opportunity.',
@@ -55,7 +53,7 @@ export default function About() {
       <section className="page-hero">
         <div className="wrap page-hero__grid">
           <div className="page-hero__photo reveal in">
-            <img src={portrait} alt="Frantz Coutard" />
+            <img src={portrait} alt="Frantz Coutard" loading="eager" decoding="async" />
           </div>
           <div className="page-hero__copy">
             <div className="eyebrow reveal in">About Frantz Coutard</div>
@@ -84,7 +82,7 @@ export default function About() {
         <div className="wrap">
           <div className="legacy-grid">
             <div className="legacy__photo legacy__photo--square reveal">
-              <img src="/assets/Frantz.PNG" alt="Frantz Coutard portrait" />
+              <img src="/assets/Frantz.webp" alt="Frantz Coutard portrait" loading="lazy" decoding="async" />
             </div>
             <div className="legacy">
               <div className="eyebrow reveal">Faith, Family &amp; Purpose</div>

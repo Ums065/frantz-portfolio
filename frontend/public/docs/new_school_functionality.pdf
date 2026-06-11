@@ -1,0 +1,3517 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+2 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Times-Roman >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Times-Bold >>
+endobj
+5 0 obj
+<< /Length 4781 >>
+stream
+q
+0.00 w
+0.043 0.043 0.043 rg
+0.043 0.043 0.043 RG
+0.00 0.00 612.00 792.00 re B
+Q
+q
+1.20 w
+0.071 0.067 0.051 rg
+0.788 0.659 0.298 RG
+18.00 18.00 576.00 756.00 re B
+Q
+BT
+/F2 10.00 Tf
+0.961 0.831 0.541 rg
+1 0 0 1 40.00 736.00 Tm
+(FRANTZCOUTARD.COM) Tj
+ET
+BT
+/F2 10.00 Tf
+0.961 0.831 0.541 rg
+1 0 0 1 444.00 736.00 Tm
+(Developer-ready spec) Tj
+ET
+q
+0.80 w
+0.788 0.659 0.298 RG
+40.00 726.00 m 572.00 726.00 l S
+Q
+q
+1.20 w
+0.788 0.659 0.298 rg
+0.961 0.831 0.541 RG
+48.00 616.00 64.00 64.00 re B
+Q
+BT
+/F4 22.00 Tf
+0.078 0.059 0.024 rg
+1 0 0 1 68.12 711.00 Tm
+(FC) Tj
+ET
+BT
+/F4 28.00 Tf
+1.000 1.000 1.000 rg
+1 0 0 1 40.00 640.00 Tm
+(new_school functionality) Tj
+ET
+BT
+/F3 16.00 Tf
+0.961 0.831 0.541 rg
+1 0 0 1 40.00 612.00 Tm
+(Leave It Better Than You Found It) Tj
+ET
+BT
+/F1 11.20 Tf
+0.902 0.878 0.824 rg
+1 0 0 1 40.00 585.00 Tm
+(This document translates the three client messages into one build-ready module spec for the current) Tj
+ET
+BT
+/F1 11.20 Tf
+0.902 0.878 0.824 rg
+1 0 0 1 40.00 569.80 Tm
+(FrantzCoutard.com site. It defines the school challenge flow, required data capture, consent and) Tj
+ET
+BT
+/F1 11.20 Tf
+0.902 0.878 0.824 rg
+1 0 0 1 40.00 554.60 Tm
+(approval gates, business interview logging, final submission rules, dashboards, admin controls, and the) Tj
+ET
+BT
+/F1 11.20 Tf
+0.902 0.878 0.824 rg
+1 0 0 1 40.00 539.40 Tm
+(technical approach for the existing React + PHP + MySQL stack.) Tj
+ET
+q
+1.00 w
+0.102 0.094 0.071 rg
+0.788 0.659 0.298 RG
+40.00 410.00 160.00 90.00 re B
+Q
+BT
+/F4 12.50 Tf
+0.961 0.831 0.541 rg
+1 0 0 1 52.00 476.00 Tm
+(Ages 14-19) Tj
+ET
+BT
+/F1 10.20 Tf
+0.906 0.886 0.839 rg
+1 0 0 1 52.00 456.00 Tm
+(Students only, with parent or) Tj
+ET
+BT
+/F1 10.20 Tf
+0.906 0.886 0.839 rg
+1 0 0 1 52.00 442.80 Tm
+(guardian consent required.) Tj
+ET
+q
+1.00 w
+0.102 0.094 0.071 rg
+0.788 0.659 0.298 RG
+212.00 410.00 160.00 90.00 re B
+Q
+BT
+/F4 12.50 Tf
+0.961 0.831 0.541 rg
+1 0 0 1 224.00 476.00 Tm
+(10 interviews) Tj
+ET
+BT
+/F1 10.20 Tf
+0.906 0.886 0.839 rg
+1 0 0 1 224.00 456.00 Tm
+(Each student must log ten) Tj
+ET
+BT
+/F1 10.20 Tf
+0.906 0.886 0.839 rg
+1 0 0 1 224.00 442.80 Tm
+(local business visits before) Tj
+ET
+BT
+/F1 10.20 Tf
+0.906 0.886 0.839 rg
+1 0 0 1 224.00 429.60 Tm
+(submission unlocks.) Tj
+ET
+q
+1.00 w
+0.102 0.094 0.071 rg
+0.788 0.659 0.298 RG
+384.00 410.00 160.00 90.00 re B
+Q
+BT
+/F4 12.50 Tf
+0.961 0.831 0.541 rg
+1 0 0 1 396.00 476.00 Tm
+($5,000 total) Tj
+ET
+BT
+/F1 10.20 Tf
+0.906 0.886 0.839 rg
+1 0 0 1 396.00 456.00 Tm
+(First, second, and third place) Tj
+ET
+BT
+/F1 10.20 Tf
+0.906 0.886 0.839 rg
+1 0 0 1 396.00 442.80 Tm
+(scholarship awards.) Tj
+ET
+q
+0.80 w
+0.071 0.067 0.051 rg
+0.788 0.659 0.298 RG
+40.00 268.00 156.00 92.00 re B
+Q
+BT
+/F2 11.50 Tf
+1.000 1.000 1.000 rg
+1 0 0 1 50.00 338.00 Tm
+(Parent QR consent) Tj
+ET
+BT
+/F1 9.60 Tf
+0.843 0.816 0.757 rg
+1 0 0 1 50.00 320.00 Tm
+(The parent approves through a) Tj
+ET
+BT
+/F1 9.60 Tf
+0.843 0.816 0.757 rg
+1 0 0 1 50.00 307.50 Tm
+(unique QR flow tied to the) Tj
+ET
+BT
+/F1 9.60 Tf
+0.843 0.816 0.757 rg
+1 0 0 1 50.00 295.00 Tm
+(student profile.) Tj
+ET
+q
+0.80 w
+0.071 0.067 0.051 rg
+0.788 0.659 0.298 RG
+208.00 268.00 156.00 92.00 re B
+Q
+BT
+/F2 11.50 Tf
+1.000 1.000 1.000 rg
+1 0 0 1 218.00 338.00 Tm
+(School approval) Tj
+ET
+BT
+/F1 9.60 Tf
+0.843 0.816 0.757 rg
+1 0 0 1 218.00 320.00 Tm
+(School staff confirm enrollment) Tj
+ET
+BT
+/F1 9.60 Tf
+0.843 0.816 0.757 rg
+1 0 0 1 218.00 307.50 Tm
+(and validate the consent) Tj
+ET
+BT
+/F1 9.60 Tf
+0.843 0.816 0.757 rg
+1 0 0 1 218.00 295.00 Tm
+(record.) Tj
+ET
+q
+0.80 w
+0.071 0.067 0.051 rg
+0.788 0.659 0.298 RG
+376.00 268.00 156.00 92.00 re B
+Q
+BT
+/F2 11.50 Tf
+1.000 1.000 1.000 rg
+1 0 0 1 386.00 338.00 Tm
+(Teacher approval) Tj
+ET
+BT
+/F1 9.60 Tf
+0.843 0.816 0.757 rg
+1 0 0 1 386.00 320.00 Tm
+(Teachers monitor progress and) Tj
+ET
+BT
+/F1 9.60 Tf
+0.843 0.816 0.757 rg
+1 0 0 1 386.00 307.50 Tm
+(confirm participation inside the) Tj
+ET
+BT
+/F1 9.60 Tf
+0.843 0.816 0.757 rg
+1 0 0 1 386.00 295.00 Tm
+(school context.) Tj
+ET
+q
+0.80 w
+0.071 0.067 0.051 rg
+0.788 0.659 0.298 RG
+544.00 268.00 156.00 92.00 re B
+Q
+BT
+/F2 11.50 Tf
+1.000 1.000 1.000 rg
+1 0 0 1 554.00 338.00 Tm
+(Admin review) Tj
+ET
+BT
+/F1 9.60 Tf
+0.843 0.816 0.757 rg
+1 0 0 1 554.00 320.00 Tm
+(Admins export data, review) Tj
+ET
+BT
+/F1 9.60 Tf
+0.843 0.816 0.757 rg
+1 0 0 1 554.00 307.50 Tm
+(submissions, and publish the) Tj
+ET
+BT
+/F1 9.60 Tf
+0.843 0.816 0.757 rg
+1 0 0 1 554.00 295.00 Tm
+(winners.) Tj
+ET
+BT
+/F2 10.50 Tf
+0.961 0.831 0.541 rg
+1 0 0 1 40.00 88.00 Tm
+(Winner announcement: August 25, 2026) Tj
+ET
+BT
+/F2 10.20 Tf
+0.961 0.831 0.541 rg
+1 0 0 1 398.00 88.00 Tm
+(Built for the existing site, not a separate product) Tj
+ET
+q
+0.80 w
+0.788 0.659 0.298 RG
+40.00 78.00 m 572.00 78.00 l S
+Q
+BT
+/F1 9.60 Tf
+0.863 0.839 0.784 rg
+1 0 0 1 40.00 52.00 Tm
+(FrantzCoutard.com  |  2026 Community Business Impact Challenge) Tj
+ET
+endstream
+endobj
+6 0 obj
+<< /Type /Page /Parent 25 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R /F4 4 0 R >> >> /Contents 5 0 R >>
+endobj
+7 0 obj
+<< /Length 4493 >>
+stream
+q
+0.00 w
+0.973 0.949 0.902 rg
+0.973 0.949 0.902 RG
+0.00 0.00 612.00 792.00 re B
+Q
+BT
+/F2 10.00 Tf
+0.541 0.416 0.184 rg
+1 0 0 1 40.00 744.00 Tm
+(1. Challenge analysis) Tj
+ET
+BT
+/F4 21.00 Tf
+0.090 0.075 0.043 rg
+1 0 0 1 40.00 728.00 Tm
+(Program overview and stakeholders) Tj
+ET
+BT
+/F1 11.00 Tf
+0.220 0.192 0.141 rg
+1 0 0 1 40.00 710.00 Tm
+(The three client messages describe one system: a school-based challenge portal that turns community) Tj
+ET
+BT
+/F1 11.00 Tf
+0.220 0.192 0.141 rg
+1 0 0 1 40.00 695.00 Tm
+(discovery into a structured project workflow. The site must capture people, approvals, evidence,) Tj
+ET
+BT
+/F1 11.00 Tf
+0.220 0.192 0.141 rg
+1 0 0 1 40.00 680.00 Tm
+(submissions, and winners in one controlled flow.) Tj
+ET
+q
+1.00 w
+0.788 0.659 0.298 RG
+40.00 655.00 m 572.00 655.00 l S
+Q
+BT
+/F2 14.00 Tf
+0.090 0.075 0.043 rg
+1 0 0 1 40.00 645.00 Tm
+(What the challenge asks students to do) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 623.90 4.20 4.20 re B
+Q
+BT
+/F1 10.70 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 629.00 Tm
+(Interview ten local businesses in their neighborhood.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 619.90 4.20 4.20 re B
+Q
+BT
+/F1 10.70 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 625.00 Tm
+(Meet the owners, listen to their stories, and understand their challenges.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 615.90 4.20 4.20 re B
+Q
+BT
+/F1 10.70 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 621.00 Tm
+(Identify opportunities for improvement and propose a practical solution.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 611.90 4.20 4.20 re B
+Q
+BT
+/F1 10.70 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 617.00 Tm
+(Explain how the solution could improve visibility, attract customers, increase sales, strengthen) Tj
+ET
+BT
+/F1 10.70 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 603.00 Tm
+(engagement, improve operations, or better serve the community.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 593.90 4.20 4.20 re B
+Q
+BT
+/F1 10.70 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 599.00 Tm
+(Submit a 1 minute 30 second video and a one-page written summary.) Tj
+ET
+BT
+/F2 14.00 Tf
+0.090 0.075 0.043 rg
+1 0 0 1 40.00 585.00 Tm
+(Who participates) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 563.90 4.20 4.20 re B
+Q
+BT
+/F1 10.70 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 569.00 Tm
+(Students ages 14-19 are the primary participants.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 559.90 4.20 4.20 re B
+Q
+BT
+/F1 10.70 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 565.00 Tm
+(Parent or guardian consent is required before participation becomes active.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 555.90 4.20 4.20 re B
+Q
+BT
+/F1 10.70 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 561.00 Tm
+(Schools register to verify students and keep the challenge tied to a real school context.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 551.90 4.20 4.20 re B
+Q
+BT
+/F1 10.70 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 557.00 Tm
+(Teachers register under the school to monitor progress and track impact.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 547.90 4.20 4.20 re B
+Q
+BT
+/F1 10.70 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 553.00 Tm
+(Admins review submissions, export data, choose winners, and publish the results.) Tj
+ET
+BT
+/F2 14.00 Tf
+0.090 0.075 0.043 rg
+1 0 0 1 40.00 539.00 Tm
+(Why it matters) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 517.90 4.20 4.20 re B
+Q
+BT
+/F1 10.70 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 523.00 Tm
+(It builds leadership, communication, business awareness, problem-solving skills, and community) Tj
+ET
+BT
+/F1 10.70 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 509.00 Tm
+(engagement.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 499.90 4.20 4.20 re B
+Q
+BT
+/F1 10.70 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 505.00 Tm
+(It gives students a real reason to study local businesses and think critically about neighborhood needs.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 495.90 4.20 4.20 re B
+Q
+BT
+/F1 10.70 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 501.00 Tm
+(It turns a student competition into a practical community impact program with measurable output.) Tj
+ET
+BT
+/F2 10.20 Tf
+0.541 0.416 0.184 rg
+1 0 0 1 40.00 86.00 Tm
+(Key result: one system, one workflow, one set of rules for the full challenge.) Tj
+ET
+BT
+/F1 9.60 Tf
+0.478 0.447 0.400 rg
+1 0 0 1 504.00 86.00 Tm
+(Page 2 / 10) Tj
+ET
+endstream
+endobj
+8 0 obj
+<< /Type /Page /Parent 25 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R /F4 4 0 R >> >> /Contents 7 0 R >>
+endobj
+9 0 obj
+<< /Length 8369 >>
+stream
+q
+0.00 w
+0.973 0.949 0.902 rg
+0.973 0.949 0.902 RG
+0.00 0.00 612.00 792.00 re B
+Q
+BT
+/F2 10.00 Tf
+0.541 0.416 0.184 rg
+1 0 0 1 40.00 744.00 Tm
+(2. Workflow) Tj
+ET
+BT
+/F4 21.00 Tf
+0.090 0.075 0.043 rg
+1 0 0 1 40.00 728.00 Tm
+(Workflow and gating logic) Tj
+ET
+BT
+/F1 11.00 Tf
+0.220 0.192 0.141 rg
+1 0 0 1 40.00 710.00 Tm
+(The system is a gated pipeline. Each stage unlocks the next one only when the previous stage is) Tj
+ET
+BT
+/F1 11.00 Tf
+0.220 0.192 0.141 rg
+1 0 0 1 40.00 695.00 Tm
+(complete and stored with the correct approval or evidence record.) Tj
+ET
+q
+1.00 w
+0.067 0.063 0.047 rg
+0.788 0.659 0.298 RG
+40.00 208.00 532.00 462.00 re B
+Q
+BT
+/F2 11.00 Tf
+0.961 0.831 0.541 rg
+1 0 0 1 56.00 648.00 Tm
+(Workflow diagram) Tj
+ET
+BT
+/F1 10.00 Tf
+0.863 0.839 0.784 rg
+1 0 0 1 172.00 648.00 Tm
+(registration to winner publishing) Tj
+ET
+q
+0.90 w
+0.063 0.063 0.047 rg
+0.788 0.659 0.298 RG
+60.00 574.00 492.00 44.00 re B
+Q
+q
+0.60 w
+0.788 0.659 0.298 rg
+0.961 0.831 0.541 RG
+74.00 582.00 24.00 24.00 re B
+Q
+BT
+/F2 13.00 Tf
+0.071 0.063 0.039 rg
+1 0 0 1 82.42 614.00 Tm
+(1) Tj
+ET
+BT
+/F2 12.20 Tf
+1.000 1.000 1.000 rg
+1 0 0 1 112.00 600.00 Tm
+(Student registers) Tj
+ET
+BT
+/F1 9.40 Tf
+0.863 0.839 0.784 rg
+1 0 0 1 112.00 585.00 Tm
+(Collects student profile, school, grade, parent contact, username, and password.) Tj
+ET
+q
+1.40 w
+0.788 0.659 0.298 RG
+306.00 574.00 m 306.00 564.00 l S
+Q
+q
+0.90 w
+0.063 0.063 0.047 rg
+0.788 0.659 0.298 RG
+60.00 518.00 492.00 44.00 re B
+Q
+q
+0.60 w
+0.788 0.659 0.298 rg
+0.961 0.831 0.541 RG
+74.00 526.00 24.00 24.00 re B
+Q
+BT
+/F2 13.00 Tf
+0.071 0.063 0.039 rg
+1 0 0 1 82.42 558.00 Tm
+(2) Tj
+ET
+BT
+/F2 12.20 Tf
+1.000 1.000 1.000 rg
+1 0 0 1 112.00 544.00 Tm
+(QR code created) Tj
+ET
+BT
+/F1 9.40 Tf
+0.863 0.839 0.784 rg
+1 0 0 1 112.00 529.00 Tm
+(Creates a participant ID and a unique QR code tied to the student profile.) Tj
+ET
+q
+1.40 w
+0.788 0.659 0.298 RG
+306.00 518.00 m 306.00 508.00 l S
+Q
+q
+0.90 w
+0.063 0.063 0.047 rg
+0.788 0.659 0.298 RG
+60.00 462.00 492.00 44.00 re B
+Q
+q
+0.60 w
+0.788 0.659 0.298 rg
+0.961 0.831 0.541 RG
+74.00 470.00 24.00 24.00 re B
+Q
+BT
+/F2 13.00 Tf
+0.071 0.063 0.039 rg
+1 0 0 1 82.42 502.00 Tm
+(3) Tj
+ET
+BT
+/F2 12.20 Tf
+1.000 1.000 1.000 rg
+1 0 0 1 112.00 488.00 Tm
+(Parent consent via QR) Tj
+ET
+BT
+/F1 9.40 Tf
+0.863 0.839 0.784 rg
+1 0 0 1 112.00 473.00 Tm
+(Parent scans the QR code, creates an account, and signs the consent form.) Tj
+ET
+q
+1.40 w
+0.788 0.659 0.298 RG
+306.00 462.00 m 306.00 452.00 l S
+Q
+q
+0.90 w
+0.063 0.063 0.047 rg
+0.788 0.659 0.298 RG
+60.00 406.00 492.00 44.00 re B
+Q
+q
+0.60 w
+0.788 0.659 0.298 rg
+0.961 0.831 0.541 RG
+74.00 414.00 24.00 24.00 re B
+Q
+BT
+/F2 13.00 Tf
+0.071 0.063 0.039 rg
+1 0 0 1 82.42 446.00 Tm
+(4) Tj
+ET
+BT
+/F2 12.20 Tf
+1.000 1.000 1.000 rg
+1 0 0 1 112.00 432.00 Tm
+(School approval) Tj
+ET
+BT
+/F1 9.40 Tf
+0.863 0.839 0.784 rg
+1 0 0 1 112.00 417.00 Tm
+(School verifies the student belongs to the school and the consent is valid.) Tj
+ET
+q
+1.40 w
+0.788 0.659 0.298 RG
+306.00 406.00 m 306.00 396.00 l S
+Q
+q
+0.90 w
+0.063 0.063 0.047 rg
+0.788 0.659 0.298 RG
+60.00 350.00 492.00 44.00 re B
+Q
+q
+0.60 w
+0.788 0.659 0.298 rg
+0.961 0.831 0.541 RG
+74.00 358.00 24.00 24.00 re B
+Q
+BT
+/F2 13.00 Tf
+0.071 0.063 0.039 rg
+1 0 0 1 82.42 390.00 Tm
+(5) Tj
+ET
+BT
+/F2 12.20 Tf
+1.000 1.000 1.000 rg
+1 0 0 1 112.00 376.00 Tm
+(Teacher approval) Tj
+ET
+BT
+/F1 9.40 Tf
+0.863 0.839 0.784 rg
+1 0 0 1 112.00 361.00 Tm
+(Teacher confirms participation and monitors progress.) Tj
+ET
+q
+1.40 w
+0.788 0.659 0.298 RG
+306.00 350.00 m 306.00 340.00 l S
+Q
+q
+0.90 w
+0.063 0.063 0.047 rg
+0.788 0.659 0.298 RG
+60.00 294.00 492.00 44.00 re B
+Q
+q
+0.60 w
+0.788 0.659 0.298 rg
+0.961 0.831 0.541 RG
+74.00 302.00 24.00 24.00 re B
+Q
+BT
+/F2 13.00 Tf
+0.071 0.063 0.039 rg
+1 0 0 1 82.42 334.00 Tm
+(6) Tj
+ET
+BT
+/F2 12.20 Tf
+1.000 1.000 1.000 rg
+1 0 0 1 112.00 320.00 Tm
+(Ten business interviews) Tj
+ET
+BT
+/F1 9.40 Tf
+0.863 0.839 0.784 rg
+1 0 0 1 112.00 305.00 Tm
+(Student records ten completed business entries and notes what was learned.) Tj
+ET
+q
+1.40 w
+0.788 0.659 0.298 RG
+306.00 294.00 m 306.00 284.00 l S
+Q
+q
+0.90 w
+0.063 0.063 0.047 rg
+0.788 0.659 0.298 RG
+60.00 238.00 492.00 44.00 re B
+Q
+q
+0.60 w
+0.788 0.659 0.298 rg
+0.961 0.831 0.541 RG
+74.00 246.00 24.00 24.00 re B
+Q
+BT
+/F2 13.00 Tf
+0.071 0.063 0.039 rg
+1 0 0 1 82.42 278.00 Tm
+(7) Tj
+ET
+BT
+/F2 12.20 Tf
+1.000 1.000 1.000 rg
+1 0 0 1 112.00 264.00 Tm
+(Final submission unlocks) Tj
+ET
+BT
+/F1 9.40 Tf
+0.863 0.839 0.784 rg
+1 0 0 1 112.00 249.00 Tm
+(Video, written summary, solution, and impact statements can now be uploaded.) Tj
+ET
+q
+1.40 w
+0.788 0.659 0.298 RG
+306.00 238.00 m 306.00 228.00 l S
+Q
+q
+0.90 w
+0.063 0.063 0.047 rg
+0.788 0.659 0.298 RG
+60.00 182.00 492.00 44.00 re B
+Q
+q
+0.60 w
+0.788 0.659 0.298 rg
+0.961 0.831 0.541 RG
+74.00 190.00 24.00 24.00 re B
+Q
+BT
+/F2 13.00 Tf
+0.071 0.063 0.039 rg
+1 0 0 1 82.42 222.00 Tm
+(8) Tj
+ET
+BT
+/F2 12.20 Tf
+1.000 1.000 1.000 rg
+1 0 0 1 112.00 208.00 Tm
+(Admin review and winners) Tj
+ET
+BT
+/F1 9.40 Tf
+0.863 0.839 0.784 rg
+1 0 0 1 112.00 193.00 Tm
+(Admin scores entries, selects winners, and publishes results.) Tj
+ET
+BT
+/F2 14.00 Tf
+0.090 0.075 0.043 rg
+1 0 0 1 40.00 198.00 Tm
+(Critical status chain) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 176.90 4.20 4.20 re B
+Q
+BT
+/F1 10.70 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 182.00 Tm
+(Student Registered) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 172.90 4.20 4.20 re B
+Q
+BT
+/F1 10.70 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 178.00 Tm
+(Parent Consent Pending) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 168.90 4.20 4.20 re B
+Q
+BT
+/F1 10.70 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 174.00 Tm
+(Parent Consent Approved) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 164.90 4.20 4.20 re B
+Q
+BT
+/F1 10.70 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 170.00 Tm
+(School Approval Pending) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 160.90 4.20 4.20 re B
+Q
+BT
+/F1 10.70 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 166.00 Tm
+(School Approval Approved) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 156.90 4.20 4.20 re B
+Q
+BT
+/F1 10.70 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 162.00 Tm
+(Teacher Approval Pending) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 152.90 4.20 4.20 re B
+Q
+BT
+/F1 10.70 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 158.00 Tm
+(Teacher Approval Approved) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 148.90 4.20 4.20 re B
+Q
+BT
+/F1 10.70 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 154.00 Tm
+(Eligible To Submit) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 144.90 4.20 4.20 re B
+Q
+BT
+/F1 10.70 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 150.00 Tm
+(Submission Complete) Tj
+ET
+BT
+/F2 14.00 Tf
+0.090 0.075 0.043 rg
+1 0 0 1 40.00 138.00 Tm
+(Gate rules) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 116.90 4.20 4.20 re B
+Q
+BT
+/F1 10.60 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 122.00 Tm
+(Students cannot submit until parent consent is approved.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 112.90 4.20 4.20 re B
+Q
+BT
+/F1 10.60 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 118.00 Tm
+(Students cannot submit until school approval is approved.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 108.90 4.20 4.20 re B
+Q
+BT
+/F1 10.60 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 114.00 Tm
+(Students cannot submit until teacher approval is approved.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 104.90 4.20 4.20 re B
+Q
+BT
+/F1 10.60 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 110.00 Tm
+(Students cannot submit until ten completed business interviews are entered.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 100.90 4.20 4.20 re B
+Q
+BT
+/F1 10.60 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 106.00 Tm
+(Every consent and approval record must store name, date, time, and signature.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 96.90 4.20 4.20 re B
+Q
+BT
+/F1 10.60 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 102.00 Tm
+(Every student must have one unique QR code connected to their profile.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 92.90 4.20 4.20 re B
+Q
+BT
+/F1 10.60 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 98.00 Tm
+(Parent information must be captured only through the student QR flow.) Tj
+ET
+BT
+/F1 9.60 Tf
+0.478 0.447 0.400 rg
+1 0 0 1 504.00 86.00 Tm
+(Page 3 / 10) Tj
+ET
+endstream
+endobj
+10 0 obj
+<< /Type /Page /Parent 25 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R /F4 4 0 R >> >> /Contents 9 0 R >>
+endobj
+11 0 obj
+<< /Length 5531 >>
+stream
+q
+0.00 w
+0.973 0.949 0.902 rg
+0.973 0.949 0.902 RG
+0.00 0.00 612.00 792.00 re B
+Q
+BT
+/F2 10.00 Tf
+0.541 0.416 0.184 rg
+1 0 0 1 40.00 744.00 Tm
+(3. Registration) Tj
+ET
+BT
+/F4 21.00 Tf
+0.090 0.075 0.043 rg
+1 0 0 1 40.00 728.00 Tm
+(Student registration and parent consent) Tj
+ET
+BT
+/F1 11.00 Tf
+0.220 0.192 0.141 rg
+1 0 0 1 40.00 710.00 Tm
+(The student creates the first record. Parent data is not typed into the student form; it is captured only after) Tj
+ET
+BT
+/F1 11.00 Tf
+0.220 0.192 0.141 rg
+1 0 0 1 40.00 695.00 Tm
+(the QR code is scanned and the parent completes the consent flow.) Tj
+ET
+q
+1.00 w
+0.788 0.659 0.298 RG
+40.00 670.00 m 572.00 670.00 l S
+Q
+BT
+/F2 14.00 Tf
+0.090 0.075 0.043 rg
+1 0 0 1 40.00 658.00 Tm
+(Student registration fields) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 636.90 4.20 4.20 re B
+Q
+BT
+/F1 10.60 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 642.00 Tm
+(Student full name) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 632.90 4.20 4.20 re B
+Q
+BT
+/F1 10.60 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 638.00 Tm
+(Age, which must be between 14 and 19) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 628.90 4.20 4.20 re B
+Q
+BT
+/F1 10.60 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 634.00 Tm
+(Date of birth) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 624.90 4.20 4.20 re B
+Q
+BT
+/F1 10.60 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 630.00 Tm
+(Email) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 620.90 4.20 4.20 re B
+Q
+BT
+/F1 10.60 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 626.00 Tm
+(Phone number) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 616.90 4.20 4.20 re B
+Q
+BT
+/F1 10.60 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 622.00 Tm
+(Home address) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 612.90 4.20 4.20 re B
+Q
+BT
+/F1 10.60 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 618.00 Tm
+(School name) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 608.90 4.20 4.20 re B
+Q
+BT
+/F1 10.60 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 614.00 Tm
+(Grade level) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 604.90 4.20 4.20 re B
+Q
+BT
+/F1 10.60 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 610.00 Tm
+(Parent or guardian name) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 600.90 4.20 4.20 re B
+Q
+BT
+/F1 10.60 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 606.00 Tm
+(Parent phone number) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 596.90 4.20 4.20 re B
+Q
+BT
+/F1 10.60 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 602.00 Tm
+(Parent email) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 592.90 4.20 4.20 re B
+Q
+BT
+/F1 10.60 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 598.00 Tm
+(Student username and password) Tj
+ET
+BT
+/F2 12.50 Tf
+0.090 0.075 0.043 rg
+1 0 0 1 40.00 586.00 Tm
+(Outputs after registration) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 566.90 4.20 4.20 re B
+Q
+BT
+/F1 10.60 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 572.00 Tm
+(Student dashboard access) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 562.90 4.20 4.20 re B
+Q
+BT
+/F1 10.60 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 568.00 Tm
+(Participant ID) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 558.90 4.20 4.20 re B
+Q
+BT
+/F1 10.60 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 564.00 Tm
+(Unique QR code for parent consent) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 554.90 4.20 4.20 re B
+Q
+BT
+/F1 10.60 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 560.00 Tm
+(Status tracker starting at Student Registered) Tj
+ET
+BT
+/F2 14.00 Tf
+0.090 0.075 0.043 rg
+1 0 0 1 40.00 546.00 Tm
+(Parent consent via QR code) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 524.90 4.20 4.20 re B
+Q
+BT
+/F1 10.50 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 530.00 Tm
+(Parent full name) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 520.90 4.20 4.20 re B
+Q
+BT
+/F1 10.50 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 526.00 Tm
+(Relationship to student) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 516.90 4.20 4.20 re B
+Q
+BT
+/F1 10.50 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 522.00 Tm
+(Phone number) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 512.90 4.20 4.20 re B
+Q
+BT
+/F1 10.50 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 518.00 Tm
+(Email) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 508.90 4.20 4.20 re B
+Q
+BT
+/F1 10.50 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 514.00 Tm
+(Home address) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 504.90 4.20 4.20 re B
+Q
+BT
+/F1 10.50 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 510.00 Tm
+(Government ID upload optional) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 500.90 4.20 4.20 re B
+Q
+BT
+/F1 10.50 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 506.00 Tm
+(Consent checkbox) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 496.90 4.20 4.20 re B
+Q
+BT
+/F1 10.50 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 502.00 Tm
+(Digital signature) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 492.90 4.20 4.20 re B
+Q
+BT
+/F1 10.50 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 498.00 Tm
+(Date and time of approval) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 488.90 4.20 4.20 re B
+Q
+BT
+/F1 10.50 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 494.00 Tm
+(Parent must confirm they are the parent or legal guardian and understand that school verification is required.) Tj
+ET
+BT
+/F1 9.60 Tf
+0.478 0.447 0.400 rg
+1 0 0 1 40.00 90.00 Tm
+(Page 4 / 10) Tj
+ET
+endstream
+endobj
+12 0 obj
+<< /Type /Page /Parent 25 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R /F4 4 0 R >> >> /Contents 11 0 R >>
+endobj
+13 0 obj
+<< /Length 6276 >>
+stream
+q
+0.00 w
+0.973 0.949 0.902 rg
+0.973 0.949 0.902 RG
+0.00 0.00 612.00 792.00 re B
+Q
+BT
+/F2 10.00 Tf
+0.541 0.416 0.184 rg
+1 0 0 1 40.00 744.00 Tm
+(4. School setup) Tj
+ET
+BT
+/F4 21.00 Tf
+0.090 0.075 0.043 rg
+1 0 0 1 40.00 728.00 Tm
+(School registration, school approval, and teacher onboarding) Tj
+ET
+BT
+/F1 11.00 Tf
+0.220 0.192 0.141 rg
+1 0 0 1 40.00 710.00 Tm
+(Schools and teachers are separate roles, but they are connected by the school record. School staff) Tj
+ET
+BT
+/F1 11.00 Tf
+0.220 0.192 0.141 rg
+1 0 0 1 40.00 695.00 Tm
+(validate the student, and teachers monitor the student progress inside that school context.) Tj
+ET
+q
+1.00 w
+0.788 0.659 0.298 RG
+40.00 670.00 m 572.00 670.00 l S
+Q
+BT
+/F2 14.00 Tf
+0.090 0.075 0.043 rg
+1 0 0 1 40.00 658.00 Tm
+(School registration fields) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 636.90 4.20 4.20 re B
+Q
+BT
+/F1 10.60 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 642.00 Tm
+(School name) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 632.90 4.20 4.20 re B
+Q
+BT
+/F1 10.60 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 638.00 Tm
+(School address) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 628.90 4.20 4.20 re B
+Q
+BT
+/F1 10.60 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 634.00 Tm
+(School district) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 624.90 4.20 4.20 re B
+Q
+BT
+/F1 10.60 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 630.00 Tm
+(Main phone number) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 620.90 4.20 4.20 re B
+Q
+BT
+/F1 10.60 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 626.00 Tm
+(Principal name) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 616.90 4.20 4.20 re B
+Q
+BT
+/F1 10.60 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 622.00 Tm
+(Administrator name) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 612.90 4.20 4.20 re B
+Q
+BT
+/F1 10.60 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 618.00 Tm
+(Administrator email) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 608.90 4.20 4.20 re B
+Q
+BT
+/F1 10.60 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 614.00 Tm
+(Administrator phone number) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 604.90 4.20 4.20 re B
+Q
+BT
+/F1 10.60 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 610.00 Tm
+(School account login) Tj
+ET
+BT
+/F2 14.00 Tf
+0.090 0.075 0.043 rg
+1 0 0 1 40.00 598.00 Tm
+(School approval fields) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 576.90 4.20 4.20 re B
+Q
+BT
+/F1 10.60 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 582.00 Tm
+(School staff name) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 572.90 4.20 4.20 re B
+Q
+BT
+/F1 10.60 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 578.00 Tm
+(Role) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 568.90 4.20 4.20 re B
+Q
+BT
+/F1 10.60 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 574.00 Tm
+(School email) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 564.90 4.20 4.20 re B
+Q
+BT
+/F1 10.60 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 570.00 Tm
+(Approval status) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 560.90 4.20 4.20 re B
+Q
+BT
+/F1 10.60 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 566.00 Tm
+(Notes) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 556.90 4.20 4.20 re B
+Q
+BT
+/F1 10.60 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 562.00 Tm
+(Digital signature) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 552.90 4.20 4.20 re B
+Q
+BT
+/F1 10.60 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 558.00 Tm
+(Date and time of approval) Tj
+ET
+BT
+/F2 14.00 Tf
+0.090 0.075 0.043 rg
+1 0 0 1 40.00 546.00 Tm
+(Teacher onboarding) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 524.90 4.20 4.20 re B
+Q
+BT
+/F1 10.50 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 530.00 Tm
+(Teacher full name) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 520.90 4.20 4.20 re B
+Q
+BT
+/F1 10.50 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 526.00 Tm
+(School name) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 516.90 4.20 4.20 re B
+Q
+BT
+/F1 10.50 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 522.00 Tm
+(School email) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 512.90 4.20 4.20 re B
+Q
+BT
+/F1 10.50 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 518.00 Tm
+(Phone number) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 508.90 4.20 4.20 re B
+Q
+BT
+/F1 10.50 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 514.00 Tm
+(Role or department) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 504.90 4.20 4.20 re B
+Q
+BT
+/F1 10.50 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 510.00 Tm
+(Grade level supported) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 500.90 4.20 4.20 re B
+Q
+BT
+/F1 10.50 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 506.00 Tm
+(Teacher login) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 496.90 4.20 4.20 re B
+Q
+BT
+/F1 10.50 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 502.00 Tm
+(Teacher approval fields: teacher name, teacher email, student name, approval status, notes, and date/time.) Tj
+ET
+BT
+/F2 12.50 Tf
+0.090 0.075 0.043 rg
+1 0 0 1 40.00 490.00 Tm
+(Teacher dashboard outputs) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 470.90 4.20 4.20 re B
+Q
+BT
+/F1 10.50 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 476.00 Tm
+(Students assigned to teacher) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 466.90 4.20 4.20 re B
+Q
+BT
+/F1 10.50 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 472.00 Tm
+(Parent consent status) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 462.90 4.20 4.20 re B
+Q
+BT
+/F1 10.50 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 468.00 Tm
+(School approval status) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 458.90 4.20 4.20 re B
+Q
+BT
+/F1 10.50 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 464.00 Tm
+(Student progress) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 454.90 4.20 4.20 re B
+Q
+BT
+/F1 10.50 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 460.00 Tm
+(Business interviews submitted) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 450.90 4.20 4.20 re B
+Q
+BT
+/F1 10.50 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 456.00 Tm
+(Final project submission status) Tj
+ET
+BT
+/F1 9.60 Tf
+0.478 0.447 0.400 rg
+1 0 0 1 40.00 90.00 Tm
+(Page 5 / 10) Tj
+ET
+endstream
+endobj
+14 0 obj
+<< /Type /Page /Parent 25 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R /F4 4 0 R >> >> /Contents 13 0 R >>
+endobj
+15 0 obj
+<< /Length 5897 >>
+stream
+q
+0.00 w
+0.973 0.949 0.902 rg
+0.973 0.949 0.902 RG
+0.00 0.00 612.00 792.00 re B
+Q
+BT
+/F2 10.00 Tf
+0.541 0.416 0.184 rg
+1 0 0 1 40.00 744.00 Tm
+(5. Evidence capture) Tj
+ET
+BT
+/F4 21.00 Tf
+0.090 0.075 0.043 rg
+1 0 0 1 40.00 728.00 Tm
+(Student business interview module) Tj
+ET
+BT
+/F1 11.00 Tf
+0.220 0.192 0.141 rg
+1 0 0 1 40.00 710.00 Tm
+(This is the core evidence layer of the challenge. Each student must record ten local businesses, with) Tj
+ET
+BT
+/F1 11.00 Tf
+0.220 0.192 0.141 rg
+1 0 0 1 40.00 695.00 Tm
+(enough context to explain what was discovered and what opportunity exists for improvement.) Tj
+ET
+q
+1.00 w
+0.788 0.659 0.298 RG
+40.00 670.00 m 572.00 670.00 l S
+Q
+BT
+/F2 14.00 Tf
+0.090 0.075 0.043 rg
+1 0 0 1 40.00 658.00 Tm
+(Interview prompts from the client) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 636.90 4.20 4.20 re B
+Q
+BT
+/F1 10.60 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 642.00 Tm
+(Does the business have a website?) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 632.90 4.20 4.20 re B
+Q
+BT
+/F1 10.60 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 638.00 Tm
+(Does the business have a Google Business Profile?) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 628.90 4.20 4.20 re B
+Q
+BT
+/F1 10.60 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 634.00 Tm
+(Does the business actively use social media?) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 624.90 4.20 4.20 re B
+Q
+BT
+/F1 10.60 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 630.00 Tm
+(Does the business use digital signage?) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 620.90 4.20 4.20 re B
+Q
+BT
+/F1 10.60 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 626.00 Tm
+(Does the business offer coupons or rewards programs?) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 616.90 4.20 4.20 re B
+Q
+BT
+/F1 10.60 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 622.00 Tm
+(Can customers order online?) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 612.90 4.20 4.20 re B
+Q
+BT
+/F1 10.60 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 618.00 Tm
+(Does the business have its own ordering platform?) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 608.90 4.20 4.20 re B
+Q
+BT
+/F1 10.60 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 614.00 Tm
+(Does the business rely solely on third-party delivery apps?) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 604.90 4.20 4.20 re B
+Q
+BT
+/F1 10.60 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 610.00 Tm
+(What is the biggest challenge facing the business?) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 600.90 4.20 4.20 re B
+Q
+BT
+/F1 10.60 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 606.00 Tm
+(What opportunities are being missed?) Tj
+ET
+BT
+/F2 14.00 Tf
+0.090 0.075 0.043 rg
+1 0 0 1 40.00 594.00 Tm
+(Required business entry fields) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 572.90 4.20 4.20 re B
+Q
+BT
+/F1 10.50 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 578.00 Tm
+(Business name) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 568.90 4.20 4.20 re B
+Q
+BT
+/F1 10.50 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 574.00 Tm
+(Owner or manager name) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 564.90 4.20 4.20 re B
+Q
+BT
+/F1 10.50 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 570.00 Tm
+(Business phone number) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 560.90 4.20 4.20 re B
+Q
+BT
+/F1 10.50 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 566.00 Tm
+(Business address) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 556.90 4.20 4.20 re B
+Q
+BT
+/F1 10.50 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 562.00 Tm
+(Business category) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 552.90 4.20 4.20 re B
+Q
+BT
+/F1 10.50 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 558.00 Tm
+(Date of visit) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 548.90 4.20 4.20 re B
+Q
+BT
+/F1 10.50 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 554.00 Tm
+(Website yes or no) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 544.90 4.20 4.20 re B
+Q
+BT
+/F1 10.50 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 550.00 Tm
+(Google Business Profile yes or no) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 540.90 4.20 4.20 re B
+Q
+BT
+/F1 10.50 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 546.00 Tm
+(Social media yes or no) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 536.90 4.20 4.20 re B
+Q
+BT
+/F1 10.50 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 542.00 Tm
+(Digital signage yes or no) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 532.90 4.20 4.20 re B
+Q
+BT
+/F1 10.50 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 538.00 Tm
+(Coupons or rewards yes or no) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 528.90 4.20 4.20 re B
+Q
+BT
+/F1 10.50 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 534.00 Tm
+(Online ordering yes or no) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 524.90 4.20 4.20 re B
+Q
+BT
+/F1 10.50 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 530.00 Tm
+(Delivery options yes or no) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 520.90 4.20 4.20 re B
+Q
+BT
+/F1 10.50 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 526.00 Tm
+(Main challenge identified) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 516.90 4.20 4.20 re B
+Q
+BT
+/F1 10.50 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 522.00 Tm
+(Student notes) Tj
+ET
+BT
+/F2 14.00 Tf
+0.090 0.075 0.043 rg
+1 0 0 1 40.00 510.00 Tm
+(Unlock rule) Tj
+ET
+BT
+/F1 10.60 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 40.00 494.00 Tm
+(The final submission step remains locked until all ten business interviews are completed and the records are) Tj
+ET
+BT
+/F1 10.60 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 40.00 480.00 Tm
+(stored as valid entries. This keeps the challenge evidence-based instead of opinion-based.) Tj
+ET
+BT
+/F1 9.60 Tf
+0.478 0.447 0.400 rg
+1 0 0 1 40.00 90.00 Tm
+(Page 6 / 10) Tj
+ET
+endstream
+endobj
+16 0 obj
+<< /Type /Page /Parent 25 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R /F4 4 0 R >> >> /Contents 15 0 R >>
+endobj
+17 0 obj
+<< /Length 5204 >>
+stream
+q
+0.00 w
+0.973 0.949 0.902 rg
+0.973 0.949 0.902 RG
+0.00 0.00 612.00 792.00 re B
+Q
+BT
+/F2 10.00 Tf
+0.541 0.416 0.184 rg
+1 0 0 1 40.00 744.00 Tm
+(6. Final review) Tj
+ET
+BT
+/F4 21.00 Tf
+0.090 0.075 0.043 rg
+1 0 0 1 40.00 728.00 Tm
+(Final submission and admin review) Tj
+ET
+BT
+/F1 11.00 Tf
+0.220 0.192 0.141 rg
+1 0 0 1 40.00 710.00 Tm
+(Once all approvals and business interviews are complete, the student can submit the final project) Tj
+ET
+BT
+/F1 11.00 Tf
+0.220 0.192 0.141 rg
+1 0 0 1 40.00 695.00 Tm
+(package. Admin review closes the loop, scores entries, and publishes the winners.) Tj
+ET
+q
+1.00 w
+0.788 0.659 0.298 RG
+40.00 670.00 m 572.00 670.00 l S
+Q
+BT
+/F2 14.00 Tf
+0.090 0.075 0.043 rg
+1 0 0 1 40.00 658.00 Tm
+(Final submission requirements) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 636.90 4.20 4.20 re B
+Q
+BT
+/F1 10.50 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 642.00 Tm
+(Video upload with a maximum runtime of 1 minute and 30 seconds.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 632.90 4.20 4.20 re B
+Q
+BT
+/F1 10.50 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 638.00 Tm
+(Written file upload with a maximum length of one page.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 628.90 4.20 4.20 re B
+Q
+BT
+/F1 10.50 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 634.00 Tm
+(Problem identified.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 624.90 4.20 4.20 re B
+Q
+BT
+/F1 10.50 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 630.00 Tm
+(Why it matters.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 620.90 4.20 4.20 re B
+Q
+BT
+/F1 10.50 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 626.00 Tm
+(Proposed solution.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 616.90 4.20 4.20 re B
+Q
+BT
+/F1 10.50 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 622.00 Tm
+(How it helps the business.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 612.90 4.20 4.20 re B
+Q
+BT
+/F1 10.50 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 618.00 Tm
+(Expected impact.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 608.90 4.20 4.20 re B
+Q
+BT
+/F1 10.50 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 614.00 Tm
+(Submission date.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 604.90 4.20 4.20 re B
+Q
+BT
+/F1 10.50 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 610.00 Tm
+(The one-page written summary must also include business name, owner name, address, phone number,) Tj
+ET
+BT
+/F1 10.50 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 596.60 Tm
+(and date of visit.) Tj
+ET
+BT
+/F2 14.00 Tf
+0.090 0.075 0.043 rg
+1 0 0 1 40.00 584.60 Tm
+(Admin dashboard requirements) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 563.50 4.20 4.20 re B
+Q
+BT
+/F1 10.40 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 568.60 Tm
+(View total students registered, total parents registered, total schools registered, total teachers registered, total) Tj
+ET
+BT
+/F1 10.40 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 555.20 Tm
+(businesses interviewed, total submissions, and winners.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 546.10 4.20 4.20 re B
+Q
+BT
+/F1 10.40 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 551.20 Tm
+(See pending parent consent, school approval, teacher approval, and eligible students.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 542.10 4.20 4.20 re B
+Q
+BT
+/F1 10.40 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 547.20 Tm
+(Approve or reject submissions.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 538.10 4.20 4.20 re B
+Q
+BT
+/F1 10.40 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 543.20 Tm
+(View student profiles, parent consent, school approval, teacher approval, and every business entry submitted.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 534.10 4.20 4.20 re B
+Q
+BT
+/F1 10.40 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 539.20 Tm
+(Export data to CSV.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 530.10 4.20 4.20 re B
+Q
+BT
+/F1 10.40 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 535.20 Tm
+(Select winners and publish them to FrantzCoutard.com.) Tj
+ET
+BT
+/F2 14.00 Tf
+0.090 0.075 0.043 rg
+1 0 0 1 40.00 523.20 Tm
+(Prize structure and announcement) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 502.10 4.20 4.20 re B
+Q
+BT
+/F1 10.50 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 507.20 Tm
+(First place: $2,500 scholarship award.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 498.10 4.20 4.20 re B
+Q
+BT
+/F1 10.50 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 503.20 Tm
+(Second place: $1,500 scholarship award.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 494.10 4.20 4.20 re B
+Q
+BT
+/F1 10.50 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 499.20 Tm
+(Third place: $1,000 scholarship award.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 490.10 4.20 4.20 re B
+Q
+BT
+/F1 10.50 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 495.20 Tm
+(Total scholarship awards: $5,000.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 486.10 4.20 4.20 re B
+Q
+BT
+/F1 10.50 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 491.20 Tm
+(Winners announced on August 25, 2026 at FrantzCoutard.com.) Tj
+ET
+BT
+/F1 9.60 Tf
+0.478 0.447 0.400 rg
+1 0 0 1 40.00 90.00 Tm
+(Page 7 / 10) Tj
+ET
+endstream
+endobj
+18 0 obj
+<< /Type /Page /Parent 25 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R /F4 4 0 R >> >> /Contents 17 0 R >>
+endobj
+19 0 obj
+<< /Length 3725 >>
+stream
+q
+0.00 w
+0.973 0.949 0.902 rg
+0.973 0.949 0.902 RG
+0.00 0.00 612.00 792.00 re B
+Q
+BT
+/F2 10.00 Tf
+0.541 0.416 0.184 rg
+1 0 0 1 40.00 744.00 Tm
+(7. Dashboard map) Tj
+ET
+BT
+/F4 21.00 Tf
+0.090 0.075 0.043 rg
+1 0 0 1 40.00 728.00 Tm
+(Public pages and dashboard overview) Tj
+ET
+BT
+/F1 11.00 Tf
+0.220 0.192 0.141 rg
+1 0 0 1 40.00 710.00 Tm
+(The website needs both public-facing challenge pages and logged-in dashboards so every role can see) Tj
+ET
+BT
+/F1 11.00 Tf
+0.220 0.192 0.141 rg
+1 0 0 1 40.00 695.00 Tm
+(the exact information it needs.) Tj
+ET
+q
+1.00 w
+0.788 0.659 0.298 RG
+40.00 670.00 m 572.00 670.00 l S
+Q
+BT
+/F2 14.00 Tf
+0.090 0.075 0.043 rg
+1 0 0 1 40.00 658.00 Tm
+(Public pages needed) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 636.90 4.20 4.20 re B
+Q
+BT
+/F1 10.35 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 642.00 Tm
+(Homepage section: Leave It Better Than You Found It, The Future Belongs To Problem Solvers, $5,000 in) Tj
+ET
+BT
+/F1 10.35 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 628.80 Tm
+(scholarship awards, and Register Free at FrantzCoutard.com.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 619.70 4.20 4.20 re B
+Q
+BT
+/F1 10.35 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 624.80 Tm
+(Challenge page: overview, who can participate, how it works, prize details, rules, consent requirements, FAQ,) Tj
+ET
+BT
+/F1 10.35 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 611.60 Tm
+(and register button.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 602.50 4.20 4.20 re B
+Q
+BT
+/F1 10.35 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 607.60 Tm
+(Registration pages: student registration, parent consent via QR code, school registration, and teacher) Tj
+ET
+BT
+/F1 10.35 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 594.40 Tm
+(registration.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 585.30 4.20 4.20 re B
+Q
+BT
+/F1 10.35 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 590.40 Tm
+(Dashboard pages: student dashboard, parent dashboard, school dashboard, teacher dashboard, and admin) Tj
+ET
+BT
+/F1 10.35 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 577.20 Tm
+(dashboard.) Tj
+ET
+BT
+/F2 14.00 Tf
+0.090 0.075 0.043 rg
+1 0 0 1 40.00 565.20 Tm
+(Dashboard roles at a glance) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 544.10 4.20 4.20 re B
+Q
+BT
+/F1 10.35 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 549.20 Tm
+(Student dashboard: participant ID, QR code, status tracker, interview progress, and submission status.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 540.10 4.20 4.20 re B
+Q
+BT
+/F1 10.35 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 545.20 Tm
+(Parent dashboard: consent record, approval status, date/time, and student linkage.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 536.10 4.20 4.20 re B
+Q
+BT
+/F1 10.35 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 541.20 Tm
+(School dashboard: registered students, pending approvals, approved students, submitted projects, and) Tj
+ET
+BT
+/F1 10.35 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 528.00 Tm
+(winners from that school.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 518.90 4.20 4.20 re B
+Q
+BT
+/F1 10.35 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 524.00 Tm
+(Teacher dashboard: assigned students, approval states, interviews entered, project status, leaderboard data,) Tj
+ET
+BT
+/F1 10.35 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 510.80 Tm
+(reports, notifications, and award progress.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 501.70 4.20 4.20 re B
+Q
+BT
+/F1 10.35 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 506.80 Tm
+(Admin dashboard: totals, pending approvals, submissions, exports, winner selection, and publication.) Tj
+ET
+BT
+/F1 9.60 Tf
+0.478 0.447 0.400 rg
+1 0 0 1 40.00 90.00 Tm
+(Page 8 / 10) Tj
+ET
+endstream
+endobj
+20 0 obj
+<< /Type /Page /Parent 25 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R /F4 4 0 R >> >> /Contents 19 0 R >>
+endobj
+21 0 obj
+<< /Length 4419 >>
+stream
+q
+0.00 w
+0.973 0.949 0.902 rg
+0.973 0.949 0.902 RG
+0.00 0.00 612.00 792.00 re B
+Q
+BT
+/F2 10.00 Tf
+0.541 0.416 0.184 rg
+1 0 0 1 40.00 744.00 Tm
+(8. Teacher focus) Tj
+ET
+BT
+/F4 21.00 Tf
+0.090 0.075 0.043 rg
+1 0 0 1 40.00 728.00 Tm
+(Teacher dashboard requirements) Tj
+ET
+BT
+/F1 11.00 Tf
+0.220 0.192 0.141 rg
+1 0 0 1 40.00 710.00 Tm
+(The teacher dashboard is the monitoring and motivation layer for the challenge. It should help teachers) Tj
+ET
+BT
+/F1 11.00 Tf
+0.220 0.192 0.141 rg
+1 0 0 1 40.00 695.00 Tm
+(see progress, identify gaps, and compete for the educator award.) Tj
+ET
+q
+1.00 w
+0.788 0.659 0.298 RG
+40.00 670.00 m 572.00 670.00 l S
+Q
+BT
+/F2 14.00 Tf
+0.090 0.075 0.043 rg
+1 0 0 1 40.00 658.00 Tm
+(Teacher dashboard must include) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 636.90 4.20 4.20 re B
+Q
+BT
+/F1 10.20 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 642.00 Tm
+(Teacher profile: teacher name, school name, email, phone number, role or department, and grade level) Tj
+ET
+BT
+/F1 10.20 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 628.90 Tm
+(supported.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 619.80 4.20 4.20 re B
+Q
+BT
+/F1 10.20 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 624.90 Tm
+(Student tracking: total students registered, students pending parent consent, students approved by parent,) Tj
+ET
+BT
+/F1 10.20 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 611.80 Tm
+(students approved by school, students with teacher approval, and students eligible to submit.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 602.70 4.20 4.20 re B
+Q
+BT
+/F1 10.20 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 607.80 Tm
+(Business interview tracking: total business interviews entered, interviews completed per student, students) Tj
+ET
+BT
+/F1 10.20 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 594.70 Tm
+(with all 10 interviews completed, and business categories collected.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 585.60 4.20 4.20 re B
+Q
+BT
+/F1 10.20 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 590.70 Tm
+(Project submission tracking: video submitted, written summary submitted, final submission status, submission) Tj
+ET
+BT
+/F1 10.20 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 577.60 Tm
+(date, and student ranking status.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 568.50 4.20 4.20 re B
+Q
+BT
+/F1 10.20 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 573.60 Tm
+(Community impact score: score based on registration, consent, school consent, business interviews, project) Tj
+ET
+BT
+/F1 10.20 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 560.50 Tm
+(submissions, finalists, and winners.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 551.40 4.20 4.20 re B
+Q
+BT
+/F1 10.20 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 556.50 Tm
+(Leaderboards: teacher leaderboard, school leaderboard, and student scholarship leaderboard.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 547.40 4.20 4.20 re B
+Q
+BT
+/F1 10.20 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 552.50 Tm
+(Reports: export student list, parent consent status, business interview data, project submission data, and) Tj
+ET
+BT
+/F1 10.20 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 539.40 Tm
+(teacher score report.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 530.30 4.20 4.20 re B
+Q
+BT
+/F1 10.20 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 535.40 Tm
+(Notifications: parent consent pending, school approval pending, student missing interviews, student submission) Tj
+ET
+BT
+/F1 10.20 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 522.30 Tm
+(deadline reminder, and award ranking updates.) Tj
+ET
+BT
+/F2 14.00 Tf
+0.090 0.075 0.043 rg
+1 0 0 1 40.00 510.30 Tm
+(Teacher award section) Tj
+ET
+BT
+/F1 10.40 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 40.00 494.30 Tm
+(The teacher dashboard should show progress toward the Community Leadership Educator Award. Prize) Tj
+ET
+BT
+/F1 10.40 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 40.00 480.70 Tm
+(package: Teacher Excellence Vacation Experience, including roundtrip airfare, hotel accommodations, ground) Tj
+ET
+BT
+/F1 10.40 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 40.00 467.10 Tm
+(transportation, recognition experience, and the Community Leadership Educator Award.) Tj
+ET
+BT
+/F2 10.00 Tf
+0.541 0.416 0.184 rg
+1 0 0 1 40.00 86.00 Tm
+(Main goal: help teachers monitor students, increase participation, track impact, and compete for the award.) Tj
+ET
+BT
+/F1 9.60 Tf
+0.478 0.447 0.400 rg
+1 0 0 1 504.00 86.00 Tm
+(Page 9 / 10) Tj
+ET
+endstream
+endobj
+22 0 obj
+<< /Type /Page /Parent 25 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R /F4 4 0 R >> >> /Contents 21 0 R >>
+endobj
+23 0 obj
+<< /Length 7828 >>
+stream
+q
+0.00 w
+0.973 0.949 0.902 rg
+0.973 0.949 0.902 RG
+0.00 0.00 612.00 792.00 re B
+Q
+BT
+/F2 10.00 Tf
+0.541 0.416 0.184 rg
+1 0 0 1 40.00 744.00 Tm
+(9. Technical plan) Tj
+ET
+BT
+/F4 21.00 Tf
+0.090 0.075 0.043 rg
+1 0 0 1 40.00 728.00 Tm
+(How this fits the current site) Tj
+ET
+BT
+/F1 11.00 Tf
+0.220 0.192 0.141 rg
+1 0 0 1 40.00 710.00 Tm
+(The new_school module should be added to the current FrantzCoutard.com architecture instead of being) Tj
+ET
+BT
+/F1 11.00 Tf
+0.220 0.192 0.141 rg
+1 0 0 1 40.00 695.00 Tm
+(built as a separate product. That keeps the brand, session model, and admin patterns consistent.) Tj
+ET
+q
+1.00 w
+0.788 0.659 0.298 RG
+40.00 670.00 m 572.00 670.00 l S
+Q
+BT
+/F2 14.00 Tf
+0.090 0.075 0.043 rg
+1 0 0 1 40.00 658.00 Tm
+(Recommended implementation approach) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 636.90 4.20 4.20 re B
+Q
+BT
+/F1 10.25 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 642.00 Tm
+(Add a new school module in the React frontend with pages for student registration, parent consent, school) Tj
+ET
+BT
+/F1 10.25 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 628.80 Tm
+(registration, teacher registration, dashboards, and admin review.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 619.70 4.20 4.20 re B
+Q
+BT
+/F1 10.25 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 624.80 Tm
+(Extend the PHP API with routes for registration, QR token validation, approvals, dashboard summaries, interview) Tj
+ET
+BT
+/F1 10.25 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 611.60 Tm
+(entries, submissions, exports, and winner publishing.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 602.50 4.20 4.20 re B
+Q
+BT
+/F1 10.25 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 607.60 Tm
+(Add MySQL tables for students, parents, schools, teachers, approvals, business interviews, submissions,) Tj
+ET
+BT
+/F1 10.25 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 594.40 Tm
+(notifications, QR tokens, and winners.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 585.30 4.20 4.20 re B
+Q
+BT
+/F1 10.25 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 590.40 Tm
+(Reuse the current site auth and session approach so the new module feels native to the existing portal.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 581.30 4.20 4.20 re B
+Q
+BT
+/F1 10.25 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 586.40 Tm
+(Use the current upload pattern for files such as consent signatures, student videos, and written submissions.) Tj
+ET
+BT
+/F2 14.00 Tf
+0.090 0.075 0.043 rg
+1 0 0 1 40.00 574.40 Tm
+(Suggested API routes) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 553.30 4.20 4.20 re B
+Q
+BT
+/F1 10.15 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 558.40 Tm
+(POST new-school/student/register - create student profile and participant QR token.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 549.30 4.20 4.20 re B
+Q
+BT
+/F1 10.15 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 554.40 Tm
+(POST new-school/parent/consent - store parent approval from the QR flow.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 545.30 4.20 4.20 re B
+Q
+BT
+/F1 10.15 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 550.40 Tm
+(POST new-school/school/register - create school account.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 541.30 4.20 4.20 re B
+Q
+BT
+/F1 10.15 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 546.40 Tm
+(POST new-school/teacher/register - create teacher account.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 537.30 4.20 4.20 re B
+Q
+BT
+/F1 10.15 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 542.40 Tm
+(POST new-school/business - save one business interview record.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 533.30 4.20 4.20 re B
+Q
+BT
+/F1 10.15 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 538.40 Tm
+(POST new-school/submission - save final video and written submission.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 529.30 4.20 4.20 re B
+Q
+BT
+/F1 10.15 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 534.40 Tm
+(GET new-school/dashboard/* - return role-based dashboard data.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 525.30 4.20 4.20 re B
+Q
+BT
+/F1 10.15 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 530.40 Tm
+(GET and PUT admin/new-school/* - admin review, exports, and winners.) Tj
+ET
+BT
+/F2 14.00 Tf
+0.090 0.075 0.043 rg
+1 0 0 1 40.00 518.40 Tm
+(Suggested database entities) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 497.30 4.20 4.20 re B
+Q
+BT
+/F1 10.10 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 502.40 Tm
+(new_school_students - student profile, school, grade, status, QR token, participant ID.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 493.30 4.20 4.20 re B
+Q
+BT
+/F1 10.10 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 498.40 Tm
+(new_school_parents - parent record, relationship, contact details, signature, approval time.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 489.30 4.20 4.20 re B
+Q
+BT
+/F1 10.10 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 494.40 Tm
+(new_school_schools - school account and identity fields.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 485.30 4.20 4.20 re B
+Q
+BT
+/F1 10.10 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 490.40 Tm
+(new_school_teachers - teacher account and school assignment.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 481.30 4.20 4.20 re B
+Q
+BT
+/F1 10.10 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 486.40 Tm
+(new_school_approvals - school and teacher approvals with notes and timestamps.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 477.30 4.20 4.20 re B
+Q
+BT
+/F1 10.10 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 482.40 Tm
+(new_school_business_interviews - ten business visits per student and interview answers.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 473.30 4.20 4.20 re B
+Q
+BT
+/F1 10.10 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 478.40 Tm
+(new_school_submissions - final video, written file, solution text, and score status.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 469.30 4.20 4.20 re B
+Q
+BT
+/F1 10.10 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 474.40 Tm
+(new_school_notifications - pending, reminder, and award messages.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 465.30 4.20 4.20 re B
+Q
+BT
+/F1 10.10 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 470.40 Tm
+(new_school_winners - final ranking and prize publication records.) Tj
+ET
+BT
+/F2 14.00 Tf
+0.090 0.075 0.043 rg
+1 0 0 1 40.00 458.40 Tm
+(Acceptance criteria) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 437.30 4.20 4.20 re B
+Q
+BT
+/F1 10.15 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 442.40 Tm
+(Student cannot submit without parent, school, and teacher approval.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 433.30 4.20 4.20 re B
+Q
+BT
+/F1 10.15 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 438.40 Tm
+(Student cannot submit without ten completed business interviews.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 429.30 4.20 4.20 re B
+Q
+BT
+/F1 10.15 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 434.40 Tm
+(Every approval stores name, date, time, and signature.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 425.30 4.20 4.20 re B
+Q
+BT
+/F1 10.15 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 430.40 Tm
+(Parent information is captured only through the QR flow.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 421.30 4.20 4.20 re B
+Q
+BT
+/F1 10.15 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 426.40 Tm
+(Admin can export data, choose winners, and publish the result page.) Tj
+ET
+q
+0.50 w
+0.192 0.169 0.118 rg
+0.192 0.169 0.118 RG
+41.90 417.30 4.20 4.20 re B
+Q
+BT
+/F1 10.15 Tf
+0.192 0.169 0.118 rg
+1 0 0 1 52.00 422.40 Tm
+(Teacher dashboard shows progress, rankings, and award status.) Tj
+ET
+BT
+/F1 9.60 Tf
+0.478 0.447 0.400 rg
+1 0 0 1 40.00 86.00 Tm
+(Page 10 / 10) Tj
+ET
+endstream
+endobj
+24 0 obj
+<< /Type /Page /Parent 25 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R /F4 4 0 R >> >> /Contents 23 0 R >>
+endobj
+25 0 obj
+<< /Type /Pages /Kids [ 6 0 R 8 0 R 10 0 R 12 0 R 14 0 R 16 0 R 18 0 R 20 0 R 22 0 R 24 0 R ] /Count 10 >>
+endobj
+26 0 obj
+<< /Type /Catalog /Pages 25 0 R >>
+endobj
+27 0 obj
+<< /Title (new_school functionality) /Author (OpenAI Codex) /Subject (new_school functionality specification) /Creator (Codex PDF generator) >>
+endobj
+xref
+0 28
+0000000000 65535 f 
+0000000015 00000 n 
+0000000085 00000 n 
+0000000160 00000 n 
+0000000232 00000 n 
+0000000303 00000 n 
+0000005136 00000 n 
+0000005293 00000 n 
+0000009838 00000 n 
+0000009995 00000 n 
+0000018416 00000 n 
+0000018574 00000 n 
+0000024158 00000 n 
+0000024317 00000 n 
+0000030646 00000 n 
+0000030805 00000 n 
+0000036755 00000 n 
+0000036914 00000 n 
+0000042171 00000 n 
+0000042330 00000 n 
+0000046108 00000 n 
+0000046267 00000 n 
+0000050739 00000 n 
+0000050898 00000 n 
+0000058779 00000 n 
+0000058938 00000 n 
+0000059061 00000 n 
+0000059112 00000 n 
+trailer
+<< /Size 28 /Root 26 0 R /Info 27 0 R >>
+startxref
+59272
+%%EOF

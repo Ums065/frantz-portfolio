@@ -8,7 +8,7 @@ interface Seo {
 
 const SITE = 'Frantz Coutard'
 const DEFAULT_DESC = 'Frantz Coutard — Technology Innovator, Visionary, Community Builder. From Community to Legacy.'
-const DEFAULT_IMAGE = '/assets/frantz-portrait.png'
+const DEFAULT_IMAGE = '/assets/frantz-portrait.webp'
 
 /** Upsert a <meta> tag by name or property. */
 function setMeta(attr: 'name' | 'property', key: string, content: string) {

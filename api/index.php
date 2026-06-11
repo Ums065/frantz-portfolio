@@ -17,6 +17,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/config.php';
 require __DIR__ . '/lib.php';
+require __DIR__ . '/new_school_routes.php';
 
 require_csrf();
 
@@ -194,6 +195,10 @@ try {
 
         case $key === 'GET auth/me': {
             json(['user' => current_user(), 'csrfToken' => csrf_token()]);
+        }
+
+        case str_starts_with($route, 'new-school/') || str_starts_with($route, 'admin/new-school/'): {
+            new_school_handle_route($method, $route);
         }
 
         case $key === 'GET user/dashboard': {

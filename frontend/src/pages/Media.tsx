@@ -40,7 +40,7 @@ export default function Media() {
   useSeo({
     title: 'Media Center',
     description: 'Press kits, interview assets, photos, video clips, and testimonial highlights for Frantz Coutard.',
-    image: '/assets/gallery-speaking-stage.png',
+    image: '/assets/gallery-speaking-stage.webp',
   })
 
   useEffect(() => {
@@ -166,7 +166,7 @@ export default function Media() {
           <div className="blog-list-grid media-list">
             {(featured ? [featured, ...items.filter((item) => item.id !== featured.id)] : items).map((item) => (
               <article className="glass blog-card reveal" key={item.id}>
-                <div className="blog-card__img"><img src={item.image || '/assets/abstract-gold-network.png'} alt="" /></div>
+                <div className="blog-card__img"><img src={item.image || '/assets/abstract-gold-network.webp'} alt="" loading="lazy" decoding="async" /></div>
                 <div className="blog-card__body">
                   <div className="kicker"><span className="cat">{item.type}</span><span>&bull;</span><span>{item.published_at || 'Current'}</span></div>
                   <h3>{item.title}</h3>
@@ -194,14 +194,14 @@ export default function Media() {
               <div
                 className="cell"
                 data-cap={item.title}
-                data-lightbox-src={item.image || '/assets/abstract-gold-network.png'}
+                data-lightbox-src={item.image || '/assets/abstract-gold-network.webp'}
                 data-lightbox-cap={item.title}
                 data-lightbox-alt={item.title}
                 key={item.id}
                 role="button"
                 tabIndex={0}
               >
-                <img src={item.image || '/assets/abstract-gold-network.png'} alt={item.title} loading="lazy" decoding="async" />
+                <img src={item.image || '/assets/abstract-gold-network.webp'} alt={item.title} loading="lazy" decoding="async" />
                 <span className="tagk">{item.type}</span>
                 <div className="cap">{item.title}</div>
               </div>

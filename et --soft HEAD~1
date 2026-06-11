@@ -1,0 +1,286 @@
+[33mcommit 003ff35164098c6b8570b077a2318953dc3cd947[m
+Author: Ums065 <umanggol2004@gmail.com>
+Date:   Thu Jun 11 09:59:17 2026 +0530
+
+    optimizing the app and publish the school functionality Test-1
+
+.tmp/award-presidential-medal.webp
+.tmp/edge-profile/1b4e532b-dacb-4e0e-a15a-13df4d03793d.tmp
+.tmp/edge-profile/49cd2a52-4277-4704-95b5-5a107aa74b34.tmp
+.tmp/edge-profile/88a2ac63-73c9-48c6-8973-e60643a0a6c4.tmp
+.tmp/edge-profile/98cc494c-9b34-47db-83b2-a1b21a853661.tmp
+.tmp/edge-profile/Crashpad/metadata
+.tmp/edge-profile/Crashpad/reports/26fbaf41-c2d2-4b07-b2c6-76d133e07c09.dmp
+.tmp/edge-profile/Crashpad/settings.dat
+.tmp/edge-profile/Crashpad/throttle_store.dat
+.tmp/edge-profile/CrashpadMetrics-active.pma
+.tmp/edge-profile/Default/Affiliation Database
+.tmp/edge-profile/Default/Affiliation Database-journal
+.tmp/edge-profile/Default/ClientCertificates/LOCK
+.tmp/edge-profile/Default/ClientCertificates/LOG
+.tmp/edge-profile/Default/Code Cache/js/index
+.tmp/edge-profile/Default/Code Cache/js/index-dir/temp-index
+.tmp/edge-profile/Default/Code Cache/wasm/index
+.tmp/edge-profile/Default/Code Cache/wasm/index-dir/temp-index
+.tmp/edge-profile/Default/DawnGraphiteCache/index
+.tmp/edge-profile/Default/DawnWebGPUCache/index
+.tmp/edge-profile/Default/EdgePushStorageWithConnectTokenAndKey/LOCK
+.tmp/edge-profile/Default/EdgePushStorageWithConnectTokenAndKey/LOG
+.tmp/edge-profile/Default/EdgePushStorageWithConnectTokens/LOCK
+.tmp/edge-profile/Default/EdgePushStorageWithConnectTokens/LOG
+.tmp/edge-profile/Default/Extension Rules/000001.dbtmp
+.tmp/edge-profile/Default/Extension Rules/48d109dd-eafd-4d83-97c0-5ceae8595f74.tmp
+.tmp/edge-profile/Default/Extension Rules/LOCK
+.tmp/edge-profile/Default/Extension Rules/LOG
+.tmp/edge-profile/Default/Extension Rules/MANIFEST-000001
+.tmp/edge-profile/Default/Extension Scripts/000001.dbtmp
+.tmp/edge-profile/Default/Extension Scripts/LOCK
+.tmp/edge-profile/Default/Extension Scripts/LOG
+.tmp/edge-profile/Default/Extension Scripts/MANIFEST-000001
+.tmp/edge-profile/Default/Favicons
+.tmp/edge-profile/Default/Favicons-journal
+.tmp/edge-profile/Default/GPUCache/index
+.tmp/edge-profile/Default/History
+.tmp/edge-profile/Default/History-journal
+.tmp/edge-profile/Default/HubApps Icons
+.tmp/edge-profile/Default/HubApps Icons-journal
+.tmp/edge-profile/Default/LOCK
+.tmp/edge-profile/Default/LOG
+.tmp/edge-profile/Default/Login Data
+.tmp/edge-profile/Default/Login Data For Account
+.tmp/edge-profile/Default/Login Data For Account-journal
+.tmp/edge-profile/Default/Login Data-journal
+.tmp/edge-profile/Default/Nurturing/campaign_history
+.tmp/edge-profile/Default/Nurturing/campaign_history-journal
+.tmp/edge-profile/Default/PersistentOriginTrials/LOCK
+.tmp/edge-profile/Default/PersistentOriginTrials/LOG
+.tmp/edge-profile/Default/README
+.tmp/edge-profile/Default/ServerCertificate
+.tmp/edge-profile/Default/ServerCertificate-journal
+.tmp/edge-profile/Default/Sessions/Session_13425539086861939
+.tmp/edge-profile/Default/Site Characteristics Database/000001.dbtmp
+.tmp/edge-profile/Default/Site Characteristics Database/LOCK
+.tmp/edge-profile/Default/Site Characteristics Database/LOG
+.tmp/edge-profile/Default/Site Characteristics Database/MANIFEST-000001
+.tmp/edge-profile/Default/Site Characteristics Database/lost/040f6c5f-8912-4c56-a750-7459642f8098.tmp
+.tmp/edge-profile/Default/Storage/ext/ihmafllikibpmigkcoadcmckbfhibefp/def/Code Cache/js/index
+.tmp/edge-profile/Default/Storage/ext/ihmafllikibpmigkcoadcmckbfhibefp/def/Code Cache/js/index-dir/temp-index
+.tmp/edge-profile/Default/Storage/ext/ihmafllikibpmigkcoadcmckbfhibefp/def/Code Cache/wasm/index
+.tmp/edge-profile/Default/Storage/ext/ihmafllikibpmigkcoadcmckbfhibefp/def/Code Cache/wasm/index-dir/temp-index
+.tmp/edge-profile/Default/Storage/ext/ihmafllikibpmigkcoadcmckbfhibefp/def/DawnGraphiteCache/index
+.tmp/edge-profile/Default/Storage/ext/ihmafllikibpmigkcoadcmckbfhibefp/def/DawnWebGPUCache/index
+.tmp/edge-profile/Default/Storage/ext/ihmafllikibpmigkcoadcmckbfhibefp/def/GPUCache/index
+.tmp/edge-profile/Default/Sync Data/LevelDB/000001.dbtmp
+.tmp/edge-profile/Default/Sync Data/LevelDB/LOCK
+.tmp/edge-profile/Default/Sync Data/LevelDB/LOG
+.tmp/edge-profile/Default/Sync Data/LevelDB/MANIFEST-000001
+.tmp/edge-profile/Default/Top Sites
+.tmp/edge-profile/Default/Top Sites-journal
+.tmp/edge-profile/Default/Vpn Tokens
+.tmp/edge-profile/Default/Vpn Tokens-journal
+.tmp/edge-profile/Default/Web Data
+.tmp/edge-profile/Default/Web Data-journal
+.tmp/edge-profile/Default/arbitration_service_config.json
+.tmp/edge-profile/Default/commerce_subscription_db/LOCK
+.tmp/edge-profile/Default/commerce_subscription_db/LOG
+.tmp/edge-profile/Default/discount_infos_db/LOCK
+.tmp/edge-profile/Default/discount_infos_db/LOG
+.tmp/edge-profile/Default/discounts_db/LOCK
+.tmp/edge-profile/Default/discounts_db/LOG
+.tmp/edge-profile/Default/load_statistics.db
+.tmp/edge-profile/Default/load_statistics.db-journal
+.tmp/edge-profile/Default/parcel_tracking_db/LOCK
+.tmp/edge-profile/Default/parcel_tracking_db/LOG
+.tmp/edge-profile/Default/shared_proto_db/metadata/000001.dbtmp
+.tmp/edge-profile/Default/shared_proto_db/metadata/LOCK
+.tmp/edge-profile/Default/shared_proto_db/metadata/LOG
+.tmp/edge-profile/Default/shared_proto_db/metadata/MANIFEST-000001
+.tmp/edge-profile/Edge-Local-State-Tmp-3587870e-9bfe-4b4f-9157-7ff362442b1b.tmp
+.tmp/edge-profile/Edge-Local-State-Tmp-90c9d55e-6e29-489c-9e84-e033c9163d1b.tmp
+.tmp/edge-profile/Edge-Local-State-Tmp-f1f33e64-161a-49ec-be75-00bedf75565f.tmp
+.tmp/edge-profile/FirstLaunchAfterInstallation
+.tmp/edge-profile/GPUPersistentCache/DawnGraphiteCache/C6YIJ5ZAKC6TXEMDAQ6UAWWQBARS2Q4L/cache.db
+.tmp/edge-profile/GPUPersistentCache/DawnGraphiteCache/C6YIJ5ZAKC6TXEMDAQ6UAWWQBARS2Q4L/cache.db-wal
+.tmp/edge-profile/GPUPersistentCache/DawnGraphiteCache/C6YIJ5ZAKC6TXEMDAQ6UAWWQBARS2Q4L/cache.journal
+.tmp/edge-profile/Last Version
+.tmp/edge-profile/Nurturing/campaign_history
+.tmp/edge-profile/Nurturing/campaign_history-journal
+.tmp/edge-profile/ShaderCache/index
+.tmp/edge-profile/SmartScreen/RemoteData/customSettings
+.tmp/edge-profile/SmartScreen/RemoteData/customSettings_F95BA787499AB4FA9EFFF472CE383A14
+.tmp/edge-profile/Variations
+.tmp/frantz-portrait.webp
+api/config.php
+api/index.php
+api/lib.php
+api/new_school_routes.php
+chrome-profile/Crashpad/metadata
+chrome-profile/Crashpad/reports/c9b5aa98-51b9-455b-8509-599be79c5439.dmp
+chrome-profile/Crashpad/settings.dat
+chrome-profile/CrashpadMetrics-active.pma
+chrome-profile/Variations
+chrome-profile/ab91cfe5-ea5f-413b-bce4-171a5559af24.tmp
+chrome-profile2/Crashpad/metadata
+chrome-profile2/Crashpad/reports/96e90b03-51e4-4b5b-a15d-c4e6734b53b8.dmp
+chrome-profile2/Crashpad/settings.dat
+chrome-profile2/CrashpadMetrics-active.pma
+chrome-profile2/Default/Account Web Data
+chrome-profile2/Default/Account Web Data-journal
+chrome-profile2/Default/Affiliation Database
+chrome-profile2/Default/Affiliation Database-journal
+chrome-profile2/Default/ClientCertificates/LOCK
+chrome-profile2/Default/ClientCertificates/LOG
+chrome-profile2/Default/Code Cache/js/index
+chrome-profile2/Default/Code Cache/js/index-dir/temp-index
+chrome-profile2/Default/Code Cache/wasm/index
+chrome-profile2/Default/Code Cache/wasm/index-dir/temp-index
+chrome-profile2/Default/Extension Rules/000001.dbtmp
+chrome-profile2/Default/Extension Rules/LOCK
+chrome-profile2/Default/Extension Rules/LOG
+chrome-profile2/Default/Extension Rules/MANIFEST-000001
+chrome-profile2/Default/Favicons
+chrome-profile2/Default/Favicons-journal
+chrome-profile2/Default/GPUCache/index
+chrome-profile2/Default/History
+chrome-profile2/Default/History-journal
+chrome-profile2/Default/LOCK
+chrome-profile2/Default/LOG
+chrome-profile2/Default/Local Storage/leveldb/000001.dbtmp
+chrome-profile2/Default/Local Storage/leveldb/LOCK
+chrome-profile2/Default/Local Storage/leveldb/LOG
+chrome-profile2/Default/Local Storage/leveldb/MANIFEST-000001
+chrome-profile2/Default/Login Data
+chrome-profile2/Default/Login Data For Account
+chrome-profile2/Default/Login Data For Account-journal
+chrome-profile2/Default/Login Data-journal
+chrome-profile2/Default/Network/NetworkDataMigrated
+chrome-profile2/Default/PersistentOriginTrials/LOCK
+chrome-profile2/Default/PersistentOriginTrials/LOG
+chrome-profile2/Default/README
+chrome-profile2/Default/Safe Browsing Network/NetworkDataMigrated
+chrome-profile2/Default/Segmentation Platform/SegmentInfoDB/LOCK
+chrome-profile2/Default/Segmentation Platform/SegmentInfoDB/LOG
+chrome-profile2/Default/Segmentation Platform/SignalDB/LOCK
+chrome-profile2/Default/Segmentation Platform/SignalDB/LOG
+chrome-profile2/Default/Segmentation Platform/SignalStorageConfigDB/LOCK
+chrome-profile2/Default/Segmentation Platform/SignalStorageConfigDB/LOG
+chrome-profile2/Default/ServerCertificate
+chrome-profile2/Default/ServerCertificate-journal
+chrome-profile2/Default/Site Characteristics Database/000001.dbtmp
+chrome-profile2/Default/Site Characteristics Database/LOCK
+chrome-profile2/Default/Site Characteristics Database/LOG
+chrome-profile2/Default/Site Characteristics Database/MANIFEST-000001
+chrome-profile2/Default/Sync Data/LevelDB/000001.dbtmp
+chrome-profile2/Default/Sync Data/LevelDB/LOCK
+chrome-profile2/Default/Sync Data/LevelDB/LOG
+chrome-profile2/Default/Sync Data/LevelDB/MANIFEST-000001
+chrome-profile2/Default/Top Sites
+chrome-profile2/Default/Top Sites-journal
+chrome-profile2/Default/Web Data
+chrome-profile2/Default/Web Data-journal
+chrome-profile2/Default/chrome_cart_db/LOCK
+chrome-profile2/Default/chrome_cart_db/LOG
+chrome-profile2/Default/commerce_subscription_db/LOCK
+chrome-profile2/Default/commerce_subscription_db/LOG
+chrome-profile2/Default/discount_infos_db/LOCK
+chrome-profile2/Default/discount_infos_db/LOG
+chrome-profile2/Default/discounts_db/LOCK
+chrome-profile2/Default/discounts_db/LOG
+chrome-profile2/Default/engine_allowlist.bf
+chrome-profile2/Default/parcel_tracking_db/LOCK
+chrome-profile2/Default/parcel_tracking_db/LOG
+chrome-profile2/GPUPersistentCache/DawnGraphiteCache/C6YIJ5ZAKC6TXEMDAQ6UAWWQBARS2Q4L/cache.db
+chrome-profile2/GPUPersistentCache/DawnGraphiteCache/C6YIJ5ZAKC6TXEMDAQ6UAWWQBARS2Q4L/cache.db-wal
+chrome-profile2/GPUPersistentCache/DawnGraphiteCache/C6YIJ5ZAKC6TXEMDAQ6UAWWQBARS2Q4L/cache.journal
+chrome-profile2/Last Version
+chrome-profile2/Variations
+chrome-profile2/c86bbbba-9f3f-46ba-99ed-fc184a41d4c2.tmp
+chrome-profile2/segmentation_platform/ukm_db
+chrome-profile2/segmentation_platform/ukm_db-journal
+db/new_school.sql
+db/new_school_additions.sql
+docs/new_school_browser_qa_checklist.md
+docs/new_school_deployment_checklist.md
+frontend/index.html
+frontend/package.json
+frontend/public/assets/Frantz-gallery1.webp
+frontend/public/assets/Frantz-gallery2.webp
+frontend/public/assets/Frantz-gallery3.webp
+frontend/public/assets/Frantz-gallery4.webp
+frontend/public/assets/Frantz-gallery5.webp
+frontend/public/assets/Frantz-gallery6.webp
+frontend/public/assets/Frantz-gallery7.webp
+frontend/public/assets/Frantz-gallery8.webp
+frontend/public/assets/Frantz-gallery9.webp
+frontend/public/assets/Frantz.webp
+frontend/public/assets/abstract-gold-network.webp
+frontend/public/assets/award-business-medal.webp
+frontend/public/assets/award-county-medal.webp
+frontend/public/assets/award-presidential-medal.webp
+frontend/public/assets/award-senate-medal.webp
+frontend/public/assets/awards/frantz-coutard.webp
+frontend/public/assets/awards/kedner-stiven.webp
+frontend/public/assets/awards/mlk-visionary.webp
+frontend/public/assets/awards/nassau-cultural.webp
+frontend/public/assets/awards/nassau-executive.webp
+frontend/public/assets/awards/nassau-legislature.webp
+frontend/public/assets/awards/ny-assembly.webp
+frontend/public/assets/awards/ny-resolution-998.webp
+frontend/public/assets/awards/presidential-lifetime.webp
+frontend/public/assets/awards/queens-chamber.webp
+frontend/public/assets/awards/us-senate.webp
+frontend/public/assets/brand-marks-grid.webp
+frontend/public/assets/brand-signature-white.webp
+frontend/public/assets/fc-icon.png
+frontend/public/assets/fc-logo-generated.webp
+frontend/public/assets/fc-logo.webp
+frontend/public/assets/fc-monogram.webp
+frontend/public/assets/frantz-half-face.webp
+frontend/public/assets/frantz-portrait.webp
+frontend/public/assets/gallery-speaking-stage.webp
+frontend/public/assets/merch-cap.webp
+frontend/public/assets/merch-collectible.webp
+frontend/public/assets/merch-hoodie.webp
+frontend/public/assets/merch-tee.webp
+frontend/public/assets/project-gives-back.webp
+frontend/public/assets/project-sornexium.webp
+frontend/public/assets/project-trendcatch-network.webp
+frontend/public/assets/project-unlock-cause.webp
+frontend/public/assets/store-logo.webp
+frontend/public/assets/unlock-a-cause-logo.webp
+frontend/public/docs/new_school_functionality.html
+frontend/public/docs/new_school_functionality.pdf
+frontend/src/App.tsx
+frontend/src/components/Home.tsx
+frontend/src/components/Modals.tsx
+frontend/src/components/SiteFooter.tsx
+frontend/src/components/SiteHeader.tsx
+frontend/src/context/AuthContext.tsx
+frontend/src/hooks/useSeo.ts
+frontend/src/hooks/useSiteInteractions.ts
+frontend/src/index.css
+frontend/src/lib/awards.ts
+frontend/src/lib/brandContent.ts
+frontend/src/lib/localQr.d.ts
+frontend/src/lib/localQr.js
+frontend/src/lib/merch.ts
+frontend/src/pages/About.tsx
+frontend/src/pages/Awards.tsx
+frontend/src/pages/Blog.tsx
+frontend/src/pages/BlogPost.tsx
+frontend/src/pages/Community.tsx
+frontend/src/pages/Media.tsx
+frontend/src/pages/NewSchool.tsx
+frontend/src/pages/Projects.tsx
+frontend/src/pages/Store.tsx
+frontend/src/styles/design.css
+frontend/src/styles/new-school.css
+frontend/tsconfig.tsbuildinfo
+scripts/__pycache__/generate_new_school_functionality_pdf.cpython-313.pyc.1852088307120
+scripts/apply_new_school_migration.php
+scripts/generate_new_school_functionality_pdf.py
+scripts/new_school_deployment_check.php
+scripts/new_school_regression_test.php
+scripts/new_school_schema_smoke_test.php
+scripts/new_school_seed_demo.php
+scripts/new_school_smoke_test.mjs
