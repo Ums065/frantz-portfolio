@@ -47,64 +47,95 @@ const monthAbbr = (d: string) => new Date(d + 'T00:00:00').toLocaleString('en-US
 const dayNum = (d: string) => new Date(d + 'T00:00:00').getDate()
 const fmtMonthYear = (d: string) => new Date(d + 'T00:00:00').toLocaleString('en-US', { month: 'short', year: 'numeric' })
 
-interface BuildProject {
+interface VentureCard {
   title: string
   copy: string
   tag: string
   media: string
-  mediaClass: string
-  tagClass?: string
-  link?: string
+  highlights: string[]
+  mediaClass?: string
 }
 
-const projectUnlock = '/assets/project-unlock-cause.webp'
+const ventureNetwork = '/assets/ventures/trendcatch-network.webp'
+const ventureGivingBack = '/assets/ventures/trendcatch-gives-back.webp'
+const venturePlayer = '/assets/ventures/trendcatch-player.webp'
+const ventureEdu = '/assets/ventures/trendcatch-edu.webp'
+const ventureShelfLink = '/assets/ventures/shelf-link.webp'
+const ventureReferral = '/assets/ventures/referral-partner-program.webp'
+const ventureLeaveBetter = '/assets/ventures/leave-it-better-than-you-found-it.webp'
+const ventureLegacy = '/assets/ventures/frantz-coutard-legacy.webp'
+const ventureFrantz = '/assets/ventures/frantz-coutard.webp'
 
-const buildProjects: BuildProject[] = [
+const ventureCards: VentureCard[] = [
   {
     title: 'TrendCatch Network',
-    copy: 'The operating system for local commerce and community connections.',
+    copy: 'The operating system for local commerce, local ads, and instant savings.',
     tag: 'Launching July 25, 2026',
-    media: projectTrendcatch,
-    mediaClass: 'proj__media--network',
+    media: ventureNetwork,
+    highlights: ['Local Ads', 'Coupons', 'Savings', 'Community'],
   },
   {
-    title: 'Unlock A Cause',
-    copy: 'A community-impact platform turning public-health and social causes into neighborhood billboard campaigns — connecting residents to local resources through QR codes.',
-    tag: 'Live Now',
-    tagClass: 'live',
-    link: 'https://unlockacause.org',
-    media: projectUnlock,
-    mediaClass: 'proj__media--brand',
+    title: 'TrendCatch Gives Back Inc.',
+    copy: 'Technology for community awareness, clean water, public safety, and sustainability.',
+    tag: 'Non-Profit Initiative',
+    media: ventureGivingBack,
+    highlights: ['Education', 'Surveys', 'Sustainability', 'Awareness'],
   },
   {
-    title: 'TrendCatch Gives Back',
-    copy: 'Creating opportunities. Empowering families. Strengthening communities.',
-    tag: 'Making an Impact Daily',
-    tagClass: 'live',
-    media: projectGivesBack,
-    mediaClass: 'proj__media--glow',
+    title: 'TrendCatch Player',
+    copy: 'Powering any screen with remote content updates and live engagement.',
+    tag: 'Proprietary Technology',
+    media: venturePlayer,
+    highlights: ['Any Screen', 'Remote Control', 'Global', 'Real-Time'],
   },
   {
-    title: 'TrendCatch Player Technology',
-    copy: 'A developing engagement layer within the TrendCatch ecosystem for interactive participation, loyalty, and future community-facing experiences.',
-    tag: 'In Development',
-    media: abstractNetwork,
-    mediaClass: 'proj__media--glow',
+    title: 'TrendCatch Edu',
+    copy: 'In-school screen programs teaching advertising, AI, design, and entrepreneurship.',
+    tag: 'In Schools Across NYC',
+    media: ventureEdu,
+    highlights: ['Advertising', 'AI', 'Design', 'Leadership'],
   },
   {
-    title: 'New School Functionality',
-    copy: 'A challenge registration system for students, parents, schools, and teachers with QR consent, interview tracking, and scholarship submissions.',
-    tag: 'In Development',
-    media: projectTrendcatch,
-    mediaClass: 'proj__media--network',
-    link: '/new-school',
+    title: 'Shelf Link',
+    copy: 'Helping local and independent brands launch and grow in retail stores.',
+    tag: 'Launching October 3, 2026',
+    media: ventureShelfLink,
+    highlights: ['Product Launch', 'Retail Partners', 'Growth', 'Distribution'],
+  },
+  {
+    title: 'Referral Partner Program',
+    copy: 'Empowering youth to build income through sales, partnerships, and referrals.',
+    tag: 'Launching October 17, 2026',
+    media: ventureReferral,
+    highlights: ['Sales Training', 'Business Leads', 'Partnerships', 'Income'],
+  },
+  {
+    title: 'Leave It Better Than You Found It™',
+    copy: 'A movement for future problem solvers building better communities.',
+    tag: 'Educational Movement',
+    media: ventureLeaveBetter,
+    highlights: ['Problem Solvers', 'Innovation', 'Leadership', 'Future Ready'],
+  },
+  {
+    title: 'Frantz Coutard.com Legacy',
+    copy: 'A digital platform helping schools access grants, resources, and opportunity.',
+    tag: 'Empowering Communities',
+    media: ventureLegacy,
+    highlights: ['Grants', 'Schools', 'Teachers', 'Parents'],
+  },
+  {
+    title: 'Frantz Coutard',
+    copy: 'Entrepreneur, innovator, and advocate building technology that strengthens communities.',
+    tag: 'My Journey Continues',
+    media: ventureFrantz,
+    highlights: ['Entrepreneur', 'Innovator', 'Advocate', 'Community'],
   },
 ]
 
 const awardHighlights = [
   {
     title: 'Presidential Lifetime Achievement Award',
-    copy: 'Awarded through AmeriCorps and the Office of the President of the United States — one of the nation’s highest volunteer service honors.',
+    copy: 'Awarded through AmeriCorps and the Office of the President of the United States â€” one of the nationâ€™s highest volunteer service honors.',
     image: '/assets/awards/presidential-lifetime.png',
   },
   {
@@ -139,7 +170,7 @@ const galleryItems = [
 const partnerItems = [
   { name: 'TrendCatch Network', image: projectTrendcatch },
   { name: 'TrendCatch Gives Back', image: projectGivesBack },
-  { name: 'Unlock A Cause', image: projectUnlock },
+  { name: 'Unlock A Cause', image: abstractNetwork },
   { name: 'Legacy Honors', image: awardPresidential },
   { name: 'Community Partners', image: awardCounty },
   { name: 'Collection Studio', image: merchCap },
@@ -246,47 +277,30 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="block" id="about">
+      <section className="block" id="ventures">
         <div className="wrap">
           <div className="block__head reveal">
-            <div className="section-title"><span className="ln l" /><h2 className="gold-text">What I'm Building Now</h2><span className="ln r" /></div>
+            <div className="section-title"><span className="ln l" /><h2 className="gold-text">What I&apos;m Building Now</h2><span className="ln r" /></div>
+            <p className="sub">Building technology, education, and opportunity that empowers communities and creates a better future.</p>
           </div>
-          <div className="building-grid">
-            <div className="proj-row">
-              {buildProjects.map((project, index) => (
-                <article className={`glass proj reveal d${index + 1}`} key={project.title}>
-                  <div className={`proj__media ${project.mediaClass}`}>
-                    <img src={project.media} alt="" loading="lazy" decoding="async" />
-                  </div>
-                  <h3>{project.title}</h3>
-                  <p>{project.copy}</p>
-                  <span className={`tag ${project.tagClass ?? ''}`.trim()}>{project.tag}</span>
-                  {project.link && (
-                    project.link.startsWith('/') ? (
-                      <Link className="proj__link" to={project.link}>
-                        Visit {project.title}
-                        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth={2}><path d="M7 17L17 7M9 7h8v8" /></svg>
-                      </Link>
-                    ) : (
-                      <a className="proj__link" href={project.link} target="_blank" rel="noopener noreferrer">
-                        Visit {project.title}
-                        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth={2}><path d="M7 17L17 7M9 7h8v8" /></svg>
-                      </a>
-                    )
-                  )}
-                </article>
-              ))}
-            </div>
-
-            <div className="glass stats reveal d2">
-              <div className="stat"><span className="si"><svg viewBox="0 0 34 34" fill="none" stroke="currentColor" strokeWidth={1.5}><circle cx="13" cy="12" r="3.5" /><circle cx="23" cy="13" r="2.8" /><path d="M6 26c0-4 3-7 7-7s7 3 7 7M20 26c0-3 1.5-5.5 4.5-5.5S29 22 29 25" /></svg></span><div><b data-count="100" data-suffix="+">100+</b><span>Community Campaigns</span></div></div>
-              <div className="stat"><span className="si"><svg viewBox="0 0 34 34" fill="none" stroke="currentColor" strokeWidth={1.5}><path d="M17 6a7 7 0 017 7c0 5-7 13-7 13s-7-8-7-13a7 7 0 017-7z" /><circle cx="17" cy="13" r="2.6" /></svg></span><div><b data-count="50" data-suffix="+">50+</b><span>Digital Locations</span></div></div>
-              <div className="stat"><span className="si"><svg viewBox="0 0 34 34" fill="none" stroke="currentColor" strokeWidth={1.5}><path d="M4 17s5-8 13-8 13 8 13 8-5 8-13 8-13-8-13-8z" /><circle cx="17" cy="17" r="3.4" /></svg></span><div><b>Millions</b><span>Community Impressions</span></div></div>
-              <div className="stat"><span className="si"><svg viewBox="0 0 34 34" fill="none" stroke="currentColor" strokeWidth={1.5}><circle cx="11" cy="11" r="3" /><circle cx="23" cy="11" r="3" /><path d="M5 25c0-4 2.5-6.5 6-6.5S17 21 17 25M17 25c0-4 2.5-6.5 6-6.5S29 21 29 25" /></svg></span><div><b data-count="10" data-suffix="K+">10K+</b><span>Families Impacted</span></div></div>
-              <div className="stat"><span className="si"><svg viewBox="0 0 34 34" fill="none" stroke="currentColor" strokeWidth={1.5}><path d="M10 6v22" /><path d="M10 7h13l-2.5 4 2.5 4H10" fill="currentColor" fillOpacity={0.12} /></svg></span><div><b>2018</b><span>TrendCatch Founded</span></div></div>
-              <div className="stat"><span className="si"><svg viewBox="0 0 34 34" fill="none" stroke="currentColor" strokeWidth={1.5}><path d="M11 7h12v4a6 6 0 01-12 0z" /><path d="M11 8H7v2a4 4 0 004 4M23 8h4v2a4 4 0 01-4 4" /><path d="M17 17v4M13 26h8M15 21h4l1 5h-6z" /></svg></span><div><b>2024</b><span>Presidential Lifetime Award</span></div></div>
-            </div>
+          <div className="venture-grid">
+            {ventureCards.map((project, index) => (
+              <article className={`glass proj venture-card reveal d${(index % 3) + 1}`} key={project.title}>
+                <div className={`proj__media ${project.mediaClass ?? ''}`.trim()}>
+                  <img src={project.media} alt={project.title} loading="lazy" decoding="async" />
+                </div>
+                <h3>{project.title}</h3>
+                <p>{project.copy}</p>
+                <div className="venture-card__chips" aria-label={`${project.title} highlights`}>
+                  {project.highlights.map((item) => (
+                    <span key={`${project.title}-${item}`}>{item}</span>
+                  ))}
+                </div>
+                <span className="tag">{project.tag}</span>
+              </article>
+            ))}
           </div>
+          <div className="venture-summary reveal">ONE VISION. MANY SOLUTIONS. STRONGER COMMUNITIES.</div>
         </div>
       </section>
 
