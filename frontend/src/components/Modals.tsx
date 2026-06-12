@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useAuth, type RegistrationRole } from '../context/AuthContext'
 import { api } from '../lib/api'
+import { BRAND_LOGO } from '../lib/brandAssets'
 
 const CloseIcon = () => (
   <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth={2}>
@@ -9,7 +10,7 @@ const CloseIcon = () => (
 )
 
 const Mono = () => (
-  <div className="mmono"><img src="/assets/fc-monogram.svg" alt="FC" decoding="async" /></div>
+  <div className="mmono"><img src={BRAND_LOGO} alt="FC logo" decoding="async" /></div>
 )
 
 const OkIcon = () => (

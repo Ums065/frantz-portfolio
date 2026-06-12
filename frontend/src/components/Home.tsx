@@ -7,9 +7,10 @@ import { socials } from '../lib/social'
 import { useSeo } from '../hooks/useSeo'
 import { platforms } from '../lib/platforms'
 import { merchPreviewItems } from '../lib/merch'
+import { BRAND_LOGO } from '../lib/brandAssets'
 import PlatformCard from './PlatformCard'
 
-const logo = '/assets/fc-monogram.svg'
+const logo = BRAND_LOGO
 const portrait = '/assets/frantz-portrait.webp'
 const halfFace = portrait
 const signatureWordmark = '/assets/brand-signature-white.webp'

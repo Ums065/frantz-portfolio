@@ -1043,6 +1043,206 @@ function mail_prepare_body(string $bodyText): string
     return implode("\r\n", $lines);
 }
 
+function mail_provider(): string
+{
+    $provider = strtolower(trim((string) env('MAIL_PROVIDER', '')));
+    $provider = str_replace(['-', ' '], '_', $provider);
+
+    if (in_array($provider, ['gmail', 'gmailapi', 'gmail_api'], true)) {
+        return 'gmail_api';
+    }
+
+    if (in_array($provider, ['smtp', 'php'], true)) {
+        return $provider;
+    }
+
+    if ($provider !== '') {
+        return $provider;
+    }
+
+    if (mail_gmail_configured()) {
+        return 'gmail_api';
+    }
+
+    if (mail_smtp_configured()) {
+        return 'smtp';
+    }
+
+    return 'php';
+}
+
+function mail_google_client_id(): string
+{
+    return trim((string) env('GOOGLE_CLIENT_ID', ''));
+}
+
+function mail_google_client_secret(): string
+{
+    return trim((string) env('GOOGLE_CLIENT_SECRET', ''));
+}
+
+function mail_google_refresh_token(): string
+{
+    return trim((string) env('GOOGLE_REFRESH_TOKEN', ''));
+}
+
+function mail_gmail_configured(): bool
+{
+    return mail_google_client_id() !== ''
+        && mail_google_client_secret() !== ''
+        && mail_google_refresh_token() !== '';
+}
+
+function mail_base64url_encode(string $value): string
+{
+    return rtrim(strtr(base64_encode($value), '+/', '-_'), '=');
+}
+
+function mail_build_message(string $to, string $subject, string $bodyText): string
+{
+    $fromAddress = mail_from_address();
+    $fromName = mail_from_name();
+
+    $headers = [
+        'From: ' . mail_encode_header($fromName) . ' <' . $fromAddress . '>',
+        'To: <' . $to . '>',
+        'Subject: ' . mail_encode_header($subject),
+        'MIME-Version: 1.0',
+        'Content-Type: text/plain; charset=UTF-8',
+        'Content-Transfer-Encoding: 8bit',
+    ];
+
+    return implode("\r\n", $headers) . "\r\n\r\n" . mail_prepare_body($bodyText);
+}
+
+function mail_http_request(string $url, string $method, ?string $body = null, array $headers = []): array
+{
+    if (!function_exists('curl_init')) {
+        throw new RuntimeException('cURL extension is required for Gmail API mail transport.');
+    }
+
+    $curl = curl_init($url);
+    if ($curl === false) {
+        throw new RuntimeException('Unable to initialize HTTP client.');
+    }
+
+    $method = strtoupper(trim($method));
+    $options = [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_CUSTOMREQUEST => $method,
+        CURLOPT_HTTPHEADER => $headers,
+        CURLOPT_CONNECTTIMEOUT => mail_timeout_seconds(),
+        CURLOPT_TIMEOUT => max(10, mail_timeout_seconds() * 4),
+        CURLOPT_SSL_VERIFYPEER => mail_verify_peer(),
+        CURLOPT_SSL_VERIFYHOST => mail_verify_peer() ? 2 : 0,
+    ];
+
+    if ($body !== null) {
+        $options[CURLOPT_POSTFIELDS] = $body;
+    }
+
+    curl_setopt_array($curl, $options);
+    $responseBody = curl_exec($curl);
+    $error = curl_error($curl);
+    $status = (int) curl_getinfo($curl, CURLINFO_HTTP_CODE);
+    curl_close($curl);
+
+    return [
+        'ok' => $error === '' && $responseBody !== false && $status >= 200 && $status < 300,
+        'status' => $status,
+        'body' => is_string($responseBody) ? $responseBody : '',
+        'error' => $error,
+    ];
+}
+
+function mail_gmail_access_token(): string
+{
+    static $cachedToken = '';
+    static $expiresAt = 0;
+
+    if ($cachedToken !== '' && time() < ($expiresAt - 60)) {
+        return $cachedToken;
+    }
+
+    if (!mail_gmail_configured()) {
+        return '';
+    }
+
+    $response = mail_http_request(
+        'https://oauth2.googleapis.com/token',
+        'POST',
+        http_build_query([
+            'client_id' => mail_google_client_id(),
+            'client_secret' => mail_google_client_secret(),
+            'refresh_token' => mail_google_refresh_token(),
+            'grant_type' => 'refresh_token',
+        ], '', '&', PHP_QUERY_RFC3986),
+        [
+            'Accept: application/json',
+            'Content-Type: application/x-www-form-urlencoded',
+        ]
+    );
+
+    if (!$response['ok']) {
+        $detail = $response['error'] !== '' ? $response['error'] : $response['body'];
+        mail_smtp_log_failure('gmail-token', $detail !== '' ? $detail : 'Token exchange failed.');
+        return '';
+    }
+
+    $data = json_decode($response['body'], true);
+    if (!is_array($data) || empty($data['access_token'])) {
+        $detail = $response['body'] !== '' ? $response['body'] : 'Invalid token response.';
+        mail_smtp_log_failure('gmail-token', $detail);
+        return '';
+    }
+
+    $cachedToken = (string) $data['access_token'];
+    $expiresIn = max(60, (int) ($data['expires_in'] ?? 3600));
+    $expiresAt = time() + $expiresIn;
+
+    return $cachedToken;
+}
+
+function mail_gmail_send_message(string $to, string $subject, string $bodyText): bool
+{
+    $accessToken = mail_gmail_access_token();
+    if ($accessToken === '') {
+        return false;
+    }
+
+    $payload = json_encode([
+        'raw' => mail_base64url_encode(mail_build_message($to, $subject, $bodyText)),
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if ($payload === false) {
+        mail_smtp_log_failure('gmail-api', 'Unable to encode Gmail API payload.');
+        return false;
+    }
+
+    $response = mail_http_request(
+        'https://gmail.googleapis.com/gmail/v1/users/me/messages/send',
+        'POST',
+        $payload,
+        [
+            'Accept: application/json',
+            'Authorization: Bearer ' . $accessToken,
+            'Content-Type: application/json; charset=UTF-8',
+        ]
+    );
+
+    if (!$response['ok']) {
+        $detail = $response['error'] !== '' ? $response['error'] : $response['body'];
+        mail_smtp_log_failure('gmail-api', $detail !== '' ? $detail : 'Gmail API send failed.');
+        return false;
+    }
+
+    return true;
+}
+
+function mail_transport_retryable(): bool
+{
+    return mail_smtp_configured() || mail_gmail_configured() || mail_allow_php_fallback();
+}
+
 function mail_smtp_read_response($socket): array
 {
     $lines = [];
@@ -1083,6 +1283,257 @@ function mail_smtp_send($socket, string $command, array $expectedCodes, string $
     mail_smtp_expect($socket, $expectedCodes, $stage);
 }
 
+function mail_php_binary(): string
+{
+    $candidates = [];
+    $binary = trim((string) (defined('PHP_BINARY') ? PHP_BINARY : ''));
+    if ($binary !== '') {
+        $candidates[] = $binary;
+    }
+
+    $bindir = trim((string) (defined('PHP_BINDIR') ? PHP_BINDIR : ''));
+    if ($bindir !== '') {
+        $candidates[] = $bindir . DIRECTORY_SEPARATOR . 'php.exe';
+        $candidates[] = $bindir . DIRECTORY_SEPARATOR . 'php';
+    }
+
+    foreach ($candidates as $candidate) {
+        if ($candidate !== '' && is_file($candidate)) {
+            return $candidate;
+        }
+    }
+
+    return $binary !== '' ? $binary : 'php';
+}
+
+function mail_queue_max_attempts(): int
+{
+    return max(1, (int) env('MAIL_MAX_ATTEMPTS', '3'));
+}
+
+function mail_queue_retry_delay_seconds(int $attempts): int
+{
+    $attempts = max(1, $attempts);
+    return min(300, max(30, 30 * $attempts));
+}
+
+function mail_queue_ensure_schema(): void
+{
+    static $ready = false;
+    if ($ready) {
+        return;
+    }
+
+    db()->exec(
+        "CREATE TABLE IF NOT EXISTS mail_outbox (
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            message_kind VARCHAR(40) NOT NULL DEFAULT 'notification',
+            recipient_email VARCHAR(160) NOT NULL,
+            subject VARCHAR(255) NOT NULL,
+            body_text LONGTEXT NOT NULL,
+            status ENUM('queued','sending','retry','sent','failed') NOT NULL DEFAULT 'queued',
+            attempts TINYINT UNSIGNED NOT NULL DEFAULT 0,
+            last_error TEXT DEFAULT NULL,
+            next_attempt_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            sent_at TIMESTAMP NULL DEFAULT NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_mail_outbox_status_next (status, next_attempt_at, created_at),
+            INDEX idx_mail_outbox_kind_status (message_kind, status, created_at),
+            INDEX idx_mail_outbox_recipient (recipient_email, created_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+
+    $ready = true;
+}
+
+function mail_queue_spawn_worker(): bool
+{
+    if (PHP_SAPI === 'cli' || PHP_SAPI === 'phpdbg') {
+        return false;
+    }
+
+    $script = realpath(__DIR__ . '/mail_worker.php') ?: (__DIR__ . '/mail_worker.php');
+    if (!is_file($script)) {
+        mail_smtp_log_failure('queue-spawn', 'Mail worker script is missing.');
+        return false;
+    }
+
+    $phpBinary = mail_php_binary();
+    $command = PHP_OS_FAMILY === 'Windows'
+        ? 'cmd /d /s /c start "" /B ' . escapeshellarg($phpBinary) . ' ' . escapeshellarg($script) . ' --drain-mail-queue >NUL 2>&1'
+        : escapeshellarg($phpBinary) . ' ' . escapeshellarg($script) . ' --drain-mail-queue >/dev/null 2>&1 &';
+
+    if (function_exists('popen')) {
+        $handle = @popen($command, 'r');
+        if ($handle !== false) {
+            @pclose($handle);
+            return true;
+        }
+    }
+
+    if (function_exists('proc_open')) {
+        $descriptorSpec = [
+            0 => ['pipe', 'r'],
+            1 => ['file', PHP_OS_FAMILY === 'Windows' ? 'NUL' : '/dev/null', 'a'],
+            2 => ['file', PHP_OS_FAMILY === 'Windows' ? 'NUL' : '/dev/null', 'a'],
+        ];
+        $process = @proc_open($command, $descriptorSpec, $pipes);
+        if (is_resource($process)) {
+            foreach ($pipes as $pipe) {
+                if (is_resource($pipe)) {
+                    fclose($pipe);
+                }
+            }
+            @proc_close($process);
+            return true;
+        }
+    }
+
+    mail_smtp_log_failure('queue-spawn', 'Unable to launch the mail worker.');
+    return false;
+}
+
+function mail_queue_enqueue(string $kind, string $to, string $subject, string $bodyText): bool
+{
+    $kind = trim($kind) !== '' ? trim($kind) : 'notification';
+    $to = trim($to);
+    $subject = trim($subject);
+    $bodyText = rtrim($bodyText);
+
+    if ($to === '' || $subject === '' || $bodyText === '') {
+        return false;
+    }
+
+    try {
+        mail_queue_ensure_schema();
+        $stmt = db()->prepare(
+            'INSERT INTO mail_outbox (message_kind, recipient_email, subject, body_text, status, attempts, last_error, next_attempt_at)
+             VALUES (?, ?, ?, ?, \'queued\', 0, NULL, NOW())'
+        );
+        $stmt->execute([$kind, $to, $subject, $bodyText]);
+        mail_queue_spawn_worker();
+        return true;
+    } catch (Throwable $e) {
+        mail_smtp_log_failure('queue', $e->getMessage());
+        return false;
+    }
+}
+
+function mail_queue_claim_next(): ?array
+{
+    mail_queue_ensure_schema();
+    $pdo = db();
+    $pdo->beginTransaction();
+
+    try {
+        $stmt = $pdo->query(
+            "SELECT id, message_kind, recipient_email, subject, body_text, attempts
+             FROM mail_outbox
+             WHERE (
+                    status = 'queued'
+                    OR (status = 'retry' AND next_attempt_at <= NOW())
+                    OR (status = 'sending' AND updated_at < DATE_SUB(NOW(), INTERVAL 15 MINUTE))
+                   )
+             ORDER BY next_attempt_at ASC, created_at ASC, id ASC
+             LIMIT 1
+             FOR UPDATE"
+        );
+        $mail = $stmt->fetch();
+        if (!$mail) {
+            $pdo->commit();
+            return null;
+        }
+
+        $update = $pdo->prepare(
+            "UPDATE mail_outbox
+             SET status = 'sending',
+                 attempts = attempts + 1,
+                 next_attempt_at = DATE_ADD(NOW(), INTERVAL 15 MINUTE),
+                 updated_at = NOW()
+             WHERE id = ?"
+        );
+        $update->execute([(int) $mail['id']]);
+
+        $pdo->commit();
+        $mail['attempts'] = (int) $mail['attempts'] + 1;
+        return $mail;
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        throw $e;
+    }
+}
+
+function mail_queue_mark_sent(int $mailId): void
+{
+    $stmt = db()->prepare(
+        "UPDATE mail_outbox
+         SET status = 'sent',
+             sent_at = NOW(),
+             last_error = NULL,
+             updated_at = NOW()
+         WHERE id = ?"
+    );
+    $stmt->execute([$mailId]);
+}
+
+function mail_queue_mark_retry(int $mailId, int $attempts, string $reason): string
+{
+    $retryable = mail_transport_retryable();
+    $status = ($retryable && $attempts < mail_queue_max_attempts()) ? 'retry' : 'failed';
+    $nextAttemptAt = $status === 'retry'
+        ? date('Y-m-d H:i:s', time() + mail_queue_retry_delay_seconds($attempts))
+        : date('Y-m-d H:i:s');
+
+    $stmt = db()->prepare(
+        "UPDATE mail_outbox
+         SET status = ?,
+             last_error = ?,
+             next_attempt_at = ?,
+             updated_at = NOW()
+         WHERE id = ?"
+    );
+    $error = function_exists('mb_substr') ? mb_substr($reason, 0, 2000) : substr($reason, 0, 2000);
+    $stmt->execute([$status, $error, $nextAttemptAt, $mailId]);
+
+    return $status;
+}
+
+function mail_queue_drain(int $limit = 10, int $timeBudgetSeconds = 15): array
+{
+    $limit = max(1, $limit);
+    $timeBudgetSeconds = max(1, $timeBudgetSeconds);
+    $deadline = microtime(true) + $timeBudgetSeconds;
+    $stats = [
+        'sent' => 0,
+        'retry' => 0,
+        'failed' => 0,
+        'processed' => 0,
+    ];
+
+    while ($limit-- > 0 && microtime(true) < $deadline) {
+        $mail = mail_queue_claim_next();
+        if ($mail === null) {
+            break;
+        }
+
+        $stats['processed']++;
+        $ok = send_mail_message((string) $mail['recipient_email'], (string) $mail['subject'], (string) $mail['body_text']);
+        if ($ok) {
+            mail_queue_mark_sent((int) $mail['id']);
+            $stats['sent']++;
+            continue;
+        }
+
+        $status = mail_queue_mark_retry((int) $mail['id'], (int) $mail['attempts'], 'Mail delivery failed.');
+        $stats[$status]++;
+    }
+
+    return $stats;
+}
+
 function send_mail_message(string $to, string $subject, string $bodyText): bool
 {
     $to = trim($to);
@@ -1092,11 +1543,19 @@ function send_mail_message(string $to, string $subject, string $bodyText): bool
 
     $subject = trim($subject);
     $bodyText = rtrim($bodyText);
-    $fromAddress = mail_from_address();
-    $fromName = mail_from_name();
     $smtpErrors = [];
+    $provider = mail_provider();
 
     try {
+        if ($provider === 'gmail_api') {
+            if (mail_gmail_configured()) {
+                return mail_gmail_send_message($to, $subject, $bodyText);
+            }
+
+            mail_smtp_log_failure('gmail-api', 'Gmail API credentials are missing.');
+            return false;
+        }
+
         if (mail_smtp_configured()) {
             $host = trim((string) env('MAIL_HOST', ''));
             $port = (int) env('MAIL_PORT', '587');
@@ -1104,15 +1563,7 @@ function send_mail_message(string $to, string $subject, string $bodyText): bool
             $password = mail_normalize_password((string) env('MAIL_PASSWORD', ''));
             $encryption = strtolower(trim((string) env('MAIL_ENCRYPTION', 'tls')));
             $timeout = mail_timeout_seconds();
-            $headers = [
-                'From: ' . mail_encode_header($fromName) . ' <' . $fromAddress . '>',
-                'To: <' . $to . '>',
-                'Subject: ' . mail_encode_header($subject),
-                'MIME-Version: 1.0',
-                'Content-Type: text/plain; charset=UTF-8',
-                'Content-Transfer-Encoding: 8bit',
-            ];
-            $messageBody = implode("\r\n", $headers) . "\r\n\r\n" . mail_prepare_body($bodyText);
+            $messageBody = mail_build_message($to, $subject, $bodyText);
 
             foreach (mail_smtp_candidates($host, $port, $encryption) as [$candidateHost, $candidatePort, $candidateEncryption]) {
                 $transport = ($candidateEncryption === 'ssl' && $candidatePort > 0)
@@ -1177,6 +1628,8 @@ function send_mail_message(string $to, string $subject, string $bodyText): bool
         }
 
         if (mail_allow_php_fallback()) {
+            $fromAddress = mail_from_address();
+            $fromName = mail_from_name();
             $headers = 'From: ' . mail_encode_header($fromName) . ' <' . $fromAddress . ">\r\n"
                 . 'Reply-To: ' . $fromAddress . "\r\n"
                 . 'MIME-Version: 1.0' . "\r\n"
@@ -1218,7 +1671,13 @@ function verification_code_body(string $name, string $otp): string
 
 function send_verification_code_mail(string $email, string $name, string $otp): bool
 {
-    return send_mail_message($email, 'Verify your email address', verification_code_body($name, $otp));
+    $subject = 'Verify your email address';
+    $bodyText = verification_code_body($name, $otp);
+    if (mail_queue_enqueue('verification', $email, $subject, $bodyText)) {
+        return true;
+    }
+
+    return send_mail_message($email, $subject, $bodyText);
 }
 
 function issue_email_verification_otp(int $userId, string $email, string $name): bool
@@ -1252,12 +1711,12 @@ function notify(string $subject, string $bodyText): void
     if ($to === '') {
         return;
     }
-    $from = env('MAIL_FROM', 'no-reply@frantzcoutard.com');
-    $headers = 'From: ' . $from . "\r\n"
-        . 'Reply-To: ' . $from . "\r\n"
-        . 'Content-Type: text/plain; charset=utf-8';
+    if (mail_queue_enqueue('notification', $to, $subject, $bodyText)) {
+        return;
+    }
+
     try {
-        @mail($to, $subject, $bodyText, $headers);
+        send_mail_message($to, $subject, $bodyText);
     } catch (\Throwable $e) {
         // swallow — notifications are best-effort
     }

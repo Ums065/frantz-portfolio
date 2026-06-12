@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { BRAND_LOGO } from '../lib/brandAssets'
 
 interface Seo {
   title: string
@@ -8,7 +9,7 @@ interface Seo {
 
 const SITE = 'Frantz Coutard'
 const DEFAULT_DESC = 'Frantz Coutard — Technology Innovator, Visionary, Community Builder. From Community to Legacy.'
-const DEFAULT_IMAGE = '/assets/frantz-portrait.webp'
+const DEFAULT_IMAGE = BRAND_LOGO
 
 /** Upsert a <meta> tag by name or property. */
 function setMeta(attr: 'name' | 'property', key: string, content: string) {

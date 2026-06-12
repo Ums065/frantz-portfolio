@@ -173,6 +173,26 @@ CREATE TABLE IF NOT EXISTS contact_messages (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 
+-- ---------- Mail outbox ----------
+-- Queue used for verification and notification mail so requests stay fast.
+CREATE TABLE IF NOT EXISTS mail_outbox (
+  id               BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  message_kind     VARCHAR(40) NOT NULL DEFAULT 'notification',
+  recipient_email  VARCHAR(160) NOT NULL,
+  subject          VARCHAR(255) NOT NULL,
+  body_text        LONGTEXT NOT NULL,
+  status           ENUM('queued','sending','retry','sent','failed') NOT NULL DEFAULT 'queued',
+  attempts         TINYINT UNSIGNED NOT NULL DEFAULT 0,
+  last_error       TEXT DEFAULT NULL,
+  next_attempt_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  sent_at          TIMESTAMP NULL DEFAULT NULL,
+  created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_mail_outbox_status_next (status, next_attempt_at, created_at),
+  INDEX idx_mail_outbox_kind_status (message_kind, status, created_at),
+  INDEX idx_mail_outbox_recipient (recipient_email, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- ============================================================
 -- SEED DATA (matches the design content)
 -- ============================================================

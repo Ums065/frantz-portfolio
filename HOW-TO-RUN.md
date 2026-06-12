@@ -25,10 +25,20 @@ The Vite dev server **proxies `/api`** to the PHP API, so the browser is same-or
 3. **Environment config (`.env`)** — already created with WAMP defaults:
    - `api/.env` — DB host/name/user/pass, session, CORS, APP_DEBUG.
      Copy from `api/.env.example` if missing. **Edit `DB_*` here to change the DB connection.**
-   - `api/.env` also needs the SMTP variables for email verification:
-     `MAIL_FROM_ADDRESS`, `MAIL_FROM_NAME`, `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`,
-     `MAIL_PASSWORD`, `MAIL_ENCRYPTION`, `MAIL_TIMEOUT_SECONDS`, `MAIL_VERIFY_PEER`,
-     `MAIL_ALLOW_PHP_FALLBACK`.
+   - `api/.env` also needs mail variables:
+     - SMTP mode: `MAIL_FROM_ADDRESS`, `MAIL_FROM_NAME`, `MAIL_HOST`, `MAIL_PORT`,
+       `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_ENCRYPTION`, `MAIL_TIMEOUT_SECONDS`,
+       `MAIL_VERIFY_PEER`, `MAIL_ALLOW_PHP_FALLBACK`.
+     - Gmail API mode: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REFRESH_TOKEN`,
+       and `MAIL_FROM_ADDRESS` set to the Gmail account that authorized the app.
+       Set the Gmail scope to `https://www.googleapis.com/auth/gmail.send` and request
+       offline access so Google returns a refresh token. `MAIL_PROVIDER=gmail_api` can be
+       used to force that transport, but it is optional because the code auto-picks Gmail API
+       when the Google token values are present.
+   - Local helper: open `http://localhost/frantz-portfolio/api/gmail-oauth-helper.php`
+     in your browser, add that exact URL as the OAuth redirect URI in Google Cloud,
+     then click "Authorize with Google" on the page. If Google does not return a
+     refresh token, revoke the app access in your Google Account and try again.
    - `frontend/.env` — `VITE_API_BASE` (defaults to `/api`).
    - Both `.env` files are git-ignored; the `.env.example` templates are tracked.
    - If your database already existed before this change, run `db/add-email-verification-columns.sql` once.
@@ -73,8 +83,13 @@ work under Apache. If you serve the build from a subfolder, uncomment and set
 `RewriteBase` in that file. (The dev server handles this automatically.)
 
 **Email notifications:** set `MAIL_ENABLED=true` and `NOTIFY_EMAIL=you@domain` in
-`api/.env` to get an email on each contact/request submission. Requires a working
-mail transport (WAMP sendmail or an SMTP relay/service).
+`api/.env` to get an email on each contact/request submission. The API queues
+mail into `mail_outbox` and drains it through `api/mail_worker.php`, so the form
+submission returns quickly while mail is sent in the background.
+If you use Gmail API, add the Google OAuth values described above. The backend will
+use Gmail API automatically once the refresh token is present, or immediately if you
+set `MAIL_PROVIDER=gmail_api`.
+If you ever need to drain the queue manually, run `php api/mail_worker.php`.
 
 ## API endpoints (quick reference)
 | Method | Route | Purpose |

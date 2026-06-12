@@ -2,8 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, NavLink } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { SocialLinks } from './SocialIcons'
+import { BRAND_LOGO } from '../lib/brandAssets'
 
-const logo = '/assets/fc-monogram.svg'
+const logo = BRAND_LOGO
 const isAdmin = (role?: string) => ['admin', 'super_admin', 'editor'].includes(role || '')
 
 type NavItem =
@@ -12,8 +13,7 @@ type NavItem =
 
 /* Shared top chrome: scroll progress bar, fixed nav, vertical social rail,
    and the mobile menu. Used on every page (Home, About, Awards).
-   `home` keeps the section links as in-page hash anchors; on other pages
-   they become root-relative (`/#speaking`) so they route home and scroll. */
+   `home` keeps the section links as in-page hash anchors. */
 export default function SiteHeader({ home = false }: { home?: boolean }) {
   const { user, logout } = useAuth()
   const [menuOpen, setMenuOpen] = useState(false)
@@ -21,7 +21,6 @@ export default function SiteHeader({ home = false }: { home?: boolean }) {
   const dashboardHref = user ? (isAdmin(user.role) ? '/admin' : '/dashboard') : '/dashboard'
   const fullName = user?.full_name || ''
   const initial = fullName.trim().charAt(0).toUpperCase() || 'U'
-  const sec = (id: string) => (home ? `#${id}` : `/#${id}`)
 
   const navLinks: NavItem[] = [
     home
@@ -30,7 +29,6 @@ export default function SiteHeader({ home = false }: { home?: boolean }) {
     { label: 'About', href: '/about', kind: 'route' },
     { label: 'Projects', href: '/projects', kind: 'route' },
     { label: 'Awards', href: '/awards', kind: 'route' },
-    { label: 'Speaking', href: sec('speaking'), kind: 'anchor' },
     { label: 'Events', href: '/events', kind: 'route' },
     { label: 'Media', href: '/media', kind: 'route' },
     { label: 'Community', href: '/community', kind: 'route' },
@@ -38,7 +36,6 @@ export default function SiteHeader({ home = false }: { home?: boolean }) {
     ...(user ? [{ label: 'Dashboard', href: '/dashboard', kind: 'route' as const }] : []),
     { label: 'Merch', href: '/store', kind: 'route' },
     { label: 'News', href: '/blog', kind: 'route' },
-    { label: 'Contact', href: sec('contact'), kind: 'anchor' },
   ]
 
   useEffect(() => {

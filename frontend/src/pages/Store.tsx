@@ -1,9 +1,10 @@
 import { Link, NavLink } from 'react-router-dom'
 import { useSeo } from '../hooks/useSeo'
 import { merchCatalogItems } from '../lib/merch'
+import { BRAND_LOGO } from '../lib/brandAssets'
 import '../styles/store.css'
 
-const LOGO = '/assets/fc-monogram.svg'
+const LOGO = BRAND_LOGO
 
 function MerchCard({ title, image, category, description, status }: typeof merchCatalogItems[number]) {
   const locked = status !== 'live'

@@ -1885,7 +1885,7 @@ section.block {
    v2 ADDITIONS — green brand accent, crisp monogram, new sections
    ============================================================ */
 
-/* ---- Real PNG logo (circular emblem on black) ---- */
+/* ---- Brand logo (circular emblem on black) ---- */
 .logo-mono, .hero__mono, .phone__screen .mono-sm, .footer__brand .fmono .lm, .modal .mmono { overflow: hidden; border-radius: 50%; flex-shrink: 0; }
 .footer__brand .fmono .lm { width: 58px; height: 58px; }
 .logo-mono img,
@@ -1893,7 +1893,7 @@ section.block {
 .phone__screen .mono-sm img,
 .footer__brand .fmono .lm img,
 .modal .mmono img,
-.merch__img .mono-w img { mix-blend-mode: normal !important; transform: scale(1.16) !important; object-fit: cover; width: 100%; height: 100%; }
+.merch__img .mono-w img { mix-blend-mode: normal !important; transform: scale(1.06) !important; object-fit: cover; width: 100%; height: 100%; }
 .pin-visual .pin-badge { border-radius: 50%; object-fit: cover; aspect-ratio: 1/1; box-shadow: 0 18px 50px -12px rgba(201,168,76,0.5), 0 0 0 1px rgba(201,168,76,0.25); }
 .logo-mono { box-shadow: 0 0 0 1px rgba(201,168,76,0.25), 0 6px 18px -6px rgba(0,0,0,0.8); }
 

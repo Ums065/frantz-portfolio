@@ -1,7 +1,8 @@
 import { Link } from 'react-router-dom'
 import { SocialLinks } from './SocialIcons'
+import { BRAND_LOGO } from '../lib/brandAssets'
 
-const logo = '/assets/fc-monogram.svg'
+const logo = BRAND_LOGO
 
 /* Shared footer used across pages. The subscribe form id (`subscribe-form`)
    is wired by useSiteInteractions to the API. */
