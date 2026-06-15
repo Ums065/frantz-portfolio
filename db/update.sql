@@ -431,25 +431,57 @@ ALTER TABLE users
   MODIFY role ENUM('member','vip','editor','admin','super_admin','student','parent','school','teacher') NOT NULL DEFAULT 'member';
 
 ALTER TABLE users
-  ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMP NULL DEFAULT NULL AFTER role,
-  ADD COLUMN IF NOT EXISTS approval_status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending' AFTER email_verified_at,
-  ADD COLUMN IF NOT EXISTS approval_note TEXT DEFAULT NULL AFTER approval_status,
-  ADD COLUMN IF NOT EXISTS approval_reviewed_by_user_id INT DEFAULT NULL AFTER approval_note,
-  ADD COLUMN IF NOT EXISTS approval_reviewed_at TIMESTAMP NULL DEFAULT NULL AFTER approval_reviewed_by_user_id,
-  ADD COLUMN IF NOT EXISTS email_verification_otp_hash VARCHAR(255) DEFAULT NULL AFTER approval_reviewed_at,
-  ADD COLUMN IF NOT EXISTS email_verification_otp_expires_at TIMESTAMP NULL DEFAULT NULL AFTER email_verification_otp_hash,
-  ADD COLUMN IF NOT EXISTS email_verification_otp_sent_at TIMESTAMP NULL DEFAULT NULL AFTER email_verification_otp_expires_at,
-  ADD COLUMN IF NOT EXISTS email_verification_otp_attempts INT NOT NULL DEFAULT 0 AFTER email_verification_otp_sent_at,
-  ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP AFTER email_verification_otp_attempts,
+  ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMP NULL DEFAULT NULL AFTER role;
+
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS approval_status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending' AFTER email_verified_at;
+
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS approval_note TEXT DEFAULT NULL AFTER approval_status;
+
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS approval_reviewed_by_user_id INT DEFAULT NULL AFTER approval_note;
+
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS approval_reviewed_at TIMESTAMP NULL DEFAULT NULL AFTER approval_reviewed_by_user_id;
+
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS email_verification_otp_hash VARCHAR(255) DEFAULT NULL AFTER approval_reviewed_at;
+
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS email_verification_otp_expires_at TIMESTAMP NULL DEFAULT NULL AFTER email_verification_otp_hash;
+
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS email_verification_otp_sent_at TIMESTAMP NULL DEFAULT NULL AFTER email_verification_otp_expires_at;
+
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS email_verification_otp_attempts INT NOT NULL DEFAULT 0 AFTER email_verification_otp_sent_at;
+
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP AFTER email_verification_otp_attempts;
+
+ALTER TABLE users
   ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER created_at;
 
 ALTER TABLE store_inventory
-  ADD COLUMN IF NOT EXISTS name VARCHAR(160) DEFAULT NULL AFTER product_id,
-  ADD COLUMN IF NOT EXISTS category VARCHAR(80) DEFAULT NULL AFTER name,
-  ADD COLUMN IF NOT EXISTS description TEXT DEFAULT NULL AFTER category,
-  ADD COLUMN IF NOT EXISTS image VARCHAR(255) DEFAULT NULL AFTER description,
-  ADD COLUMN IF NOT EXISTS price DECIMAL(10,2) DEFAULT NULL AFTER image,
-  ADD COLUMN IF NOT EXISTS visibility ENUM('live','upcoming','hidden') NOT NULL DEFAULT 'live' AFTER restock_note,
+  ADD COLUMN IF NOT EXISTS name VARCHAR(160) DEFAULT NULL AFTER product_id;
+
+ALTER TABLE store_inventory
+  ADD COLUMN IF NOT EXISTS category VARCHAR(80) DEFAULT NULL AFTER name;
+
+ALTER TABLE store_inventory
+  ADD COLUMN IF NOT EXISTS description TEXT DEFAULT NULL AFTER category;
+
+ALTER TABLE store_inventory
+  ADD COLUMN IF NOT EXISTS image VARCHAR(255) DEFAULT NULL AFTER description;
+
+ALTER TABLE store_inventory
+  ADD COLUMN IF NOT EXISTS price DECIMAL(10,2) DEFAULT NULL AFTER image;
+
+ALTER TABLE store_inventory
+  ADD COLUMN IF NOT EXISTS visibility ENUM('live','upcoming','hidden') NOT NULL DEFAULT 'live' AFTER restock_note;
+
+ALTER TABLE store_inventory
   ADD COLUMN IF NOT EXISTS sort_order INT NOT NULL DEFAULT 0 AFTER visibility;
 
 INSERT IGNORE INTO store_inventory (
@@ -468,10 +500,18 @@ INSERT IGNORE INTO store_inventory (
   ('print-signed', 'Signed Founder''s Print', 'Art Prints', 'Signed founder print reserved for a premium future drop.', '/assets/brand-signature-white.webp', 48.00, 16, 4, 'Upcoming drop', 'upcoming', 11);
 
 ALTER TABLE new_school_students
-  ADD COLUMN IF NOT EXISTS parent_consent_status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending' AFTER grade_level,
-  ADD COLUMN IF NOT EXISTS school_approval_status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending' AFTER parent_consent_status,
-  ADD COLUMN IF NOT EXISTS teacher_approval_status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending' AFTER school_approval_status,
-  ADD COLUMN IF NOT EXISTS submission_status ENUM('locked','eligible','submitted','complete') NOT NULL DEFAULT 'locked' AFTER teacher_approval_status,
+  ADD COLUMN IF NOT EXISTS parent_consent_status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending' AFTER grade_level;
+
+ALTER TABLE new_school_students
+  ADD COLUMN IF NOT EXISTS school_approval_status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending' AFTER parent_consent_status;
+
+ALTER TABLE new_school_students
+  ADD COLUMN IF NOT EXISTS teacher_approval_status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending' AFTER school_approval_status;
+
+ALTER TABLE new_school_students
+  ADD COLUMN IF NOT EXISTS submission_status ENUM('locked','eligible','submitted','complete') NOT NULL DEFAULT 'locked' AFTER teacher_approval_status;
+
+ALTER TABLE new_school_students
   ADD COLUMN IF NOT EXISTS overall_status ENUM(
     'student_registered',
     'parent_consent_pending',
@@ -484,8 +524,12 @@ ALTER TABLE new_school_students
     'submission_submitted',
     'submission_complete',
     'rejected'
-  ) NOT NULL DEFAULT 'student_registered' AFTER submission_status,
-  ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP AFTER overall_status,
+  ) NOT NULL DEFAULT 'student_registered' AFTER submission_status;
+
+ALTER TABLE new_school_students
+  ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP AFTER overall_status;
+
+ALTER TABLE new_school_students
   ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER created_at;
 
 UPDATE new_school_students
@@ -514,5 +558,7 @@ ALTER TABLE new_school_approvals
   ADD COLUMN IF NOT EXISTS recorded_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP AFTER approved_at;
 
 ALTER TABLE new_school_submissions
-  ADD COLUMN IF NOT EXISTS reviewed_by_user_id INT DEFAULT NULL AFTER reviewer_notes,
+  ADD COLUMN IF NOT EXISTS reviewed_by_user_id INT DEFAULT NULL AFTER reviewer_notes;
+
+ALTER TABLE new_school_submissions
   ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMP NULL DEFAULT NULL AFTER reviewed_by_user_id;

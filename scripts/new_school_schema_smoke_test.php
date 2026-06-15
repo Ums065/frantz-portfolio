@@ -62,6 +62,21 @@ $columnExists = static function (PDO $pdo, string $table, string $column) use ($
     }
 };
 
+$columnType = static function (PDO $pdo, string $table, string $column) use ($assert): string {
+    $stmt = $pdo->prepare(
+        'SELECT COLUMN_TYPE
+         FROM information_schema.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME = ?
+           AND COLUMN_NAME = ?
+         LIMIT 1'
+    );
+    $stmt->execute([$table, $column]);
+    $value = $stmt->fetchColumn();
+    $assert($value !== false, "Missing required column: {$table}.{$column}");
+    return (string) $value;
+};
+
 foreach ([
     'new_school_schools',
     'new_school_teachers',
@@ -79,14 +94,47 @@ foreach ([
 foreach ([
     ['new_school_students', 'overall_status'],
     ['new_school_students', 'submission_status'],
+    ['new_school_students', 'parent_consent_status'],
+    ['new_school_students', 'school_approval_status'],
+    ['new_school_students', 'teacher_approval_status'],
+    ['new_school_parents', 'approved_at'],
     ['new_school_parents', 'consented_at'],
     ['new_school_approvals', 'recorded_at'],
     ['new_school_submissions', 'reviewed_by_user_id'],
     ['new_school_submissions', 'reviewed_at'],
     ['new_school_notifications', 'is_read'],
     ['new_school_notifications', 'read_at'],
+    ['users', 'approval_status'],
+    ['users', 'approval_note'],
+    ['users', 'approval_reviewed_by_user_id'],
+    ['users', 'approval_reviewed_at'],
+    ['users', 'updated_at'],
+    ['store_inventory', 'name'],
+    ['store_inventory', 'category'],
+    ['store_inventory', 'description'],
+    ['store_inventory', 'image'],
+    ['store_inventory', 'price'],
+    ['store_inventory', 'visibility'],
+    ['store_inventory', 'sort_order'],
+    ['store_inventory', 'updated_at'],
 ] as [$table, $column]) {
     $columnExists($pdo, $table, $column);
+}
+
+$userRoleType = $columnType($pdo, 'users', 'role');
+foreach (['student', 'parent', 'school', 'teacher'] as $roleValue) {
+    $assert(
+        str_contains($userRoleType, "'" . $roleValue . "'"),
+        'users.role enum is missing ' . $roleValue . '.'
+    );
+}
+
+$visibilityType = $columnType($pdo, 'store_inventory', 'visibility');
+foreach (['live', 'upcoming', 'hidden'] as $visibilityValue) {
+    $assert(
+        str_contains($visibilityType, "'" . $visibilityValue . "'"),
+        'store_inventory.visibility enum is missing ' . $visibilityValue . '.'
+    );
 }
 
 echo 'new_school schema smoke test passed' . PHP_EOL;

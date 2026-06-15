@@ -43,6 +43,21 @@ $columnExists = static function (PDO $pdo, string $table, string $column) use ($
     $assert($value !== false, 'Missing required column: ' . $table . '.' . $column);
 };
 
+$columnType = static function (PDO $pdo, string $table, string $column) use ($assert): string {
+    $stmt = $pdo->prepare(
+        'SELECT COLUMN_TYPE
+         FROM information_schema.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME = ?
+           AND COLUMN_NAME = ?
+         LIMIT 1'
+    );
+    $stmt->execute([$table, $column]);
+    $value = $stmt->fetchColumn();
+    $assert($value !== false, 'Missing required column: ' . $table . '.' . $column);
+    return (string) $value;
+};
+
 foreach ([
     'new_school_schools',
     'new_school_teachers',
@@ -69,8 +84,37 @@ foreach ([
     ['new_school_submissions', 'reviewed_at'],
     ['new_school_notifications', 'is_read'],
     ['new_school_notifications', 'read_at'],
+    ['users', 'approval_status'],
+    ['users', 'approval_note'],
+    ['users', 'approval_reviewed_by_user_id'],
+    ['users', 'approval_reviewed_at'],
+    ['users', 'updated_at'],
+    ['store_inventory', 'name'],
+    ['store_inventory', 'category'],
+    ['store_inventory', 'description'],
+    ['store_inventory', 'image'],
+    ['store_inventory', 'price'],
+    ['store_inventory', 'visibility'],
+    ['store_inventory', 'sort_order'],
+    ['store_inventory', 'updated_at'],
 ] as [$table, $column]) {
     $columnExists($pdo, $table, $column);
+}
+
+$userRoleType = $columnType($pdo, 'users', 'role');
+foreach (['student', 'parent', 'school', 'teacher'] as $roleValue) {
+    $assert(
+        str_contains($userRoleType, "'" . $roleValue . "'"),
+        'users.role enum is missing ' . $roleValue . '.'
+    );
+}
+
+$visibilityType = $columnType($pdo, 'store_inventory', 'visibility');
+foreach (['live', 'upcoming', 'hidden'] as $visibilityValue) {
+    $assert(
+        str_contains($visibilityType, "'" . $visibilityValue . "'"),
+        'store_inventory.visibility enum is missing ' . $visibilityValue . '.'
+    );
 }
 
 $distIndex = __DIR__ . '/../frontend/dist/index.html';
@@ -96,10 +140,23 @@ $corsOrigin = trim((string) env('CORS_ORIGIN', ''));
 if ($appEnv === 'production') {
     $assert($appDebug === false, 'APP_DEBUG must be false in production.');
     $assert($corsOrigin !== '', 'CORS_ORIGIN must be set in production.');
-    $assert(trim((string) env('MAIL_HOST', '')) !== '', 'MAIL_HOST must be set in production.');
-    $assert(trim((string) env('MAIL_USERNAME', '')) !== '', 'MAIL_USERNAME must be set in production.');
-    $assert(trim((string) env('MAIL_PASSWORD', '')) !== '', 'MAIL_PASSWORD must be set in production.');
-    $assert(trim((string) env('MAIL_FROM_ADDRESS', '')) !== '', 'MAIL_FROM_ADDRESS must be set in production.');
+    $mailProvider = mail_provider();
+    $assert($mailProvider !== 'php', 'Configure MAIL_PROVIDER to gmail_api or smtp in production.');
+
+    if ($mailProvider === 'gmail_api') {
+        $assert(mail_gmail_configured(), 'GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_REFRESH_TOKEN must be set for Gmail API.');
+        $assert(trim((string) env('MAIL_FROM_ADDRESS', '')) !== '', 'MAIL_FROM_ADDRESS must be set for Gmail API in production.');
+        $assert(trim((string) env('MAIL_FROM_NAME', '')) !== '', 'MAIL_FROM_NAME must be set for Gmail API in production.');
+    } elseif ($mailProvider === 'smtp') {
+        $assert(trim((string) env('MAIL_HOST', '')) !== '', 'MAIL_HOST must be set for SMTP in production.');
+        $assert(trim((string) env('MAIL_USERNAME', '')) !== '', 'MAIL_USERNAME must be set for SMTP in production.');
+        $assert(trim((string) env('MAIL_PASSWORD', '')) !== '', 'MAIL_PASSWORD must be set for SMTP in production.');
+        $assert(trim((string) env('MAIL_FROM_ADDRESS', '')) !== '', 'MAIL_FROM_ADDRESS must be set for SMTP in production.');
+    }
+
+    if (filter_var(env('MAIL_ENABLED', 'false'), FILTER_VALIDATE_BOOLEAN)) {
+        $assert(trim((string) env('NOTIFY_EMAIL', '')) !== '', 'NOTIFY_EMAIL must be set when MAIL_ENABLED=true in production.');
+    }
 }
 
 echo json_encode([
