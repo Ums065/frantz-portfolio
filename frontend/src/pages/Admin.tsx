@@ -13,8 +13,13 @@ interface MemberRow {
   full_name: string
   email: string
   role: string
+  email_verified_at?: string | null
   approval_status?: string | null
   approval_note?: string | null
+  approval_reviewed_by_user_id?: number | null
+  approval_reviewed_by_name?: string | null
+  approval_reviewed_by_email?: string | null
+  approval_reviewed_by_role?: string | null
   approval_reviewed_at?: string | null
   created_at: string
   updated_at?: string | null
@@ -27,7 +32,38 @@ interface Submissions {
   requests: RequestRow[]; subscribers: SubRow[]; contacts: ContactRow[]; members: MemberRow[]; orders: OrderRow[]
 }
 
+interface DetailField {
+  label: string
+  value: string | number
+}
+
+interface DetailSection {
+  title: string
+  fields: DetailField[]
+}
+
+interface DetailTable {
+  title: string
+  columns: string[]
+  rows: Array<Record<string, string | number | null>>
+}
+
+interface UserDetailPayload {
+  user: MemberRow
+  sections: DetailSection[]
+  tables: DetailTable[]
+}
+
 const isAdmin = (role?: string) => ['admin', 'super_admin', 'editor'].includes(role || '')
+const approvalButtonClass = (current: string, action: 'pending' | 'approved' | 'rejected') =>
+  `btn btn--sm${current === action ? ' btn--solid' : ''}`
+
+const displayValue = (value: unknown): string => {
+  if (value === null || value === undefined || value === '') return '—'
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No'
+  if (typeof value === 'number') return String(value)
+  return String(value)
+}
 
 export default function Admin() {
   const { user, loading, logout, refresh: refreshAuth } = useAuth()
@@ -36,11 +72,21 @@ export default function Admin() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [selectedUser, setSelectedUser] = useState<MemberRow | null>(null)
+  const [selectedUserDetail, setSelectedUserDetail] = useState<UserDetailPayload | null>(null)
+  const [selectedUserLoading, setSelectedUserLoading] = useState(false)
+  const [selectedUserError, setSelectedUserError] = useState('')
 
-  const refreshData = () =>
-    api.get<Submissions>('admin/submissions').then(setData).catch(() => setData(null))
+  const refreshData = async () => {
+    try {
+      const payload = await api.get<Submissions>('admin/submissions')
+      setData(payload)
+    } catch {
+      setData(null)
+    }
+  }
 
-  useEffect(() => { if (isAdmin(user?.role)) refreshData() }, [user])
+  useEffect(() => { if (isAdmin(user?.role)) void refreshData() }, [user])
 
   const doLogin = async (e: React.FormEvent) => {
     e.preventDefault(); setError('')
@@ -53,18 +99,64 @@ export default function Admin() {
 
   const setStatus = async (id: number, status: string) => {
     await api.put(`admin/request/${id}`, { status })
-    refreshData()
+    void refreshData()
   }
 
   const setOrderStatus = async (id: number, status: string) => {
     await api.put(`admin/order/${id}`, { status })
-    refreshData()
+    void refreshData()
+  }
+
+  const syncUpdatedUser = (updated: MemberRow) => {
+    setData((prev) => {
+      if (!prev) return prev
+      return {
+        ...prev,
+        members: prev.members.map((m) => (m.id === updated.id ? { ...m, ...updated } : m)),
+      }
+    })
+    setSelectedUser((prev) => (prev && prev.id === updated.id ? { ...prev, ...updated } : prev))
+    setSelectedUserDetail((prev) => {
+      if (!prev || prev.user.id !== updated.id) return prev
+      return {
+        ...prev,
+        user: { ...prev.user, ...updated },
+      }
+    })
+  }
+
+  const openUserDetails = async (member: MemberRow) => {
+    setSelectedUser(member)
+    setSelectedUserDetail(null)
+    setSelectedUserError('')
+    setSelectedUserLoading(true)
+    try {
+      const detail = await api.get<UserDetailPayload>(`admin/user/${member.id}`)
+      setSelectedUserDetail(detail)
+    } catch (err) {
+      setSelectedUserError(err instanceof Error ? err.message : 'Failed to load user details.')
+    } finally {
+      setSelectedUserLoading(false)
+    }
+  }
+
+  const closeUserDetails = () => {
+    setSelectedUser(null)
+    setSelectedUserDetail(null)
+    setSelectedUserError('')
+    setSelectedUserLoading(false)
   }
 
   const setApproval = async (id: number, approval_status: 'pending' | 'approved' | 'rejected', approval_note = '') => {
     if (approval_status === 'rejected' && !confirm('Reject this account?')) return
-    await api.put(`admin/user/${id}/approval`, { approval_status, approval_note })
-    refreshData()
+    const result = await api.put<{ message: string; user?: MemberRow }>(`admin/user/${id}/approval`, { approval_status, approval_note })
+    if (result.user) {
+      syncUpdatedUser(result.user)
+    }
+    await refreshData()
+    if (selectedUser?.id === id) {
+      void openUserDetails(selectedUser)
+    }
   }
 
   const reviewableAccounts = data?.members.filter((m) => !isAdmin(m.role)) ?? []
@@ -249,9 +341,10 @@ export default function Admin() {
                       <span style={{ color: 'var(--muted)', fontSize: 12 }}>Protected account</span>
                     ) : (
                       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                        <button className="btn btn--sm btn--solid" onClick={() => setApproval(m.id, 'approved')}>Approve</button>
-                        <button className="btn btn--sm" onClick={() => setApproval(m.id, 'pending')}>Pending</button>
-                        <button className="btn btn--sm" onClick={() => setApproval(m.id, 'rejected')}>Reject</button>
+                        <button type="button" className="btn btn--sm" onClick={() => void openUserDetails(m)}>Details</button>
+                        <button type="button" className={approvalButtonClass(status, 'approved')} onClick={() => void setApproval(m.id, 'approved')}>Approve</button>
+                        <button type="button" className={approvalButtonClass(status, 'pending')} onClick={() => void setApproval(m.id, 'pending')}>Pending</button>
+                        <button type="button" className={approvalButtonClass(status, 'rejected')} onClick={() => void setApproval(m.id, 'rejected')}>Reject</button>
                       </div>
                     )}
                   </td>
@@ -267,7 +360,11 @@ export default function Admin() {
               .filter((m) => !isAdmin(m.role) && (m.approval_status || 'pending') !== 'approved')
               .map((m) => {
                 const status = (m.approval_status || 'pending').toLowerCase()
-                const statusClass = status === 'rejected' ? 'status-pill--closed' : 'status-pill--new'
+                const statusClass = status === 'rejected'
+                  ? 'status-pill--closed'
+                  : status === 'approved'
+                    ? 'status-pill--approved'
+                    : 'status-pill--new'
                 return (
                   <tr key={m.id} style={rowS}>
                     <td style={tdS}>{m.full_name}</td>
@@ -277,9 +374,10 @@ export default function Admin() {
                     <td style={tdS}>{m.approval_reviewed_at || 'â€”'}</td>
                     <td style={tdS}>
                       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                        <button className="btn btn--sm btn--solid" onClick={() => setApproval(m.id, 'approved')}>Approve</button>
-                        <button className="btn btn--sm" onClick={() => setApproval(m.id, 'pending')}>Keep Pending</button>
-                        <button className="btn btn--sm" onClick={() => setApproval(m.id, 'rejected')}>Reject</button>
+                        <button type="button" className="btn btn--sm" onClick={() => void openUserDetails(m)}>Details</button>
+                        <button type="button" className={approvalButtonClass(status, 'approved')} onClick={() => void setApproval(m.id, 'approved')}>Approve</button>
+                        <button type="button" className={approvalButtonClass(status, 'pending')} onClick={() => void setApproval(m.id, 'pending')}>Keep Pending</button>
+                        <button type="button" className={approvalButtonClass(status, 'rejected')} onClick={() => void setApproval(m.id, 'rejected')}>Reject</button>
                       </div>
                     </td>
                   </tr>
@@ -296,6 +394,129 @@ export default function Admin() {
         {tab === 'community' && <CommunityAdmin />}
         {tab === 'rsvps' && <RsvpsAdmin />}
         {tab === 'inventory' && <InventoryAdmin />}
+      </div>
+
+      <UserDetailModal
+        open={!!selectedUser}
+        summary={selectedUser}
+        detail={selectedUserDetail}
+        loading={selectedUserLoading}
+        error={selectedUserError}
+        onClose={closeUserDetails}
+        onApproval={(status) => selectedUser && void setApproval(selectedUser.id, status)}
+      />
+    </div>
+  )
+}
+
+function UserDetailModal({
+  open,
+  summary,
+  detail,
+  loading,
+  error,
+  onClose,
+  onApproval,
+}: {
+  open: boolean
+  summary: MemberRow | null
+  detail: UserDetailPayload | null
+  loading: boolean
+  error: string
+  onClose: () => void
+  onApproval: (status: 'pending' | 'approved' | 'rejected') => void
+}) {
+  if (!open || !summary) return null
+
+  const status = (detail?.user.approval_status || summary.approval_status || 'pending').toLowerCase()
+  const reviewer = detail?.user.approval_reviewed_by_name
+    ? `${detail.user.approval_reviewed_by_name}${detail.user.approval_reviewed_by_email ? ` (${detail.user.approval_reviewed_by_email})` : ''}`
+    : '—'
+
+  return (
+    <div className="modal-overlay open" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal" style={{ maxWidth: 900, maxHeight: '90vh', overflowY: 'auto' }}>
+        <button type="button" className="close" onClick={onClose} aria-label="Close">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth={2}>
+            <path d="M6 6l12 12M18 6L6 18" />
+          </svg>
+        </button>
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 18, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+          <div>
+            <h3 className="gold-text">{summary.full_name}</h3>
+            <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: 6 }}>
+              {summary.email} · {summary.role}
+            </p>
+          </div>
+          <span className={`status-pill ${status === 'approved' ? 'status-pill--approved' : status === 'rejected' ? 'status-pill--closed' : 'status-pill--new'}`}>
+            {status}
+          </span>
+        </div>
+
+        {loading && <p style={{ color: 'var(--muted)', marginTop: 18 }}>Loading user details…</p>}
+        {error && <p style={{ color: '#e08a8a', marginTop: 18 }}>{error}</p>}
+
+        {!loading && !error && detail && (
+          <div style={{ display: 'grid', gap: 16, marginTop: 18 }}>
+            {detail.sections.map((section) => (
+              <section key={section.title} className="glass" style={{ padding: 18, borderRadius: 14 }}>
+                <h4 className="gold-text" style={{ fontSize: 18, marginBottom: 12 }}>{section.title}</h4>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+                  {section.fields.map((field) => (
+                    <div key={field.label} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--line)', borderRadius: 10, padding: '12px 14px' }}>
+                      <div style={{ color: 'var(--muted)', fontSize: 11, letterSpacing: '.12em', textTransform: 'uppercase', marginBottom: 6 }}>
+                        {field.label}
+                      </div>
+                      <div style={{ fontSize: 14, lineHeight: 1.6, wordBreak: 'break-word' }}>{displayValue(field.value)}</div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ))}
+
+            {detail.tables.map((table) => (
+              <section key={table.title} className="glass" style={{ padding: 18, borderRadius: 14, overflowX: 'auto' }}>
+                <h4 className="gold-text" style={{ fontSize: 18, marginBottom: 12 }}>{table.title}</h4>
+                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 620 }}>
+                  <thead>
+                    <tr>
+                      {table.columns.map((column) => (
+                        <th key={column} style={{ textAlign: 'left', padding: '10px 8px', borderBottom: '1px solid var(--line)', color: 'var(--muted)', fontSize: 11, letterSpacing: '.12em', textTransform: 'uppercase' }}>
+                          {column}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {table.rows.map((row, index) => (
+                      <tr key={`${table.title}-${index}`}>
+                        {Object.values(row).map((value, cellIndex) => (
+                          <td key={cellIndex} style={{ padding: '11px 8px', borderBottom: '1px solid rgba(255,255,255,0.06)', verticalAlign: 'top', lineHeight: 1.5 }}>
+                            {displayValue(value)}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </section>
+            ))}
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 20 }}>
+          <button type="button" className={approvalButtonClass(status, 'approved')} disabled={loading} onClick={() => onApproval('approved')}>
+            Approve
+          </button>
+          <button type="button" className={approvalButtonClass(status, 'pending')} disabled={loading} onClick={() => onApproval('pending')}>
+            Keep Pending
+          </button>
+          <button type="button" className={approvalButtonClass(status, 'rejected')} disabled={loading} onClick={() => onApproval('rejected')}>
+            Reject
+          </button>
+          <span style={{ color: 'var(--muted)', fontSize: 12, alignSelf: 'center', marginLeft: 'auto' }}>Reviewed by: {reviewer}</span>
+        </div>
       </div>
     </div>
   )

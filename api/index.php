@@ -803,6 +803,15 @@ try {
             json(['message' => 'Order updated.']);
         }
 
+        case $method === 'GET' && preg_match('#^admin/user/(\d+)$#', $route, $m) === 1: {
+            require_admin();
+            $detail = admin_user_detail_payload((int) $m[1]);
+            if (!$detail) {
+                json(['error' => 'User not found.'], 404);
+            }
+            json($detail);
+        }
+
         case $key === 'GET admin/event-rsvps': {
             require_admin();
             $rows = db()->query(

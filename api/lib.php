@@ -87,6 +87,315 @@ function require_admin(): array
     return $u;
 }
 
+function admin_user_detail_payload(int $userId): ?array
+{
+    $stmt = db()->prepare(
+        'SELECT u.id, u.full_name, u.email, u.role, u.email_verified_at, u.approval_status,
+                u.approval_note, u.approval_reviewed_by_user_id, u.approval_reviewed_at,
+                u.created_at, u.updated_at,
+                rv.full_name AS approval_reviewed_by_name,
+                rv.email AS approval_reviewed_by_email,
+                rv.role AS approval_reviewed_by_role
+         FROM users u
+         LEFT JOIN users rv ON rv.id = u.approval_reviewed_by_user_id
+         WHERE u.id = ?
+         LIMIT 1'
+    );
+    $stmt->execute([$userId]);
+    $user = $stmt->fetch();
+    if (!$user) {
+        return null;
+    }
+
+    $field = static function (string $label, mixed $value): array {
+        if ($value === null || $value === '') {
+            $value = '—';
+        } elseif (is_bool($value)) {
+            $value = $value ? 'Yes' : 'No';
+        } elseif (is_array($value)) {
+            $value = json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        }
+        return ['label' => $label, 'value' => $value];
+    };
+
+    $section = static function (string $title, array $fields): array {
+        return ['title' => $title, 'fields' => array_values($fields)];
+    };
+
+    $sections = [];
+    $tables = [];
+
+    $sections[] = $section('Account', [
+        $field('Full Name', $user['full_name']),
+        $field('Email', $user['email']),
+        $field('Role', $user['role']),
+        $field('Email Verified', $user['email_verified_at'] ?? null),
+        $field('Created At', $user['created_at']),
+        $field('Updated At', $user['updated_at'] ?? null),
+    ]);
+
+    $sections[] = $section('Approval', [
+        $field('Status', $user['approval_status'] ?? null),
+        $field('Note', $user['approval_note'] ?? null),
+        $field('Reviewed By', trim((string) ($user['approval_reviewed_by_name'] ?? '')) !== ''
+            ? $user['approval_reviewed_by_name'] . (
+                trim((string) ($user['approval_reviewed_by_email'] ?? '')) !== ''
+                    ? ' (' . $user['approval_reviewed_by_email'] . ')'
+                    : ''
+            )
+            : null),
+        $field('Reviewed Role', $user['approval_reviewed_by_role'] ?? null),
+        $field('Reviewed At', $user['approval_reviewed_at'] ?? null),
+    ]);
+
+    $role = (string) ($user['role'] ?? '');
+
+    if ($role === 'student') {
+        $student = new_school_fetch_student_by_user_id($userId);
+        if ($student) {
+            $interviewCount = new_school_student_interview_count((int) $student['id']);
+            $parent = new_school_fetch_parent_by_student_id((int) $student['id']);
+            $school = !empty($student['school_id'])
+                ? new_school_fetch_school_by_id((int) $student['school_id'])
+                : new_school_fetch_school_by_name((string) ($student['school_name'] ?? ''));
+            $teacher = !empty($student['teacher_id'])
+                ? new_school_fetch_teacher_by_id((int) $student['teacher_id'])
+                : null;
+            $submission = new_school_fetch_submission_by_student_id((int) $student['id']);
+            $winner = new_school_fetch_winner_by_student_id((int) $student['id']);
+
+            $sections[] = $section('Student Registration', [
+                $field('Participant ID', $student['participant_id']),
+                $field('Username', $student['student_username']),
+                $field('Age', $student['age']),
+                $field('Date of Birth', $student['date_of_birth']),
+                $field('Phone Number', $student['phone_number']),
+                $field('Email', $student['email']),
+                $field('Home Address', $student['home_address']),
+                $field('School Name', $student['school_name']),
+                $field('Grade Level', $student['grade_level']),
+                $field('Parent Name', $student['parent_name']),
+                $field('Parent Phone', $student['parent_phone']),
+                $field('Parent Email', $student['parent_email']),
+                $field('Parent Consent', $student['parent_consent_status']),
+                $field('School Approval', $student['school_approval_status']),
+                $field('Teacher Approval', $student['teacher_approval_status']),
+                $field('Submission Status', $student['submission_status']),
+                $field('Overall Status', $student['overall_status']),
+            ]);
+
+            if ($parent) {
+                $sections[] = $section('Parent Details', [
+                    $field('Parent Full Name', $parent['parent_full_name']),
+                    $field('Relationship', $parent['relationship_to_student']),
+                    $field('Phone Number', $parent['phone_number']),
+                    $field('Email', $parent['email']),
+                    $field('Home Address', $parent['home_address']),
+                    $field('Consented At', $parent['consented_at'] ?? null),
+                    $field('Approved At', $parent['approved_at'] ?? null),
+                ]);
+            }
+
+            if ($school) {
+                $sections[] = $section('School Link', [
+                    $field('School Name', $school['school_name']),
+                    $field('District', $school['school_district']),
+                    $field('Main Phone', $school['main_phone']),
+                    $field('Principal', $school['principal_name']),
+                    $field('Administrator', $school['administrator_name']),
+                    $field('Administrator Email', $school['administrator_email']),
+                    $field('Administrator Phone', $school['administrator_phone']),
+                    $field('Status', $school['status']),
+                ]);
+            }
+
+            if ($teacher) {
+                $sections[] = $section('Teacher Link', [
+                    $field('Teacher Name', $teacher['teacher_full_name']),
+                    $field('School Email', $teacher['school_email']),
+                    $field('Phone Number', $teacher['phone_number']),
+                    $field('Department', $teacher['role_department']),
+                    $field('Grade Level Supported', $teacher['grade_level_supported']),
+                    $field('Linked School', $teacher['linked_school_name'] ?? null),
+                    $field('Status', $teacher['status']),
+                ]);
+            }
+
+            $sections[] = $section('Progress', [
+                $field('Interview Count', $interviewCount),
+                $field('Submission Ready', !new_school_submission_is_locked($student, $interviewCount)),
+                $field('Winner', $winner ? $winner['place'] . ' place' : '—'),
+            ]);
+
+            if ($submission) {
+                $sections[] = $section('Submission', [
+                    $field('Status', $submission['status']),
+                    $field('Problem Identified', $submission['problem_identified']),
+                    $field('Why It Matters', $submission['why_it_matters']),
+                    $field('Proposed Solution', $submission['proposed_solution']),
+                    $field('How It Helps', $submission['how_it_helps']),
+                    $field('Expected Impact', $submission['expected_impact']),
+                    $field('Video URL', $submission['video_url'] ?? null),
+                    $field('Written URL', $submission['written_url'] ?? null),
+                    $field('Reviewed By', $submission['reviewer_name'] ?? null),
+                    $field('Reviewed At', $submission['reviewed_at'] ?? null),
+                ]);
+            }
+
+            $interviews = array_map(
+                static fn(array $row): array => [
+                    'visit_number' => (int) ($row['visit_number'] ?? 0),
+                    'business_name' => (string) ($row['business_name'] ?? ''),
+                    'owner_name' => (string) ($row['owner_name'] ?? ''),
+                    'business_category' => (string) ($row['business_category'] ?? ''),
+                    'date_of_visit' => (string) ($row['date_of_visit'] ?? ''),
+                    'main_challenge' => (string) ($row['main_challenge'] ?? ''),
+                ],
+                array_slice(new_school_fetch_student_interviews((int) $student['id']), 0, 10)
+            );
+            if ($interviews !== []) {
+                $tables[] = [
+                    'title' => 'Business Interviews',
+                    'columns' => ['Visit', 'Business', 'Owner', 'Category', 'Date', 'Challenge'],
+                    'rows' => $interviews,
+                ];
+            }
+
+            $approvals = new_school_fetch_student_approvals((int) $student['id']);
+            $approvalRows = array_values(array_filter([
+                $approvals['school'] ? [
+                    'approval_type' => 'School',
+                    'status' => (string) ($approvals['school']['status'] ?? ''),
+                    'reviewer_name' => (string) ($approvals['school']['reviewer_name'] ?? ''),
+                    'reviewer_role' => (string) ($approvals['school']['reviewer_role'] ?? ''),
+                    'approved_at' => (string) ($approvals['school']['approved_at'] ?? ''),
+                    'notes' => (string) ($approvals['school']['notes'] ?? ''),
+                ] : null,
+                $approvals['teacher'] ? [
+                    'approval_type' => 'Teacher',
+                    'status' => (string) ($approvals['teacher']['status'] ?? ''),
+                    'reviewer_name' => (string) ($approvals['teacher']['reviewer_name'] ?? ''),
+                    'reviewer_role' => (string) ($approvals['teacher']['reviewer_role'] ?? ''),
+                    'approved_at' => (string) ($approvals['teacher']['approved_at'] ?? ''),
+                    'notes' => (string) ($approvals['teacher']['notes'] ?? ''),
+                ] : null,
+            ]));
+            if ($approvalRows !== []) {
+                $tables[] = [
+                    'title' => 'School / Teacher Approvals',
+                    'columns' => ['Type', 'Status', 'Reviewer', 'Role', 'Approved At', 'Notes'],
+                    'rows' => $approvalRows,
+                ];
+            }
+        }
+    } elseif ($role === 'parent') {
+        $parent = new_school_fetch_parent_by_user_id($userId);
+        if ($parent) {
+            $student = new_school_fetch_student_by_id((int) $parent['student_id']);
+            $sections[] = $section('Parent Registration', [
+                $field('Parent Full Name', $parent['parent_full_name']),
+                $field('Relationship', $parent['relationship_to_student']),
+                $field('Phone Number', $parent['phone_number']),
+                $field('Email', $parent['email']),
+                $field('Home Address', $parent['home_address']),
+                $field('Consented At', $parent['consented_at'] ?? null),
+                $field('Approved At', $parent['approved_at'] ?? null),
+            ]);
+            if ($student) {
+                $sections[] = $section('Linked Student', [
+                    $field('Student Name', $student['full_name']),
+                    $field('Participant ID', $student['participant_id']),
+                    $field('School Name', $student['school_name']),
+                    $field('Grade Level', $student['grade_level']),
+                    $field('Parent Consent', $student['parent_consent_status']),
+                    $field('School Approval', $student['school_approval_status']),
+                    $field('Teacher Approval', $student['teacher_approval_status']),
+                    $field('Submission Status', $student['submission_status']),
+                    $field('Overall Status', $student['overall_status']),
+                ]);
+                $sections[] = $section('Progress', [
+                    $field('Interview Count', new_school_student_interview_count((int) $student['id'])),
+                    $field('Submission Ready', !new_school_submission_is_locked($student, new_school_student_interview_count((int) $student['id']))),
+                ]);
+            }
+        }
+    } elseif ($role === 'school') {
+        $school = new_school_fetch_school_by_user_id($userId);
+        if ($school) {
+            $sections[] = $section('School Registration', [
+                $field('School Name', $school['school_name']),
+                $field('School Address', $school['school_address']),
+                $field('School District', $school['school_district']),
+                $field('Main Phone', $school['main_phone']),
+                $field('Principal Name', $school['principal_name']),
+                $field('Administrator Name', $school['administrator_name']),
+                $field('Administrator Email', $school['administrator_email']),
+                $field('Administrator Phone', $school['administrator_phone']),
+                $field('Status', $school['status']),
+            ]);
+
+            $assignedStudents = array_map(
+                static fn(array $row): array => [
+                    'name' => (string) ($row['full_name'] ?? ''),
+                    'grade_level' => (string) ($row['grade_level'] ?? ''),
+                    'overall_status' => (string) ($row['overall_status'] ?? ''),
+                    'parent_consent_status' => (string) ($row['parent_consent_status'] ?? ''),
+                    'school_approval_status' => (string) ($row['school_approval_status'] ?? ''),
+                    'teacher_approval_status' => (string) ($row['teacher_approval_status'] ?? ''),
+                    'submission_status' => (string) ($row['submission_status'] ?? ''),
+                ],
+                array_slice(new_school_fetch_students_for_school($school), 0, 12)
+            );
+            if ($assignedStudents !== []) {
+                $tables[] = [
+                    'title' => 'Assigned Students',
+                    'columns' => ['Name', 'Grade', 'Overall Status', 'Parent', 'School', 'Teacher', 'Submission'],
+                    'rows' => $assignedStudents,
+                ];
+            }
+        }
+    } elseif ($role === 'teacher') {
+        $teacher = new_school_fetch_teacher_by_user_id($userId);
+        if ($teacher) {
+            $sections[] = $section('Teacher Registration', [
+                $field('Teacher Name', $teacher['teacher_full_name']),
+                $field('School Email', $teacher['school_email']),
+                $field('Phone Number', $teacher['phone_number']),
+                $field('Department', $teacher['role_department']),
+                $field('Grade Level Supported', $teacher['grade_level_supported']),
+                $field('Linked School', $teacher['linked_school_name'] ?? null),
+                $field('Status', $teacher['status']),
+            ]);
+
+            $assignedStudents = array_map(
+                static fn(array $row): array => [
+                    'name' => (string) ($row['full_name'] ?? ''),
+                    'grade_level' => (string) ($row['grade_level'] ?? ''),
+                    'overall_status' => (string) ($row['overall_status'] ?? ''),
+                    'parent_consent_status' => (string) ($row['parent_consent_status'] ?? ''),
+                    'school_approval_status' => (string) ($row['school_approval_status'] ?? ''),
+                    'teacher_approval_status' => (string) ($row['teacher_approval_status'] ?? ''),
+                    'submission_status' => (string) ($row['submission_status'] ?? ''),
+                ],
+                array_slice(new_school_fetch_students_for_teacher($teacher), 0, 12)
+            );
+            if ($assignedStudents !== []) {
+                $tables[] = [
+                    'title' => 'Assigned Students',
+                    'columns' => ['Name', 'Grade', 'Overall Status', 'Parent', 'School', 'Teacher', 'Submission'],
+                    'rows' => $assignedStudents,
+                ];
+            }
+        }
+    }
+
+    return [
+        'user' => $user,
+        'sections' => $sections,
+        'tables' => $tables,
+    ];
+}
+
 function csrf_token(): string
 {
     return (string) ($_SESSION['csrf_token'] ?? '');
