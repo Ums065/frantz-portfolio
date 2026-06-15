@@ -1,5 +1,5 @@
-import { lazy, Suspense, type ReactNode } from 'react'
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { lazy, Suspense, type ReactNode, useEffect } from 'react'
+import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom'
 import Home from './components/Home'
 import SiteLayout from './components/SiteLayout'
 import { AuthProvider } from './context/AuthContext'
@@ -44,6 +44,16 @@ function RoutedPage({ children, home = false, pageKey }: { children: ReactNode; 
   )
 }
 
+function ScrollToTop() {
+  const { pathname } = useLocation()
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+  }, [pathname])
+
+  return null
+}
+
 declare global {
   interface Window { fcToast?: (msg: string) => void }
 }
@@ -52,6 +62,7 @@ export default function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
+        <ScrollToTop />
         <Routes>
           {/* Unique keys force SiteLayout to remount on navigation so the
               scroll-reveal observer & DOM wiring re-run for the new page. */}
