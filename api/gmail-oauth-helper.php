@@ -36,11 +36,11 @@ function gmail_oauth_current_url(): string
 function gmail_oauth_target_email(): string
 {
     $configured = trim((string) env('MAIL_FROM_ADDRESS', ''));
-    if ($configured !== '' && str_contains(strtolower($configured), '@gmail.com')) {
+    if ($configured !== '') {
         return $configured;
     }
 
-    return 'umang.developer05@gmail.com';
+    return 'your-gmail-account@gmail.com';
 }
 
 function gmail_oauth_authorize_url(string $redirectUri, string $state): string
@@ -143,9 +143,13 @@ if ($clientId === '' || $clientSecret === '') {
         <p class="err">GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are missing in <code>api/.env</code>.</p>
         <div class="box">
             <p>Add these values first:</p>
-            <pre>GOOGLE_CLIENT_ID=your-client-id
+            <pre>MAIL_PROVIDER=gmail_api
+MAIL_FROM_ADDRESS=' . gmail_oauth_escape(gmail_oauth_target_email()) . '
+MAIL_FROM_NAME=' . gmail_oauth_escape(mail_from_name()) . '
+GOOGLE_CLIENT_ID=your-client-id
 GOOGLE_CLIENT_SECRET=your-client-secret
-MAIL_FROM_ADDRESS=umang.developer05@gmail.com</pre>
+GOOGLE_REFRESH_TOKEN=your-refresh-token
+MAIL_VERIFY_PEER=true</pre>
         </div>
         <p class="muted">Then reload this page and authorize again.</p>
     ');
@@ -185,6 +189,7 @@ if (isset($_GET['code'])) {
             <div class="box">
                 <pre>MAIL_PROVIDER=gmail_api
 MAIL_FROM_ADDRESS=' . gmail_oauth_escape(gmail_oauth_target_email()) . '
+MAIL_FROM_NAME=' . gmail_oauth_escape(mail_from_name()) . '
 GOOGLE_CLIENT_ID=' . gmail_oauth_escape($clientId) . '
 GOOGLE_CLIENT_SECRET=' . gmail_oauth_escape($clientSecret) . '
 GOOGLE_REFRESH_TOKEN=' . gmail_oauth_escape($refreshToken) . '
