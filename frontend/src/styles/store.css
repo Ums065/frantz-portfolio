@@ -98,6 +98,9 @@
 .store-page .card__badge { position:absolute; top:13px; left:13px; z-index:2; font-size:9.5px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase;
   padding:6px 11px; border-radius:18px; background:rgba(10,10,10,0.7); border:1px solid var(--gold); color:var(--gold-light); }
 .store-page .card__badge.green { border-color:var(--green-bright); color:var(--green-bright); }
+.store-page .card__badge.amber { border-color:var(--gold-light); color:var(--gold-light); }
+.store-page .card__badge.red { border-color:#e08a8a; color:#e08a8a; }
+.store-page .card__badge.muted { border-color:var(--muted-dim); color:var(--muted-dim); }
 .store-page .card.locked .card__badge { border-color:var(--green-bright); color:var(--green-bright); }
 .store-page .card__overlay { position:absolute; inset:0; display:grid; place-items:center; text-align:center; padding:20px; background:linear-gradient(0deg, rgba(7,6,5,0.78), rgba(7,6,5,0.15)); opacity:0; transition:opacity .3s var(--ease); }
 .store-page .card__overlay span { padding:9px 14px; border-radius:999px; border:1px solid var(--gold); background:rgba(10,10,10,0.7); color:var(--gold-light); font-size:11px; letter-spacing:0.16em; text-transform:uppercase; }
@@ -113,6 +116,10 @@
 .store-page .card__foot { display:flex; align-items:center; justify-content:space-between; margin-top:14px; gap:10px; }
 .store-page .card__status { font-size:10.5px; line-height:1.4; letter-spacing:0.1em; text-transform:uppercase; color:var(--green-bright); }
 .store-page .card.locked .card__status { color:var(--gold-light); }
+.store-page .card__status.green { color:var(--green-bright); }
+.store-page .card__status.amber { color:var(--gold-light); }
+.store-page .card__status.red { color:#e08a8a; }
+.store-page .card__status.muted { color:var(--muted-dim); }
 .store-page .card__meta { font-size:10.5px; line-height:1.4; letter-spacing:0.1em; text-transform:uppercase; color:var(--muted-dim); text-align:right; }
 .store-page .card.hidden { display:none; }
 .store-page .empty { grid-column:1/-1; text-align:center; padding:80px 20px; color:var(--muted); }

@@ -438,38 +438,292 @@ function logout_user(): void
     session_destroy();
 }
 
-function storefront_catalog(): array
-{
-    return [
-        'hoodie-legacy' => ['name' => 'Founder Hoodie - Legacy Black', 'price' => 68.0],
-        'hoodie-c2l' => ['name' => 'From Community to Legacy Hoodie', 'price' => 72.0],
-        'tee-emblem' => ['name' => 'Premium Tee - FC Emblem', 'price' => 34.0],
-        'tee-tech' => ['name' => 'Technology For Good Tee', 'price' => 32.0],
-        'tee-vision' => ['name' => 'Visionary Tee', 'price' => 30.0],
-        'cap-gold' => ['name' => 'Signature Cap - Gold FC', 'price' => 28.0],
-        'cap-builder' => ['name' => 'Community Builder Cap', 'price' => 26.0],
-        'book-nts' => ['name' => 'From Nothing to Something - Hardcover', 'price' => 24.0],
-        'book-blueprint' => ['name' => 'The Legacy Blueprint - eBook', 'price' => 14.0],
-        'pin-ltd' => ['name' => 'Limited Edition FC Lapel Pin', 'price' => 18.0],
-        'print-signed' => ['name' => 'Signed Founder\'s Print', 'price' => 48.0],
-    ];
-}
-
 function storefront_inventory_defaults(): array
 {
     return [
-        'hoodie-legacy'   => ['stock' => 24, 'threshold' => 5],
-        'hoodie-c2l'      => ['stock' => 18, 'threshold' => 4],
-        'tee-emblem'      => ['stock' => 48, 'threshold' => 8],
-        'tee-tech'        => ['stock' => 44, 'threshold' => 8],
-        'tee-vision'      => ['stock' => 36, 'threshold' => 6],
-        'cap-gold'        => ['stock' => 40, 'threshold' => 6],
-        'cap-builder'     => ['stock' => 32, 'threshold' => 5],
-        'book-nts'        => ['stock' => 64, 'threshold' => 10],
-        'book-blueprint'   => ['stock' => 96, 'threshold' => 12],
-        'pin-ltd'         => ['stock' => 70, 'threshold' => 10],
-        'print-signed'    => ['stock' => 16, 'threshold' => 4],
+        'hoodie-legacy' => [
+            'name' => 'Founder Hoodie - Legacy Black',
+            'category' => 'Hoodies',
+            'description' => 'Heavyweight fleece hoodie with the embroidered FC emblem.',
+            'image' => '/assets/merch-hoodie.webp',
+            'price' => 68.0,
+            'stock' => 24,
+            'threshold' => 5,
+            'restock_note' => 'Core collection stock',
+            'visibility' => 'live',
+            'sort_order' => 1,
+        ],
+        'tee-emblem' => [
+            'name' => 'Premium Tee - FC Emblem',
+            'category' => 'T-Shirts',
+            'description' => 'Soft cotton tee with the FC emblem and an everyday fit.',
+            'image' => '/assets/merch-tee.webp',
+            'price' => 34.0,
+            'stock' => 48,
+            'threshold' => 8,
+            'restock_note' => 'Core collection stock',
+            'visibility' => 'live',
+            'sort_order' => 2,
+        ],
+        'cap-gold' => [
+            'name' => 'Signature Cap - Gold FC',
+            'category' => 'Caps',
+            'description' => 'Structured cap with gold FC monogram and adjustable fit.',
+            'image' => '/assets/merch-cap.webp',
+            'price' => 28.0,
+            'stock' => 40,
+            'threshold' => 6,
+            'restock_note' => 'Core collection stock',
+            'visibility' => 'live',
+            'sort_order' => 3,
+        ],
+        'book-nts' => [
+            'name' => 'From Nothing to Something - Hardcover',
+            'category' => 'Books',
+            'description' => 'Hardcover guide to the From Nothing to Something story.',
+            'image' => '/assets/brand-signature-white.webp',
+            'price' => 24.0,
+            'stock' => 64,
+            'threshold' => 10,
+            'restock_note' => 'Core collection stock',
+            'visibility' => 'live',
+            'sort_order' => 4,
+        ],
+        'pin-ltd' => [
+            'name' => 'Limited Edition FC Lapel Pin',
+            'category' => 'Collectibles',
+            'description' => 'Gold enamel FC pin for collectors and launch supporters.',
+            'image' => '/assets/merch-collectible.webp',
+            'price' => 18.0,
+            'stock' => 70,
+            'threshold' => 10,
+            'restock_note' => 'Core collection stock',
+            'visibility' => 'live',
+            'sort_order' => 5,
+        ],
+        'hoodie-c2l' => [
+            'name' => 'From Community to Legacy Hoodie',
+            'category' => 'Hoodies',
+            'description' => 'Premium brushed hoodie reserved for a future drop.',
+            'image' => '/assets/merch-hoodie.webp',
+            'price' => 72.0,
+            'stock' => 18,
+            'threshold' => 4,
+            'restock_note' => 'Upcoming drop',
+            'visibility' => 'upcoming',
+            'sort_order' => 6,
+        ],
+        'tee-tech' => [
+            'name' => 'Technology For Good Tee',
+            'category' => 'T-Shirts',
+            'description' => 'A future tee drop centered on the tech-for-good mission.',
+            'image' => '/assets/merch-tee.webp',
+            'price' => 32.0,
+            'stock' => 44,
+            'threshold' => 8,
+            'restock_note' => 'Upcoming drop',
+            'visibility' => 'upcoming',
+            'sort_order' => 7,
+        ],
+        'tee-vision' => [
+            'name' => 'Visionary Tee',
+            'category' => 'T-Shirts',
+            'description' => 'Statement tee reserved for a later release window.',
+            'image' => '/assets/merch-tee.webp',
+            'price' => 30.0,
+            'stock' => 36,
+            'threshold' => 6,
+            'restock_note' => 'Upcoming drop',
+            'visibility' => 'upcoming',
+            'sort_order' => 8,
+        ],
+        'cap-builder' => [
+            'name' => 'Community Builder Cap',
+            'category' => 'Caps',
+            'description' => 'Structured cap saved for a future community release.',
+            'image' => '/assets/merch-cap.webp',
+            'price' => 26.0,
+            'stock' => 32,
+            'threshold' => 5,
+            'restock_note' => 'Upcoming drop',
+            'visibility' => 'upcoming',
+            'sort_order' => 9,
+        ],
+        'book-blueprint' => [
+            'name' => 'The Legacy Blueprint - eBook',
+            'category' => 'Books',
+            'description' => 'Digital companion guide for a future resource release.',
+            'image' => '/assets/brand-signature-white.webp',
+            'price' => 14.0,
+            'stock' => 96,
+            'threshold' => 12,
+            'restock_note' => 'Upcoming drop',
+            'visibility' => 'upcoming',
+            'sort_order' => 10,
+        ],
+        'print-signed' => [
+            'name' => 'Signed Founder\'s Print',
+            'category' => 'Art Prints',
+            'description' => 'Signed founder print reserved for a premium future drop.',
+            'image' => '/assets/brand-signature-white.webp',
+            'price' => 48.0,
+            'stock' => 16,
+            'threshold' => 4,
+            'restock_note' => 'Upcoming drop',
+            'visibility' => 'upcoming',
+            'sort_order' => 11,
+        ],
     ];
+}
+
+function storefront_inventory_has_catalog_columns(): bool
+{
+    static $cached = null;
+    if ($cached !== null) {
+        return $cached;
+    }
+
+    try {
+        $stmt = db()->query("SHOW COLUMNS FROM store_inventory LIKE 'visibility'");
+        $cached = (bool) $stmt->fetch();
+    } catch (Throwable $e) {
+        $cached = false;
+    }
+
+    return $cached;
+}
+
+function storefront_seed_inventory_defaults(?PDO $pdo = null): void
+{
+    $pdo ??= db();
+    $defaults = storefront_inventory_defaults();
+
+    if (storefront_inventory_has_catalog_columns()) {
+        $seed = $pdo->prepare(
+            'INSERT IGNORE INTO store_inventory
+               (product_id, name, category, description, image, price, stock, low_stock_threshold, restock_note, visibility, sort_order)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        );
+        foreach ($defaults as $productId => $cfg) {
+            $seed->execute([
+                $productId,
+                $cfg['name'] ?? null,
+                $cfg['category'] ?? null,
+                $cfg['description'] ?? null,
+                $cfg['image'] ?? null,
+                (float) ($cfg['price'] ?? 0),
+                (int) ($cfg['stock'] ?? 0),
+                (int) ($cfg['threshold'] ?? 5),
+                $cfg['restock_note'] ?? null,
+                $cfg['visibility'] ?? 'live',
+                (int) ($cfg['sort_order'] ?? 0),
+            ]);
+        }
+        return;
+    }
+
+    $seed = $pdo->prepare(
+        'INSERT IGNORE INTO store_inventory (product_id, stock, low_stock_threshold, restock_note)
+         VALUES (?, ?, ?, ?)'
+    );
+    foreach ($defaults as $productId => $cfg) {
+        $seed->execute([
+            $productId,
+            (int) ($cfg['stock'] ?? 0),
+            (int) ($cfg['threshold'] ?? 5),
+            $cfg['restock_note'] ?? null,
+        ]);
+    }
+}
+
+function storefront_inventory_rows(bool $includeHidden = false): array
+{
+    storefront_seed_inventory_defaults();
+    $defaults = storefront_inventory_defaults();
+    $rows = [];
+
+    if (storefront_inventory_has_catalog_columns()) {
+        $sql = 'SELECT product_id, name, category, description, image, price, stock, low_stock_threshold,
+                       restock_note, visibility, sort_order, updated_at
+                FROM store_inventory';
+        if (!$includeHidden) {
+            $sql .= ' WHERE visibility <> "hidden"';
+        }
+        $sql .= ' ORDER BY sort_order ASC, product_id ASC';
+
+        foreach (db()->query($sql)->fetchAll() as $row) {
+            $productId = (string) $row['product_id'];
+            $meta = $defaults[$productId] ?? [];
+            $name = trim((string) ($row['name'] ?? '')) !== '' ? (string) $row['name'] : (string) ($meta['name'] ?? $productId);
+            $category = trim((string) ($row['category'] ?? '')) !== '' ? (string) $row['category'] : (string) ($meta['category'] ?? '');
+            $description = trim((string) ($row['description'] ?? '')) !== '' ? (string) $row['description'] : ($meta['description'] ?? null);
+            $image = trim((string) ($row['image'] ?? '')) !== '' ? (string) $row['image'] : ($meta['image'] ?? null);
+            $price = $row['price'] !== null && $row['price'] !== '' ? (float) $row['price'] : (float) ($meta['price'] ?? 0);
+            $stock = (int) ($row['stock'] ?? 0);
+            $threshold = (int) ($row['low_stock_threshold'] ?? ($meta['threshold'] ?? 5));
+            $visibility = (string) ($row['visibility'] ?? ($meta['visibility'] ?? 'live'));
+            $stockStatus = inventory_status_label($stock, $threshold);
+            $rows[] = [
+                'product_id' => $productId,
+                'name' => $name,
+                'category' => $category,
+                'description' => $description,
+                'image' => $image,
+                'price' => round($price, 2),
+                'stock' => $stock,
+                'low_stock_threshold' => $threshold,
+                'visibility' => $visibility,
+                'stock_status' => $stockStatus,
+                'status' => $stockStatus,
+                'restock_note' => $row['restock_note'] !== null && $row['restock_note'] !== ''
+                    ? (string) $row['restock_note']
+                    : ($meta['restock_note'] ?? null),
+                'sort_order' => (int) ($row['sort_order'] ?? ($meta['sort_order'] ?? 0)),
+                'updated_at' => $row['updated_at'] ?? null,
+            ];
+        }
+
+        return $rows;
+    }
+
+    $stmt = db()->query(
+        'SELECT product_id, stock, low_stock_threshold, restock_note, updated_at
+         FROM store_inventory ORDER BY product_id ASC'
+    );
+    foreach ($stmt->fetchAll() as $row) {
+        $productId = (string) $row['product_id'];
+        $meta = $defaults[$productId] ?? [];
+        $stock = (int) $row['stock'];
+        $threshold = (int) $row['low_stock_threshold'];
+        $stockStatus = inventory_status_label($stock, $threshold);
+        $rows[] = [
+            'product_id' => $productId,
+            'name' => (string) ($meta['name'] ?? $productId),
+            'category' => (string) ($meta['category'] ?? ''),
+            'description' => $meta['description'] ?? null,
+            'image' => $meta['image'] ?? null,
+            'price' => round((float) ($meta['price'] ?? 0), 2),
+            'stock' => $stock,
+            'low_stock_threshold' => $threshold,
+            'visibility' => (string) ($meta['visibility'] ?? 'live'),
+            'stock_status' => $stockStatus,
+            'status' => $stockStatus,
+            'restock_note' => $row['restock_note'] ?: ($meta['restock_note'] ?? null),
+            'sort_order' => (int) ($meta['sort_order'] ?? 0),
+            'updated_at' => $row['updated_at'],
+        ];
+    }
+
+    return $rows;
+}
+
+function storefront_catalog(bool $includeHidden = true): array
+{
+    $catalog = [];
+    foreach (storefront_inventory_rows($includeHidden) as $row) {
+        $catalog[(string) $row['product_id']] = $row;
+    }
+    return $catalog;
 }
 
 function inventory_status_label(int $stock, int $threshold): string
@@ -1201,12 +1455,17 @@ function normalized_order_items(array $items): array
             continue;
         }
 
+        $product = $catalog[$id];
+        if ((string) ($product['visibility'] ?? 'live') !== 'live') {
+            continue;
+        }
+
         $normalized[] = [
             'id' => $id,
-            'name' => $catalog[$id]['name'],
+            'name' => $product['name'],
             'size' => $size !== '' ? $size : 'Default',
             'qty' => $qty,
-            'price' => $catalog[$id]['price'],
+            'price' => $product['price'],
         ];
     }
 

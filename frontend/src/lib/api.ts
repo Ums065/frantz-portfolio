@@ -302,14 +302,22 @@ export interface CommunityCommentRow {
   created_at: string
 }
 
+export type ProductVisibility = 'live' | 'upcoming' | 'hidden'
+
 export interface InventoryRow {
   product_id: string
   name: string
+  category: string | null
+  description: string | null
+  image: string | null
   price: number
   stock: number
   low_stock_threshold: number
+  visibility: ProductVisibility
+  stock_status: 'in' | 'low' | 'out'
   status: 'in' | 'low' | 'out'
   restock_note: string | null
+  sort_order: number
   updated_at: string | null
 }
 

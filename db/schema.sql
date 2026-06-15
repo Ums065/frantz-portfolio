@@ -163,9 +163,16 @@ CREATE TABLE IF NOT EXISTS event_rsvps (
 -- ---------- Store inventory ----------
 CREATE TABLE IF NOT EXISTS store_inventory (
   product_id         VARCHAR(40) PRIMARY KEY,
+  name               VARCHAR(160) DEFAULT NULL,
+  category           VARCHAR(80) DEFAULT NULL,
+  description        TEXT DEFAULT NULL,
+  image              VARCHAR(255) DEFAULT NULL,
+  price              DECIMAL(10,2) DEFAULT NULL,
   stock              INT NOT NULL DEFAULT 0,
   low_stock_threshold INT NOT NULL DEFAULT 5,
   restock_note       VARCHAR(180) DEFAULT NULL,
+  visibility         ENUM('live','upcoming','hidden') NOT NULL DEFAULT 'live',
+  sort_order         INT NOT NULL DEFAULT 0,
   updated_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 
@@ -258,18 +265,20 @@ INSERT INTO testimonials (quote, author_name, author_title, company, image, is_f
   ('Frantz brings a clear message, strong presence, and a focus on helping people move forward.', 'Event Producer', 'Booking Director', 'Leadership Summit', '/assets/gallery-speaking-stage.png', 0, 2),
   ('The brand system is premium, but the mission stays human. That combination stands out.', 'Brand Advisor', 'Creative Strategist', 'Studio Partner', '/assets/brand-signature-white.jpg', 0, 3);
 
-INSERT INTO store_inventory (product_id, stock, low_stock_threshold, restock_note) VALUES
-  ('hoodie-legacy', 24, 5, 'Core collection stock'),
-  ('hoodie-c2l', 18, 4, 'Core collection stock'),
-  ('tee-emblem', 48, 8, 'Core collection stock'),
-  ('tee-tech', 44, 8, 'Core collection stock'),
-  ('tee-vision', 36, 6, 'Core collection stock'),
-  ('cap-gold', 40, 6, 'Core collection stock'),
-  ('cap-builder', 32, 5, 'Core collection stock'),
-  ('book-nts', 64, 10, 'Core collection stock'),
-  ('book-blueprint', 96, 12, 'Core collection stock'),
-  ('pin-ltd', 70, 10, 'Core collection stock'),
-  ('print-signed', 16, 4, 'Core collection stock');
+INSERT INTO store_inventory (
+  product_id, name, category, description, image, price, stock, low_stock_threshold, restock_note, visibility, sort_order
+) VALUES
+  ('hoodie-legacy', 'Founder Hoodie - Legacy Black', 'Hoodies', 'Heavyweight fleece hoodie with the embroidered FC emblem.', '/assets/merch-hoodie.webp', 68.00, 24, 5, 'Core collection stock', 'live', 1),
+  ('tee-emblem', 'Premium Tee - FC Emblem', 'T-Shirts', 'Soft cotton tee with the FC emblem and an everyday fit.', '/assets/merch-tee.webp', 34.00, 48, 8, 'Core collection stock', 'live', 2),
+  ('cap-gold', 'Signature Cap - Gold FC', 'Caps', 'Structured cap with gold FC monogram and adjustable fit.', '/assets/merch-cap.webp', 28.00, 40, 6, 'Core collection stock', 'live', 3),
+  ('book-nts', 'From Nothing to Something - Hardcover', 'Books', 'Hardcover guide to the From Nothing to Something story.', '/assets/brand-signature-white.webp', 24.00, 64, 10, 'Core collection stock', 'live', 4),
+  ('pin-ltd', 'Limited Edition FC Lapel Pin', 'Collectibles', 'Gold enamel FC pin for collectors and launch supporters.', '/assets/merch-collectible.webp', 18.00, 70, 10, 'Core collection stock', 'live', 5),
+  ('hoodie-c2l', 'From Community to Legacy Hoodie', 'Hoodies', 'Premium brushed hoodie reserved for a future drop.', '/assets/merch-hoodie.webp', 72.00, 18, 4, 'Upcoming drop', 'upcoming', 6),
+  ('tee-tech', 'Technology For Good Tee', 'T-Shirts', 'A future tee drop centered on the tech-for-good mission.', '/assets/merch-tee.webp', 32.00, 44, 8, 'Upcoming drop', 'upcoming', 7),
+  ('tee-vision', 'Visionary Tee', 'T-Shirts', 'Statement tee reserved for a later release window.', '/assets/merch-tee.webp', 30.00, 36, 6, 'Upcoming drop', 'upcoming', 8),
+  ('cap-builder', 'Community Builder Cap', 'Caps', 'Structured cap saved for a future community release.', '/assets/merch-cap.webp', 26.00, 32, 5, 'Upcoming drop', 'upcoming', 9),
+  ('book-blueprint', 'The Legacy Blueprint - eBook', 'Books', 'Digital companion guide for a future resource release.', '/assets/brand-signature-white.webp', 14.00, 96, 12, 'Upcoming drop', 'upcoming', 10),
+  ('print-signed', 'Signed Founder''s Print', 'Art Prints', 'Signed founder print reserved for a premium future drop.', '/assets/brand-signature-white.webp', 48.00, 16, 4, 'Upcoming drop', 'upcoming', 11);
 
 INSERT INTO community_threads (title, body, audience, author_name, is_pinned) VALUES
   ('Welcome to the Community Board', 'This space is for founder updates, launch notes, invite-only announcements, and conversations that keep the community close to the mission.', 'public', 'Frantz Coutard', 1),

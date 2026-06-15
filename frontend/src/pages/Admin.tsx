@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { api, type AnalyticsPayload, type AwardRow, type CommunityCommentRow, type CommunityThreadRow, type EventItem, type EventRsvpRow, type InventoryRow, type MediaRow, type PostDetail, type TestimonialRow, type User } from '../lib/api'
+import { api, type AnalyticsPayload, type AwardRow, type CommunityCommentRow, type CommunityThreadRow, type EventItem, type EventRsvpRow, type InventoryRow, type MediaRow, type PostDetail, type ProductVisibility, type TestimonialRow, type User } from '../lib/api'
 import { useAuth } from '../context/AuthContext'
 
 interface RequestRow {
@@ -213,7 +213,7 @@ export default function Admin() {
     ['media', 'Media'],
     ['community', 'Community'],
     ['rsvps', 'RSVPs'],
-    ['inventory', 'Inventory'],
+    ['inventory', 'Products & Inventory'],
   ] as const
 
   return (
@@ -1378,7 +1378,316 @@ function RsvpsAdmin() {
   )
 }
 
+type InventoryDraft = {
+  product_id: string
+  name: string
+  category: string
+  description: string
+  image: string
+  price: string
+  stock: string
+  low_stock_threshold: string
+  visibility: ProductVisibility
+  restock_note: string
+  sort_order: string
+}
+
+const inventoryDraftFromRow = (row: InventoryRow): InventoryDraft => ({
+  product_id: row.product_id,
+  name: row.name || '',
+  category: row.category || '',
+  description: row.description || '',
+  image: row.image || '',
+  price: String(row.price ?? 0),
+  stock: String(row.stock ?? 0),
+  low_stock_threshold: String(row.low_stock_threshold ?? 0),
+  visibility: row.visibility,
+  restock_note: row.restock_note || '',
+  sort_order: String(row.sort_order ?? 0),
+})
+
+const emptyInventoryDraft = (sortOrder: number): InventoryDraft => ({
+  product_id: '',
+  name: '',
+  category: '',
+  description: '',
+  image: '',
+  price: '0',
+  stock: '0',
+  low_stock_threshold: '5',
+  visibility: 'upcoming',
+  restock_note: '',
+  sort_order: String(sortOrder),
+})
+
+const inventoryTone = (row: Pick<InventoryRow, 'visibility' | 'stock_status'>): { label: string; tone: 'green' | 'amber' | 'red' | 'muted' } => {
+  if (row.visibility === 'hidden') return { label: 'Hidden', tone: 'muted' }
+  if (row.visibility === 'upcoming') return { label: 'Upcoming', tone: 'amber' }
+  if (row.stock_status === 'out') return { label: 'Sold out', tone: 'red' }
+  if (row.stock_status === 'low') return { label: 'Low stock', tone: 'amber' }
+  return { label: 'Live', tone: 'green' }
+}
+
+const badgePill = (tone: 'green' | 'amber' | 'red' | 'muted'): React.CSSProperties => {
+  const palette = {
+    green: { border: 'rgba(143,191,150,0.38)', color: '#8FBF96', background: 'rgba(15,91,58,0.16)' },
+    amber: { border: 'rgba(201,168,76,0.38)', color: '#F5D48A', background: 'rgba(201,168,76,0.12)' },
+    red: { border: 'rgba(224,138,138,0.42)', color: '#e08a8a', background: 'rgba(122,59,59,0.16)' },
+    muted: { border: 'rgba(128,119,104,0.42)', color: '#807768', background: 'rgba(128,119,104,0.12)' },
+  }[tone]
+
+  return {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 999,
+    padding: '6px 10px',
+    border: `1px solid ${palette.border}`,
+    color: palette.color,
+    background: palette.background,
+    fontSize: 11,
+    letterSpacing: '.08em',
+    textTransform: 'uppercase',
+    whiteSpace: 'nowrap',
+  }
+}
+
 function InventoryAdmin() {
+  const [rows, setRows] = useState<InventoryRow[]>([])
+  const [editing, setEditing] = useState<InventoryDraft | null>(null)
+  const [editingIsNew, setEditingIsNew] = useState(false)
+  const [busyId, setBusyId] = useState<string | null>(null)
+  const [error, setError] = useState('')
+
+  const load = () =>
+    api.get<{ inventory: InventoryRow[] }>('admin/inventory')
+      .then((d) => setRows(d.inventory))
+      .catch(() => {})
+
+  useEffect(() => { load() }, [])
+
+  const nextSortOrder = rows.reduce((max, row) => Math.max(max, row.sort_order), 0) + 1
+  const liveCount = rows.filter((row) => row.visibility === 'live').length
+  const upcomingCount = rows.filter((row) => row.visibility === 'upcoming').length
+  const hiddenCount = rows.filter((row) => row.visibility === 'hidden').length
+  const soldOutCount = rows.filter((row) => row.visibility === 'live' && row.stock_status === 'out').length
+
+  const openNewProduct = () => {
+    setError('')
+    setEditingIsNew(true)
+    setEditing(emptyInventoryDraft(nextSortOrder))
+  }
+
+  const openEditProduct = (row: InventoryRow) => {
+    setError('')
+    setEditingIsNew(false)
+    setEditing(inventoryDraftFromRow(row))
+  }
+
+  const saveRow = async (productId: string, payload: Record<string, unknown>) => {
+    setBusyId(productId)
+    setError('')
+    try {
+      await api.put(`admin/inventory/${encodeURIComponent(productId)}`, payload)
+      await load()
+      return true
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not update merch product.')
+      return false
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  const saveEditing = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editing) return
+
+    const productId = editing.product_id.trim()
+    if (!productId) {
+      setError('Product ID is required.')
+      return
+    }
+    if (!editing.name.trim()) {
+      setError('Product name is required.')
+      return
+    }
+
+    const ok = await saveRow(productId, {
+      name: editing.name.trim(),
+      category: editing.category.trim() || null,
+      description: editing.description.trim() || null,
+      image: editing.image.trim() || null,
+      price: Number(editing.price || 0),
+      stock: Number(editing.stock || 0),
+      low_stock_threshold: Number(editing.low_stock_threshold || 0),
+      visibility: editing.visibility,
+      restock_note: editing.restock_note.trim() || null,
+      sort_order: Number(editing.sort_order || 0),
+    })
+
+    if (ok) {
+      setEditing(null)
+      setEditingIsNew(false)
+    }
+  }
+
+  const toggleVisibility = async (row: InventoryRow) => {
+    const nextVisibility: ProductVisibility = row.visibility === 'hidden' ? 'live' : 'hidden'
+    await saveRow(row.product_id, {
+      name: row.name,
+      category: row.category,
+      description: row.description,
+      image: row.image,
+      price: row.price,
+      stock: row.stock,
+      low_stock_threshold: row.low_stock_threshold,
+      visibility: nextVisibility,
+      restock_note: row.restock_note,
+      sort_order: row.sort_order,
+    })
+  }
+
+  return (
+    <div style={{ display: 'grid', gap: 18 }}>
+      <div className="glass" style={{ padding: 20, borderRadius: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+        <div>
+          <h3 className="gold-text">Products & Inventory</h3>
+          <p style={{ color: 'var(--muted)', fontSize: 13 }}>
+            {rows.length} products · {liveCount} live · {upcomingCount} upcoming · {hiddenCount} hidden · {soldOutCount} sold out
+          </p>
+        </div>
+        <button className="btn btn--sm btn--solid" onClick={openNewProduct}>+ Add Product</button>
+      </div>
+
+      {error && <p style={{ color: '#e08a8a', fontSize: 13 }}>{error}</p>}
+
+      <Table head={['Product', 'Visibility', 'Stock', 'Threshold', 'Status', 'Price', 'Updated', 'Actions']}>
+        {rows.map((row) => {
+          const tone = inventoryTone(row)
+          return (
+            <tr key={row.product_id} style={rowS}>
+              <td style={tdS}>
+                <div style={{ fontWeight: 600, color: '#f0e3bf' }}>{row.name}</div>
+                <div style={{ color: 'var(--muted)', fontSize: 12, lineHeight: 1.5 }}>
+                  {row.product_id} · {row.category || 'Uncategorized'}
+                </div>
+              </td>
+              <td style={tdS}>
+                <span style={badgePill(row.visibility === 'hidden' ? 'muted' : row.visibility === 'upcoming' ? 'amber' : 'green')}>
+                  {row.visibility}
+                </span>
+              </td>
+              <td style={tdS}>{row.stock}</td>
+              <td style={tdS}>{row.low_stock_threshold}</td>
+              <td style={tdS}>
+                <span style={badgePill(tone.tone)}>{tone.label}</span>
+              </td>
+              <td style={tdS}>${Number(row.price || 0).toFixed(2)}</td>
+              <td style={tdS}>{row.updated_at || 'â€”'}</td>
+              <td style={tdS}>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  <button className="btn btn--sm" onClick={() => openEditProduct(row)}>Edit</button>
+                  <button className="btn btn--sm" onClick={() => void toggleVisibility(row)} disabled={busyId === row.product_id}>
+                    {busyId === row.product_id ? 'Working…' : row.visibility === 'hidden' ? 'Restore' : 'Hide'}
+                  </button>
+                </div>
+              </td>
+            </tr>
+          )
+        })}
+      </Table>
+
+      {editing && (
+        <div className="modal-overlay open" onClick={(e) => e.target === e.currentTarget && !busyId && (setEditing(null), setEditingIsNew(false))}>
+          <form className="modal" style={{ maxWidth: 760, maxHeight: '90vh', overflowY: 'auto' }} onSubmit={saveEditing}>
+            <button type="button" className="close" onClick={() => { setEditing(null); setEditingIsNew(false) }} aria-label="Close" disabled={!!busyId}>
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth={2}><path d="M6 6l12 12M18 6L6 18" /></svg>
+            </button>
+            <h3 className="gold-text">{editingIsNew ? 'New Product' : 'Edit Product'}</h3>
+            <p style={{ color: 'var(--muted)', fontSize: 13, lineHeight: 1.6, margin: '4px 0 18px' }}>
+              Hidden removes the product from the public store, upcoming keeps it visible as a future drop, and live publishes it.
+            </p>
+
+            <div className="field">
+              <label>Product ID</label>
+              <input
+                type="text"
+                required
+                value={editing.product_id}
+                onChange={(e) => setEditing((prev) => (prev ? { ...prev, product_id: e.target.value } : prev))}
+                placeholder="hoodie-spring-drop"
+                disabled={!editingIsNew}
+              />
+            </div>
+
+            <div className="field">
+              <label>Product Name</label>
+              <input type="text" required value={editing.name} onChange={(e) => setEditing((prev) => (prev ? { ...prev, name: e.target.value } : prev))} />
+            </div>
+
+            <div className="fgrid">
+              <div className="field">
+                <label>Category</label>
+                <input type="text" value={editing.category} onChange={(e) => setEditing((prev) => (prev ? { ...prev, category: e.target.value } : prev))} placeholder="Hoodies, Caps, Books" />
+              </div>
+              <div className="field">
+                <label>Price</label>
+                <input type="number" min="0" step="0.01" value={editing.price} onChange={(e) => setEditing((prev) => (prev ? { ...prev, price: e.target.value } : prev))} />
+              </div>
+              <div className="field">
+                <label>Visibility</label>
+                <select value={editing.visibility} onChange={(e) => setEditing((prev) => (prev ? { ...prev, visibility: e.target.value as ProductVisibility } : prev))} style={fldSelectS}>
+                  <option value="live">Live</option>
+                  <option value="upcoming">Upcoming</option>
+                  <option value="hidden">Hidden</option>
+                </select>
+              </div>
+              <div className="field">
+                <label>Sort Order</label>
+                <input type="number" min="0" value={editing.sort_order} onChange={(e) => setEditing((prev) => (prev ? { ...prev, sort_order: e.target.value } : prev))} />
+              </div>
+              <div className="field">
+                <label>Stock</label>
+                <input type="number" min="0" value={editing.stock} onChange={(e) => setEditing((prev) => (prev ? { ...prev, stock: e.target.value } : prev))} />
+              </div>
+              <div className="field">
+                <label>Low Stock Threshold</label>
+                <input type="number" min="0" value={editing.low_stock_threshold} onChange={(e) => setEditing((prev) => (prev ? { ...prev, low_stock_threshold: e.target.value } : prev))} />
+              </div>
+            </div>
+
+            <div className="field">
+              <label>Image URL</label>
+              <input type="text" value={editing.image} onChange={(e) => setEditing((prev) => (prev ? { ...prev, image: e.target.value } : prev))} placeholder="/assets/merch-hoodie.webp" />
+            </div>
+
+            <div className="field">
+              <label>Description</label>
+              <textarea className="fld-area" style={{ minHeight: 120 }} value={editing.description} onChange={(e) => setEditing((prev) => (prev ? { ...prev, description: e.target.value } : prev))} />
+            </div>
+
+            <div className="field">
+              <label>Restock Note</label>
+              <input type="text" value={editing.restock_note} onChange={(e) => setEditing((prev) => (prev ? { ...prev, restock_note: e.target.value } : prev))} placeholder="Core collection stock" />
+            </div>
+
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'space-between', flexWrap: 'wrap', marginTop: 6 }}>
+              <p style={{ color: 'var(--muted)', fontSize: 12, lineHeight: 1.6, maxWidth: 420 }}>
+                Set visibility to <strong>live</strong> when you want it on the store, <strong>upcoming</strong> when it should preview publicly, and <strong>hidden</strong> to remove it from the public site.
+              </p>
+              <button type="submit" className="btn btn--solid" disabled={!!busyId}>
+                {busyId ? 'Saving…' : 'Save Product'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function InventoryAdminLegacy() {
   const [rows, setRows] = useState<InventoryRow[]>([])
   const [drafts, setDrafts] = useState<Record<string, { stock: string; low_stock_threshold: string; restock_note: string }>>({})
   const [busyId, setBusyId] = useState<string | null>(null)

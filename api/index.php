@@ -302,49 +302,7 @@ try {
         }
 
         case $key === 'GET store/inventory': {
-            $catalog = storefront_catalog();
-            $defaults = storefront_inventory_defaults();
-            $seed = db()->prepare(
-                'INSERT IGNORE INTO store_inventory (product_id, stock, low_stock_threshold)
-                 VALUES (?, ?, ?)'
-            );
-            foreach ($defaults as $productId => $cfg) {
-                $seed->execute([$productId, (int) $cfg['stock'], (int) $cfg['threshold']]);
-            }
-
-            $stmt = db()->query(
-                'SELECT product_id, stock, low_stock_threshold, restock_note, updated_at
-                 FROM store_inventory ORDER BY product_id ASC'
-            );
-            $map = [];
-            foreach ($stmt->fetchAll() as $row) {
-                $map[(string) $row['product_id']] = $row;
-            }
-
-            $inventory = [];
-            foreach ($catalog as $productId => $meta) {
-                $row = $map[$productId] ?? [
-                    'product_id' => $productId,
-                    'stock' => $defaults[$productId]['stock'] ?? 0,
-                    'low_stock_threshold' => $defaults[$productId]['threshold'] ?? 5,
-                    'restock_note' => null,
-                    'updated_at' => null,
-                ];
-                $stock = (int) $row['stock'];
-                $threshold = (int) $row['low_stock_threshold'];
-                $inventory[] = [
-                    'product_id' => $productId,
-                    'name' => $meta['name'],
-                    'price' => $meta['price'],
-                    'stock' => $stock,
-                    'low_stock_threshold' => $threshold,
-                    'status' => inventory_status_label($stock, $threshold),
-                    'restock_note' => $row['restock_note'],
-                    'updated_at' => $row['updated_at'],
-                ];
-            }
-
-            json(['inventory' => $inventory]);
+            json(['inventory' => storefront_inventory_rows(false)]);
         }
 
         case $key === 'GET community/threads': {
@@ -610,21 +568,13 @@ try {
                 json(['error' => 'Cart contains invalid items.'], 422);
             }
 
-            $catalog = storefront_catalog();
-            $defaults = storefront_inventory_defaults();
             $grouped = [];
             foreach ($normalizedItems as $item) {
                 $grouped[$item['id']] = ($grouped[$item['id']] ?? 0) + (int) $item['qty'];
             }
 
             $pdo = db();
-            $seed = $pdo->prepare(
-                'INSERT IGNORE INTO store_inventory (product_id, stock, low_stock_threshold)
-                 VALUES (?, ?, ?)'
-            );
-            foreach ($defaults as $productId => $cfg) {
-                $seed->execute([$productId, (int) $cfg['stock'], (int) $cfg['threshold']]);
-            }
+            $catalog = storefront_catalog();
 
             $pdo->beginTransaction();
             try {
@@ -837,65 +787,121 @@ try {
 
         case $key === 'GET admin/inventory': {
             require_admin();
-            $catalog = storefront_catalog();
-            $defaults = storefront_inventory_defaults();
-            $seed = db()->prepare(
-                'INSERT IGNORE INTO store_inventory (product_id, stock, low_stock_threshold)
-                 VALUES (?, ?, ?)'
-            );
-            foreach ($defaults as $productId => $cfg) {
-                $seed->execute([$productId, (int) $cfg['stock'], (int) $cfg['threshold']]);
-            }
-
-            $stmt = db()->query(
-                'SELECT product_id, stock, low_stock_threshold, restock_note, updated_at
-                 FROM store_inventory ORDER BY product_id ASC'
-            );
-            $inventory = [];
-            foreach ($stmt->fetchAll() as $row) {
-                $productId = (string) $row['product_id'];
-                $meta = $catalog[$productId] ?? ['name' => $productId, 'price' => 0];
-                $stock = (int) $row['stock'];
-                $threshold = (int) $row['low_stock_threshold'];
-                $inventory[] = [
-                    'product_id' => $productId,
-                    'name' => $meta['name'],
-                    'price' => $meta['price'],
-                    'stock' => $stock,
-                    'low_stock_threshold' => $threshold,
-                    'status' => inventory_status_label($stock, $threshold),
-                    'restock_note' => $row['restock_note'],
-                    'updated_at' => $row['updated_at'],
-                ];
-            }
-            json(['inventory' => $inventory]);
+            json(['inventory' => storefront_inventory_rows(true)]);
         }
 
         case $method === 'PUT' && preg_match('#^admin/inventory/([a-z0-9_-]+)$#', $route, $m) === 1: {
             require_admin();
-            $catalog = storefront_catalog();
             $productId = $m[1];
-            if (!isset($catalog[$productId])) {
-                json(['error' => 'Invalid product.'], 422);
+            if (!storefront_inventory_has_catalog_columns()) {
+                json(['error' => 'Run db/update.sql to enable merch product management.'], 409);
             }
 
             $b = body();
-            $stock = (int) ($_POST['stock'] ?? $b['stock'] ?? 0);
-            $threshold = (int) ($_POST['low_stock_threshold'] ?? $b['low_stock_threshold'] ?? 5);
+            $existingStmt = db()->prepare(
+                'SELECT product_id, name, category, description, image, price, stock, low_stock_threshold,
+                        restock_note, visibility, sort_order
+                 FROM store_inventory
+                 WHERE product_id = ?
+                 LIMIT 1'
+            );
+            $existingStmt->execute([$productId]);
+            $existing = $existingStmt->fetch() ?: [];
+            $defaults = storefront_inventory_defaults();
+            $fallback = $defaults[$productId] ?? [];
+
+            $name = field($b, 'name');
+            if ($name === '') {
+                $name = trim((string) ($existing['name'] ?? $fallback['name'] ?? ''));
+            }
+            if ($name === '') {
+                json(['error' => 'Product name is required.'], 422);
+            }
+
+            $category = field($b, 'category');
+            if ($category === '') {
+                $category = trim((string) ($existing['category'] ?? $fallback['category'] ?? ''));
+            }
+
+            $description = field($b, 'description');
+            if ($description === '') {
+                $description = trim((string) ($existing['description'] ?? $fallback['description'] ?? ''));
+            }
+
+            $image = field($b, 'image');
+            if ($image === '') {
+                $image = trim((string) ($existing['image'] ?? $fallback['image'] ?? ''));
+            }
+
+            if (array_key_exists('price', $b) && trim((string) $b['price']) !== '') {
+                $price = (float) $b['price'];
+            } elseif (isset($existing['price']) && $existing['price'] !== null && $existing['price'] !== '') {
+                $price = (float) $existing['price'];
+            } else {
+                $price = (float) ($fallback['price'] ?? 0);
+            }
+
+            $stock = array_key_exists('stock', $b) && trim((string) $b['stock']) !== ''
+                ? (int) $b['stock']
+                : (int) ($existing['stock'] ?? ($fallback['stock'] ?? 0));
+
+            $threshold = array_key_exists('low_stock_threshold', $b) && trim((string) $b['low_stock_threshold']) !== ''
+                ? (int) $b['low_stock_threshold']
+                : (int) ($existing['low_stock_threshold'] ?? ($fallback['threshold'] ?? 5));
+
+            $visibility = field($b, 'visibility');
+            if ($visibility === '') {
+                $visibility = trim((string) ($existing['visibility'] ?? ($fallback['visibility'] ?? 'live')));
+            }
+
+            $sortOrder = array_key_exists('sort_order', $b) && trim((string) $b['sort_order']) !== ''
+                ? (int) $b['sort_order']
+                : (int) ($existing['sort_order'] ?? ($fallback['sort_order'] ?? 0));
+
             $note = field($b, 'restock_note');
-            if ($stock < 0 || $threshold < 0) {
+            if ($note === '') {
+                $note = trim((string) ($existing['restock_note'] ?? ($fallback['restock_note'] ?? '')));
+            }
+
+            if ($stock < 0 || $threshold < 0 || $sortOrder < 0) {
                 json(['error' => 'Stock values must be zero or greater.'], 422);
+            }
+            if ($price < 0) {
+                json(['error' => 'Price values must be zero or greater.'], 422);
+            }
+            if (!in_array($visibility, ['live', 'upcoming', 'hidden'], true)) {
+                json(['error' => 'Invalid visibility status.'], 422);
             }
 
             $stmt = db()->prepare(
-                'INSERT INTO store_inventory (product_id, stock, low_stock_threshold, restock_note)
-                 VALUES (?, ?, ?, ?)
+                'INSERT INTO store_inventory
+                    (product_id, name, category, description, image, price, stock, low_stock_threshold, restock_note, visibility, sort_order)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                  ON DUPLICATE KEY UPDATE
+                    name = VALUES(name),
+                    category = VALUES(category),
+                    description = VALUES(description),
+                    image = VALUES(image),
+                    price = VALUES(price),
                     stock = VALUES(stock),
                     low_stock_threshold = VALUES(low_stock_threshold),
-                    restock_note = VALUES(restock_note)'
+                    restock_note = VALUES(restock_note),
+                    visibility = VALUES(visibility),
+                    sort_order = VALUES(sort_order)'
             );
-            $stmt->execute([$productId, $stock, $threshold, $note ?: null]);
+            $stmt->execute([
+                $productId,
+                $name,
+                $category !== '' ? $category : null,
+                $description !== '' ? $description : null,
+                $image !== '' ? $image : null,
+                $price,
+                $stock,
+                $threshold,
+                $note !== '' ? $note : null,
+                $visibility,
+                $sortOrder,
+            ]);
             json(['message' => 'Inventory updated.']);
         }
 
