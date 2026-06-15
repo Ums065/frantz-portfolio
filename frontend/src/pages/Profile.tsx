@@ -31,6 +31,8 @@ export default function Profile() {
 
   const fullName = user.full_name || ''
   const initial = fullName.trim().charAt(0).toUpperCase() || 'U'
+  const approvalStatus = (user.approval_status || 'approved').toString()
+  const statusLabel = approvalStatus === 'approved' ? 'Active' : approvalStatus === 'rejected' ? 'Rejected' : 'Pending review'
 
   return (
     <section className="profile-page">
@@ -60,10 +62,21 @@ export default function Profile() {
             <strong>{user.role}</strong>
           </div>
           <div>
+            <span>Status</span>
+            <strong>{statusLabel}</strong>
+          </div>
+          <div>
             <span>Joined</span>
             <strong>{new Date(user.created_at).toLocaleString()}</strong>
           </div>
         </div>
+        {approvalStatus !== 'approved' && (
+          <p className="profile-page__muted" style={{ marginTop: 14 }}>
+            {approvalStatus === 'rejected'
+              ? 'This account was rejected by admin.'
+              : 'This account is waiting for admin approval.'}
+          </p>
+        )}
         <div className="profile-actions">
           <Link className="btn btn--sm btn--solid" to={isAdmin(user.role) ? '/admin' : '/dashboard'}>Dashboard</Link>
           <Link className="btn btn--sm" to="/">View Site</Link>

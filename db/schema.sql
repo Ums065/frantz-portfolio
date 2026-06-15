@@ -16,11 +16,16 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash VARCHAR(255) NOT NULL,
   role          ENUM('member','vip','editor','admin','super_admin') NOT NULL DEFAULT 'member',
   email_verified_at TIMESTAMP NULL DEFAULT NULL,
+  approval_status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending',
+  approval_note TEXT DEFAULT NULL,
+  approval_reviewed_by_user_id INT DEFAULT NULL,
+  approval_reviewed_at TIMESTAMP NULL DEFAULT NULL,
   email_verification_otp_hash VARCHAR(255) DEFAULT NULL,
   email_verification_otp_expires_at TIMESTAMP NULL DEFAULT NULL,
   email_verification_otp_sent_at TIMESTAMP NULL DEFAULT NULL,
   email_verification_otp_attempts INT NOT NULL DEFAULT 0,
-  created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 
 -- ---------- Newsletter subscribers ----------

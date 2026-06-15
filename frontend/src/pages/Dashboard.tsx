@@ -59,9 +59,11 @@ export default function Dashboard() {
   const avatarInitial = fullName.trim().charAt(0).toUpperCase() || 'U'
   const displayName = data?.user?.full_name || fullName
   const activeTabLabel = dashboardTabs.find((item) => item.key === tab)?.label || 'Overview'
+  const approvalStatus = (user?.approval_status || 'approved').toString()
+  const requiresApproval = !!user && !isAdmin(user.role) && approvalStatus !== 'approved'
 
   useEffect(() => {
-    if (!user || isAdmin(user.role)) return
+    if (!user || isAdmin(user.role) || requiresApproval) return
     api.get<DashboardData>('user/dashboard')
       .then((res) => {
         setData(res)
@@ -71,7 +73,7 @@ export default function Dashboard() {
     setSavedArticles(loadSavedItems('article'))
     setSavedEvents(loadSavedItems('event'))
     setNotifications(loadMemberNotifications())
-  }, [user])
+  }, [user, requiresApproval])
 
   const saveProfile = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -132,6 +134,45 @@ export default function Dashboard() {
           <div className="profile-actions">
             <Link className="btn btn--sm btn--solid" to="/admin">Open Admin</Link>
             <Link className="btn btn--sm" to="/">View Site</Link>
+          </div>
+        </div>
+      </section>
+    )
+  }
+
+  if (requiresApproval) {
+    return (
+      <section className="profile-page">
+        <div className="profile-card glass" style={{ maxWidth: 720 }}>
+          <p className="eyebrow">Account Review</p>
+          <h1 className="gold-text">{approvalStatus === 'rejected' ? 'Account Rejected' : 'Approval Pending'}</h1>
+          <p className="profile-page__muted" style={{ maxWidth: 620, margin: '0 auto' }}>
+            {approvalStatus === 'rejected'
+              ? 'This account was rejected by admin. Private tools stay locked and the account cannot be used until the review is changed.'
+              : 'Your account is waiting for admin approval. You can log in, but member dashboard tools and private perks stay locked until the review is completed.'}
+          </p>
+          <div className="profile-grid" style={{ marginTop: 20 }}>
+            <div>
+              <span>Account</span>
+              <strong>{fullName || user.email}</strong>
+            </div>
+            <div>
+              <span>Role</span>
+              <strong>{user.role}</strong>
+            </div>
+            <div>
+              <span>Status</span>
+              <strong>{approvalStatus}</strong>
+            </div>
+            <div>
+              <span>Next step</span>
+              <strong>Admin review</strong>
+            </div>
+          </div>
+          <div className="profile-actions">
+            <Link className="btn btn--sm btn--solid" to="/profile">View Profile</Link>
+            <Link className="btn btn--sm" to="/">Back to Home</Link>
+            <button className="btn btn--sm" type="button" onClick={() => logout()}>Logout</button>
           </div>
         </div>
       </section>

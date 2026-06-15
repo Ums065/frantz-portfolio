@@ -8,7 +8,17 @@ interface RequestRow {
 }
 interface SubRow { id: number; email: string; created_at: string }
 interface ContactRow { id: number; full_name: string; email: string; message: string | null; created_at: string }
-interface MemberRow { id: number; full_name: string; email: string; role: string; created_at: string }
+interface MemberRow {
+  id: number
+  full_name: string
+  email: string
+  role: string
+  approval_status?: string | null
+  approval_note?: string | null
+  approval_reviewed_at?: string | null
+  created_at: string
+  updated_at?: string | null
+}
 interface OrderRow {
   id: number; order_no: string; customer_name: string; email: string; items: string
   total: string; payment_method: string; status: string; created_at: string
@@ -22,7 +32,7 @@ const isAdmin = (role?: string) => ['admin', 'super_admin', 'editor'].includes(r
 export default function Admin() {
   const { user, loading, logout, refresh: refreshAuth } = useAuth()
   const [data, setData] = useState<Submissions | null>(null)
-  const [tab, setTab] = useState<'analytics' | 'requests' | 'orders' | 'subscribers' | 'contacts' | 'members' | 'awards' | 'events' | 'blog' | 'testimonials' | 'media' | 'community' | 'rsvps' | 'inventory'>('analytics')
+  const [tab, setTab] = useState<'analytics' | 'requests' | 'orders' | 'subscribers' | 'contacts' | 'members' | 'approvals' | 'awards' | 'events' | 'blog' | 'testimonials' | 'media' | 'community' | 'rsvps' | 'inventory'>('analytics')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -50,6 +60,18 @@ export default function Admin() {
     await api.put(`admin/order/${id}`, { status })
     refreshData()
   }
+
+  const setApproval = async (id: number, approval_status: 'pending' | 'approved' | 'rejected', approval_note = '') => {
+    if (approval_status === 'rejected' && !confirm('Reject this account?')) return
+    await api.put(`admin/user/${id}/approval`, { approval_status, approval_note })
+    refreshData()
+  }
+
+  const reviewableAccounts = data?.members.filter((m) => !isAdmin(m.role)) ?? []
+  const pendingAccounts = reviewableAccounts.filter((m) => (m.approval_status || 'pending') === 'pending').length
+  const rejectedAccounts = reviewableAccounts.filter((m) => (m.approval_status || 'pending') === 'rejected').length
+  const approvalQueueCount = reviewableAccounts.filter((m) => (m.approval_status || 'pending') !== 'approved').length
+  const approvedAccounts = reviewableAccounts.filter((m) => (m.approval_status || 'pending') === 'approved').length
 
   if (loading) {
     return (
@@ -90,7 +112,8 @@ export default function Admin() {
     ['orders', `Orders (${data?.orders?.length ?? 0})`],
     ['subscribers', `Subscribers (${data?.subscribers.length ?? 0})`],
     ['contacts', `Contacts (${data?.contacts.length ?? 0})`],
-    ['members', `Members (${data?.members.length ?? 0})`],
+    ['members', `Accounts (${data?.members.length ?? 0})`],
+    ['approvals', `Approvals (${approvalQueueCount})`],
     ['awards', 'Awards'],
     ['events', 'Events'],
     ['blog', 'Blog'],
@@ -109,7 +132,7 @@ export default function Admin() {
             <span className="admin-kicker">Admin Dashboard</span>
             <h1 className="gold-text" style={{ fontFamily: 'var(--f-serif)', fontSize: 30, marginTop: 6 }}>Command Center</h1>
             <p style={{ color: 'var(--muted)', fontSize: 13, maxWidth: 640, lineHeight: 1.6 }}>
-              Signed in as {user?.full_name} | {user?.role}. Manage requests, orders, content, and inventory from one secure console.
+              Signed in as {user?.full_name} | {user?.role}. Manage requests, approvals, orders, content, and inventory from one secure console.
             </p>
           </div>
           <div style={{ display: 'flex', gap: 10 }}>
@@ -121,7 +144,9 @@ export default function Admin() {
         <div className="admin-stats">
           <div className="admin-stat glass"><span>Requests</span><strong>{data?.requests.length ?? 0}</strong><p>Forms awaiting review</p></div>
           <div className="admin-stat glass"><span>Orders</span><strong>{data?.orders?.length ?? 0}</strong><p>Commerce records</p></div>
-          <div className="admin-stat glass"><span>Members</span><strong>{data?.members.length ?? 0}</strong><p>Approved accounts</p></div>
+          <div className="admin-stat glass"><span>Pending</span><strong>{pendingAccounts}</strong><p>Accounts waiting on approval</p></div>
+          <div className="admin-stat glass"><span>Approved</span><strong>{approvedAccounts}</strong><p>Live accounts</p></div>
+          <div className="admin-stat glass"><span>Rejected</span><strong>{rejectedAccounts}</strong><p>Accounts declined by admin</p></div>
           <div className="admin-stat glass"><span>Contacts</span><strong>{data?.contacts.length ?? 0}</strong><p>Inbound messages</p></div>
         </div>
 
@@ -201,10 +226,65 @@ export default function Admin() {
         )}
 
         {tab === 'members' && (
-          <Table head={['Name', 'Email', 'Role', 'Joined']}>
-            {data?.members.map((m) => (
-              <tr key={m.id} style={rowS}><td style={tdS}>{m.full_name}</td><td style={tdS}>{m.email}</td><td style={tdS}>{m.role}</td><td style={tdS}>{m.created_at}</td></tr>
-            ))}
+          <Table head={['Name', 'Email', 'Role', 'Status', 'Joined', 'Actions']}>
+            {data?.members.map((m) => {
+              const adminAccount = isAdmin(m.role)
+              const status = adminAccount ? 'protected' : (m.approval_status || 'pending').toLowerCase()
+              const statusClass = adminAccount
+                ? 'status-pill--approved'
+                : status === 'approved'
+                  ? 'status-pill--approved'
+                  : status === 'rejected'
+                    ? 'status-pill--closed'
+                    : 'status-pill--new'
+              return (
+                <tr key={m.id} style={rowS}>
+                  <td style={tdS}>{m.full_name}</td>
+                  <td style={tdS}>{m.email}</td>
+                  <td style={tdS}>{m.role}</td>
+                  <td style={tdS}><span className={`status-pill ${statusClass}`}>{status}</span></td>
+                  <td style={tdS}>{m.created_at}</td>
+                  <td style={tdS}>
+                    {adminAccount ? (
+                      <span style={{ color: 'var(--muted)', fontSize: 12 }}>Protected account</span>
+                    ) : (
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        <button className="btn btn--sm btn--solid" onClick={() => setApproval(m.id, 'approved')}>Approve</button>
+                        <button className="btn btn--sm" onClick={() => setApproval(m.id, 'pending')}>Pending</button>
+                        <button className="btn btn--sm" onClick={() => setApproval(m.id, 'rejected')}>Reject</button>
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              )
+            })}
+          </Table>
+        )}
+
+        {tab === 'approvals' && (
+          <Table head={['Name', 'Email', 'Role', 'Status', 'Reviewed', 'Actions']}>
+            {data?.members
+              .filter((m) => !isAdmin(m.role) && (m.approval_status || 'pending') !== 'approved')
+              .map((m) => {
+                const status = (m.approval_status || 'pending').toLowerCase()
+                const statusClass = status === 'rejected' ? 'status-pill--closed' : 'status-pill--new'
+                return (
+                  <tr key={m.id} style={rowS}>
+                    <td style={tdS}>{m.full_name}</td>
+                    <td style={tdS}>{m.email}</td>
+                    <td style={tdS}>{m.role}</td>
+                    <td style={tdS}><span className={`status-pill ${statusClass}`}>{status}</span></td>
+                    <td style={tdS}>{m.approval_reviewed_at || 'â€”'}</td>
+                    <td style={tdS}>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        <button className="btn btn--sm btn--solid" onClick={() => setApproval(m.id, 'approved')}>Approve</button>
+                        <button className="btn btn--sm" onClick={() => setApproval(m.id, 'pending')}>Keep Pending</button>
+                        <button className="btn btn--sm" onClick={() => setApproval(m.id, 'rejected')}>Reject</button>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
           </Table>
         )}
 
@@ -532,6 +612,9 @@ function AnalyticsAdmin() {
   const cards = [
     ['Users', data?.totals.users ?? 0],
     ['Members', data?.totals.members ?? 0],
+    ['Pending', data?.totals.pending_accounts ?? 0],
+    ['Approved', data?.totals.approved_accounts ?? 0],
+    ['Rejected', data?.totals.rejected_accounts ?? 0],
     ['Requests', data?.totals.requests ?? 0],
     ['Orders', data?.totals.orders ?? 0],
     ['Revenue', `$${(data?.totals.revenue ?? 0).toFixed(2)}`],

@@ -19,6 +19,10 @@ function new_school_demo_upsert_user(PDO $pdo, string $fullName, string $email, 
              SET full_name = ?,
                  password_hash = ?,
                  role = ?,
+                 approval_status = "approved",
+                 approval_note = NULL,
+                 approval_reviewed_by_user_id = NULL,
+                 approval_reviewed_at = COALESCE(approval_reviewed_at, NOW()),
                  email_verified_at = COALESCE(email_verified_at, NOW()),
                  email_verification_otp_hash = NULL,
                  email_verification_otp_expires_at = NULL,
@@ -39,10 +43,11 @@ function new_school_demo_upsert_user(PDO $pdo, string $fullName, string $email, 
 
     $insert = $pdo->prepare(
         'INSERT INTO users (
-            full_name, email, password_hash, role, email_verified_at,
+            full_name, email, password_hash, role, approval_status, approval_note,
+            approval_reviewed_by_user_id, approval_reviewed_at, email_verified_at,
             email_verification_otp_hash, email_verification_otp_expires_at,
             email_verification_otp_sent_at, email_verification_otp_attempts
-         ) VALUES (?, ?, ?, ?, NOW(), NULL, NULL, NULL, 0)'
+         ) VALUES (?, ?, ?, ?, "approved", NULL, NULL, NOW(), NOW(), NULL, NULL, NULL, 0)'
     );
     $insert->execute([$fullName, $email, $passwordHash, $role]);
 

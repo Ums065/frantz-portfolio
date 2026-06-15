@@ -38,31 +38,31 @@ const registerRoleMeta: Record<RegistrationRole, { title: string; subtitle: stri
   community: {
     title: 'Join the Community',
     subtitle: 'Create a standard site account to stay connected.',
-    helper: 'Choose Student, Parent, School, or Teacher if you want the challenge-specific registration flow.',
+    helper: 'Community accounts are reviewed by admin before member access is activated.',
     button: 'Create Account',
   },
   student: {
     title: 'Student Registration',
     subtitle: 'Register for the Community Business Impact Challenge.',
-    helper: 'Students must be 11-19 and complete parent, school, and teacher approval before submission opens.',
+    helper: 'Students must be 11-19 and the account is reviewed by admin before the challenge dashboard opens.',
     button: 'Register Student',
   },
   parent: {
     title: 'Parent Consent',
     subtitle: 'Use the QR token from the student profile to finish consent.',
-    helper: 'Parent records are linked to the student QR flow and store consent approval details.',
+    helper: 'Parent records are linked to the student QR flow and are reviewed before access is fully activated.',
     button: 'Save Consent',
   },
   school: {
     title: 'School Registration',
     subtitle: 'Register your school for challenge oversight and approvals.',
-    helper: 'School administrators can review registered students, approvals, and submissions after onboarding.',
+    helper: 'School accounts are queued for admin review before the dashboard becomes active.',
     button: 'Register School',
   },
   teacher: {
     title: 'Teacher Registration',
     subtitle: 'Create a teacher account under your school.',
-    helper: 'Teachers monitor student progress, interviews, submissions, and awards.',
+    helper: 'Teacher accounts are queued for admin review before tracking tools unlock.',
     button: 'Register Teacher',
   },
 }
@@ -143,7 +143,7 @@ export function AuthModal({
   const [form, setForm] = useState<RegisterFormState>(createRegisterForm())
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
-  const [done, setDone] = useState<string | null>(null)
+  const [done, setDone] = useState<{ title: string; message: string } | null>(null)
 
   useEffect(() => {
     if (open) {
@@ -160,10 +160,23 @@ export function AuthModal({
     return () => document.removeEventListener('keydown', onKey)
   }, [onClose])
 
-  const finishSuccess = (fullName: string) => {
-    const firstName = (fullName || '').trim().split(/\s+/)[0] || 'Welcome'
-    setDone(firstName)
-    setForm(createRegisterForm())
+  const finishSuccess = (result: AuthResult) => {
+    const firstName = (result.user?.full_name || '').trim().split(/\s+/)[0] || 'there'
+    const approvalStatus = (result.user?.approval_status || 'approved').toString()
+    if (approvalStatus === 'approved') {
+      setDone({
+        title: `Welcome, ${firstName}`,
+        message: result.user?.role === 'member'
+          ? 'Your member account is active.'
+          : 'Your account is active and ready to use.',
+      })
+      return
+    }
+
+    setDone({
+      title: `Request received, ${firstName}`,
+      message: 'Your account is pending admin approval. You can keep browsing the public site, and we will unlock access after review.',
+    })
   }
 
   const handleAuthResult = async (result: AuthResult) => {
@@ -171,7 +184,8 @@ export function AuthModal({
       throw new Error('Unexpected authentication response from the server.')
     }
 
-    finishSuccess(result.user.full_name)
+    finishSuccess(result)
+    setForm(createRegisterForm())
   }
 
   const updateField = <K extends keyof RegisterFormState>(key: K, value: RegisterFormState[K]) => {
@@ -303,8 +317,8 @@ export function AuthModal({
         {done ? (
           <div style={{ textAlign: 'center' }}>
             <OkIcon />
-            <h3 className="gold-text">Welcome, {done}</h3>
-            <p className="msub">Your account is ready. You can continue now.</p>
+            <h3 className="gold-text">{done.title}</h3>
+            <p className="msub">{done.message}</p>
             <button className="btn btn--solid" onClick={onClose}>Continue</button>
           </div>
         ) : (

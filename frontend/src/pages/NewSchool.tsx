@@ -166,6 +166,10 @@ export default function NewSchool() {
     description: 'Join New York\'s Largest Student Problem-Solving Movement - student registration, parent QR consent, school and teacher approval, business interviews, and scholarship submissions.',
   })
 
+  const accountApprovalStatus = (user?.approval_status || 'approved').toString()
+  const hasApprovedChallengeAccess = !user || isAdminRole(user.role) || accountApprovalStatus === 'approved'
+  const accountNeedsReview = !!user && !isAdminRole(user.role) && accountApprovalStatus !== 'approved'
+
   const showNotice = (tone: 'success' | 'error' | 'info', text: string) => {
     setNotice({ tone, text })
     window.fcToast?.(text)
@@ -245,12 +249,17 @@ export default function NewSchool() {
   useEffect(() => {
     if (loading) return
     if (user) {
-      reloadDashboard().catch((err) => handleError(err, 'Could not load dashboard data.'))
+      if (hasApprovedChallengeAccess) {
+        reloadDashboard().catch((err) => handleError(err, 'Could not load dashboard data.'))
+      } else {
+        setDashboard(null)
+        setAdminSummary(null)
+      }
     } else {
       setDashboard(null)
       setAdminSummary(null)
     }
-  }, [user, loading])
+  }, [user, loading, hasApprovedChallengeAccess])
 
   useEffect(() => {
     if (!token) {
@@ -698,6 +707,13 @@ export default function NewSchool() {
               <a className="btn" href="#dashboard">Open Dashboard</a>
               <button className="btn" type="button" data-auth="login">Member Login</button>
             </div>
+            {accountNeedsReview && (
+              <div className={`ns-alert ns-alert--${accountApprovalStatus === 'rejected' ? 'error' : 'info'}`}>
+                {accountApprovalStatus === 'rejected'
+                  ? 'Your account was rejected by admin. Please contact support before trying again.'
+                  : 'Your account is pending admin approval. Public pages remain open, but dashboard access unlocks after review.'}
+              </div>
+            )}
             {notice && <div className={`ns-alert ns-alert--${notice.tone}`}>{notice.text}</div>}
             {token && parentLink?.student && (
               <div className="ns-qr-banner glass">
@@ -844,7 +860,7 @@ export default function NewSchool() {
             ))}
           </div>
           <p className="ns-registration-note">
-            Admin accounts stay private. Public registration is available for students, parents through QR consent, schools, and teachers.
+            Admin accounts stay private. Public registration is available for students, parents through QR consent, schools, and teachers, and each request is reviewed by admin before full access is unlocked.
           </p>
 
           <div className="ns-form-grid ns-form-grid--single">

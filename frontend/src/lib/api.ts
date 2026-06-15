@@ -139,7 +139,12 @@ export interface User {
   email: string
   role: string
   email_verified_at?: string | null
+  approval_status?: string | null
+  approval_note?: string | null
+  approval_reviewed_by_user_id?: number | null
+  approval_reviewed_at?: string | null
   created_at: string
+  updated_at?: string | null
 }
 
 export interface EventItem {
@@ -229,6 +234,9 @@ export interface AnalyticsPayload {
     members: number
     vip: number
     admin: number
+    pending_accounts?: number
+    approved_accounts?: number
+    rejected_accounts?: number
     requests: number
     orders: number
     revenue: number

@@ -71,11 +71,9 @@ function db(): PDO
                 PDO::ATTR_EMULATE_PREPARES   => false,
             ]);
         } catch (PDOException $e) {
-            $payload = ['error' => 'Database connection failed'];
-            if (app_debug()) {
-                $payload['detail'] = $e->getMessage();
-            }
-            json($payload, 500);
+            throw new RuntimeException(
+                'Database connection failed' . (app_debug() ? ': ' . $e->getMessage() : '')
+            );
         }
     }
     return $pdo;

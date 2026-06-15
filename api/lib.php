@@ -45,10 +45,22 @@ function current_user(): ?array
     if (empty($_SESSION['uid'])) {
         return null;
     }
-    $stmt = db()->prepare('SELECT id, full_name, email, role, email_verified_at, created_at FROM users WHERE id = ?');
-    $stmt->execute([$_SESSION['uid']]);
-    $u = $stmt->fetch();
-    return $u ?: null;
+    try {
+        $stmt = db()->prepare(
+            'SELECT id, full_name, email, role, email_verified_at, approval_status,
+                    approval_note, approval_reviewed_by_user_id, approval_reviewed_at,
+                    created_at, updated_at
+             FROM users WHERE id = ?'
+        );
+        $stmt->execute([$_SESSION['uid']]);
+        $u = $stmt->fetch();
+        return $u ?: null;
+    } catch (Throwable $e) {
+        if (app_debug()) {
+            error_log('current_user() failed: ' . $e->getMessage());
+        }
+        return null;
+    }
 }
 
 /** Require a logged-in user (any role) or fail 401. */
@@ -57,6 +69,10 @@ function require_login(): array
     $u = current_user();
     if (!$u) {
         json(['error' => 'Authentication required.'], 401);
+    }
+    if (!in_array((string) ($u['role'] ?? ''), ['admin', 'super_admin', 'editor'], true)
+        && (string) ($u['approval_status'] ?? 'pending') !== 'approved') {
+        json(['error' => 'Your account is pending admin approval.'], 403);
     }
     return $u;
 }

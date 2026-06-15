@@ -54,10 +54,16 @@ try {
                 $passwordHash = password_hash($pass, PASSWORD_DEFAULT);
 
                 if ($existing) {
+                    $existingApproval = (string) ($existing['approval_status'] ?? 'pending');
+                    $nextApproval = $existingApproval === 'approved' ? 'approved' : 'pending';
                     $update = $pdo->prepare(
                         'UPDATE users
                          SET full_name = ?,
                              password_hash = ?,
+                             approval_status = ?,
+                             approval_note = CASE WHEN ? = "approved" THEN approval_note ELSE NULL END,
+                             approval_reviewed_by_user_id = CASE WHEN ? = "approved" THEN approval_reviewed_by_user_id ELSE NULL END,
+                             approval_reviewed_at = CASE WHEN ? = "approved" THEN approval_reviewed_at ELSE NULL END,
                              email_verified_at = NOW(),
                              email_verification_otp_hash = NULL,
                              email_verification_otp_expires_at = NULL,
@@ -65,7 +71,7 @@ try {
                              email_verification_otp_attempts = 0
                          WHERE id = ?'
                     );
-                    $update->execute([$name, $passwordHash, $existing['id']]);
+                    $update->execute([$name, $passwordHash, $nextApproval, $nextApproval, $nextApproval, $nextApproval, $existing['id']]);
                     $userId = (int) $existing['id'];
                 } else {
                     $insert = $pdo->prepare(
@@ -73,12 +79,16 @@ try {
                             full_name,
                             email,
                             password_hash,
+                            approval_status,
+                            approval_note,
+                            approval_reviewed_by_user_id,
+                            approval_reviewed_at,
                             email_verified_at,
                             email_verification_otp_hash,
                             email_verification_otp_expires_at,
                             email_verification_otp_sent_at,
                             email_verification_otp_attempts
-                         ) VALUES (?, ?, ?, NOW(), NULL, NULL, NULL, 0)'
+                         ) VALUES (?, ?, ?, "pending", NULL, NULL, NULL, NOW(), NULL, NULL, NULL, 0)'
                     );
                     $insert->execute([$name, $email, $passwordHash]);
                     $userId = (int) $pdo->lastInsertId();
@@ -93,10 +103,13 @@ try {
 
                 $pdo->commit();
                 $registeredUser = login_user($registeredUser);
+                $approvalMessage = (string) ($registeredUser['approval_status'] ?? 'pending') === 'approved'
+                    ? 'Account created successfully.'
+                    : 'Account submitted for admin approval.';
 
                 json([
                     'user' => $registeredUser,
-                    'message' => 'Account created successfully.',
+                    'message' => $approvalMessage,
                     'csrfToken' => csrf_token(),
                 ], 201);
             } catch (Throwable $e) {
@@ -121,6 +134,9 @@ try {
 
             if (!$u || !password_verify($pass, $u['password_hash'])) {
                 json(['error' => 'Invalid email or password.'], 401);
+            }
+            if ((string) ($u['approval_status'] ?? 'pending') === 'rejected') {
+                json(['error' => 'This account has been rejected. Please contact the administrator.'], 403);
             }
 
             $pdo->beginTransaction();
@@ -677,7 +693,7 @@ try {
                 'requests'    => db()->query('SELECT * FROM requests ORDER BY created_at DESC LIMIT 200')->fetchAll(),
                 'subscribers' => db()->query('SELECT * FROM subscribers ORDER BY created_at DESC LIMIT 200')->fetchAll(),
                 'contacts'    => db()->query('SELECT * FROM contact_messages ORDER BY created_at DESC LIMIT 200')->fetchAll(),
-                'members'     => db()->query('SELECT id, full_name, email, role, created_at FROM users ORDER BY created_at DESC LIMIT 200')->fetchAll(),
+                'members'     => db()->query('SELECT id, full_name, email, role, approval_status, approval_note, approval_reviewed_at, created_at, updated_at FROM users ORDER BY CASE approval_status WHEN "pending" THEN 0 WHEN "rejected" THEN 1 ELSE 2 END, created_at DESC LIMIT 200')->fetchAll(),
                 'orders'      => db()->query('SELECT * FROM orders ORDER BY created_at DESC LIMIT 200')->fetchAll(),
             ]);
         }
@@ -695,9 +711,12 @@ try {
             json([
                 'totals' => [
                     'users'        => $count('SELECT COUNT(*) FROM users'),
-                    'members'      => $count("SELECT COUNT(*) FROM users WHERE role = 'member'"),
+                    'members'      => $count("SELECT COUNT(*) FROM users WHERE role = 'member' AND approval_status = 'approved'"),
                     'vip'          => $count("SELECT COUNT(*) FROM users WHERE role = 'vip'"),
                     'admin'        => $count("SELECT COUNT(*) FROM users WHERE role IN ('admin','super_admin','editor')"),
+                    'pending_accounts' => $count("SELECT COUNT(*) FROM users WHERE approval_status = 'pending'"),
+                    'approved_accounts' => $count("SELECT COUNT(*) FROM users WHERE approval_status = 'approved'"),
+                    'rejected_accounts' => $count("SELECT COUNT(*) FROM users WHERE approval_status = 'rejected'"),
                     'requests'     => $count('SELECT COUNT(*) FROM requests'),
                     'orders'       => $count('SELECT COUNT(*) FROM orders'),
                     'revenue'      => round((float) db()->query('SELECT COALESCE(SUM(total),0) FROM orders')->fetchColumn(), 2),
@@ -726,6 +745,39 @@ try {
                     ['label' => 'Community', 'value' => $count('SELECT COUNT(*) FROM community_threads')],
                     ['label' => 'RSVPs', 'value' => $count('SELECT COUNT(*) FROM event_rsvps')],
                 ],
+            ]);
+        }
+
+        case $method === 'PUT' && preg_match('#^admin/user/(\d+)/approval$#', $route, $m) === 1: {
+            $admin = require_admin();
+            $status = field(body(), 'approval_status');
+            $note = field(body(), 'approval_note');
+            if (!in_array($status, ['pending', 'approved', 'rejected'], true)) {
+                json(['error' => 'Invalid approval status.'], 422);
+            }
+
+            $reviewedAt = in_array($status, ['approved', 'rejected'], true) ? date('Y-m-d H:i:s') : null;
+            $reviewedBy = in_array($status, ['approved', 'rejected'], true) ? (int) $admin['id'] : null;
+            $approvalNote = $status === 'pending' ? null : ($note !== '' ? $note : null);
+
+            $stmt = db()->prepare(
+                'UPDATE users
+                 SET approval_status = ?,
+                     approval_note = ?,
+                     approval_reviewed_by_user_id = ?,
+                     approval_reviewed_at = ?,
+                     updated_at = NOW()
+                 WHERE id = ?'
+            );
+            $stmt->execute([$status, $approvalNote, $reviewedBy, $reviewedAt, (int) $m[1]]);
+
+            $fresh = db()->prepare('SELECT id, full_name, email, role, approval_status, approval_note, approval_reviewed_at, created_at, updated_at FROM users WHERE id = ? LIMIT 1');
+            $fresh->execute([(int) $m[1]]);
+            $updatedUser = $fresh->fetch();
+
+            json([
+                'message' => 'Approval updated.',
+                'user' => $updatedUser ?: null,
             ]);
         }
 

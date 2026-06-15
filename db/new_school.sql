@@ -18,6 +18,18 @@ ALTER TABLE users
     'teacher'
   ) NOT NULL DEFAULT 'member';
 
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS approval_status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending' AFTER email_verified_at,
+  ADD COLUMN IF NOT EXISTS approval_note TEXT DEFAULT NULL AFTER approval_status,
+  ADD COLUMN IF NOT EXISTS approval_reviewed_by_user_id INT DEFAULT NULL AFTER approval_note,
+  ADD COLUMN IF NOT EXISTS approval_reviewed_at TIMESTAMP NULL DEFAULT NULL AFTER approval_reviewed_by_user_id,
+  ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER created_at;
+
+UPDATE users
+SET approval_status = 'approved',
+    approval_reviewed_at = COALESCE(approval_reviewed_at, created_at)
+WHERE approval_status IS NULL OR approval_status <> 'approved';
+
 CREATE TABLE IF NOT EXISTS new_school_schools (
   id                      INT AUTO_INCREMENT PRIMARY KEY,
   user_id                 INT NOT NULL UNIQUE,

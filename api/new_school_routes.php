@@ -15,11 +15,18 @@ function new_school_upsert_user_account(string $fullName, string $email, string 
             json(['error' => 'That email is already reserved for an administrator account.'], 409);
         }
 
+        $existingApproval = (string) ($existing['approval_status'] ?? 'pending');
+        $nextApproval = $existingApproval === 'approved' ? 'approved' : 'pending';
+
         $update = $pdo->prepare(
             'UPDATE users
              SET full_name = ?,
                  password_hash = ?,
                  role = ?,
+                 approval_status = ?,
+                 approval_note = CASE WHEN ? = "approved" THEN approval_note ELSE NULL END,
+                 approval_reviewed_by_user_id = CASE WHEN ? = "approved" THEN approval_reviewed_by_user_id ELSE NULL END,
+                 approval_reviewed_at = CASE WHEN ? = "approved" THEN approval_reviewed_at ELSE NULL END,
                  email_verified_at = COALESCE(email_verified_at, NOW()),
                  email_verification_otp_hash = NULL,
                  email_verification_otp_expires_at = NULL,
@@ -27,7 +34,7 @@ function new_school_upsert_user_account(string $fullName, string $email, string 
                  email_verification_otp_attempts = 0
              WHERE id = ?'
         );
-        $update->execute([$fullName, $passwordHash, $role, $existing['id']]);
+        $update->execute([$fullName, $passwordHash, $role, $nextApproval, $nextApproval, $nextApproval, $nextApproval, $existing['id']]);
 
         $fresh = $pdo->prepare('SELECT * FROM users WHERE id = ? LIMIT 1');
         $fresh->execute([(int) $existing['id']]);
@@ -44,12 +51,16 @@ function new_school_upsert_user_account(string $fullName, string $email, string 
             email,
             password_hash,
             role,
+            approval_status,
+            approval_note,
+            approval_reviewed_by_user_id,
+            approval_reviewed_at,
             email_verified_at,
             email_verification_otp_hash,
             email_verification_otp_expires_at,
             email_verification_otp_sent_at,
             email_verification_otp_attempts
-         ) VALUES (?, ?, ?, ?, NOW(), NULL, NULL, NULL, 0)'
+         ) VALUES (?, ?, ?, ?, "pending", NULL, NULL, NULL, NOW(), NULL, NULL, NULL, 0)'
     );
     $insert->execute([$fullName, $email, $passwordHash, $role]);
 
@@ -184,37 +195,29 @@ function new_school_handle_route(string $method, string $route): bool
 
     switch (true) {
         case $key === 'GET new-school/overview': {
-            $schools = array_map(
-                static fn(array $school): array => [
-                    'id' => (int) $school['id'],
-                    'school_name' => (string) $school['school_name'],
-                    'school_district' => (string) $school['school_district'],
-                    'status' => (string) $school['status'],
-                ],
-                new_school_fetch_all_schools()
-            );
-
-            $winners = db()->query(
-                'SELECT w.id, w.place, w.scholarship_amount, w.announced_at, w.published_at,
-                        s.full_name AS student_name, s.grade_level, sc.school_name, sub.score, sub.rank_position
-                 FROM new_school_winners w
-                 INNER JOIN new_school_students s ON s.id = w.student_id
-                 INNER JOIN new_school_submissions sub ON sub.id = w.submission_id
-                 LEFT JOIN new_school_schools sc ON sc.id = s.school_id
-                 ORDER BY w.created_at DESC'
-            )->fetchAll();
-
-            json([
+            $payload = [
                 'challenge' => [
                     'title' => 'What Problem Will You Solve?',
                     'subtitle' => 'Join New York\'s Largest Student Problem-Solving Movement',
                     'deadline' => '2026-08-25',
                     'website' => 'FrantzCoutard.com',
                 ],
-                'summary' => new_school_public_summary(),
-                'leaderboards' => new_school_public_leaderboards(),
-                'schools' => $schools,
-                'winners' => $winners,
+                'summary' => [
+                    'students' => 0,
+                    'parents' => 0,
+                    'schools' => 0,
+                    'teachers' => 0,
+                    'businesses' => 0,
+                    'submissions' => 0,
+                    'winners' => 0,
+                ],
+                'leaderboards' => [
+                    'schools' => [],
+                    'teachers' => [],
+                    'students' => [],
+                ],
+                'schools' => [],
+                'winners' => [],
                 'workflow' => [
                     ['step' => 1, 'title' => 'Register', 'detail' => 'Students ages 11-19 create a challenge profile on the site.'],
                     ['step' => 2, 'title' => 'Interview 10 Local Businesses', 'detail' => 'Students meet with businesses to learn real community challenges.'],
@@ -242,7 +245,39 @@ function new_school_handle_route(string $method, string $route): bool
                     'Challenge identified, proposed solution, and expected impact',
                 ],
                 'user' => $user,
-            ]);
+            ];
+
+            try {
+                $payload['schools'] = array_map(
+                    static fn(array $school): array => [
+                        'id' => (int) $school['id'],
+                        'school_name' => (string) $school['school_name'],
+                        'school_district' => (string) $school['school_district'],
+                        'status' => (string) $school['status'],
+                    ],
+                    new_school_fetch_all_schools()
+                );
+
+                $payload['winners'] = db()->query(
+                    'SELECT w.id, w.place, w.scholarship_amount, w.announced_at, w.published_at,
+                            s.full_name AS student_name, s.grade_level, sc.school_name, sub.score, sub.rank_position
+                     FROM new_school_winners w
+                     INNER JOIN new_school_students s ON s.id = w.student_id
+                     INNER JOIN new_school_submissions sub ON sub.id = w.submission_id
+                     LEFT JOIN new_school_schools sc ON sc.id = s.school_id
+                     ORDER BY w.created_at DESC'
+                )->fetchAll();
+
+                $payload['summary'] = new_school_public_summary();
+                $payload['leaderboards'] = new_school_public_leaderboards();
+            } catch (Throwable $e) {
+                if (app_debug()) {
+                    error_log('new-school overview fallback: ' . $e->getMessage());
+                    $payload['warning'] = 'Overview data is using fallback content because the database is temporarily unavailable.';
+                }
+            }
+
+            json($payload);
         }
 
         case $key === 'GET new-school/dashboard': {
@@ -526,7 +561,7 @@ function new_school_handle_route(string $method, string $route): bool
             );
 
             json([
-                'message' => 'Student registered successfully.',
+                'message' => 'Student registration submitted for admin approval.',
                 'user' => login_user($user),
                 'student' => $student,
                 'qr_token' => $qrToken,
@@ -671,7 +706,7 @@ function new_school_handle_route(string $method, string $route): bool
             );
 
             json([
-                'message' => 'Parent consent approved.',
+                'message' => 'Parent consent saved and account submitted for admin review.',
                 'user' => login_user($user),
                 'parent' => new_school_fetch_parent_by_student_id($studentId),
                 'student' => $student,
@@ -763,7 +798,7 @@ function new_school_handle_route(string $method, string $route): bool
             );
 
             json([
-                'message' => 'School registered successfully.',
+                'message' => 'School registration submitted for admin approval.',
                 'user' => login_user($user),
                 'school' => new_school_fetch_school_by_id($schoolId),
             ], $existingSchool ? 200 : 201);
@@ -848,7 +883,7 @@ function new_school_handle_route(string $method, string $route): bool
             );
 
             json([
-                'message' => 'Teacher registered successfully.',
+                'message' => 'Teacher registration submitted for admin approval.',
                 'user' => login_user($user),
                 'teacher' => new_school_fetch_teacher_by_user_id((int) $user['id']),
                 'school' => $school,
