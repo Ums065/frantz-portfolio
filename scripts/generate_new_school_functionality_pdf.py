@@ -285,7 +285,7 @@ def add_cover(pdf: PDFWriter) -> None:
     box_w = 160
     gap = 12
     metrics = [
-        ("Ages 14-19", "Students only, with parent or guardian consent required."),
+        ("Ages 11-19", "Students only, with parent or guardian consent required."),
         ("10 interviews", "Each student must log ten local business visits before submission unlocks."),
         ("$5,000 total", "First, second, and third place scholarship awards."),
     ]
@@ -360,7 +360,7 @@ def add_page_2(pdf: PDFWriter) -> None:
         MARGIN,
         y,
         [
-            "Students ages 14-19 are the primary participants.",
+            "Students ages 11-19 are the primary participants.",
             "Parent or guardian consent is required before participation becomes active.",
             "Schools register to verify students and keep the challenge tied to a real school context.",
             "Teachers register under the school to monitor progress and track impact.",

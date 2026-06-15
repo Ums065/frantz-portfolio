@@ -206,8 +206,8 @@ function new_school_handle_route(string $method, string $route): bool
 
             json([
                 'challenge' => [
-                    'title' => 'Leave It Better Than You Found It',
-                    'subtitle' => '2026 Community Business Impact Challenge',
+                    'title' => 'What Problem Will You Solve?',
+                    'subtitle' => 'Join New York\'s Largest Student Problem-Solving Movement',
                     'deadline' => '2026-08-25',
                     'website' => 'FrantzCoutard.com',
                 ],
@@ -216,16 +216,15 @@ function new_school_handle_route(string $method, string $route): bool
                 'schools' => $schools,
                 'winners' => $winners,
                 'workflow' => [
-                    ['step' => 1, 'title' => 'Student registration', 'detail' => 'Students ages 14-19 create a challenge profile on the site.'],
-                    ['step' => 2, 'title' => 'Parent consent', 'detail' => 'A QR code opens the parent approval flow on a phone.'],
-                    ['step' => 3, 'title' => 'School verification', 'detail' => 'School staff confirms enrollment and confirms the parent link.'],
-                    ['step' => 4, 'title' => 'Teacher approval', 'detail' => 'The teacher monitors progress and approves participation.'],
-                    ['step' => 5, 'title' => 'Ten interviews', 'detail' => 'Each student logs 10 local businesses before final submission unlocks.'],
-                    ['step' => 6, 'title' => 'Final submission', 'detail' => 'The student uploads a short video and one-page written solution.'],
-                    ['step' => 7, 'title' => 'Winner review', 'detail' => 'Admin scores submissions and publishes the scholarship winners.'],
+                    ['step' => 1, 'title' => 'Register', 'detail' => 'Students ages 11-19 create a challenge profile on the site.'],
+                    ['step' => 2, 'title' => 'Interview 10 Local Businesses', 'detail' => 'Students meet with businesses to learn real community challenges.'],
+                    ['step' => 3, 'title' => 'Identify A Community Problem', 'detail' => 'Interview notes become a clear problem statement to solve.'],
+                    ['step' => 4, 'title' => 'Develop A Solution', 'detail' => 'Students build a practical plan that can make a measurable difference.'],
+                    ['step' => 5, 'title' => 'Submit Your Project', 'detail' => 'The final video and written summary are uploaded for review.'],
+                    ['step' => 6, 'title' => 'Compete For Scholarships & School Grants', 'detail' => 'Admin review publishes awards and recognition.'],
                 ],
                 'rules' => [
-                    'Students must be ages 14-19.',
+                    'Students must be ages 11-19.',
                     'Parent or guardian consent is required.',
                     'School and teacher approval must be complete before final submission.',
                     'A student must log 10 business interviews.',
@@ -391,7 +390,7 @@ function new_school_handle_route(string $method, string $route): bool
             if ($fullName === '') json(['error' => 'Student full name is required.'], 422);
             if ($username === '') json(['error' => 'Student username is required.'], 422);
             if ($password === '' || strlen($password) < 6) json(['error' => 'Password must be at least 6 characters.'], 422);
-            if ($age < 14 || $age > 19) json(['error' => 'Students must be ages 14 to 19.'], 422);
+            if ($age < 11 || $age > 19) json(['error' => 'Students must be ages 11 to 19.'], 422);
             if ($dob === '') json(['error' => 'Date of birth is required.'], 422);
             if ($phone === '' || $homeAddress === '' || $schoolName === '' || $gradeLevel === '') {
                 json(['error' => 'Student contact and school details are required.'], 422);

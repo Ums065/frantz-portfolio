@@ -11,19 +11,18 @@ npm run seed:new-school
 
 - Open `/new-school`.
 - Confirm the hero section shows:
-  - `New School Functionality`
-  - scholarship pool
+  - `What Problem Will You Solve?`
+  - live movement counter
   - register buttons
 - Confirm the overview blocks render:
-  - workflow
-  - rules
-  - prizes
-  - leaderboards
+  - who can participate
+  - how it works
+  - registration hub
 - Confirm the page loads without console errors on desktop and mobile widths.
 
 ## 2. Student Registration
 
-- Register a new student with age 14 to 19.
+- Register a new student with age 11 to 19.
 - Confirm the participant ID is generated.
 - Confirm the QR consent preview renders locally.
 - Confirm the student status tracker shows the expected steps.

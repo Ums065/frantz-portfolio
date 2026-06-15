@@ -44,7 +44,7 @@ const registerRoleMeta: Record<RegistrationRole, { title: string; subtitle: stri
   student: {
     title: 'Student Registration',
     subtitle: 'Register for the Community Business Impact Challenge.',
-    helper: 'Students must be 14-19 and complete parent, school, and teacher approval before submission opens.',
+    helper: 'Students must be 11-19 and complete parent, school, and teacher approval before submission opens.',
     button: 'Register Student',
   },
   parent: {
@@ -343,7 +343,7 @@ export function AuthModal({
                       <>
                         {renderTextField('fullName', 'Student Full Name', { full: true, placeholder: 'Student full name', autoComplete: 'name' })}
                         {renderTextField('studentUsername', 'Student Username', { placeholder: 'Choose a username' })}
-                        {renderTextField('age', 'Age', { type: 'number', placeholder: '14-19', min: 14, max: 19 })}
+                        {renderTextField('age', 'Age', { type: 'number', placeholder: '11-19', min: 11, max: 19 })}
                         {renderTextField('dateOfBirth', 'Date of Birth', { type: 'date' })}
                         {renderTextField('email', 'Student Email', { type: 'email', full: true, placeholder: 'student@example.com', autoComplete: 'email' })}
                         {renderTextField('phoneNumber', 'Phone Number', { type: 'tel', placeholder: 'Student phone number', autoComplete: 'tel' })}
@@ -355,7 +355,7 @@ export function AuthModal({
                         {renderTextField('parentEmail', 'Parent Email Address', { type: 'email', placeholder: 'parent@example.com', autoComplete: 'email' })}
                         {renderTextField('password', 'Password', { type: 'password', placeholder: 'Create a password', autoComplete: 'new-password' })}
                         {renderTextField('confirmPassword', 'Confirm Password', { type: 'password', placeholder: 'Repeat the password', autoComplete: 'new-password' })}
-                        {renderCheckbox('I confirm I am a student ages 14-19.', 'This account will be linked to parent consent, school approval, and teacher approval.')}
+                        {renderCheckbox('I confirm I am a student ages 11-19.', 'This account will be linked to parent consent, school approval, and teacher approval.')}
                       </>
                     )}
 

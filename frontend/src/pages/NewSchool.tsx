@@ -17,6 +17,17 @@ const asArray = <T,>(value: unknown): T[] => (Array.isArray(value) ? (value as T
 const formatMoney = (amount: any) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(Number(amount || 0))
 
+const formatDateLabel = (value?: string) => {
+  if (!value) return 'To be announced'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(date)
+}
+
 const escapeCsv = (value: unknown) => {
   const text = String(value ?? '')
   const escaped = text.replace(/"/g, '""')
@@ -78,6 +89,67 @@ const registrationOptions: Array<{
   { key: 'teacher', title: 'Teacher', detail: 'Register the teacher dashboard and tracking view.' },
 ]
 
+const participantCards = [
+  {
+    kicker: 'Open To',
+    title: 'Students Ages 11-19',
+    detail: 'Lead the interviews, identify the problem, and turn ideas into a solution.',
+  },
+  {
+    kicker: 'Support',
+    title: 'Parents',
+    detail: 'Give consent, support the student, and stay informed through the QR flow.',
+  },
+  {
+    kicker: 'Guide',
+    title: 'Teachers',
+    detail: 'Track progress, confirm readiness, and help guide each project.',
+  },
+  {
+    kicker: 'Verify',
+    title: 'Schools',
+    detail: 'Verify participation and support the challenge at the building level.',
+  },
+  {
+    kicker: 'Partner',
+    title: 'Community Partners',
+    detail: 'Share real business challenges and help students learn from the field.',
+  },
+]
+
+const movementSteps = [
+  {
+    badge: '①',
+    title: 'Register',
+    detail: 'Create the student, parent, school, or teacher profile to get started.',
+  },
+  {
+    badge: '②',
+    title: 'Interview 10 Local Businesses',
+    detail: 'Collect real feedback from the community and document each visit.',
+  },
+  {
+    badge: '③',
+    title: 'Identify A Community Problem',
+    detail: 'Turn interview notes into a clear problem statement worth solving.',
+  },
+  {
+    badge: '④',
+    title: 'Develop A Solution',
+    detail: 'Build a practical plan that can make a measurable difference.',
+  },
+  {
+    badge: '⑤',
+    title: 'Submit Your Project',
+    detail: 'Upload the final video and written summary for review.',
+  },
+  {
+    badge: '⑥',
+    title: 'Compete For Scholarships & School Grants',
+    detail: 'Enter the judging stage for awards and recognition.',
+  },
+]
+
 export default function NewSchool() {
   const { token } = useParams()
   const { user, loading, refresh } = useAuth()
@@ -90,8 +162,8 @@ export default function NewSchool() {
   const [notice, setNotice] = useState<{ tone: 'success' | 'error' | 'info'; text: string } | null>(null)
 
   useSeo({
-    title: 'New School Functionality',
-    description: 'Leave It Better Than You Found It - registration, QR consent, school approval, teacher tracking, business interviews, and final submission workflow.',
+    title: 'What Problem Will You Solve?',
+    description: 'Join New York\'s Largest Student Problem-Solving Movement - student registration, parent QR consent, school and teacher approval, business interviews, and scholarship submissions.',
   })
 
   const showNotice = (tone: 'success' | 'error' | 'info', text: string) => {
@@ -145,7 +217,29 @@ export default function NewSchool() {
   }
 
   useEffect(() => {
-    reloadOverview().catch((err) => handleError(err, 'Could not load challenge overview.'))
+    let alive = true
+    let inFlight = false
+    const syncOverview = async () => {
+      if (!alive || inFlight) return
+      inFlight = true
+      try {
+        await reloadOverview()
+      } catch (err) {
+        handleError(err, 'Could not load challenge overview.')
+      } finally {
+        inFlight = false
+      }
+    }
+
+    void syncOverview()
+    const interval = window.setInterval(() => {
+      void syncOverview()
+    }, 30000)
+
+    return () => {
+      alive = false
+      window.clearInterval(interval)
+    }
   }, [])
 
   useEffect(() => {
@@ -207,6 +301,7 @@ export default function NewSchool() {
       showNotice('success', res.message || 'Student registered.')
       event.currentTarget.reset()
       await refresh()
+      await reloadOverview()
     } catch (err) {
       handleError(err, 'Student registration failed.')
     } finally {
@@ -238,6 +333,7 @@ export default function NewSchool() {
       showNotice('success', res.message || 'Parent consent saved.')
       event.currentTarget.reset()
       await refresh()
+      await reloadOverview()
       if (payload.token) {
         await reloadParentLink(payload.token)
       }
@@ -270,6 +366,7 @@ export default function NewSchool() {
       showNotice('success', res.message || 'School registered.')
       event.currentTarget.reset()
       await refresh()
+      await reloadOverview()
     } catch (err) {
       handleError(err, 'School registration failed.')
     } finally {
@@ -299,6 +396,7 @@ export default function NewSchool() {
       showNotice('success', res.message || 'Teacher registered.')
       event.currentTarget.reset()
       await refresh()
+      await reloadOverview()
     } catch (err) {
       handleError(err, 'Teacher registration failed.')
     } finally {
@@ -334,6 +432,7 @@ export default function NewSchool() {
       showNotice('success', res.message || 'Business interview saved.')
       event.currentTarget.reset()
       await reloadDashboard()
+      await reloadOverview()
     } catch (err) {
       handleError(err, 'Business interview could not be saved.')
     } finally {
@@ -363,6 +462,7 @@ export default function NewSchool() {
       showNotice('success', res.message || 'Submission saved.')
       event.currentTarget.reset()
       await reloadDashboard()
+      await reloadOverview()
     } catch (err) {
       handleError(err, 'Final submission failed.')
     } finally {
@@ -389,6 +489,7 @@ export default function NewSchool() {
       showNotice('success', res.message || 'School approval saved.')
       event.currentTarget.reset()
       await reloadDashboard()
+      await reloadOverview()
     } catch (err) {
       handleError(err, 'School approval failed.')
     } finally {
@@ -415,6 +516,7 @@ export default function NewSchool() {
       showNotice('success', res.message || 'Teacher approval saved.')
       event.currentTarget.reset()
       await reloadDashboard()
+      await reloadOverview()
     } catch (err) {
       handleError(err, 'Teacher approval failed.')
     } finally {
@@ -443,6 +545,7 @@ export default function NewSchool() {
       showNotice('success', res.message || 'Submission updated.')
       event.currentTarget.reset()
       await reloadDashboard()
+      await reloadOverview()
     } catch (err) {
       handleError(err, 'Could not update submission.')
     } finally {
@@ -496,11 +599,32 @@ export default function NewSchool() {
   }
 
   const summary = overview?.summary || {}
-  const workflow = Array.isArray(overview?.workflow) ? overview.workflow : []
-  const prizes = Array.isArray(overview?.prizes) ? overview.prizes : []
-  const leaderboards = overview?.leaderboards || { schools: [], teachers: [], students: [] }
   const schools = Array.isArray(overview?.schools) ? overview.schools : []
   const winners = Array.isArray(overview?.winners) ? overview.winners : []
+  const challenge = overview?.challenge || {}
+  const leaderboards = overview?.leaderboards || {}
+  const leaderboardSchools = asArray<any>(leaderboards.schools)
+  const leaderboardStudents = asArray<any>(leaderboards.students)
+  const latestWinner = winners[0] || null
+  const topSchool = leaderboardSchools[0] || null
+  const topStudent = leaderboardStudents[0] || null
+  const deadlineLabel = formatDateLabel(challenge.deadline)
+  const deadlineDate = challenge.deadline ? new Date(challenge.deadline) : null
+  const deadlineDays = deadlineDate && !Number.isNaN(deadlineDate.getTime())
+    ? Math.max(0, Math.ceil((deadlineDate.getTime() - Date.now()) / 86400000))
+    : null
+  const scholarshipsAwarded = winners.reduce((total: number, winner: any) => total + Number(winner.scholarship_amount || 0), 0)
+  const completionPercent = Number(summary.students ?? 0) > 0
+    ? Math.min(100, Math.round((Number(summary.submissions ?? 0) / Number(summary.students ?? 0)) * 100))
+    : 0
+  const movementStats: Array<{ label: string; value: string | number }> = [
+    { label: 'Schools Registered', value: Number(summary.schools ?? 0) },
+    { label: 'Students Registered', value: Number(summary.students ?? 0) },
+    { label: 'Business Interviews Completed', value: Number(summary.businesses ?? 0) },
+    // Each final submission represents one community problem identified and solved.
+    { label: 'Community Problems Identified', value: Number(summary.submissions ?? 0) },
+    { label: 'Scholarships Awarded', value: formatMoney(scholarshipsAwarded) },
+  ]
   const studentDashboard = dashboard?.role === 'student' ? dashboard : null
   const parentDashboard = dashboard?.role === 'parent' ? dashboard : null
   const schoolDashboard = dashboard?.role === 'school' ? dashboard : null
@@ -557,10 +681,14 @@ export default function NewSchool() {
         </div>
         <div className="wrap ns-hero__grid-wrap">
           <div className="ns-hero__copy reveal in">
-            <p className="eyebrow">LEAVE IT BETTER THAN YOU FOUND IT TM</p>
-            <h1>New School Functionality</h1>
+            <p className="eyebrow">WHAT PROBLEM WILL YOU SOLVE?</p>
+            <h1>
+              <span>Join New York&apos;s Largest</span>
+              <span>Student Problem-Solving</span>
+              <span>Movement{'™'}</span>
+            </h1>
             <p className="ns-lead">
-              A challenge registration and approval system for students ages 14-19 on FrantzCoutard.com. The workflow captures student profiles, parent QR consent, school verification, teacher monitoring, 10 business interviews, and the final scholarship submission.
+              Every community has challenges. Every student has ideas. This challenge empowers students to interview local businesses, uncover real issues, develop solutions, and compete for scholarships while creating measurable community impact.
             </p>
             <div className="ns-hero__actions">
               <button className="btn btn--solid" type="button" onClick={() => openRegistrationTag('student')}>Register Student</button>
@@ -590,154 +718,84 @@ export default function NewSchool() {
 
           <aside className="ns-hero__panel glass reveal in">
             <div className="ns-hero__panel-head">
-              <span className="eyebrow">Program Snapshot</span>
-              <h2>$5,000 Scholarship Pool</h2>
-            </div>
-            <div className="ns-metrics">
-              <div className="ns-metric">
-                <strong>{summary.students ?? 0}</strong>
-                <span>Students</span>
-              </div>
-              <div className="ns-metric">
-                <strong>{summary.parents ?? 0}</strong>
-                <span>Parents</span>
-              </div>
-              <div className="ns-metric">
-                <strong>{summary.schools ?? 0}</strong>
-                <span>Schools</span>
-              </div>
-              <div className="ns-metric">
-                <strong>{summary.teachers ?? 0}</strong>
-                <span>Teachers</span>
-              </div>
-              <div className="ns-metric">
-                <strong>{summary.businesses ?? 0}</strong>
-                <span>Businesses</span>
-              </div>
-              <div className="ns-metric">
-                <strong>{summary.submissions ?? 0}</strong>
-                <span>Submissions</span>
-              </div>
+              <span className="eyebrow">{challenge.title || 'THE MOVEMENT'}</span>
+              <h2>{challenge.subtitle || 'Live Impact Counter'}</h2>
             </div>
             <div className="ns-hero__panel-foot">
               <div>
-                <span>Winner announcement</span>
-                <strong>August 25, 2026</strong>
+                <span>Deadline</span>
+                <strong>{deadlineLabel}</strong>
               </div>
               <div>
-                <span>Eligible ages</span>
-                <strong>14-19</strong>
+                <span>Days Left</span>
+                <strong>{deadlineDays !== null ? `${deadlineDays} days` : 'Open now'}</strong>
+              </div>
+            </div>
+            <div className="ns-metrics">
+              {movementStats.map((item) => (
+                <div className="ns-metric" key={item.label}>
+                  <strong>{item.value}</strong>
+                  <span>{item.label}</span>
+                </div>
+              ))}
+            </div>
+            <div className="ns-award">
+              <div className="ns-award__head">
+                <strong>Challenge Completion</strong>
+                <span>{completionPercent}%</span>
+              </div>
+              <div className="ns-award__bar">
+                <span style={{ width: `${completionPercent}%` }} />
               </div>
             </div>
             <div className="ns-hero__winners">
-              <h3>Latest Winners</h3>
-              {winners.length > 0 ? (
-                winners.slice(0, 3).map((winner: any) => (
-                  <div className="ns-winner-row" key={winner.id}>
-                    <strong>{winner.place}</strong>
-                    <span>{winner.student_name}</span>
-                    <em>{formatMoney(winner.scholarship_amount)}</em>
-                  </div>
-                ))
-              ) : (
-                <p className="ns-muted">Winners will publish here after admin review.</p>
+              <h3>Live Snapshot</h3>
+              {latestWinner && (
+                <div className="ns-winner-row">
+                  <strong>Winner</strong>
+                  <em>{latestWinner.student_name}</em>
+                  <span>{formatMoney(latestWinner.scholarship_amount)}</span>
+                </div>
+              )}
+              {topSchool && (
+                <div className="ns-winner-row">
+                  <strong>Top School</strong>
+                  <em>{topSchool.label}</em>
+                  <span>{topSchool.submissions || 0} subs</span>
+                </div>
+              )}
+              {topStudent && (
+                <div className="ns-winner-row">
+                  <strong>Top Student</strong>
+                  <em>{topStudent.label}</em>
+                  <span>{topStudent.interview_count || 0} interviews</span>
+                </div>
+              )}
+              {!latestWinner && !topSchool && !topStudent && (
+                <p className="ns-muted">Live rankings will appear once schools, students, and winners are added.</p>
               )}
             </div>
+            <p className="ns-muted">Counts update from registrations, interviews, submissions, and published winners.</p>
           </aside>
         </div>
       </section>
 
-      <section className="block ns-section">
+      <section className="block ns-section" id="participants">
         <div className="wrap">
           <div className="ns-section__head reveal in">
-            <span className="eyebrow">Overview</span>
-            <h2>Workflow, rules, and prizes in one place.</h2>
-            <p>
-              The system is built so a student cannot submit until parent consent, school approval, teacher approval, and all 10 business interviews are completed.
-            </p>
+            <span className="eyebrow">WHO CAN PARTICIPATE?</span>
+            <h2>Students, parents, teachers, schools, and community partners.</h2>
+            <p>Students ages 11-19 lead the challenge with support from the adults and partners around them.</p>
           </div>
 
-          <div className="ns-three-grid">
-            <article className="glass ns-info-card reveal in">
-              <span className="ns-info-card__kicker">Submission Rules</span>
-              <h3>What the student must complete</h3>
-              <ul>
-                {(overview?.submission_requirements || []).map((rule: string) => (
-                  <li key={rule}>{rule}</li>
-                ))}
-              </ul>
-            </article>
-
-            <article className="glass ns-info-card reveal in">
-              <span className="ns-info-card__kicker">Prize Structure</span>
-              <h3>Scholarships for top solutions</h3>
-              <ul className="ns-prize-list">
-                {prizes.map((prize: any) => (
-                  <li key={prize.place}>
-                    <strong>{prize.place} Place</strong>
-                    <span>{formatMoney(prize.amount)} {prize.label}</span>
-                  </li>
-                ))}
-              </ul>
-            </article>
-
-            <article className="glass ns-info-card reveal in">
-              <span className="ns-info-card__kicker">Rules</span>
-              <h3>Important guardrails</h3>
-              <ul>
-                {(overview?.rules || []).map((rule: string) => (
-                  <li key={rule}>{rule}</li>
-                ))}
-              </ul>
-            </article>
-          </div>
-
-          <div className="ns-leaderboard-grid">
-            <article className="glass ns-board reveal in">
-              <div className="ns-board__head">
-                <span className="eyebrow">School Leaderboard</span>
-                <Link to="/dashboard" className="ns-board__link">View Account</Link>
-              </div>
-              {(leaderboards.schools || []).slice(0, 3).map((row: any) => (
-                <div className="ns-board__row" key={row.id}>
-                  <div>
-                    <strong>{row.label}</strong>
-                    <span>{row.students} students</span>
-                  </div>
-                  <em>{row.submissions} submissions</em>
-                </div>
-              ))}
-            </article>
-            <article className="glass ns-board reveal in">
-              <div className="ns-board__head">
-                <span className="eyebrow">Teacher Leaderboard</span>
-                <span className="ns-board__badge">Community score</span>
-              </div>
-              {(leaderboards.teachers || []).slice(0, 3).map((row: any) => (
-                <div className="ns-board__row" key={row.id}>
-                  <div>
-                    <strong>{row.label}</strong>
-                    <span>{row.students} students</span>
-                  </div>
-                  <em>{row.teacher_approved || 0} approved</em>
-                </div>
-              ))}
-            </article>
-            <article className="glass ns-board reveal in">
-              <div className="ns-board__head">
-                <span className="eyebrow">Student Leaderboard</span>
-                <span className="ns-board__badge">Interview count</span>
-              </div>
-              {(leaderboards.students || []).slice(0, 3).map((row: any) => (
-                <div className="ns-board__row" key={row.id}>
-                  <div>
-                    <strong>{row.label}</strong>
-                    <span>{row.grade_level}</span>
-                  </div>
-                  <em>{row.interview_count} interviews</em>
-                </div>
-              ))}
-            </article>
+          <div className="ns-participant-grid">
+            {participantCards.map((card) => (
+              <article className="glass ns-info-card reveal in" key={card.title}>
+                <span className="ns-info-card__kicker">{card.kicker}</span>
+                <h3>{card.title}</h3>
+                <p>{card.detail}</p>
+              </article>
+            ))}
           </div>
         </div>
       </section>
@@ -745,15 +803,15 @@ export default function NewSchool() {
       <section className="block ns-section" id="workflow">
         <div className="wrap">
           <div className="ns-section__head reveal in">
-            <span className="eyebrow">Workflow Diagram</span>
-            <h2>How the challenge moves through the site.</h2>
-            <p>Each stage is tracked in the database so students, parents, schools, teachers, and admins can see progress immediately.</p>
+            <span className="eyebrow">HOW IT WORKS</span>
+            <h2>From registration to scholarships and school grants.</h2>
+            <p>Each step moves students closer to a solution that addresses a real community problem.</p>
           </div>
 
           <div className="ns-workflow">
-            {workflow.map((step: any) => (
-              <article className="glass ns-workflow__step reveal in" key={step.step}>
-                <span className="ns-workflow__num">0{step.step}</span>
+            {movementSteps.map((step) => (
+              <article className="glass ns-workflow__step reveal in" key={step.title}>
+                <span className="ns-workflow__num">{step.badge}</span>
                 <h3>{step.title}</h3>
                 <p>{step.detail}</p>
               </article>
@@ -799,7 +857,7 @@ export default function NewSchool() {
               <div className="ns-field-grid">
                 <label className="ns-field"><span>Full Name</span><input name="full_name" required /></label>
                 <label className="ns-field"><span>Student Username</span><input name="student_username" required /></label>
-                <label className="ns-field"><span>Age</span><input name="age" type="number" min="14" max="19" required /></label>
+                <label className="ns-field"><span>Age</span><input name="age" type="number" min="11" max="19" required /></label>
                 <label className="ns-field"><span>Date of Birth</span><input name="date_of_birth" type="date" required /></label>
                 <label className="ns-field"><span>Email</span><input name="email" type="email" required /></label>
                 <label className="ns-field"><span>Password</span><input name="password" type="password" minLength={6} required /></label>
@@ -813,7 +871,7 @@ export default function NewSchool() {
                 <label className="ns-field ns-field--full"><span>Parent Email</span><input name="parent_email" type="email" required /></label>
                 <label className="ns-check ns-field--full">
                   <input name="student_acknowledgement" type="checkbox" required />
-                  <span>I confirm this student is between 14 and 19 and understands parent consent is required before submission.</span>
+                  <span>I confirm this student is between 11 and 19 and understands parent consent is required before submission.</span>
                 </label>
               </div>
               <button className="btn btn--solid" type="submit" disabled={busy === 'student'}>{busy === 'student' ? 'Saving...' : 'Create Student Profile'}</button>
