@@ -1,9 +1,10 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useLocation, useParams } from 'react-router-dom'
 import { api } from '../lib/api'
 import { buildLocalQrDataUri } from '../lib/localQr.js'
 import { useAuth } from '../context/AuthContext'
 import { useSeo } from '../hooks/useSeo'
+import { resolveDashboardRoute } from '../lib/dashboardRoute'
 
 const isAdminRole = (role?: string) => ['admin', 'super_admin', 'editor'].includes(role || '')
 
@@ -77,6 +78,7 @@ function clipText(text: string, max = 120) {
 }
 
 type RegistrationTag = 'student' | 'parent' | 'school' | 'teacher'
+type DashboardTabKey = 'overview' | 'activity' | 'rankings' | 'records' | 'approvals' | 'reviews' | 'notifications' | 'data'
 
 const registrationOptions: Array<{
   key: RegistrationTag
@@ -117,6 +119,43 @@ const participantCards = [
   },
 ]
 
+const dashboardTabsByRole: Record<string, Array<{ key: DashboardTabKey; label: string; hint: string }>> = {
+  student: [
+    { key: 'overview', label: 'Overview', hint: 'Status and progress' },
+    { key: 'activity', label: 'Activity', hint: 'Business and submission work' },
+    { key: 'rankings', label: 'Rankings', hint: 'Competition board' },
+    { key: 'notifications', label: 'Alerts', hint: 'Unread updates' },
+  ],
+  parent: [
+    { key: 'overview', label: 'Overview', hint: 'Consent and student snapshot' },
+    { key: 'rankings', label: 'Rankings', hint: 'Competition board' },
+    { key: 'notifications', label: 'Alerts', hint: 'Unread updates' },
+  ],
+  school: [
+    { key: 'overview', label: 'Overview', hint: 'School summary' },
+    { key: 'approvals', label: 'Approvals', hint: 'Teacher and student review' },
+    { key: 'rankings', label: 'Rankings', hint: 'School competition board' },
+    { key: 'records', label: 'Records', hint: 'Students and submissions' },
+    { key: 'reviews', label: 'Reviews', hint: 'Submission review tools' },
+    { key: 'notifications', label: 'Alerts', hint: 'Unread updates' },
+  ],
+  teacher: [
+    { key: 'overview', label: 'Overview', hint: 'Teacher summary' },
+    { key: 'approvals', label: 'Approvals', hint: 'Student review tools' },
+    { key: 'rankings', label: 'Rankings', hint: 'Teacher competition board' },
+    { key: 'records', label: 'Records', hint: 'Students and submissions' },
+    { key: 'reviews', label: 'Reports', hint: 'Leaderboards and exports' },
+    { key: 'notifications', label: 'Alerts', hint: 'Unread updates' },
+  ],
+  admin: [
+    { key: 'overview', label: 'Overview', hint: 'Platform summary' },
+    { key: 'data', label: 'Data', hint: 'Schools, parents, approvals' },
+    { key: 'reviews', label: 'Reviews', hint: 'Submission decisions' },
+    { key: 'rankings', label: 'Rankings', hint: 'Global leaderboard' },
+    { key: 'notifications', label: 'Alerts', hint: 'Unread updates' },
+  ],
+}
+
 const movementSteps = [
   {
     badge: '①',
@@ -152,10 +191,14 @@ const movementSteps = [
 
 export default function NewSchool() {
   const { token } = useParams()
+  const location = useLocation()
   const { user, loading, refresh } = useAuth()
+  const isDashboardRoute = location.pathname.startsWith('/new-school/dashboard')
   const [overview, setOverview] = useState<any>(null)
   const [dashboard, setDashboard] = useState<any>(null)
   const [adminSummary, setAdminSummary] = useState<any>(null)
+  const [dashboardLoading, setDashboardLoading] = useState(false)
+  const [dashboardTab, setDashboardTab] = useState<DashboardTabKey>('overview')
   const [parentLink, setParentLink] = useState<any>(null)
   const [busy, setBusy] = useState('')
   const [registrationTag, setRegistrationTag] = useState<RegistrationTag>('student')
@@ -169,13 +212,15 @@ export default function NewSchool() {
   const [schoolTeacherApprovalId, setSchoolTeacherApprovalId] = useState('')
 
   useSeo({
-    title: 'What Problem Will You Solve?',
-    description: 'Join New York\'s Largest Student Problem-Solving Movement - student registration, parent QR consent, school and teacher approval, business interviews, and scholarship submissions.',
+    title: isDashboardRoute ? 'New School Dashboard' : 'What Problem Will You Solve?',
+    description: isDashboardRoute
+      ? 'Private role dashboard for approved students, parents, schools, teachers, and admins.'
+      : 'Join New York\'s Largest Student Problem-Solving Movement - student registration, parent QR consent, school and teacher approval, business interviews, and scholarship submissions.',
   })
 
   const accountApprovalStatus = (user?.approval_status || 'approved').toString()
   const hasApprovedChallengeAccess = !user || isAdminRole(user.role) || accountApprovalStatus === 'approved'
-  const accountNeedsReview = !!user && !isAdminRole(user.role) && accountApprovalStatus !== 'approved'
+  const dashboardHref = user ? resolveDashboardRoute(user.role) : '/demo-login'
 
   const showNotice = (tone: 'success' | 'error' | 'info', text: string) => {
     setNotice({ tone, text })
@@ -201,15 +246,20 @@ export default function NewSchool() {
 
   const reloadDashboard = async () => {
     if (!user) return
-    if (isAdminRole(user.role)) {
-      const data = await api.get<any>('admin/new-school/summary')
-      setAdminSummary(data)
-      setDashboard(null)
-      return
+    setDashboardLoading(true)
+    try {
+      if (isAdminRole(user.role)) {
+        const data = await api.get<any>('admin/new-school/summary')
+        setAdminSummary(data)
+        setDashboard(null)
+        return
+      }
+      const data = await api.get<any>('new-school/dashboard')
+      setDashboard(data)
+      setAdminSummary(null)
+    } finally {
+      setDashboardLoading(false)
     }
-    const data = await api.get<any>('new-school/dashboard')
-    setDashboard(data)
-    setAdminSummary(null)
   }
 
   const reloadParentLink = async (qrToken: string) => {
@@ -231,6 +281,11 @@ export default function NewSchool() {
   }
 
   useEffect(() => {
+    if (isDashboardRoute) {
+      setOverview(null)
+      return
+    }
+
     let alive = true
     let inFlight = false
     const syncOverview = async () => {
@@ -254,10 +309,15 @@ export default function NewSchool() {
       alive = false
       window.clearInterval(interval)
     }
-  }, [])
+  }, [isDashboardRoute])
 
   useEffect(() => {
     if (loading) return
+    if (!isDashboardRoute) {
+      setDashboard(null)
+      setAdminSummary(null)
+      return
+    }
     if (user) {
       if (hasApprovedChallengeAccess) {
         reloadDashboard().catch((err) => handleError(err, 'Could not load dashboard data.'))
@@ -269,7 +329,7 @@ export default function NewSchool() {
       setDashboard(null)
       setAdminSummary(null)
     }
-  }, [user, loading, hasApprovedChallengeAccess])
+  }, [user, loading, hasApprovedChallengeAccess, isDashboardRoute])
 
   useEffect(() => {
     if (!token) {
@@ -288,6 +348,14 @@ export default function NewSchool() {
       document.getElementById('parent-consent')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }
   }, [token, parentLink])
+
+  useEffect(() => {
+    if (!isDashboardRoute) return
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById('dashboard')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [isDashboardRoute, loading, user])
 
   const submitStudent = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -723,7 +791,9 @@ export default function NewSchool() {
   const schoolDashboard = dashboard?.role === 'school' ? dashboard : null
   const teacherDashboard = dashboard?.role === 'teacher' ? dashboard : null
   const adminDashboard = adminSummary || (dashboard?.role === 'admin' ? dashboard : null)
-  const selectedStudent = studentDashboard?.student || parentDashboard?.student_context?.student || null
+  const dashboardRole = adminDashboard ? 'admin' : studentDashboard ? 'student' : parentDashboard ? 'parent' : schoolDashboard ? 'school' : teacherDashboard ? 'teacher' : ''
+  const dashboardTabs = dashboardRole ? dashboardTabsByRole[dashboardRole] || [] : []
+  const dashboardActiveTab = dashboardTabs.find((tab) => tab.key === dashboardTab) || dashboardTabs[0] || null
   const selectedBusinessId = studentDashboard?.submission?.source_business_id || ''
   const canStudentSubmit = !!studentDashboard?.can_submit
   const teacherScore = teacherDashboard
@@ -764,6 +834,15 @@ export default function NewSchool() {
   const schoolRankedTeachers = asArray<any>(schoolDashboard?.rankings?.teachers)
   const teacherRankedStudents = asArray<any>(teacherDashboard?.rankings?.students)
   const teacherRankedTeachers = asArray<any>(teacherDashboard?.rankings?.teachers)
+
+  useEffect(() => {
+    if (!isDashboardRoute) return
+    setDashboardTab((current) => {
+      const nextTab = dashboardTabs.find((tab) => tab.key === current) ? current : dashboardTabs[0]?.key || 'overview'
+      return nextTab
+    })
+  }, [dashboardRole, isDashboardRoute])
+
   const approvedSchool = (query: string) =>
     schools.find((school: any) => String(school.school_name || '').toLowerCase() === query.trim().toLowerCase()) || null
   const teachersForSchool = (schoolId?: number | string) =>
@@ -774,14 +853,95 @@ export default function NewSchool() {
   const studentSchoolTeachers = matchedStudentSchool ? teachersForSchool(matchedStudentSchool.id) : []
   const parentSchoolTeachers = matchedParentSchool ? teachersForSchool(matchedParentSchool.id) : []
   const selectedSchoolTeacher = schoolDashboard?.teachers?.find((teacher: any) => String(teacher.id) === String(schoolTeacherApprovalId)) || null
+  const currentParticipantId = studentDashboard?.student?.participant_id || parentDashboard?.student_context?.student?.participant_id || ''
   const studentUnreadNotifications = studentNotifications.filter((item: any) => !item.is_read)
   const parentUnreadNotifications = parentNotifications.filter((item: any) => !item.is_read)
   const schoolUnreadNotifications = schoolNotifications.filter((item: any) => !item.is_read)
   const teacherUnreadNotifications = teacherNotifications.filter((item: any) => !item.is_read)
   const adminUnreadNotifications = adminNotifications.filter((item: any) => !item.is_read)
+  const dashboardHero = (() => {
+    if (studentDashboard) {
+      return {
+        eyebrow: 'Student Control Center',
+        title: studentDashboard.student.full_name,
+        lead: 'Track your progress, keep the competition moving, and jump directly to the next step.',
+        stats: [
+          { label: 'Performance', value: studentDashboard.performance_score || 0 },
+          { label: 'Interviews', value: studentDashboard.interview_count || 0 },
+          { label: 'School Rank', value: `#${studentDashboard.rankings?.school?.position || '-'}` },
+          { label: 'Teacher Rank', value: `#${studentDashboard.rankings?.teacher?.position || '-'}` },
+        ],
+        primary: { label: 'Continue Activity', tab: 'activity' as DashboardTabKey },
+        secondary: { label: 'View Rankings', tab: 'rankings' as DashboardTabKey },
+      }
+    }
+    if (parentDashboard) {
+      return {
+        eyebrow: 'Parent Monitor',
+        title: parentDashboard.parent.parent_full_name,
+        lead: 'See consent, progress, and ranking movement without any extra noise.',
+        stats: [
+          { label: 'Student', value: parentDashboard.parent.student_full_name || '-' },
+          { label: 'Consent', value: parentDashboard.student_context?.student?.parent_consent_status || 'pending' },
+          { label: 'Rank', value: `#${parentDashboard.student_context?.rankings?.school?.position || '-'}` },
+          { label: 'Unread', value: parentUnreadNotifications.length || 0 },
+        ],
+        primary: { label: 'Open Overview', tab: 'overview' as DashboardTabKey },
+        secondary: { label: 'View Rankings', tab: 'rankings' as DashboardTabKey },
+      }
+    }
+    if (schoolDashboard) {
+      return {
+        eyebrow: 'Principal Workspace',
+        title: schoolDashboard.school.school_name,
+        lead: 'Approve teachers, monitor student readiness, and keep the school leaderboard moving.',
+        stats: [
+          { label: 'Students', value: schoolDashboard.summary.students_total || 0 },
+          { label: 'Teachers', value: schoolDashboard.summary.teacher_approved || 0 },
+          { label: 'Eligible', value: schoolDashboard.summary.eligible_to_submit || 0 },
+          { label: 'Submissions', value: schoolDashboard.summary.submitted || 0 },
+        ],
+        primary: { label: 'Manage Approvals', tab: 'approvals' as DashboardTabKey },
+        secondary: { label: 'Open Rankings', tab: 'rankings' as DashboardTabKey },
+      }
+    }
+    if (teacherDashboard) {
+      return {
+        eyebrow: 'Teacher Command Panel',
+        title: teacherDashboard.teacher.teacher_full_name,
+        lead: 'Review student approvals, verify submissions, and keep your class leaderboard competitive.',
+        stats: [
+          { label: 'Students', value: teacherDashboard.summary.students_total || 0 },
+          { label: 'Submitted', value: teacherDashboard.summary.submitted || 0 },
+          { label: 'Approved', value: teacherDashboard.summary.teacher_approved || 0 },
+          { label: 'Score', value: teacherScore },
+        ],
+        primary: { label: 'Review Approvals', tab: 'approvals' as DashboardTabKey },
+        secondary: { label: 'Open Rankings', tab: 'rankings' as DashboardTabKey },
+      }
+    }
+    if (adminDashboard) {
+      return {
+        eyebrow: 'Admin Console',
+        title: 'Platform Control Center',
+        lead: 'Monitor schools, approvals, submissions, and rankings from a single clean view.',
+        stats: [
+          { label: 'Schools', value: adminDashboard.summary.schools || 0 },
+          { label: 'Students', value: adminDashboard.summary.students || 0 },
+          { label: 'Teachers', value: adminDashboard.summary.teachers || 0 },
+          { label: 'Winners', value: adminDashboard.summary.winners || 0 },
+        ],
+        primary: { label: 'Open Data', tab: 'data' as DashboardTabKey },
+        secondary: { label: 'Review Results', tab: 'reviews' as DashboardTabKey },
+      }
+    }
+    return null
+  })()
 
   return (
     <div className="ns-page">
+      {!isDashboardRoute && (
+        <>
       <section className="ns-hero">
         <div className="ns-hero__bg" aria-hidden="true">
           <span className="ns-hero__orb ns-hero__orb--one" />
@@ -804,16 +964,9 @@ export default function NewSchool() {
               <button className="btn" type="button" onClick={() => openRegistrationTag('parent')}>Parent Consent</button>
               <button className="btn" type="button" onClick={() => openRegistrationTag('school')}>School Registration</button>
               <button className="btn" type="button" onClick={() => openRegistrationTag('teacher')}>Teacher Registration</button>
-              <a className="btn" href="#dashboard">Open Dashboard</a>
+              <Link className="btn" to={dashboardHref}>Open Dashboard</Link>
               <button className="btn" type="button" data-auth="login">Member Login</button>
             </div>
-            {accountNeedsReview && (
-              <div className={`ns-alert ns-alert--${accountApprovalStatus === 'rejected' ? 'error' : 'info'}`}>
-                {accountApprovalStatus === 'rejected'
-                  ? 'Your account was rejected by admin. Please contact support before trying again.'
-                  : 'Your account is pending admin approval. Public pages remain open, but dashboard access unlocks after review.'}
-              </div>
-            )}
             {notice && <div className={`ns-alert ns-alert--${notice.tone}`}>{notice.text}</div>}
             {token && parentLink?.student && (
               <div className="ns-qr-banner glass">
@@ -1202,7 +1355,11 @@ export default function NewSchool() {
           </datalist>
         </div>
       </section>
+        </>
+      )}
 
+      {isDashboardRoute && (
+        <>
       <section className="block ns-section" id="dashboard">
         <div className="wrap">
           <div className="ns-section__head reveal in">
@@ -1211,18 +1368,113 @@ export default function NewSchool() {
             <p>Student, parent, school, teacher, and admin views are driven from the same data tables.</p>
           </div>
 
-          {!user && (
-            <div className="glass ns-empty reveal in">
-              <h3>Sign in to open the live dashboard</h3>
-              <p>Registered students, parents, schools, and teachers can use the normal site login or the member login button in the header.</p>
-              <div className="ns-actions">
-                <button className="btn btn--solid" type="button" data-auth="login">Open Login</button>
-                <Link className="btn" to="/dashboard">Existing Member Area</Link>
-              </div>
-            </div>
-          )}
+          <div className="ns-dashboard-shell">
+            <aside className="ns-dashboard-rail">
+              {dashboardHero && (
+                <section className="ns-dashboard-hero glass reveal in" aria-label="Dashboard summary">
+                  <div className="ns-dashboard-hero__copy">
+                    <span className="eyebrow">{dashboardHero.eyebrow}</span>
+                    <h3>{dashboardHero.title}</h3>
+                    <p>{dashboardHero.lead}</p>
+                    <div className="ns-dashboard-hero__actions">
+                      <button className="btn btn--solid" type="button" onClick={() => setDashboardTab(dashboardHero.primary.tab)}>
+                        {dashboardHero.primary.label}
+                      </button>
+                      <button className="btn" type="button" onClick={() => setDashboardTab(dashboardHero.secondary.tab)}>
+                        {dashboardHero.secondary.label}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="ns-dashboard-hero__stats" aria-label="Quick stats">
+                    {dashboardHero.stats.map((stat) => (
+                      <div className="ns-dashboard-hero__stat" key={stat.label}>
+                        <span>{stat.label}</span>
+                        <strong>{String(stat.value)}</strong>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
 
-          {studentDashboard && (
+              {dashboardTabs.length > 0 && (
+                <div className="ns-dashboard-tabs" role="tablist" aria-label="Dashboard sections" aria-orientation="vertical">
+                  {dashboardTabs.map((tab) => (
+                    <button
+                      key={tab.key}
+                      type="button"
+                      className={`ns-dashboard-tabs__btn ${dashboardTab === tab.key ? 'is-active' : ''}`}
+                      role="tab"
+                      aria-selected={dashboardTab === tab.key}
+                      onClick={() => setDashboardTab(tab.key)}
+                    >
+                      <strong>{tab.label}</strong>
+                      <span>{tab.hint}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {dashboardActiveTab && (
+                <section className="ns-dashboard-rail__note glass reveal in" aria-label="Current dashboard section">
+                  <span className="eyebrow">Current section</span>
+                  <h3>{dashboardActiveTab.label}</h3>
+                  <p>{dashboardActiveTab.hint}</p>
+                </section>
+              )}
+            </aside>
+
+            <div className="ns-dashboard-stage">
+              {dashboardActiveTab && (
+                <section className="ns-dashboard-stage__head glass reveal in" aria-label="Selected dashboard section">
+                  <div>
+                    <span className="eyebrow">Active view</span>
+                    <h3>{dashboardActiveTab.label}</h3>
+                    <p>{dashboardActiveTab.hint}</p>
+                  </div>
+                  <div className="ns-dashboard-stage__meta">
+                    <span className="ns-board__badge">{dashboardHero?.eyebrow || 'Private workspace'}</span>
+                    <strong>{dashboardHero?.primary.label || 'Focus mode'}</strong>
+                  </div>
+                </section>
+              )}
+
+              {(loading || dashboardLoading) && (
+                <div className="glass ns-empty reveal in">
+                  <h3>Loading private dashboard</h3>
+                  <p>Fetching your role-specific data now.</p>
+                </div>
+              )}
+
+              {!loading && !dashboardLoading && !user && (
+                <div className="glass ns-empty reveal in">
+                  <h3>Sign in to open the live dashboard</h3>
+                  <p>Registered students, parents, schools, and teachers can use the normal site login or the member login button in the header.</p>
+                  <div className="ns-actions">
+                    <button className="btn btn--solid" type="button" data-auth="login">Open Login</button>
+                    <Link className="btn" to="/dashboard">Existing Member Area</Link>
+                  </div>
+                </div>
+              )}
+
+              {!loading && !dashboardLoading && user && !hasApprovedChallengeAccess && (
+                <div className="glass ns-empty reveal in">
+                  <h3>Your account is waiting for approval</h3>
+                  <p>
+                    {accountApprovalStatus === 'rejected'
+                      ? 'This account was rejected by admin. Contact support before trying again.'
+                      : 'Private dashboard access unlocks after admin approval.'}
+                  </p>
+                </div>
+              )}
+
+              {!loading && !dashboardLoading && user && hasApprovedChallengeAccess && !studentDashboard && !parentDashboard && !schoolDashboard && !teacherDashboard && !adminDashboard && (
+                <div className="glass ns-empty reveal in">
+                  <h3>No dashboard data available</h3>
+                  <p>Your account is approved, but no role-specific records were found yet.</p>
+                </div>
+              )}
+
+              {studentDashboard && (
             <div className="ns-dash-grid">
               <article className="glass ns-dash-card reveal in">
                 <div className="ns-dash-card__head">
@@ -1302,7 +1554,7 @@ export default function NewSchool() {
                 <p className="ns-muted">This tab is your student profile overview. It shows your school link, teacher link, and scholarship progress.</p>
               </article>
 
-              <article className="glass ns-dash-card ns-dash-card--wide reveal in">
+              <article className="glass ns-dash-card ns-dash-card--wide reveal in" hidden={dashboardTab !== 'rankings'}>
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">Rankings</span>
                   <span className="ns-board__badge">
@@ -1324,7 +1576,10 @@ export default function NewSchool() {
                         </thead>
                         <tbody>
                           {studentSchoolRankings.slice(0, 5).map((row: any) => (
-                            <tr key={`school-rank-${row.id}`}>
+                            <tr
+                              key={`school-rank-${row.id}`}
+                              className={`${Number(row.rank_position || 0) <= 3 ? 'is-top' : ''} ${String(row.participant_id || '') === currentParticipantId ? 'is-me' : ''}`.trim()}
+                            >
                               <td>{row.rank_position || '-'}</td>
                               <td>{row.full_name}</td>
                               <td>{row.performance_score ?? 0}</td>
@@ -1349,7 +1604,10 @@ export default function NewSchool() {
                         </thead>
                         <tbody>
                           {studentTeacherRankings.slice(0, 5).map((row: any) => (
-                            <tr key={`teacher-rank-${row.id}`}>
+                            <tr
+                              key={`teacher-rank-${row.id}`}
+                              className={`${Number(row.rank_position || 0) <= 3 ? 'is-top' : ''} ${String(row.participant_id || '') === currentParticipantId ? 'is-me' : ''}`.trim()}
+                            >
                               <td>{row.rank_position || '-'}</td>
                               <td>{row.full_name}</td>
                               <td>{row.performance_score ?? 0}</td>
@@ -1363,7 +1621,7 @@ export default function NewSchool() {
                 </div>
               </article>
 
-              <article className="glass ns-dash-card reveal in">
+              <article className="glass ns-dash-card reveal in" hidden={dashboardTab !== 'notifications'}>
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">Notifications</span>
                   <span className="ns-board__badge">{studentUnreadNotifications.length} unread</span>
@@ -1384,7 +1642,7 @@ export default function NewSchool() {
                 </div>
               </article>
 
-              <article className="glass ns-dash-card ns-dash-card--wide reveal in">
+              <article className="glass ns-dash-card ns-dash-card--wide reveal in" hidden={dashboardTab !== 'activity'}>
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">Business Interviews</span>
                   <span className="ns-board__badge">{studentDashboard.interview_count} / 10 complete</span>
@@ -1401,7 +1659,7 @@ export default function NewSchool() {
                 </div>
               </article>
 
-              <form className="glass ns-form ns-form--compact reveal in" id="business-interviews" onSubmit={submitBusiness}>
+              <form className="glass ns-form ns-form--compact reveal in" id="business-interviews" onSubmit={submitBusiness} hidden={dashboardTab !== 'activity'}>
                 <div className="ns-form__head">
                   <span className="eyebrow">Business Entry</span>
                   <h3>Log a local business</h3>
@@ -1437,7 +1695,7 @@ export default function NewSchool() {
                 <button className="btn btn--solid" type="submit" disabled={busy === 'business'}>{busy === 'business' ? 'Saving...' : 'Save Business Interview'}</button>
               </form>
 
-              <form className="glass ns-form ns-form--compact reveal in" id="final-submission" onSubmit={submitSubmission}>
+              <form className="glass ns-form ns-form--compact reveal in" id="final-submission" onSubmit={submitSubmission} hidden={dashboardTab !== 'activity'}>
                 <div className="ns-form__head">
                   <span className="eyebrow">Problem &amp; Solution Submission</span>
                   <h3>Video and written upload</h3>
@@ -1473,9 +1731,9 @@ export default function NewSchool() {
                 )}
               </form>
             </div>
-          )}
+              )}
 
-          {parentDashboard && (
+              {parentDashboard && (
             <div className="ns-dash-grid">
               <article className="glass ns-dash-card reveal in">
                 <div className="ns-dash-card__head">
@@ -1491,35 +1749,7 @@ export default function NewSchool() {
                   <div><span>Student School</span><strong>{parentDashboard.parent.student_school_name}</strong></div>
                 </div>
               </article>
-              <article className="glass ns-dash-card reveal in">
-                <div className="ns-dash-card__head">
-                  <span className="eyebrow">Student Snapshot</span>
-                  <span className="ns-board__badge">{parentDashboard.student_context?.student?.submission_status || 'locked'}</span>
-                </div>
-                <p>{parentDashboard.student_context?.student?.full_name}</p>
-                <div className="ns-status-grid">
-                  {(parentDashboard.student_context?.status_tracker || []).map((step: any) => (
-                    <div className={`ns-status ${step.complete ? 'is-on' : ''}`} key={step.label}>
-                      <strong>{step.label}</strong>
-                      <span>{step.complete ? 'Complete' : 'Pending'}</span>
-                    </div>
-                  ))}
-                </div>
-              </article>
-              <article className="glass ns-dash-card reveal in">
-                <div className="ns-dash-card__head">
-                  <span className="eyebrow">Consent Record</span>
-                  <span className="ns-board__badge">{parentDashboard.student_context?.student?.parent_consent_status || (parentDashboard.parent.consent_checked ? 'approved' : 'pending')}</span>
-                </div>
-                <div className="ns-approval-stack">
-                  <div className="ns-approval-row"><strong>Consent Status</strong><span>{parentDashboard.student_context?.student?.parent_consent_status || (parentDashboard.parent.consent_checked ? 'approved' : 'pending')}</span></div>
-                  <div className="ns-approval-row"><strong>Approved At</strong><span>{parentDashboard.parent.approved_at || parentDashboard.parent.consented_at || '-'}</span></div>
-                  <div className="ns-approval-row"><strong>Signature</strong><span>{parentDashboard.parent.digital_signature || '-'}</span></div>
-                  <div className="ns-approval-row"><strong>Address</strong><span>{parentDashboard.parent.home_address || '-'}</span></div>
-                </div>
-              </article>
-
-              <article className="glass ns-dash-card reveal in">
+              <article className="glass ns-dash-card reveal in" hidden={dashboardTab !== 'rankings'}>
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">Ranking Snapshot</span>
                   <span className="ns-board__badge">{parentDashboard.student_context?.performance_score || 0} pts</span>
@@ -1531,8 +1761,7 @@ export default function NewSchool() {
                   <div className="ns-approval-row"><strong>Participant ID</strong><span>{parentDashboard.student_context?.student?.participant_id || '-'}</span></div>
                 </div>
               </article>
-
-              <article className="glass ns-dash-card reveal in">
+              <article className="glass ns-dash-card reveal in" hidden={dashboardTab !== 'notifications'}>
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">Notifications</span>
                   <span className="ns-board__badge">{parentUnreadNotifications.length} unread</span>
@@ -1553,9 +1782,9 @@ export default function NewSchool() {
                 </div>
               </article>
             </div>
-          )}
+              )}
 
-          {schoolDashboard && (
+              {schoolDashboard && (
             <div className="ns-dash-grid">
               <article className="glass ns-dash-card ns-dash-card--wide reveal in">
                 <div className="ns-dash-card__head">
@@ -1588,8 +1817,7 @@ export default function NewSchool() {
                   <div className="ns-approval-row"><strong>Main Phone</strong><span>{schoolDashboard.school.main_phone || '-'}</span></div>
                 </div>
               </article>
-
-              <form className="glass ns-form ns-form--compact reveal in" onSubmit={submitSchoolTeacherApproval}>
+              <form className="glass ns-form ns-form--compact reveal in" onSubmit={submitSchoolTeacherApproval} hidden={dashboardTab !== 'approvals'}>
                 <div className="ns-form__head">
                   <span className="eyebrow">Teacher Verification</span>
                   <h3>Approve or reject teachers</h3>
@@ -1637,7 +1865,7 @@ export default function NewSchool() {
                 </button>
               </form>
 
-              <form className="glass ns-form ns-form--compact reveal in" onSubmit={submitSchoolApproval}>
+              <form className="glass ns-form ns-form--compact reveal in" onSubmit={submitSchoolApproval} hidden={dashboardTab !== 'approvals'}>
                 <div className="ns-form__head">
                   <span className="eyebrow">School Approval</span>
                   <h3>Verify student participation</h3>
@@ -1688,7 +1916,7 @@ export default function NewSchool() {
                   {busy === 'school-approval' ? 'Saving...' : 'Save School Approval'}
                 </button>
               </form>
-              <article className="glass ns-dash-card ns-dash-card--wide reveal in">
+              <article className="glass ns-dash-card ns-dash-card--wide reveal in" hidden={dashboardTab !== 'records'}>
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">Registered Students</span>
                   <span className="ns-board__badge">{schoolDashboard.students.length}</span>
@@ -1723,7 +1951,7 @@ export default function NewSchool() {
                 </div>
               </article>
 
-              <article className="glass ns-dash-card ns-dash-card--wide reveal in">
+              <article className="glass ns-dash-card ns-dash-card--wide reveal in" hidden={dashboardTab !== 'records'}>
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">Teacher List</span>
                   <span className="ns-board__badge">{schoolDashboard.teachers.length}</span>
@@ -1756,7 +1984,7 @@ export default function NewSchool() {
                 </div>
               </article>
 
-              <article className="glass ns-dash-card ns-dash-card--wide reveal in">
+              <article className="glass ns-dash-card ns-dash-card--wide reveal in" hidden={dashboardTab !== 'rankings'}>
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">Rankings</span>
                   <span className="ns-board__badge">School-wide &amp; Teacher</span>
@@ -1777,7 +2005,10 @@ export default function NewSchool() {
                         </thead>
                         <tbody>
                           {schoolRankedStudents.slice(0, 8).map((row: any) => (
-                            <tr key={`school-student-${row.id}`}>
+                            <tr
+                              key={`school-student-${row.id}`}
+                              className={Number(row.rank_position || 0) <= 3 ? 'is-top' : ''}
+                            >
                               <td>{row.rank_position || '-'}</td>
                               <td>{row.full_name}</td>
                               <td>{row.teacher_full_name || '-'}</td>
@@ -1804,7 +2035,10 @@ export default function NewSchool() {
                         </thead>
                         <tbody>
                           {schoolRankedTeachers.slice(0, 8).map((row: any) => (
-                            <tr key={`school-teacher-${row.id}`}>
+                            <tr
+                              key={`school-teacher-${row.id}`}
+                              className={Number(row.rank_position || 0) <= 3 ? 'is-top' : ''}
+                            >
                               <td>{row.rank_position || '-'}</td>
                               <td>{row.teacher_full_name}</td>
                               <td>{row.students_total ?? 0}</td>
@@ -1819,7 +2053,7 @@ export default function NewSchool() {
                 </div>
               </article>
 
-              <article className="glass ns-dash-card ns-dash-card--wide reveal in">
+              <article className="glass ns-dash-card ns-dash-card--wide reveal in" hidden={dashboardTab !== 'records'}>
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">Business Interviews</span>
                   <span className="ns-board__badge">{schoolBusinesses.length}</span>
@@ -1851,7 +2085,7 @@ export default function NewSchool() {
                   </table>
                 </div>
               </article>
-              <article className="glass ns-dash-card ns-dash-card--wide reveal in">
+              <article className="glass ns-dash-card ns-dash-card--wide reveal in" hidden={dashboardTab !== 'records'}>
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">Approval Records</span>
                   <span className="ns-board__badge">{schoolApprovals.length}</span>
@@ -1884,7 +2118,7 @@ export default function NewSchool() {
                 </div>
               </article>
 
-              <form className="glass ns-form ns-form--compact reveal in" onSubmit={submitSubmissionReview}>
+              <form className="glass ns-form ns-form--compact reveal in" onSubmit={submitSubmissionReview} hidden={dashboardTab !== 'reviews'}>
                 <div className="ns-form__head">
                   <span className="eyebrow">Submission Review</span>
                   <h3>Approve or reject problem and solution submissions</h3>
@@ -1927,7 +2161,7 @@ export default function NewSchool() {
                 </button>
               </form>
 
-              <article className="glass ns-dash-card ns-dash-card--wide reveal in">
+              <article className="glass ns-dash-card ns-dash-card--wide reveal in" hidden={dashboardTab !== 'records'}>
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">Submitted Projects</span>
                   <span className="ns-board__badge">{schoolSubmissions.length}</span>
@@ -1967,7 +2201,7 @@ export default function NewSchool() {
                   </table>
                 </div>
               </article>
-              <article className="glass ns-dash-card reveal in">
+              <article className="glass ns-dash-card reveal in" hidden={dashboardTab !== 'records'}>
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">School Winners</span>
                   <span className="ns-board__badge">{schoolWinners.length}</span>
@@ -1986,7 +2220,7 @@ export default function NewSchool() {
                   )}
                 </div>
               </article>
-              <article className="glass ns-dash-card reveal in">
+              <article className="glass ns-dash-card reveal in" hidden={dashboardTab !== 'notifications'}>
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">Notifications</span>
                   <span className="ns-board__badge">{schoolUnreadNotifications.length} unread</span>
@@ -2011,9 +2245,9 @@ export default function NewSchool() {
                 </div>
               </article>
             </div>
-          )}
+              )}
 
-          {teacherDashboard && (
+              {teacherDashboard && (
             <div className="ns-dash-grid">
               <article className="glass ns-dash-card reveal in">
                 <div className="ns-dash-card__head">
@@ -2039,7 +2273,7 @@ export default function NewSchool() {
                   <p>Progress toward the Community Leadership Educator Award.</p>
                 </div>
               </article>
-              <form className="glass ns-form ns-form--compact reveal in" onSubmit={submitTeacherApproval}>
+              <form className="glass ns-form ns-form--compact reveal in" onSubmit={submitTeacherApproval} hidden={dashboardTab !== 'approvals'}>
                 <div className="ns-form__head">
                   <span className="eyebrow">Teacher Approval</span>
                   <h3>Approve student registration</h3>
@@ -2091,7 +2325,7 @@ export default function NewSchool() {
                 </button>
               </form>
 
-              <form className="glass ns-form ns-form--compact reveal in" onSubmit={submitSubmissionReview}>
+              <form className="glass ns-form ns-form--compact reveal in" onSubmit={submitSubmissionReview} hidden={dashboardTab !== 'reviews'}>
                 <div className="ns-form__head">
                   <span className="eyebrow">Submission Review</span>
                   <h3>Approve or reject problem and solution submissions</h3>
@@ -2134,7 +2368,7 @@ export default function NewSchool() {
                 </button>
               </form>
 
-              <article className="glass ns-dash-card ns-dash-card--wide reveal in">
+              <article className="glass ns-dash-card ns-dash-card--wide reveal in" hidden={dashboardTab !== 'records'}>
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">Students Under Teacher</span>
                   <span className="ns-board__badge">{teacherDashboard.students.length}</span>
@@ -2166,7 +2400,7 @@ export default function NewSchool() {
                   </table>
                 </div>
               </article>
-              <article className="glass ns-dash-card ns-dash-card--wide reveal in">
+              <article className="glass ns-dash-card ns-dash-card--wide reveal in" hidden={dashboardTab !== 'records'}>
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">Business Interview Tracking</span>
                   <span className="ns-board__badge">{teacherBusinesses.length}</span>
@@ -2206,7 +2440,7 @@ export default function NewSchool() {
                   </table>
                 </div>
               </article>
-              <article className="glass ns-dash-card ns-dash-card--wide reveal in">
+              <article className="glass ns-dash-card ns-dash-card--wide reveal in" hidden={dashboardTab !== 'records'}>
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">Project Submission Tracking</span>
                   <span className="ns-board__badge">{teacherSubmissions.length}</span>
@@ -2251,7 +2485,7 @@ export default function NewSchool() {
                 </div>
               </article>
 
-              <article className="glass ns-dash-card ns-dash-card--wide reveal in">
+              <article className="glass ns-dash-card ns-dash-card--wide reveal in" hidden={dashboardTab !== 'rankings'}>
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">Teacher Rankings</span>
                   <span className="ns-board__badge">School-wide &amp; Under You</span>
@@ -2272,7 +2506,10 @@ export default function NewSchool() {
                         </thead>
                         <tbody>
                           {teacherRankedTeachers.slice(0, 8).map((row: any) => (
-                            <tr key={`teacher-rank-${row.id}`}>
+                            <tr
+                              key={`teacher-rank-${row.id}`}
+                              className={Number(row.rank_position || 0) <= 3 ? 'is-top' : ''}
+                            >
                               <td>{row.rank_position || '-'}</td>
                               <td>{row.teacher_full_name}</td>
                               <td>{row.students_total ?? 0}</td>
@@ -2299,7 +2536,10 @@ export default function NewSchool() {
                         </thead>
                         <tbody>
                           {teacherRankedStudents.slice(0, 8).map((row: any) => (
-                            <tr key={`teacher-student-${row.id}`}>
+                            <tr
+                              key={`teacher-student-${row.id}`}
+                              className={`${Number(row.rank_position || 0) <= 3 ? 'is-top' : ''} ${String(row.participant_id || '') === currentParticipantId ? 'is-me' : ''}`.trim()}
+                            >
                               <td>{row.rank_position || '-'}</td>
                               <td>{row.full_name}</td>
                               <td>{row.performance_score ?? 0}</td>
@@ -2314,7 +2554,7 @@ export default function NewSchool() {
                 </div>
               </article>
 
-              <article className="glass ns-dash-card ns-dash-card--wide reveal in">
+              <article className="glass ns-dash-card ns-dash-card--wide reveal in" hidden={dashboardTab !== 'records'}>
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">Approval Records</span>
                   <span className="ns-board__badge">{teacherApprovals.length}</span>
@@ -2346,7 +2586,7 @@ export default function NewSchool() {
                   </table>
                 </div>
               </article>
-              <article className="glass ns-dash-card reveal in">
+              <article className="glass ns-dash-card reveal in" hidden={dashboardTab !== 'rankings'}>
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">Winner Results</span>
                   <span className="ns-board__badge">{teacherWinners.length}</span>
@@ -2361,7 +2601,7 @@ export default function NewSchool() {
                   )) : <p className="ns-muted">No teacher winner results yet.</p>}
                 </div>
               </article>
-              <article className="glass ns-dash-card reveal in">
+              <article className="glass ns-dash-card reveal in" hidden={dashboardTab !== 'rankings'}>
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">Leaderboards</span>
                   <span className="ns-board__badge">Top 3</span>
@@ -2393,7 +2633,7 @@ export default function NewSchool() {
                   ))}
                 </div>
               </article>
-              <article className="glass ns-dash-card reveal in">
+              <article className="glass ns-dash-card reveal in" hidden={dashboardTab !== 'rankings'}>
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">Teacher Award</span>
                   <span className="ns-board__badge">{teacherProgress}%</span>
@@ -2407,7 +2647,7 @@ export default function NewSchool() {
                   <p>Prize package: roundtrip airfare, hotel accommodations, ground transportation, recognition experience, and the Community Leadership Educator Award.</p>
                 </div>
               </article>
-              <article className="glass ns-dash-card reveal in">
+              <article className="glass ns-dash-card reveal in" hidden={dashboardTab !== 'reviews'}>
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">Reports</span>
                   <span className="ns-board__badge">{teacherNotifications.length}</span>
@@ -2497,9 +2737,9 @@ export default function NewSchool() {
                 </div>
               </article>
             </div>
-          )}
+              )}
 
-          {adminDashboard && (
+              {adminDashboard && (
             <div className="ns-dash-grid">
               <article className="glass ns-dash-card ns-dash-card--wide reveal in">
                 <div className="ns-dash-card__head">
@@ -2546,7 +2786,52 @@ export default function NewSchool() {
                 </div>
               </article>
 
-              <article className="glass ns-dash-card ns-dash-card--wide reveal in">
+              <article className="glass ns-dash-card ns-dash-card--wide reveal in" hidden={dashboardTab !== 'rankings'}>
+                <div className="ns-dash-card__head">
+                  <span className="eyebrow">Global Rankings</span>
+                  <span className="ns-board__badge">Top 3 by type</span>
+                </div>
+                <div className="ns-rank-columns">
+                  <div>
+                    <strong className="ns-subtitle">Schools</strong>
+                    <div className="ns-notification-list">
+                      {asArray<any>(adminDashboard.leaderboards?.schools).slice(0, 3).map((row: any) => (
+                        <div className="ns-notification-item" key={`admin-school-${row.id}`}>
+                          <strong>{row.label}</strong>
+                          <p>{row.submissions} submissions</p>
+                          <span>{row.students} students</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <strong className="ns-subtitle">Teachers</strong>
+                    <div className="ns-notification-list">
+                      {asArray<any>(adminDashboard.leaderboards?.teachers).slice(0, 3).map((row: any) => (
+                        <div className="ns-notification-item" key={`admin-teacher-${row.id}`}>
+                          <strong>{row.label}</strong>
+                          <p>{row.teacher_approved || 0} approved</p>
+                          <span>{row.students} students</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <strong className="ns-subtitle">Students</strong>
+                    <div className="ns-notification-list">
+                      {asArray<any>(adminDashboard.leaderboards?.students).slice(0, 3).map((row: any) => (
+                        <div className="ns-notification-item" key={`admin-student-${row.id}`}>
+                          <strong>{row.label}</strong>
+                          <p>{row.interview_count} interviews</p>
+                          <span>{row.grade_level}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </article>
+
+              <article className="glass ns-dash-card ns-dash-card--wide reveal in" hidden={dashboardTab !== 'data'}>
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">Submissions</span>
                   <span className="ns-board__badge">{adminDashboard.submissions?.length || 0}</span>
@@ -2579,7 +2864,7 @@ export default function NewSchool() {
                 </div>
               </article>
 
-              <article className="glass ns-dash-card ns-dash-card--wide reveal in">
+              <article className="glass ns-dash-card ns-dash-card--wide reveal in" hidden={dashboardTab !== 'data'}>
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">Schools</span>
                   <span className="ns-board__badge">{adminSchools.length}</span>
@@ -2610,7 +2895,7 @@ export default function NewSchool() {
                 </div>
               </article>
 
-              <article className="glass ns-dash-card ns-dash-card--wide reveal in">
+              <article className="glass ns-dash-card ns-dash-card--wide reveal in" hidden={dashboardTab !== 'data'}>
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">Parent Consent</span>
                   <span className="ns-board__badge">{adminParents.length}</span>
@@ -2643,7 +2928,7 @@ export default function NewSchool() {
                 </div>
               </article>
 
-              <article className="glass ns-dash-card ns-dash-card--wide reveal in">
+              <article className="glass ns-dash-card ns-dash-card--wide reveal in" hidden={dashboardTab !== 'data'}>
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">Approval Records</span>
                   <span className="ns-board__badge">{adminApprovals.length}</span>
@@ -2676,7 +2961,7 @@ export default function NewSchool() {
                 </div>
               </article>
 
-              <article className="glass ns-dash-card ns-dash-card--wide reveal in">
+              <article className="glass ns-dash-card ns-dash-card--wide reveal in" hidden={dashboardTab !== 'data'}>
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">Business Interviews</span>
                   <span className="ns-board__badge">{adminBusinesses.length}</span>
@@ -2709,7 +2994,7 @@ export default function NewSchool() {
                 </div>
               </article>
 
-              <article className="glass ns-dash-card reveal in">
+              <article className="glass ns-dash-card reveal in" hidden={dashboardTab !== 'notifications'}>
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">Notifications</span>
                   <span className="ns-board__badge">{adminUnreadNotifications.length} unread</span>
@@ -2730,7 +3015,7 @@ export default function NewSchool() {
                 </div>
               </article>
 
-              <form className="glass ns-form ns-form--compact reveal in" onSubmit={submitAdminReview}>
+              <form className="glass ns-form ns-form--compact reveal in" onSubmit={submitAdminReview} hidden={dashboardTab !== 'reviews'}>
                 <div className="ns-form__head">
                   <span className="eyebrow">Submission Review</span>
                   <h3>Score and publish a result</h3>
@@ -2783,7 +3068,7 @@ export default function NewSchool() {
                 </button>
               </form>
 
-              <form className="glass ns-form ns-form--compact reveal in" onSubmit={publishWinners}>
+              <form className="glass ns-form ns-form--compact reveal in" onSubmit={publishWinners} hidden={dashboardTab !== 'reviews'}>
                 <div className="ns-form__head">
                   <span className="eyebrow">Publish Winners</span>
                   <h3>Select the top 3 submissions</h3>
@@ -2799,9 +3084,13 @@ export default function NewSchool() {
                 <button className="btn btn--solid" type="submit" disabled={busy === 'publish'}>{busy === 'publish' ? 'Publishing...' : 'Publish Winners'}</button>
               </form>
             </div>
-          )}
+              )}
+            </div>
+          </div>
         </div>
       </section>
+        </>
+      )}
 
     </div>
   )

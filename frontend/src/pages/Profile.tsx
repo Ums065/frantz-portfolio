@@ -1,7 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-
-const isAdmin = (role?: string) => ['admin', 'super_admin', 'editor'].includes(role || '')
+import { resolveDashboardRoute } from '../lib/dashboardRoute'
 
 export default function Profile() {
   const { user, loading } = useAuth()
@@ -78,7 +77,7 @@ export default function Profile() {
           </p>
         )}
         <div className="profile-actions">
-          <Link className="btn btn--sm btn--solid" to={isAdmin(user.role) ? '/admin' : '/dashboard'}>Dashboard</Link>
+          <Link className="btn btn--sm btn--solid" to={resolveDashboardRoute(user.role)}>Dashboard</Link>
           <Link className="btn btn--sm" to="/">View Site</Link>
         </div>
       </div>

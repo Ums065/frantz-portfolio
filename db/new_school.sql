@@ -18,17 +18,53 @@ ALTER TABLE users
     'teacher'
   ) NOT NULL DEFAULT 'member';
 
-ALTER TABLE users
-  ADD COLUMN IF NOT EXISTS approval_status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending' AFTER email_verified_at,
-  ADD COLUMN IF NOT EXISTS approval_note TEXT DEFAULT NULL AFTER approval_status,
-  ADD COLUMN IF NOT EXISTS approval_reviewed_by_user_id INT DEFAULT NULL AFTER approval_note,
-  ADD COLUMN IF NOT EXISTS approval_reviewed_at TIMESTAMP NULL DEFAULT NULL AFTER approval_reviewed_by_user_id,
-  ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER created_at;
+DROP PROCEDURE IF EXISTS add_column_if_missing;
+DELIMITER $$
+
+CREATE PROCEDURE add_column_if_missing(
+  IN p_table_name VARCHAR(64),
+  IN p_column_name VARCHAR(64),
+  IN p_column_definition TEXT,
+  IN p_after_column VARCHAR(64)
+)
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = DATABASE()
+      AND table_name = p_table_name
+      AND column_name = p_column_name
+  ) THEN
+    SET @add_column_sql = CONCAT(
+      'ALTER TABLE `', p_table_name, '` ADD COLUMN `', p_column_name, '` ',
+      p_column_definition,
+      IF(
+        p_after_column IS NULL OR p_after_column = '',
+        '',
+        CONCAT(' AFTER `', p_after_column, '`')
+      )
+    );
+    PREPARE stmt FROM @add_column_sql;
+    EXECUTE stmt;
+    DEALLOCATE PREPARE stmt;
+  END IF;
+END$$
+
+DELIMITER ;
+
+CALL add_column_if_missing('users', 'email_verified_at', 'TIMESTAMP NULL DEFAULT NULL', 'role');
+CALL add_column_if_missing('users', 'approval_status', 'ENUM(''pending'',''approved'',''rejected'') NOT NULL DEFAULT ''pending''', 'email_verified_at');
+CALL add_column_if_missing('users', 'approval_note', 'TEXT DEFAULT NULL', 'approval_status');
+CALL add_column_if_missing('users', 'approval_reviewed_by_user_id', 'INT DEFAULT NULL', 'approval_note');
+CALL add_column_if_missing('users', 'approval_reviewed_at', 'TIMESTAMP NULL DEFAULT NULL', 'approval_reviewed_by_user_id');
+CALL add_column_if_missing('users', 'updated_at', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP', 'created_at');
 
 UPDATE users
 SET approval_status = 'approved',
     approval_reviewed_at = COALESCE(approval_reviewed_at, created_at)
 WHERE approval_status IS NULL OR approval_status <> 'approved';
+
+DROP PROCEDURE IF EXISTS add_column_if_missing;
 
 CREATE TABLE IF NOT EXISTS new_school_schools (
   id                      INT AUTO_INCREMENT PRIMARY KEY,

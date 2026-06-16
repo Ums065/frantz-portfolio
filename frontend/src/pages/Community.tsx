@@ -5,8 +5,7 @@ import { communityUpdates, memberPerks } from '../lib/brandContent'
 import { DEFAULT_MEMBER_NOTIFICATIONS, loadMemberNotifications, MemberNotification } from '../lib/memberStorage'
 import { useAuth } from '../context/AuthContext'
 import { useSeo } from '../hooks/useSeo'
-
-const isAdmin = (role?: string) => ['admin', 'super_admin', 'editor'].includes(role || '')
+import { resolveDashboardRoute } from '../lib/dashboardRoute'
 
 export default function Community() {
   const { user } = useAuth()
@@ -120,12 +119,12 @@ export default function Community() {
               </div>
               <div className="member-card__grid">
                 <div><span>Member ID</span><strong>{memberId}</strong></div>
-                <div><span>Status</span><strong>{user ? (isAdmin(user.role) ? 'Admin access' : 'Member access') : 'Public access'}</strong></div>
+                <div><span>Status</span><strong>{user ? (resolveDashboardRoute(user.role) === '/admin' ? 'Admin access' : 'Member access') : 'Public access'}</strong></div>
                 <div><span>Role</span><strong>{user?.role || 'visitor'}</strong></div>
                 <div><span>Access</span><strong>{user ? 'Saved items + perks' : 'Join for updates'}</strong></div>
               </div>
               <div className="profile-actions">
-                <Link className="btn btn--solid btn--sm" to={user ? (isAdmin(user.role) ? '/admin' : '/dashboard') : '/dashboard'}>{user ? 'Open Dashboard' : 'Sign In'}</Link>
+                <Link className="btn btn--solid btn--sm" to={user ? resolveDashboardRoute(user.role) : '/dashboard'}>{user ? 'Open Dashboard' : 'Sign In'}</Link>
                 <Link className="btn btn--sm" to="/blog">Read the News</Link>
               </div>
             </div>

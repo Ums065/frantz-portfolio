@@ -11,6 +11,7 @@ const BlogPost = lazy(() => import('./pages/BlogPost'))
 const Community = lazy(() => import('./pages/Community'))
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const Events = lazy(() => import('./pages/Events'))
+const DemoLogin = lazy(() => import('./pages/DemoLogin'))
 const Media = lazy(() => import('./pages/Media'))
 const NewSchool = lazy(() => import('./pages/NewSchool'))
 const Profile = lazy(() => import('./pages/Profile'))
@@ -45,11 +46,12 @@ function RoutedPage({ children, home = false, pageKey }: { children: ReactNode; 
 }
 
 function ScrollToTop() {
-  const { pathname } = useLocation()
+  const { pathname, hash } = useLocation()
 
   useEffect(() => {
+    if (hash) return
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
-  }, [pathname])
+  }, [pathname, hash])
 
   return null
 }
@@ -75,7 +77,9 @@ export default function App() {
           <Route path="/events" element={<RoutedPage pageKey="events"><Events /></RoutedPage>} />
           <Route path="/media" element={<RoutedPage pageKey="media"><Media /></RoutedPage>} />
           <Route path="/community" element={<RoutedPage pageKey="community"><Community /></RoutedPage>} />
+          <Route path="/demo-login" element={<RoutedPage pageKey="demo-login"><DemoLogin /></RoutedPage>} />
           <Route path="/new-school" element={<RoutedPage pageKey="new-school"><NewSchool /></RoutedPage>} />
+          <Route path="/new-school/dashboard" element={<RoutedPage pageKey="new-school-dashboard"><NewSchool /></RoutedPage>} />
           <Route path="/new-school/parent/:token" element={<RoutedPage pageKey="new-school-parent"><NewSchool /></RoutedPage>} />
           <Route path="/dashboard" element={<RoutedPage pageKey="dashboard"><Dashboard /></RoutedPage>} />
           <Route path="/profile" element={<RoutedPage pageKey="profile"><Profile /></RoutedPage>} />

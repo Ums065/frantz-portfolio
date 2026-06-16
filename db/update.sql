@@ -427,62 +427,67 @@ CREATE TABLE IF NOT EXISTS new_school_notifications (
 ) ENGINE=InnoDB;
 
 -- ---------- Idempotent upgrades for existing databases ----------
+DROP PROCEDURE IF EXISTS add_column_if_missing;
+DELIMITER $$
+
+CREATE PROCEDURE add_column_if_missing(
+  IN p_table_name VARCHAR(64),
+  IN p_column_name VARCHAR(64),
+  IN p_column_definition TEXT,
+  IN p_after_column VARCHAR(64)
+)
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = DATABASE()
+      AND table_name = p_table_name
+      AND column_name = p_column_name
+  ) THEN
+    SET @add_column_sql = CONCAT(
+      'ALTER TABLE `', p_table_name, '` ADD COLUMN `', p_column_name, '` ',
+      p_column_definition,
+      IF(
+        p_after_column IS NULL OR p_after_column = '',
+        '',
+        CONCAT(' AFTER `', p_after_column, '`')
+      )
+    );
+    PREPARE stmt FROM @add_column_sql;
+    EXECUTE stmt;
+    DEALLOCATE PREPARE stmt;
+  END IF;
+END$$
+
+DELIMITER ;
+
 ALTER TABLE users
   MODIFY role ENUM('member','vip','editor','admin','super_admin','student','parent','school','teacher') NOT NULL DEFAULT 'member';
 
-ALTER TABLE users
-  ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMP NULL DEFAULT NULL AFTER role;
+CALL add_column_if_missing('users', 'email_verified_at', 'TIMESTAMP NULL DEFAULT NULL', 'role');
+CALL add_column_if_missing('users', 'approval_status', 'ENUM(''pending'',''approved'',''rejected'') NOT NULL DEFAULT ''pending''', 'email_verified_at');
+CALL add_column_if_missing('users', 'approval_note', 'TEXT DEFAULT NULL', 'approval_status');
+CALL add_column_if_missing('users', 'approval_reviewed_by_user_id', 'INT DEFAULT NULL', 'approval_note');
+CALL add_column_if_missing('users', 'approval_reviewed_at', 'TIMESTAMP NULL DEFAULT NULL', 'approval_reviewed_by_user_id');
+CALL add_column_if_missing('users', 'email_verification_otp_hash', 'VARCHAR(255) DEFAULT NULL', 'approval_reviewed_at');
+CALL add_column_if_missing('users', 'email_verification_otp_expires_at', 'TIMESTAMP NULL DEFAULT NULL', 'email_verification_otp_hash');
+CALL add_column_if_missing('users', 'email_verification_otp_sent_at', 'TIMESTAMP NULL DEFAULT NULL', 'email_verification_otp_expires_at');
+CALL add_column_if_missing('users', 'email_verification_otp_attempts', 'INT NOT NULL DEFAULT 0', 'email_verification_otp_sent_at');
+CALL add_column_if_missing('users', 'created_at', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP', 'email_verification_otp_attempts');
+CALL add_column_if_missing('users', 'updated_at', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP', 'created_at');
 
-ALTER TABLE users
-  ADD COLUMN IF NOT EXISTS approval_status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending' AFTER email_verified_at;
+UPDATE users
+SET approval_status = 'approved',
+    approval_reviewed_at = COALESCE(approval_reviewed_at, created_at)
+WHERE approval_status IS NULL OR approval_status <> 'approved';
 
-ALTER TABLE users
-  ADD COLUMN IF NOT EXISTS approval_note TEXT DEFAULT NULL AFTER approval_status;
-
-ALTER TABLE users
-  ADD COLUMN IF NOT EXISTS approval_reviewed_by_user_id INT DEFAULT NULL AFTER approval_note;
-
-ALTER TABLE users
-  ADD COLUMN IF NOT EXISTS approval_reviewed_at TIMESTAMP NULL DEFAULT NULL AFTER approval_reviewed_by_user_id;
-
-ALTER TABLE users
-  ADD COLUMN IF NOT EXISTS email_verification_otp_hash VARCHAR(255) DEFAULT NULL AFTER approval_reviewed_at;
-
-ALTER TABLE users
-  ADD COLUMN IF NOT EXISTS email_verification_otp_expires_at TIMESTAMP NULL DEFAULT NULL AFTER email_verification_otp_hash;
-
-ALTER TABLE users
-  ADD COLUMN IF NOT EXISTS email_verification_otp_sent_at TIMESTAMP NULL DEFAULT NULL AFTER email_verification_otp_expires_at;
-
-ALTER TABLE users
-  ADD COLUMN IF NOT EXISTS email_verification_otp_attempts INT NOT NULL DEFAULT 0 AFTER email_verification_otp_sent_at;
-
-ALTER TABLE users
-  ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP AFTER email_verification_otp_attempts;
-
-ALTER TABLE users
-  ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER created_at;
-
-ALTER TABLE store_inventory
-  ADD COLUMN IF NOT EXISTS name VARCHAR(160) DEFAULT NULL AFTER product_id;
-
-ALTER TABLE store_inventory
-  ADD COLUMN IF NOT EXISTS category VARCHAR(80) DEFAULT NULL AFTER name;
-
-ALTER TABLE store_inventory
-  ADD COLUMN IF NOT EXISTS description TEXT DEFAULT NULL AFTER category;
-
-ALTER TABLE store_inventory
-  ADD COLUMN IF NOT EXISTS image VARCHAR(255) DEFAULT NULL AFTER description;
-
-ALTER TABLE store_inventory
-  ADD COLUMN IF NOT EXISTS price DECIMAL(10,2) DEFAULT NULL AFTER image;
-
-ALTER TABLE store_inventory
-  ADD COLUMN IF NOT EXISTS visibility ENUM('live','upcoming','hidden') NOT NULL DEFAULT 'live' AFTER restock_note;
-
-ALTER TABLE store_inventory
-  ADD COLUMN IF NOT EXISTS sort_order INT NOT NULL DEFAULT 0 AFTER visibility;
+CALL add_column_if_missing('store_inventory', 'name', 'VARCHAR(160) DEFAULT NULL', 'product_id');
+CALL add_column_if_missing('store_inventory', 'category', 'VARCHAR(80) DEFAULT NULL', 'name');
+CALL add_column_if_missing('store_inventory', 'description', 'TEXT DEFAULT NULL', 'category');
+CALL add_column_if_missing('store_inventory', 'image', 'VARCHAR(255) DEFAULT NULL', 'description');
+CALL add_column_if_missing('store_inventory', 'price', 'DECIMAL(10,2) DEFAULT NULL', 'image');
+CALL add_column_if_missing('store_inventory', 'visibility', 'ENUM(''live'',''upcoming'',''hidden'') NOT NULL DEFAULT ''live''', 'restock_note');
+CALL add_column_if_missing('store_inventory', 'sort_order', 'INT NOT NULL DEFAULT 0', 'visibility');
 
 INSERT IGNORE INTO store_inventory (
   product_id, name, category, description, image, price, stock, low_stock_threshold, restock_note, visibility, sort_order
@@ -499,38 +504,47 @@ INSERT IGNORE INTO store_inventory (
   ('book-blueprint', 'The Legacy Blueprint - eBook', 'Books', 'Digital companion guide for a future resource release.', '/assets/brand-signature-white.webp', 14.00, 96, 12, 'Upcoming drop', 'upcoming', 10),
   ('print-signed', 'Signed Founder''s Print', 'Art Prints', 'Signed founder print reserved for a premium future drop.', '/assets/brand-signature-white.webp', 48.00, 16, 4, 'Upcoming drop', 'upcoming', 11);
 
-ALTER TABLE new_school_students
-  ADD COLUMN IF NOT EXISTS parent_consent_status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending' AFTER grade_level;
+CALL add_column_if_missing('new_school_schools', 'status', 'ENUM(''registered'',''approved'',''rejected'') DEFAULT NULL', 'administrator_phone');
 
-ALTER TABLE new_school_students
-  ADD COLUMN IF NOT EXISTS school_approval_status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending' AFTER parent_consent_status;
+UPDATE new_school_schools
+SET status = 'approved'
+WHERE status IS NULL OR status = '';
 
-ALTER TABLE new_school_students
-  ADD COLUMN IF NOT EXISTS teacher_approval_status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending' AFTER school_approval_status;
+ALTER TABLE new_school_schools
+  MODIFY status ENUM('registered','approved','rejected') NOT NULL DEFAULT 'registered';
 
-ALTER TABLE new_school_students
-  ADD COLUMN IF NOT EXISTS submission_status ENUM('locked','eligible','submitted','complete') NOT NULL DEFAULT 'locked' AFTER teacher_approval_status;
+CALL add_column_if_missing('new_school_teachers', 'status', 'ENUM(''registered'',''approved'',''rejected'') DEFAULT NULL', 'grade_level_supported');
 
-ALTER TABLE new_school_students
-  ADD COLUMN IF NOT EXISTS overall_status ENUM(
-    'student_registered',
-    'parent_consent_pending',
-    'parent_consent_approved',
-    'school_approval_pending',
-    'school_approval_approved',
-    'teacher_approval_pending',
-    'interviews_pending',
-    'eligible_to_submit',
-    'submission_submitted',
-    'submission_complete',
-    'rejected'
-  ) NOT NULL DEFAULT 'student_registered' AFTER submission_status;
+UPDATE new_school_teachers
+SET status = 'approved'
+WHERE status IS NULL OR status = '';
 
-ALTER TABLE new_school_students
-  ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP AFTER overall_status;
+ALTER TABLE new_school_teachers
+  MODIFY status ENUM('registered','approved','rejected') NOT NULL DEFAULT 'registered';
 
-ALTER TABLE new_school_students
-  ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER created_at;
+CALL add_column_if_missing('new_school_students', 'parent_consent_status', 'ENUM(''pending'',''approved'',''rejected'') NOT NULL DEFAULT ''pending''', 'grade_level');
+CALL add_column_if_missing('new_school_students', 'school_approval_status', 'ENUM(''pending'',''approved'',''rejected'') NOT NULL DEFAULT ''pending''', 'parent_consent_status');
+CALL add_column_if_missing('new_school_students', 'teacher_approval_status', 'ENUM(''pending'',''approved'',''rejected'') NOT NULL DEFAULT ''pending''', 'school_approval_status');
+CALL add_column_if_missing('new_school_students', 'submission_status', 'ENUM(''locked'',''eligible'',''submitted'',''complete'') NOT NULL DEFAULT ''locked''', 'teacher_approval_status');
+CALL add_column_if_missing('new_school_students', 'overall_status', 'ENUM(''student_registered'',''parent_consent_pending'',''parent_consent_approved'',''school_approval_pending'',''school_approval_approved'',''teacher_approval_pending'',''interviews_pending'',''eligible_to_submit'',''submission_submitted'',''submission_complete'',''rejected'') NOT NULL DEFAULT ''student_registered''', 'submission_status');
+CALL add_column_if_missing('new_school_students', 'created_at', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP', 'overall_status');
+CALL add_column_if_missing('new_school_students', 'updated_at', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP', 'created_at');
+CALL add_column_if_missing('new_school_students', 'teacher_id', 'INT DEFAULT NULL', 'school_id');
+CALL add_column_if_missing('new_school_students', 'participant_id', 'VARCHAR(40) DEFAULT NULL', 'teacher_id');
+CALL add_column_if_missing('new_school_students', 'qr_token', 'VARCHAR(80) DEFAULT NULL', 'participant_id');
+CALL add_column_if_missing('new_school_students', 'qr_url', 'VARCHAR(255) DEFAULT NULL', 'qr_token');
+
+UPDATE new_school_students
+SET participant_id = LPAD(id, 8, '0')
+WHERE participant_id IS NULL OR participant_id = '';
+
+UPDATE new_school_students
+SET qr_token = CONCAT('legacy-', participant_id)
+WHERE qr_token IS NULL OR qr_token = '';
+
+UPDATE new_school_students
+SET qr_url = CONCAT('/new-school/parent/', qr_token)
+WHERE qr_url IS NULL OR qr_url = '';
 
 UPDATE new_school_students
 SET overall_status = 'interviews_pending'
@@ -551,14 +565,24 @@ ALTER TABLE new_school_students
     'rejected'
   ) NOT NULL DEFAULT 'student_registered';
 
-ALTER TABLE new_school_parents
-  ADD COLUMN IF NOT EXISTS consented_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP AFTER approved_at;
+CALL add_column_if_missing('new_school_parents', 'government_id_url', 'VARCHAR(255) DEFAULT NULL', 'home_address');
+CALL add_column_if_missing('new_school_parents', 'consent_checked', 'TINYINT(1) NOT NULL DEFAULT 0', 'government_id_url');
+CALL add_column_if_missing('new_school_parents', 'digital_signature', 'VARCHAR(255) DEFAULT NULL', 'consent_checked');
+CALL add_column_if_missing('new_school_parents', 'approved_at', 'TIMESTAMP NULL DEFAULT NULL', 'digital_signature');
+CALL add_column_if_missing('new_school_parents', 'consented_at', 'TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP', 'approved_at');
 
-ALTER TABLE new_school_approvals
-  ADD COLUMN IF NOT EXISTS recorded_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP AFTER approved_at;
+CALL add_column_if_missing('new_school_approvals', 'reviewer_role', 'VARCHAR(120) DEFAULT NULL', 'reviewer_email');
+CALL add_column_if_missing('new_school_approvals', 'notes', 'TEXT DEFAULT NULL', 'status');
+CALL add_column_if_missing('new_school_approvals', 'digital_signature', 'VARCHAR(255) DEFAULT NULL', 'notes');
+CALL add_column_if_missing('new_school_approvals', 'approved_at', 'TIMESTAMP NULL DEFAULT NULL', 'digital_signature');
+CALL add_column_if_missing('new_school_approvals', 'recorded_at', 'TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP', 'approved_at');
 
-ALTER TABLE new_school_submissions
-  ADD COLUMN IF NOT EXISTS reviewed_by_user_id INT DEFAULT NULL AFTER reviewer_notes;
+CALL add_column_if_missing('new_school_submissions', 'source_business_id', 'INT DEFAULT NULL', 'student_id');
+CALL add_column_if_missing('new_school_submissions', 'submission_date', 'TIMESTAMP NULL DEFAULT NULL', 'written_url');
+CALL add_column_if_missing('new_school_submissions', 'reviewer_notes', 'TEXT DEFAULT NULL', 'status');
+CALL add_column_if_missing('new_school_submissions', 'reviewed_by_user_id', 'INT DEFAULT NULL', 'reviewer_notes');
+CALL add_column_if_missing('new_school_submissions', 'reviewed_at', 'TIMESTAMP NULL DEFAULT NULL', 'reviewed_by_user_id');
+CALL add_column_if_missing('new_school_submissions', 'score', 'DECIMAL(6,2) DEFAULT NULL', 'reviewed_at');
+CALL add_column_if_missing('new_school_submissions', 'rank_position', 'TINYINT UNSIGNED DEFAULT NULL', 'score');
 
-ALTER TABLE new_school_submissions
-  ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMP NULL DEFAULT NULL AFTER reviewed_by_user_id;
+DROP PROCEDURE IF EXISTS add_column_if_missing;

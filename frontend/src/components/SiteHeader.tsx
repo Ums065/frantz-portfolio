@@ -3,9 +3,9 @@ import { Link, NavLink } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { SocialLinks } from './SocialIcons'
 import { BRAND_LOGO } from '../lib/brandAssets'
+import { resolveDashboardRoute } from '../lib/dashboardRoute'
 
 const logo = BRAND_LOGO
-const isAdmin = (role?: string) => ['admin', 'super_admin', 'editor'].includes(role || '')
 
 type NavItem =
   | { label: string; href: string; kind: 'route'; end?: boolean }
@@ -18,7 +18,7 @@ export default function SiteHeader({ home = false }: { home?: boolean }) {
   const { user, logout } = useAuth()
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement | null>(null)
-  const dashboardHref = user ? (isAdmin(user.role) ? '/admin' : '/dashboard') : '/dashboard'
+  const dashboardHref = resolveDashboardRoute(user?.role)
   const fullName = user?.full_name || ''
   const initial = fullName.trim().charAt(0).toUpperCase() || 'U'
 
@@ -33,7 +33,7 @@ export default function SiteHeader({ home = false }: { home?: boolean }) {
     { label: 'Media', href: '/media', kind: 'route' },
     { label: 'Community', href: '/community', kind: 'route' },
     { label: 'Challenge', href: '/new-school', kind: 'route' },
-    ...(user ? [{ label: 'Dashboard', href: '/dashboard', kind: 'route' as const }] : []),
+    ...(user ? [{ label: 'Dashboard', href: dashboardHref, kind: 'route' as const }] : []),
     { label: 'Merch', href: '/store', kind: 'route' },
     { label: 'News', href: '/blog', kind: 'route' },
   ]
@@ -104,6 +104,7 @@ export default function SiteHeader({ home = false }: { home?: boolean }) {
                     <span>{user.email}</span>
                   </div>
                   <Link to={dashboardHref} onClick={closeMenu}>Dashboard</Link>
+                  <Link to="/demo-login" onClick={closeMenu}>Demo Login</Link>
                   <Link to="/profile" onClick={closeMenu}>Profile</Link>
                   <button
                     type="button"
@@ -118,6 +119,7 @@ export default function SiteHeader({ home = false }: { home?: boolean }) {
               </div>
             ) : (
               <>
+                <Link className="btn btn--sm" to="/demo-login">Demo Login</Link>
                 <button className="btn btn--sm" data-auth="login">Login</button>
                 <button className="btn btn--sm btn--solid" data-auth="register">Register</button>
               </>
@@ -151,12 +153,14 @@ export default function SiteHeader({ home = false }: { home?: boolean }) {
           <div className="mcta">
             {user ? (
               <>
+                <Link className="btn btn--sm" to="/demo-login">Demo Login</Link>
                 <Link className="btn btn--sm btn--solid" to={dashboardHref}>Dashboard</Link>
                 <Link className="btn btn--sm" to="/profile">Profile</Link>
                 <button className="btn btn--sm" type="button" onClick={() => logout()}>Logout</button>
               </>
             ) : (
               <>
+                <Link className="btn btn--sm" to="/demo-login">Demo Login</Link>
                 <button className="btn btn--sm" data-auth="login">Login</button>
                 <button className="btn btn--sm btn--solid" data-auth="register">Register</button>
               </>
