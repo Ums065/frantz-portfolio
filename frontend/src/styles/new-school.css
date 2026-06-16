@@ -996,6 +996,68 @@
   grid-column: 1 / -1;
 }
 
+.ns-dashboard-callout {
+  margin-top: 16px;
+  padding: 16px 18px;
+  border-radius: 18px;
+  border: 1px solid rgba(201, 168, 76, 0.16);
+  background:
+    linear-gradient(135deg, rgba(201, 168, 76, 0.08), rgba(255, 255, 255, 0.02)),
+    rgba(255, 255, 255, 0.02);
+}
+
+.ns-dashboard-callout__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.ns-dashboard-callout__head strong {
+  color: #f5efe3;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.ns-dashboard-callout__head span {
+  color: var(--gold-light);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.ns-dashboard-callout p {
+  margin-top: 10px;
+  color: var(--muted);
+  line-height: 1.6;
+  font-size: 13px;
+}
+
+.ns-progress-track {
+  margin-top: 12px;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+}
+
+.ns-progress-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #c9a84c, #f2d48b);
+}
+
+.ns-dashboard-callout small {
+  display: block;
+  margin-top: 10px;
+  color: var(--muted-dim);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.11em;
+}
+
 .ns-status-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

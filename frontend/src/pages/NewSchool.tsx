@@ -808,6 +808,29 @@ export default function NewSchool() {
       )
     : 0
   const teacherProgress = Math.min(100, Math.round(teacherScore / 8))
+  const studentProgress = studentDashboard
+    ? Math.round(Math.min(100, ((studentDashboard.interview_count || 0) / 10) * 100))
+    : 0
+  const studentStatusProgress = studentDashboard
+    ? Math.round(((studentDashboard.status_tracker || []).filter((step: any) => step.complete).length / Math.max((studentDashboard.status_tracker || []).length, 1)) * 100)
+    : 0
+  const parentReadinessProgress = parentDashboard
+    ? Math.round([
+        parentDashboard.student_context?.student?.parent_consent_status,
+        parentDashboard.student_context?.student?.school_approval_status,
+        parentDashboard.student_context?.student?.teacher_approval_status,
+        parentDashboard.student_context?.student?.submission_status,
+      ].filter((status) => status && !['pending', 'locked', 'draft'].includes(String(status).toLowerCase())).length / 4 * 100)
+    : 0
+  const schoolReadinessProgress = schoolDashboard
+    ? Math.round(Math.min(100, (((schoolDashboard.summary.teacher_approved || 0) + (schoolDashboard.summary.school_approved || 0) + (schoolDashboard.summary.parent_approved || 0)) / Math.max(Number(schoolDashboard.summary.students_total || 0), 1)) * 100))
+    : 0
+  const teacherReadinessProgress = teacherDashboard
+    ? Math.round(Math.min(100, (((teacherDashboard.summary.teacher_approved || 0) + (teacherDashboard.summary.submitted || 0)) / Math.max(Number(teacherDashboard.summary.students_total || 0), 1)) * 100))
+    : 0
+  const adminReadinessProgress = adminDashboard
+    ? Math.round(Math.min(100, (((adminDashboard.summary.submissions || 0) + (adminDashboard.summary.winners || 0)) / Math.max(Number(adminDashboard.summary.students || 0), 1)) * 100))
+    : 0
   const currentSchoolEmail = schoolDashboard?.school?.administrator_email || user?.email || ''
   const currentTeacherEmail = teacherDashboard?.teacher?.school_email || user?.email || ''
   const studentNotifications = asArray<any>(studentDashboard?.notifications)
@@ -1475,13 +1498,24 @@ export default function NewSchool() {
               )}
 
               {studentDashboard && (
-            <div className="ns-dash-grid">
+            <div className="ns-dash-grid" hidden={dashboardTab !== 'overview'}>
               <article className="glass ns-dash-card reveal in">
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">Student Status</span>
                   <span className="ns-board__badge">{studentDashboard.student.submission_status}</span>
                 </div>
                 <h3>{studentDashboard.student.full_name}</h3>
+                <div className="ns-dashboard-callout">
+                  <div className="ns-dashboard-callout__head">
+                    <strong>Next milestone</strong>
+                    <span>{studentDashboard.can_submit ? 'Ready to submit' : 'Build momentum'}</span>
+                  </div>
+                  <p>{studentDashboard.can_submit ? 'Your final submission is unlocked. Use the activity tab to send the project.' : 'Complete approvals and interviews to unlock the final project.'}</p>
+                  <div className="ns-progress-track" aria-hidden="true">
+                    <span style={{ width: `${studentProgress}%` }} />
+                  </div>
+                  <small>{studentStatusProgress}% workflow complete | {studentDashboard.interview_count || 0}/10 interviews done</small>
+                </div>
                 <div className="ns-status-grid">
                   {(studentDashboard.status_tracker || []).map((step: any) => (
                     <div className={`ns-status ${step.complete ? 'is-on' : ''}`} key={step.label}>
@@ -1502,6 +1536,11 @@ export default function NewSchool() {
                     <strong>Parent Consent QR</strong>
                     <p>Share this code so the parent can open the consent flow on a phone.</p>
                   </div>
+                </div>
+                <div className="ns-actions">
+                  <button className="btn btn--sm" type="button" onClick={() => navigator.clipboard.writeText(studentDashboard.student.qr_url)}>Copy QR</button>
+                  <button className="btn btn--sm" type="button" onClick={() => setDashboardTab('activity')}>Open Activity</button>
+                  <button className="btn btn--sm btn--solid" type="button" onClick={() => setDashboardTab('rankings')}>View Rankings</button>
                 </div>
               </article>
 
@@ -1734,7 +1773,7 @@ export default function NewSchool() {
               )}
 
               {parentDashboard && (
-            <div className="ns-dash-grid">
+            <div className="ns-dash-grid" hidden={dashboardTab !== 'overview'}>
               <article className="glass ns-dash-card reveal in">
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">Parent Dashboard</span>
@@ -1742,11 +1781,26 @@ export default function NewSchool() {
                 </div>
                 <h3>{parentDashboard.parent.parent_full_name}</h3>
                 <p>Linked student: {parentDashboard.parent.student_full_name}</p>
+                <div className="ns-dashboard-callout">
+                  <div className="ns-dashboard-callout__head">
+                    <strong>Monitoring mode</strong>
+                    <span>{parentDashboard.student_context?.student?.submission_status || 'tracking'}</span>
+                  </div>
+                  <p>Watch approvals, rank movement, and scholarship progress without editing anything.</p>
+                  <div className="ns-progress-track" aria-hidden="true">
+                    <span style={{ width: `${parentReadinessProgress}%` }} />
+                  </div>
+                  <small>{parentReadinessProgress}% of the student workflow is complete</small>
+                </div>
                 <div className="ns-quick-stats">
                   <div><span>Relationship</span><strong>{parentDashboard.parent.relationship_to_student}</strong></div>
                   <div><span>Phone</span><strong>{parentDashboard.parent.phone_number}</strong></div>
                   <div><span>Email</span><strong>{parentDashboard.parent.email}</strong></div>
                   <div><span>Student School</span><strong>{parentDashboard.parent.student_school_name}</strong></div>
+                </div>
+                <div className="ns-actions">
+                  <button className="btn btn--sm btn--solid" type="button" onClick={() => setDashboardTab('rankings')}>View Rankings</button>
+                  <button className="btn btn--sm" type="button" onClick={() => setDashboardTab('notifications')}>Open Alerts</button>
                 </div>
               </article>
               <article className="glass ns-dash-card reveal in" hidden={dashboardTab !== 'rankings'}>
@@ -1785,11 +1839,22 @@ export default function NewSchool() {
               )}
 
               {schoolDashboard && (
-            <div className="ns-dash-grid">
+            <div className="ns-dash-grid" hidden={dashboardTab !== 'overview'}>
               <article className="glass ns-dash-card ns-dash-card--wide reveal in">
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">School Dashboard</span>
                   <span className="ns-board__badge">{schoolDashboard.school.school_name}</span>
+                </div>
+                <div className="ns-dashboard-callout">
+                  <div className="ns-dashboard-callout__head">
+                    <strong>Principal control room</strong>
+                    <span>{schoolDashboard.summary.submitted || 0} submissions</span>
+                  </div>
+                  <p>Approve teachers, keep school readiness high, and monitor performance from one view.</p>
+                  <div className="ns-progress-track" aria-hidden="true">
+                    <span style={{ width: `${schoolReadinessProgress}%` }} />
+                  </div>
+                  <small>{schoolReadinessProgress}% readiness across the school workflow</small>
                 </div>
                 <div className="ns-quick-stats">
                   <div><span>Students</span><strong>{schoolDashboard.summary.students_total || 0}</strong></div>
@@ -1802,6 +1867,11 @@ export default function NewSchool() {
                   <div><span>Eligible</span><strong>{schoolDashboard.summary.eligible_to_submit || 0}</strong></div>
                   <div><span>Submissions</span><strong>{schoolDashboard.summary.submitted || 0}</strong></div>
                   <div><span>Interviews</span><strong>{schoolDashboard.summary.interviews_total || 0}</strong></div>
+                </div>
+                <div className="ns-actions">
+                  <button className="btn btn--sm btn--solid" type="button" onClick={() => setDashboardTab('approvals')}>Manage Approvals</button>
+                  <button className="btn btn--sm" type="button" onClick={() => setDashboardTab('rankings')}>Open Rankings</button>
+                  <button className="btn btn--sm" type="button" onClick={() => setDashboardTab('records')}>View Records</button>
                 </div>
               </article>
 
@@ -2248,13 +2318,24 @@ export default function NewSchool() {
               )}
 
               {teacherDashboard && (
-            <div className="ns-dash-grid">
-              <article className="glass ns-dash-card reveal in">
+            <div className="ns-dash-grid" hidden={dashboardTab !== 'overview'}>
+              <article className="glass ns-dash-card ns-dash-card--wide reveal in">
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">Teacher Dashboard</span>
                   <span className="ns-board__badge">{teacherDashboard.teacher.teacher_full_name}</span>
                 </div>
                 <p>{teacherDashboard.school?.school_name || teacherDashboard.teacher.linked_school_name || '-'}</p>
+                <div className="ns-dashboard-callout">
+                  <div className="ns-dashboard-callout__head">
+                    <strong>Classroom queue</strong>
+                    <span>{teacherDashboard.summary.teacher_approved || 0} approved</span>
+                  </div>
+                  <p>Review student approvals first, then clear submissions and keep the leaderboard moving.</p>
+                  <div className="ns-progress-track" aria-hidden="true">
+                    <span style={{ width: `${teacherReadinessProgress}%` }} />
+                  </div>
+                  <small>{teacherReadinessProgress}% classroom progress</small>
+                </div>
                 <div className="ns-quick-stats">
                   <div><span>Students</span><strong>{teacherDashboard.summary.students_total || 0}</strong></div>
                   <div><span>Parent Pending</span><strong>{teacherDashboard.summary.parent_pending || 0}</strong></div>
@@ -2271,6 +2352,11 @@ export default function NewSchool() {
                   </div>
                   <div className="ns-award__bar"><span style={{ width: `${teacherProgress}%` }} /></div>
                   <p>Progress toward the Community Leadership Educator Award.</p>
+                </div>
+                <div className="ns-actions">
+                  <button className="btn btn--sm btn--solid" type="button" onClick={() => setDashboardTab('approvals')}>Review Approvals</button>
+                  <button className="btn btn--sm" type="button" onClick={() => setDashboardTab('reviews')}>Open Reviews</button>
+                  <button className="btn btn--sm" type="button" onClick={() => setDashboardTab('rankings')}>View Rankings</button>
                 </div>
               </article>
               <form className="glass ns-form ns-form--compact reveal in" onSubmit={submitTeacherApproval} hidden={dashboardTab !== 'approvals'}>
@@ -2740,11 +2826,22 @@ export default function NewSchool() {
               )}
 
               {adminDashboard && (
-            <div className="ns-dash-grid">
+            <div className="ns-dash-grid" hidden={dashboardTab !== 'overview'}>
               <article className="glass ns-dash-card ns-dash-card--wide reveal in">
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">Admin Dashboard</span>
                   <span className="ns-board__badge">Management console</span>
+                </div>
+                <div className="ns-dashboard-callout">
+                  <div className="ns-dashboard-callout__head">
+                    <strong>Platform oversight</strong>
+                    <span>{adminDashboard.summary.winners || 0} winners published</span>
+                  </div>
+                  <p>Track the entire program, review results, and export data without leaving the console.</p>
+                  <div className="ns-progress-track" aria-hidden="true">
+                    <span style={{ width: `${adminReadinessProgress}%` }} />
+                  </div>
+                  <small>{adminReadinessProgress}% platform completion</small>
                 </div>
                 <div className="ns-quick-stats">
                   {[
