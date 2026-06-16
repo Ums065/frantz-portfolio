@@ -160,6 +160,13 @@ export default function NewSchool() {
   const [busy, setBusy] = useState('')
   const [registrationTag, setRegistrationTag] = useState<RegistrationTag>('student')
   const [notice, setNotice] = useState<{ tone: 'success' | 'error' | 'info'; text: string } | null>(null)
+  const [studentSchoolSearch, setStudentSchoolSearch] = useState('')
+  const [studentTeacherId, setStudentTeacherId] = useState('')
+  const [teacherSchoolSearch, setTeacherSchoolSearch] = useState('')
+  const [parentSchoolSearch, setParentSchoolSearch] = useState('')
+  const [parentTeacherId, setParentTeacherId] = useState('')
+  const [parentParticipantId, setParentParticipantId] = useState('')
+  const [schoolTeacherApprovalId, setSchoolTeacherApprovalId] = useState('')
 
   useSeo({
     title: 'What Problem Will You Solve?',
@@ -208,6 +215,9 @@ export default function NewSchool() {
   const reloadParentLink = async (qrToken: string) => {
     const data = await api.get<any>(`new-school/parent/${qrToken}`)
     setParentLink(data)
+    setParentParticipantId(data?.student?.participant_id || '')
+    setParentSchoolSearch(data?.school?.school_name || '')
+    setParentTeacherId(data?.teacher?.id ? String(data.teacher.id) : '')
   }
 
   const markNotificationRead = async (notificationId: number) => {
@@ -264,6 +274,9 @@ export default function NewSchool() {
   useEffect(() => {
     if (!token) {
       setParentLink(null)
+      setParentParticipantId('')
+      setParentSchoolSearch('')
+      setParentTeacherId('')
       return
     }
     setRegistrationTag('parent')
@@ -299,7 +312,9 @@ export default function NewSchool() {
         password,
         phone_number: value(fd, 'phone_number'),
         home_address: value(fd, 'home_address'),
+        school_id: Number(value(fd, 'school_id') || 0) || undefined,
         school_name: value(fd, 'school_name'),
+        teacher_id: Number(value(fd, 'teacher_id') || 0) || undefined,
         grade_level: value(fd, 'grade_level'),
         parent_name: value(fd, 'parent_name'),
         parent_phone: value(fd, 'parent_phone'),
@@ -309,6 +324,8 @@ export default function NewSchool() {
       const res = await api.post<any>('new-school/student/register', payload)
       showNotice('success', res.message || 'Student registered.')
       event.currentTarget.reset()
+      setStudentSchoolSearch('')
+      setStudentTeacherId('')
       await refresh()
       await reloadOverview()
     } catch (err) {
@@ -327,6 +344,7 @@ export default function NewSchool() {
       const governmentIdUrl = await uploadIfPresent(governmentId)
       const payload = {
         token: value(fd, 'token') || token || parentLink?.token || '',
+        participant_id: value(fd, 'participant_id'),
         parent_full_name: value(fd, 'parent_full_name'),
         relationship_to_student: value(fd, 'relationship_to_student'),
         phone_number: value(fd, 'phone_number'),
@@ -337,10 +355,15 @@ export default function NewSchool() {
         consent_checked: checked(fd, 'consent_checked'),
         digital_signature: value(fd, 'digital_signature'),
         preferred_contact_method: value(fd, 'preferred_contact_method'),
+        school_id: Number(value(fd, 'school_id') || 0) || undefined,
+        teacher_id: Number(value(fd, 'teacher_id') || 0) || undefined,
       }
       const res = await api.post<any>('new-school/parent/consent', payload)
       showNotice('success', res.message || 'Parent consent saved.')
       event.currentTarget.reset()
+      setParentParticipantId('')
+      setParentSchoolSearch('')
+      setParentTeacherId('')
       await refresh()
       await reloadOverview()
       if (payload.token) {
@@ -404,6 +427,7 @@ export default function NewSchool() {
       const res = await api.post<any>('new-school/teacher/register', payload)
       showNotice('success', res.message || 'Teacher registered.')
       event.currentTarget.reset()
+      setTeacherSchoolSearch('')
       await refresh()
       await reloadOverview()
     } catch (err) {
@@ -533,6 +557,65 @@ export default function NewSchool() {
     }
   }
 
+  const submitSchoolTeacherApproval = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setBusy('school-teacher-approval')
+    try {
+      const fd = new FormData(event.currentTarget)
+      const teacherId = Number(value(fd, 'teacher_id') || 0)
+      if (!teacherId) {
+        throw new Error('Select a teacher to review.')
+      }
+      const payload = {
+        teacher_id: teacherId,
+        teacher_name: value(fd, 'teacher_name') || selectedSchoolTeacher?.teacher_full_name || '',
+        teacher_email: value(fd, 'teacher_email') || selectedSchoolTeacher?.school_email || '',
+        role: value(fd, 'role') || selectedSchoolTeacher?.role_department || 'Teacher',
+        approval_status: value(fd, 'approval_status') || 'approved',
+        notes: value(fd, 'notes'),
+        digital_signature: value(fd, 'digital_signature'),
+      }
+      const res = await api.post<any>('new-school/school/teacher/approve', payload)
+      showNotice('success', res.message || 'Teacher verification saved.')
+      event.currentTarget.reset()
+      setSchoolTeacherApprovalId('')
+      await reloadDashboard()
+      await reloadOverview()
+    } catch (err) {
+      handleError(err, 'Teacher verification failed.')
+    } finally {
+      setBusy('')
+    }
+  }
+
+  const submitSubmissionReview = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setBusy('submission-review')
+    try {
+      const fd = new FormData(event.currentTarget)
+      const submissionId = Number(value(fd, 'submission_id') || 0)
+      if (!submissionId) {
+        throw new Error('Select a submission to review.')
+      }
+      const payload = {
+        submission_id: submissionId,
+        status: value(fd, 'status') || 'approved',
+        reviewer_notes: value(fd, 'reviewer_notes'),
+        score: value(fd, 'score'),
+        rank_position: Number(value(fd, 'rank_position') || 0) || undefined,
+      }
+      const res = await api.post<any>('new-school/submission/review', payload)
+      showNotice('success', res.message || 'Submission review saved.')
+      event.currentTarget.reset()
+      await reloadDashboard()
+      await reloadOverview()
+    } catch (err) {
+      handleError(err, 'Could not update the submission review.')
+    } finally {
+      setBusy('')
+    }
+  }
+
   const submitAdminReview = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setBusy('admin-review')
@@ -609,6 +692,7 @@ export default function NewSchool() {
 
   const summary = overview?.summary || {}
   const schools = Array.isArray(overview?.schools) ? overview.schools : []
+  const teachers = Array.isArray(overview?.teachers) ? overview.teachers : []
   const winners = Array.isArray(overview?.winners) ? overview.winners : []
   const challenge = overview?.challenge || {}
   const leaderboards = overview?.leaderboards || {}
@@ -674,6 +758,22 @@ export default function NewSchool() {
   const adminNotifications = asArray<any>(adminDashboard?.notifications)
   const adminSchools = asArray<any>(adminDashboard?.schools)
   const adminStudentSummary = adminDashboard?.student_summary || {}
+  const studentSchoolRankings = asArray<any>(studentDashboard?.rankings?.school?.leaderboard)
+  const studentTeacherRankings = asArray<any>(studentDashboard?.rankings?.teacher?.leaderboard)
+  const schoolRankedStudents = asArray<any>(schoolDashboard?.rankings?.students)
+  const schoolRankedTeachers = asArray<any>(schoolDashboard?.rankings?.teachers)
+  const teacherRankedStudents = asArray<any>(teacherDashboard?.rankings?.students)
+  const teacherRankedTeachers = asArray<any>(teacherDashboard?.rankings?.teachers)
+  const approvedSchool = (query: string) =>
+    schools.find((school: any) => String(school.school_name || '').toLowerCase() === query.trim().toLowerCase()) || null
+  const teachersForSchool = (schoolId?: number | string) =>
+    teachers.filter((teacher: any) => Number(teacher.school_id || 0) === Number(schoolId || 0))
+  const matchedStudentSchool = approvedSchool(studentSchoolSearch)
+  const matchedTeacherSchool = approvedSchool(teacherSchoolSearch)
+  const matchedParentSchool = approvedSchool(parentSchoolSearch)
+  const studentSchoolTeachers = matchedStudentSchool ? teachersForSchool(matchedStudentSchool.id) : []
+  const parentSchoolTeachers = matchedParentSchool ? teachersForSchool(matchedParentSchool.id) : []
+  const selectedSchoolTeacher = schoolDashboard?.teachers?.find((teacher: any) => String(teacher.id) === String(schoolTeacherApprovalId)) || null
   const studentUnreadNotifications = studentNotifications.filter((item: any) => !item.is_read)
   const parentUnreadNotifications = parentNotifications.filter((item: any) => !item.is_read)
   const schoolUnreadNotifications = schoolNotifications.filter((item: any) => !item.is_read)
@@ -860,7 +960,7 @@ export default function NewSchool() {
             ))}
           </div>
           <p className="ns-registration-note">
-            Admin accounts stay private. Public registration is available for students, parents through QR consent, schools, and teachers, and each request is reviewed by admin before full access is unlocked.
+            Admin accounts stay private. Public registration is available for students, parents through student ID or QR consent, schools, and teachers. Approved schools and teachers appear in the searchable dropdowns.
           </p>
 
           <div className="ns-form-grid ns-form-grid--single">
@@ -880,7 +980,44 @@ export default function NewSchool() {
                 <label className="ns-field"><span>Confirm Password</span><input name="confirm_password" type="password" minLength={6} required /></label>
                 <label className="ns-field"><span>Phone Number</span><input name="phone_number" required /></label>
                 <label className="ns-field ns-field--full"><span>Home Address</span><input name="home_address" required /></label>
-                <label className="ns-field"><span>School Name</span><input name="school_name" list="school-list" required /></label>
+                <label className="ns-field ns-field--full">
+                  <span>School Search</span>
+                  <input
+                    name="school_name"
+                    list="approved-school-list"
+                    value={studentSchoolSearch}
+                    onChange={(event) => {
+                      setStudentSchoolSearch(event.target.value)
+                      setStudentTeacherId('')
+                    }}
+                    placeholder="Search approved schools"
+                    required
+                  />
+                </label>
+                <input type="hidden" name="school_id" value={matchedStudentSchool?.id || ''} readOnly />
+                {matchedStudentSchool ? (
+                  studentSchoolTeachers.length > 0 ? (
+                    <label className="ns-field ns-field--full">
+                      <span>Teacher</span>
+                      <select name="teacher_id" value={studentTeacherId} onChange={(event) => setStudentTeacherId(event.target.value)} required>
+                        <option value="">Select a teacher</option>
+                        {studentSchoolTeachers.map((teacher: any) => (
+                          <option key={teacher.id} value={teacher.id}>
+                            {teacher.teacher_full_name} - {teacher.role_department}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : (
+                    <div className="ns-alert ns-alert--info ns-field--full">
+                      This school has no approved teachers yet. A teacher must be approved before a student can register.
+                    </div>
+                  )
+                ) : (
+                  <div className="ns-alert ns-alert--info ns-field--full">
+                    Search and select an approved school to reveal its teacher list.
+                  </div>
+                )}
                 <label className="ns-field"><span>Grade Level</span><input name="grade_level" placeholder="9th Grade" required /></label>
                 <label className="ns-field"><span>Parent Name</span><input name="parent_name" required /></label>
                 <label className="ns-field"><span>Parent Phone</span><input name="parent_phone" required /></label>
@@ -890,19 +1027,35 @@ export default function NewSchool() {
                   <span>I confirm this student is between 11 and 19 and understands parent consent is required before submission.</span>
                 </label>
               </div>
-              <button className="btn btn--solid" type="submit" disabled={busy === 'student'}>{busy === 'student' ? 'Saving...' : 'Create Student Profile'}</button>
+              <button
+                className="btn btn--solid"
+                type="submit"
+                disabled={busy === 'student' || !matchedStudentSchool || studentSchoolTeachers.length === 0}
+              >
+                {busy === 'student' ? 'Saving...' : 'Create Student Profile'}
+              </button>
             </form>
 
             <form className="glass ns-form reveal in" id="parent-consent" onSubmit={submitParent} hidden={registrationTag !== 'parent'}>
               <div className="ns-form__head">
                 <span className="eyebrow">Step 2</span>
-                <h3>Parent Consent via QR</h3>
-                <p>Parent scans the QR link, creates an account, and signs the consent form.</p>
+                <h3>Parent Consent via Student ID</h3>
+                <p>Parent can use the 8-digit student ID or the QR link, then select the approved school teacher for review.</p>
               </div>
               <div className="ns-field-grid">
                 <label className="ns-field ns-field--full">
-                  <span>QR Token</span>
-                  <input name="token" defaultValue={token || parentLink?.token || ''} placeholder="Paste the student QR token here" required />
+                  <span>Student Unique Platform ID</span>
+                  <input
+                    name="participant_id"
+                    value={parentParticipantId}
+                    onChange={(event) => setParentParticipantId(event.target.value)}
+                    placeholder="Enter the 8-digit student ID"
+                    required
+                  />
+                </label>
+                <label className="ns-field ns-field--full">
+                  <span>QR Token (Optional)</span>
+                  <input name="token" defaultValue={token || parentLink?.token || ''} placeholder="Use this if you opened the QR link" />
                 </label>
                 <label className="ns-field"><span>Parent Name</span><input name="parent_full_name" required /></label>
                 <label className="ns-field"><span>Relationship</span><input name="relationship_to_student" required /></label>
@@ -917,6 +1070,43 @@ export default function NewSchool() {
                   </select>
                 </label>
                 <label className="ns-field ns-field--full"><span>Home Address</span><input name="home_address" required /></label>
+                <label className="ns-field ns-field--full">
+                  <span>School Search</span>
+                  <input
+                    name="school_name"
+                    list="approved-school-list"
+                    value={parentSchoolSearch}
+                    onChange={(event) => {
+                      setParentSchoolSearch(event.target.value)
+                      setParentTeacherId('')
+                    }}
+                    placeholder="Search approved schools"
+                  />
+                </label>
+                <input type="hidden" name="school_id" value={matchedParentSchool?.id || ''} readOnly />
+                {matchedParentSchool ? (
+                  parentSchoolTeachers.length > 0 ? (
+                    <label className="ns-field ns-field--full">
+                      <span>Teacher</span>
+                      <select name="teacher_id" value={parentTeacherId} onChange={(event) => setParentTeacherId(event.target.value)} required>
+                        <option value="">Select a teacher</option>
+                        {parentSchoolTeachers.map((teacher: any) => (
+                          <option key={teacher.id} value={teacher.id}>
+                            {teacher.teacher_full_name} - {teacher.role_department}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : (
+                    <div className="ns-alert ns-alert--info ns-field--full">
+                      This school has no approved teachers yet. Parent consent will still save, but teacher review cannot start until one is approved.
+                    </div>
+                  )
+                ) : (
+                  <div className="ns-alert ns-alert--info ns-field--full">
+                    Search and select the student&apos;s approved school to reveal teacher options.
+                  </div>
+                )}
                 <label className="ns-field ns-field--full">
                   <span>Government ID Upload Optional</span>
                   <input name="government_id_file" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" />
@@ -971,19 +1161,18 @@ export default function NewSchool() {
               </div>
               <div className="ns-field-grid">
                 <label className="ns-field ns-field--full"><span>Teacher Full Name</span><input name="teacher_full_name" required /></label>
-                <label className="ns-field">
-                  <span>School</span>
-                  <select name="school_id" defaultValue="">
-                    <option value="">Select registered school</option>
-                    {schools.map((school: any) => (
-                      <option key={school.id} value={school.id}>{school.school_name}</option>
-                    ))}
-                  </select>
+                <label className="ns-field ns-field--full">
+                  <span>School Search</span>
+                  <input
+                    name="school_name"
+                    list="approved-school-list"
+                    value={teacherSchoolSearch}
+                    onChange={(event) => setTeacherSchoolSearch(event.target.value)}
+                    placeholder="Search approved schools"
+                    required
+                  />
                 </label>
-                <label className="ns-field">
-                  <span>School Name Fallback</span>
-                  <input name="school_name" placeholder="Use if school is not in the dropdown" />
-                </label>
+                <input type="hidden" name="school_id" value={approvedSchool(teacherSchoolSearch)?.id || ''} readOnly />
                 <label className="ns-field"><span>School Email</span><input name="school_email" type="email" required /></label>
                 <label className="ns-field"><span>Phone Number</span><input name="phone_number" required /></label>
                 <label className="ns-field"><span>Role / Department</span><input name="role_department" required /></label>
@@ -1000,11 +1189,13 @@ export default function NewSchool() {
                 <label className="ns-field ns-field--full"><span>Employee ID</span><input name="employee_id" placeholder="Optional staff identifier" /></label>
                 <label className="ns-field ns-field--full"><span>Password</span><input name="password" type="password" minLength={6} required /></label>
               </div>
-              <button className="btn btn--solid" type="submit" disabled={busy === 'teacher'}>{busy === 'teacher' ? 'Saving...' : 'Register Teacher'}</button>
+              <button className="btn btn--solid" type="submit" disabled={busy === 'teacher' || !approvedSchool(teacherSchoolSearch)}>
+                {busy === 'teacher' ? 'Saving...' : 'Register Teacher'}
+              </button>
             </form>
           </div>
 
-          <datalist id="school-list">
+          <datalist id="approved-school-list">
             {schools.map((school: any) => (
               <option value={school.school_name} key={school.id} />
             ))}
@@ -1099,6 +1290,81 @@ export default function NewSchool() {
 
               <article className="glass ns-dash-card reveal in">
                 <div className="ns-dash-card__head">
+                  <span className="eyebrow">About</span>
+                  <span className="ns-board__badge">{studentDashboard.student.grade_level || 'Student'}</span>
+                </div>
+                <div className="ns-approval-stack">
+                  <div className="ns-approval-row"><strong>School</strong><span>{studentDashboard.school?.school_name || studentDashboard.student.school_name || '-'}</span></div>
+                  <div className="ns-approval-row"><strong>Teacher</strong><span>{studentDashboard.teacher?.teacher_full_name || '-'}</span></div>
+                  <div className="ns-approval-row"><strong>Scholarship</strong><span>{formatMoney(studentDashboard.winner?.scholarship_amount || 0)}</span></div>
+                  <div className="ns-approval-row"><strong>Performance Score</strong><span>{studentDashboard.performance_score || 0}</span></div>
+                </div>
+                <p className="ns-muted">This tab is your student profile overview. It shows your school link, teacher link, and scholarship progress.</p>
+              </article>
+
+              <article className="glass ns-dash-card ns-dash-card--wide reveal in">
+                <div className="ns-dash-card__head">
+                  <span className="eyebrow">Rankings</span>
+                  <span className="ns-board__badge">
+                    School #{studentDashboard.rankings?.school?.position || '-'} / Teacher #{studentDashboard.rankings?.teacher?.position || '-'}
+                  </span>
+                </div>
+                <div className="ns-rank-columns">
+                  <div>
+                    <strong className="ns-subtitle">School Ranking</strong>
+                    <div className="ns-table-wrap">
+                      <table className="ns-table">
+                        <thead>
+                          <tr>
+                            <th>Rank</th>
+                            <th>Student</th>
+                            <th>Score</th>
+                            <th>Interviews</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {studentSchoolRankings.slice(0, 5).map((row: any) => (
+                            <tr key={`school-rank-${row.id}`}>
+                              <td>{row.rank_position || '-'}</td>
+                              <td>{row.full_name}</td>
+                              <td>{row.performance_score ?? 0}</td>
+                              <td>{row.interview_count || 0}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                  <div>
+                    <strong className="ns-subtitle">Teacher Ranking</strong>
+                    <div className="ns-table-wrap">
+                      <table className="ns-table">
+                        <thead>
+                          <tr>
+                            <th>Rank</th>
+                            <th>Student</th>
+                            <th>Score</th>
+                            <th>Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {studentTeacherRankings.slice(0, 5).map((row: any) => (
+                            <tr key={`teacher-rank-${row.id}`}>
+                              <td>{row.rank_position || '-'}</td>
+                              <td>{row.full_name}</td>
+                              <td>{row.performance_score ?? 0}</td>
+                              <td>{row.submission_status || '-'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              </article>
+
+              <article className="glass ns-dash-card reveal in">
+                <div className="ns-dash-card__head">
                   <span className="eyebrow">Notifications</span>
                   <span className="ns-board__badge">{studentUnreadNotifications.length} unread</span>
                 </div>
@@ -1173,7 +1439,7 @@ export default function NewSchool() {
 
               <form className="glass ns-form ns-form--compact reveal in" id="final-submission" onSubmit={submitSubmission}>
                 <div className="ns-form__head">
-                  <span className="eyebrow">Final Submission</span>
+                  <span className="eyebrow">Problem &amp; Solution Submission</span>
                   <h3>Video and written upload</h3>
                   <p>Unlocked after approvals and the 10 required interviews are complete.</p>
                 </div>
@@ -1252,6 +1518,20 @@ export default function NewSchool() {
                   <div className="ns-approval-row"><strong>Address</strong><span>{parentDashboard.parent.home_address || '-'}</span></div>
                 </div>
               </article>
+
+              <article className="glass ns-dash-card reveal in">
+                <div className="ns-dash-card__head">
+                  <span className="eyebrow">Ranking Snapshot</span>
+                  <span className="ns-board__badge">{parentDashboard.student_context?.performance_score || 0} pts</span>
+                </div>
+                <div className="ns-approval-stack">
+                  <div className="ns-approval-row"><strong>School Rank</strong><span>#{parentDashboard.student_context?.rankings?.school?.position || '-'}</span></div>
+                  <div className="ns-approval-row"><strong>Teacher Rank</strong><span>#{parentDashboard.student_context?.rankings?.teacher?.position || '-'}</span></div>
+                  <div className="ns-approval-row"><strong>Scholarship</strong><span>{formatMoney(parentDashboard.student_context?.winner?.scholarship_amount || 0)}</span></div>
+                  <div className="ns-approval-row"><strong>Participant ID</strong><span>{parentDashboard.student_context?.student?.participant_id || '-'}</span></div>
+                </div>
+              </article>
+
               <article className="glass ns-dash-card reveal in">
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">Notifications</span>
@@ -1295,6 +1575,68 @@ export default function NewSchool() {
                   <div><span>Interviews</span><strong>{schoolDashboard.summary.interviews_total || 0}</strong></div>
                 </div>
               </article>
+
+              <article className="glass ns-dash-card reveal in">
+                <div className="ns-dash-card__head">
+                  <span className="eyebrow">School Profile</span>
+                  <span className="ns-board__badge">{schoolDashboard.school.status || 'registered'}</span>
+                </div>
+                <div className="ns-approval-stack">
+                  <div className="ns-approval-row"><strong>Principal</strong><span>{schoolDashboard.school.principal_name || '-'}</span></div>
+                  <div className="ns-approval-row"><strong>Administrator</strong><span>{schoolDashboard.school.administrator_name || '-'}</span></div>
+                  <div className="ns-approval-row"><strong>District</strong><span>{schoolDashboard.school.school_district || '-'}</span></div>
+                  <div className="ns-approval-row"><strong>Main Phone</strong><span>{schoolDashboard.school.main_phone || '-'}</span></div>
+                </div>
+              </article>
+
+              <form className="glass ns-form ns-form--compact reveal in" onSubmit={submitSchoolTeacherApproval}>
+                <div className="ns-form__head">
+                  <span className="eyebrow">Teacher Verification</span>
+                  <h3>Approve or reject teachers</h3>
+                  <p>Select a teacher from this school and record the principal review.</p>
+                </div>
+                <div className="ns-field-grid">
+                  <label className="ns-field ns-field--full">
+                    <span>Teacher</span>
+                    <select
+                      name="teacher_id"
+                      value={schoolTeacherApprovalId}
+                      onChange={(event) => setSchoolTeacherApprovalId(event.target.value)}
+                      required
+                    >
+                      <option value="">Select teacher</option>
+                      {schoolDashboard.teachers.map((teacher: any) => (
+                        <option key={teacher.id} value={teacher.id}>
+                          {teacher.teacher_full_name} - {teacher.status}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <input type="hidden" name="teacher_name" value={selectedSchoolTeacher?.teacher_full_name || ''} readOnly />
+                  <input type="hidden" name="teacher_email" value={selectedSchoolTeacher?.school_email || ''} readOnly />
+                  <input type="hidden" name="role" value={selectedSchoolTeacher?.role_department || 'Teacher'} readOnly />
+                  <label className="ns-field">
+                    <span>Status</span>
+                    <select name="approval_status" defaultValue="approved">
+                      <option value="approved">Approved</option>
+                      <option value="pending">Pending</option>
+                      <option value="rejected">Rejected</option>
+                    </select>
+                  </label>
+                  <label className="ns-field ns-field--full">
+                    <span>Notes</span>
+                    <textarea name="notes" rows={3} placeholder="Optional teacher review notes" />
+                  </label>
+                  <label className="ns-field ns-field--full">
+                    <span>Digital Signature</span>
+                    <input name="digital_signature" defaultValue={user?.full_name || schoolDashboard.school.principal_name || ''} required />
+                  </label>
+                </div>
+                <button className="btn btn--solid" type="submit" disabled={busy === 'school-teacher-approval'}>
+                  {busy === 'school-teacher-approval' ? 'Saving...' : 'Save Teacher Review'}
+                </button>
+              </form>
+
               <form className="glass ns-form ns-form--compact reveal in" onSubmit={submitSchoolApproval}>
                 <div className="ns-form__head">
                   <span className="eyebrow">School Approval</span>
@@ -1380,6 +1722,103 @@ export default function NewSchool() {
                   </table>
                 </div>
               </article>
+
+              <article className="glass ns-dash-card ns-dash-card--wide reveal in">
+                <div className="ns-dash-card__head">
+                  <span className="eyebrow">Teacher List</span>
+                  <span className="ns-board__badge">{schoolDashboard.teachers.length}</span>
+                </div>
+                <div className="ns-table-wrap">
+                  <table className="ns-table">
+                    <thead>
+                      <tr>
+                        <th>Rank</th>
+                        <th>Teacher</th>
+                        <th>Status</th>
+                        <th>Students</th>
+                        <th>Score</th>
+                        <th>Top Student</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {schoolDashboard.teachers.map((row: any) => (
+                        <tr key={row.id}>
+                          <td>{row.rank_position ?? '-'}</td>
+                          <td>{row.teacher_full_name}</td>
+                          <td>{row.status}</td>
+                          <td>{row.students_total ?? 0}</td>
+                          <td>{row.ranking_score ?? 0}</td>
+                          <td>{row.top_student_name ? `${row.top_student_name} (${row.top_student_score ?? 0})` : '-'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </article>
+
+              <article className="glass ns-dash-card ns-dash-card--wide reveal in">
+                <div className="ns-dash-card__head">
+                  <span className="eyebrow">Rankings</span>
+                  <span className="ns-board__badge">School-wide &amp; Teacher</span>
+                </div>
+                <div className="ns-rank-columns">
+                  <div>
+                    <strong className="ns-subtitle">Global Student Ranking</strong>
+                    <div className="ns-table-wrap">
+                      <table className="ns-table">
+                        <thead>
+                          <tr>
+                            <th>Rank</th>
+                            <th>Student</th>
+                            <th>Teacher</th>
+                            <th>Score</th>
+                            <th>Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {schoolRankedStudents.slice(0, 8).map((row: any) => (
+                            <tr key={`school-student-${row.id}`}>
+                              <td>{row.rank_position || '-'}</td>
+                              <td>{row.full_name}</td>
+                              <td>{row.teacher_full_name || '-'}</td>
+                              <td>{row.performance_score ?? 0}</td>
+                              <td>{row.submission_status || '-'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                  <div>
+                    <strong className="ns-subtitle">Teacher Ranking</strong>
+                    <div className="ns-table-wrap">
+                      <table className="ns-table">
+                        <thead>
+                          <tr>
+                            <th>Rank</th>
+                            <th>Teacher</th>
+                            <th>Students</th>
+                            <th>Score</th>
+                            <th>Top Student</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {schoolRankedTeachers.slice(0, 8).map((row: any) => (
+                            <tr key={`school-teacher-${row.id}`}>
+                              <td>{row.rank_position || '-'}</td>
+                              <td>{row.teacher_full_name}</td>
+                              <td>{row.students_total ?? 0}</td>
+                              <td>{row.ranking_score ?? 0}</td>
+                              <td>{row.top_student_name || '-'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              </article>
+
               <article className="glass ns-dash-card ns-dash-card--wide reveal in">
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">Business Interviews</span>
@@ -1444,6 +1883,50 @@ export default function NewSchool() {
                   </table>
                 </div>
               </article>
+
+              <form className="glass ns-form ns-form--compact reveal in" onSubmit={submitSubmissionReview}>
+                <div className="ns-form__head">
+                  <span className="eyebrow">Submission Review</span>
+                  <h3>Approve or reject problem and solution submissions</h3>
+                  <p>Principal can review the submission list before final publishing.</p>
+                </div>
+                <div className="ns-field-grid">
+                  <label className="ns-field ns-field--full">
+                    <span>Submission</span>
+                    <select name="submission_id" defaultValue="" required>
+                      <option value="">Select submission</option>
+                      {schoolSubmissions.map((row: any) => (
+                        <option key={row.id} value={row.id}>
+                          #{row.id} - {row.student_name} - {row.status}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="ns-field">
+                    <span>Status</span>
+                    <select name="status" defaultValue="approved">
+                      <option value="approved">Approved</option>
+                      <option value="rejected">Rejected</option>
+                    </select>
+                  </label>
+                  <label className="ns-field">
+                    <span>Score</span>
+                    <input name="score" type="number" min="0" step="0.01" placeholder="Optional" />
+                  </label>
+                  <label className="ns-field">
+                    <span>Rank Position</span>
+                    <input name="rank_position" type="number" min="1" max="3" placeholder="Optional" />
+                  </label>
+                  <label className="ns-field ns-field--full">
+                    <span>Reviewer Notes</span>
+                    <textarea name="reviewer_notes" rows={3} placeholder="Optional review notes" />
+                  </label>
+                </div>
+                <button className="btn btn--solid" type="submit" disabled={busy === 'submission-review'}>
+                  {busy === 'submission-review' ? 'Saving...' : 'Save Submission Review'}
+                </button>
+              </form>
+
               <article className="glass ns-dash-card ns-dash-card--wide reveal in">
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">Submitted Projects</span>
@@ -1456,9 +1939,12 @@ export default function NewSchool() {
                         <th>Participant ID</th>
                         <th>Student</th>
                         <th>Business</th>
+                        <th>Problem</th>
+                        <th>Solution</th>
                         <th>Status</th>
                         <th>Score</th>
                         <th>Rank</th>
+                        <th>Reviewer</th>
                         <th>Submitted</th>
                       </tr>
                     </thead>
@@ -1468,9 +1954,12 @@ export default function NewSchool() {
                           <td>{row.participant_id}</td>
                           <td>{row.student_name}</td>
                           <td>{row.source_business_name || '-'}</td>
+                          <td>{clipText(row.problem_identified, 36)}</td>
+                          <td>{clipText(row.proposed_solution, 36)}</td>
                           <td>{row.status}</td>
                           <td>{row.score ?? '-'}</td>
                           <td>{row.rank_position ?? '-'}</td>
+                          <td>{row.reviewer_name || row.reviewer_user_name || '-'}</td>
                           <td>{row.submission_date || '-'}</td>
                         </tr>
                       ))}
@@ -1531,6 +2020,7 @@ export default function NewSchool() {
                   <span className="eyebrow">Teacher Dashboard</span>
                   <span className="ns-board__badge">{teacherDashboard.teacher.teacher_full_name}</span>
                 </div>
+                <p>{teacherDashboard.school?.school_name || teacherDashboard.teacher.linked_school_name || '-'}</p>
                 <div className="ns-quick-stats">
                   <div><span>Students</span><strong>{teacherDashboard.summary.students_total || 0}</strong></div>
                   <div><span>Parent Pending</span><strong>{teacherDashboard.summary.parent_pending || 0}</strong></div>
@@ -1552,7 +2042,7 @@ export default function NewSchool() {
               <form className="glass ns-form ns-form--compact reveal in" onSubmit={submitTeacherApproval}>
                 <div className="ns-form__head">
                   <span className="eyebrow">Teacher Approval</span>
-                  <h3>Confirm student monitoring</h3>
+                  <h3>Approve student registration</h3>
                   <p>Choose a student, confirm participation, and store the teacher approval record.</p>
                 </div>
                 <div className="ns-field-grid">
@@ -1600,6 +2090,50 @@ export default function NewSchool() {
                   {busy === 'teacher-approval' ? 'Saving...' : 'Save Teacher Approval'}
                 </button>
               </form>
+
+              <form className="glass ns-form ns-form--compact reveal in" onSubmit={submitSubmissionReview}>
+                <div className="ns-form__head">
+                  <span className="eyebrow">Submission Review</span>
+                  <h3>Approve or reject problem and solution submissions</h3>
+                  <p>Teachers can review student submissions before they reach admin review.</p>
+                </div>
+                <div className="ns-field-grid">
+                  <label className="ns-field ns-field--full">
+                    <span>Submission</span>
+                    <select name="submission_id" defaultValue="" required>
+                      <option value="">Select submission</option>
+                      {teacherSubmissions.map((row: any) => (
+                        <option key={row.id} value={row.id}>
+                          #{row.id} - {row.student_name} - {row.status}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="ns-field">
+                    <span>Status</span>
+                    <select name="status" defaultValue="approved">
+                      <option value="approved">Approved</option>
+                      <option value="rejected">Rejected</option>
+                    </select>
+                  </label>
+                  <label className="ns-field">
+                    <span>Score</span>
+                    <input name="score" type="number" min="0" step="0.01" placeholder="Optional" />
+                  </label>
+                  <label className="ns-field">
+                    <span>Rank Position</span>
+                    <input name="rank_position" type="number" min="1" max="3" placeholder="Optional" />
+                  </label>
+                  <label className="ns-field ns-field--full">
+                    <span>Reviewer Notes</span>
+                    <textarea name="reviewer_notes" rows={3} placeholder="Optional review notes" />
+                  </label>
+                </div>
+                <button className="btn btn--solid" type="submit" disabled={busy === 'submission-review'}>
+                  {busy === 'submission-review' ? 'Saving...' : 'Save Submission Review'}
+                </button>
+              </form>
+
               <article className="glass ns-dash-card ns-dash-card--wide reveal in">
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">Students Under Teacher</span>
@@ -1684,12 +2218,15 @@ export default function NewSchool() {
                         <th>Participant ID</th>
                         <th>Student</th>
                         <th>Business</th>
+                        <th>Problem</th>
+                        <th>Solution</th>
                         <th>Video</th>
                         <th>Written</th>
                         <th>Status</th>
                         <th>Submitted</th>
                         <th>Score</th>
                         <th>Rank</th>
+                        <th>Reviewer</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1698,18 +2235,85 @@ export default function NewSchool() {
                           <td>{row.participant_id}</td>
                           <td>{row.student_name}</td>
                           <td>{row.source_business_name || '-'}</td>
+                          <td>{clipText(row.problem_identified, 30)}</td>
+                          <td>{clipText(row.proposed_solution, 30)}</td>
                           <td>{row.video_url ? 'Yes' : 'No'}</td>
                           <td>{row.written_url ? 'Yes' : 'No'}</td>
                           <td>{row.status}</td>
                           <td>{row.submission_date || '-'}</td>
                           <td>{row.score ?? '-'}</td>
                           <td>{row.rank_position ?? '-'}</td>
+                          <td>{row.reviewer_name || row.reviewer_user_name || '-'}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
               </article>
+
+              <article className="glass ns-dash-card ns-dash-card--wide reveal in">
+                <div className="ns-dash-card__head">
+                  <span className="eyebrow">Teacher Rankings</span>
+                  <span className="ns-board__badge">School-wide &amp; Under You</span>
+                </div>
+                <div className="ns-rank-columns">
+                  <div>
+                    <strong className="ns-subtitle">School Teacher Ranking</strong>
+                    <div className="ns-table-wrap">
+                      <table className="ns-table">
+                        <thead>
+                          <tr>
+                            <th>Rank</th>
+                            <th>Teacher</th>
+                            <th>Students</th>
+                            <th>Score</th>
+                            <th>Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {teacherRankedTeachers.slice(0, 8).map((row: any) => (
+                            <tr key={`teacher-rank-${row.id}`}>
+                              <td>{row.rank_position || '-'}</td>
+                              <td>{row.teacher_full_name}</td>
+                              <td>{row.students_total ?? 0}</td>
+                              <td>{row.ranking_score ?? 0}</td>
+                              <td>{row.status}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                  <div>
+                    <strong className="ns-subtitle">Students Under This Teacher</strong>
+                    <div className="ns-table-wrap">
+                      <table className="ns-table">
+                        <thead>
+                          <tr>
+                            <th>Rank</th>
+                            <th>Student</th>
+                            <th>Score</th>
+                            <th>Interviews</th>
+                            <th>Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {teacherRankedStudents.slice(0, 8).map((row: any) => (
+                            <tr key={`teacher-student-${row.id}`}>
+                              <td>{row.rank_position || '-'}</td>
+                              <td>{row.full_name}</td>
+                              <td>{row.performance_score ?? 0}</td>
+                              <td>{row.interview_count || 0}</td>
+                              <td>{row.submission_status || '-'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              </article>
+
               <article className="glass ns-dash-card ns-dash-card--wide reveal in">
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">Approval Records</span>

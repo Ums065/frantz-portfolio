@@ -739,7 +739,18 @@ function inventory_status_label(int $stock, int $threshold): string
 
 function new_school_generate_participant_id(): string
 {
-    return 'NS-' . date('Y') . '-' . strtoupper(bin2hex(random_bytes(3)));
+    $pdo = db();
+
+    for ($attempt = 0; $attempt < 20; $attempt++) {
+        $candidate = (string) random_int(10000000, 99999999);
+        $stmt = $pdo->prepare('SELECT 1 FROM new_school_students WHERE participant_id = ? LIMIT 1');
+        $stmt->execute([$candidate]);
+        if (!$stmt->fetchColumn()) {
+            return $candidate;
+        }
+    }
+
+    return (string) random_int(10000000, 99999999);
 }
 
 function new_school_generate_qr_token(): string
@@ -750,6 +761,163 @@ function new_school_generate_qr_token(): string
 function new_school_qr_url(string $token): string
 {
     return '/new-school/parent/' . rawurlencode($token);
+}
+
+function new_school_student_performance_score(array $student): float
+{
+    $interviewCount = min(10, max(0, (int) ($student['interview_count'] ?? 0)));
+    $score = $interviewCount * 6;
+
+    if (($student['parent_consent_status'] ?? '') === 'approved') {
+        $score += 12;
+    }
+    if (($student['school_approval_status'] ?? '') === 'approved') {
+        $score += 12;
+    }
+    if (($student['teacher_approval_status'] ?? '') === 'approved') {
+        $score += 12;
+    }
+
+    $submissionStatus = (string) ($student['submission_status'] ?? '');
+    if ($submissionStatus === 'submitted') {
+        $score += 14;
+    } elseif ($submissionStatus === 'complete') {
+        $score += 24;
+    } elseif ($submissionStatus === 'winner') {
+        $score += 34;
+    }
+
+    $submissionScore = (float) ($student['submission_score'] ?? 0);
+    if ($submissionScore > 0) {
+        $score += min(24, $submissionScore);
+    }
+
+    if ((int) ($student['has_submission'] ?? 0) > 0) {
+        $score += 4;
+    }
+
+    return round($score, 2);
+}
+
+function new_school_rank_students(array $students): array
+{
+    $ranked = [];
+    foreach ($students as $student) {
+        if (!is_array($student)) {
+            continue;
+        }
+        $student['performance_score'] = new_school_student_performance_score($student);
+        $ranked[] = $student;
+    }
+
+    usort($ranked, static function (array $left, array $right): int {
+        $leftScore = (float) ($left['performance_score'] ?? 0);
+        $rightScore = (float) ($right['performance_score'] ?? 0);
+        if ($leftScore !== $rightScore) {
+            return $rightScore <=> $leftScore;
+        }
+
+        $leftInterviews = (int) ($left['interview_count'] ?? 0);
+        $rightInterviews = (int) ($right['interview_count'] ?? 0);
+        if ($leftInterviews !== $rightInterviews) {
+            return $rightInterviews <=> $leftInterviews;
+        }
+
+        $leftSubmitted = (int) ($left['has_submission'] ?? 0);
+        $rightSubmitted = (int) ($right['has_submission'] ?? 0);
+        if ($leftSubmitted !== $rightSubmitted) {
+            return $rightSubmitted <=> $leftSubmitted;
+        }
+
+        $leftName = strtolower((string) ($left['full_name'] ?? ''));
+        $rightName = strtolower((string) ($right['full_name'] ?? ''));
+        return $leftName <=> $rightName;
+    });
+
+    foreach ($ranked as $index => &$student) {
+        $student['rank_position'] = $index + 1;
+    }
+    unset($student);
+
+    return $ranked;
+}
+
+function new_school_rank_teachers(array $teachers, array $students): array
+{
+    $teacherGroups = [];
+    foreach ($students as $student) {
+        $teacherId = (int) ($student['teacher_id'] ?? 0);
+        if ($teacherId <= 0) {
+            continue;
+        }
+        $teacherGroups[$teacherId][] = $student;
+    }
+
+    $ranked = [];
+    foreach ($teachers as $teacher) {
+        if (!is_array($teacher)) {
+            continue;
+        }
+
+        $teacherStudents = $teacherGroups[(int) $teacher['id']] ?? [];
+        $rankedStudents = new_school_rank_students($teacherStudents);
+        $topStudent = $rankedStudents[0] ?? null;
+        $totalScore = 0.0;
+        foreach ($rankedStudents as $student) {
+            $totalScore += (float) ($student['performance_score'] ?? 0);
+        }
+
+        $teacher['students_total'] = count($teacherStudents);
+        $teacher['ranking_score'] = round($totalScore, 2);
+        $teacher['average_student_score'] = $teacherStudents !== [] ? round($totalScore / count($teacherStudents), 2) : 0;
+        $teacher['top_student_name'] = $topStudent['full_name'] ?? null;
+        $teacher['top_student_participant_id'] = $topStudent['participant_id'] ?? null;
+        $teacher['top_student_score'] = $topStudent['performance_score'] ?? null;
+        $teacher['top_student_rank'] = $topStudent['rank_position'] ?? null;
+        $ranked[] = $teacher;
+    }
+
+    usort($ranked, static function (array $left, array $right): int {
+        $leftScore = (float) ($left['ranking_score'] ?? 0);
+        $rightScore = (float) ($right['ranking_score'] ?? 0);
+        if ($leftScore !== $rightScore) {
+            return $rightScore <=> $leftScore;
+        }
+
+        $leftStudents = (int) ($left['students_total'] ?? 0);
+        $rightStudents = (int) ($right['students_total'] ?? 0);
+        if ($leftStudents !== $rightStudents) {
+            return $rightStudents <=> $leftStudents;
+        }
+
+        $leftTop = (float) ($left['top_student_score'] ?? 0);
+        $rightTop = (float) ($right['top_student_score'] ?? 0);
+        if ($leftTop !== $rightTop) {
+            return $rightTop <=> $leftTop;
+        }
+
+        $leftName = strtolower((string) ($left['teacher_full_name'] ?? ''));
+        $rightName = strtolower((string) ($right['teacher_full_name'] ?? ''));
+        return $leftName <=> $rightName;
+    });
+
+    foreach ($ranked as $index => &$teacher) {
+        $teacher['rank_position'] = $index + 1;
+    }
+    unset($teacher);
+
+    return $ranked;
+}
+
+function new_school_find_student_rank_position(array $students, int $studentId): ?int
+{
+    foreach ($students as $student) {
+        if ((int) ($student['id'] ?? 0) === $studentId) {
+            return (int) ($student['rank_position'] ?? 0) ?: null;
+        }
+    }
+
+    return null;
 }
 
 function new_school_submission_is_locked(array $student, int $interviewCount): bool
@@ -1272,23 +1440,77 @@ function new_school_fetch_students_by_teacher_id(int $teacherId): array
     return $stmt->fetchAll();
 }
 
-function new_school_fetch_all_schools(): array
+function new_school_fetch_all_schools(bool $approvedOnly = false): array
 {
-    return db()->query(
-        'SELECT id, school_name, school_address, school_district, main_phone, principal_name, administrator_name, administrator_email, administrator_phone, status, created_at
-         FROM new_school_schools
-         ORDER BY school_name ASC'
-    )->fetchAll();
+    $sql = 'SELECT id, school_name, school_address, school_district, main_phone, principal_name, administrator_name, administrator_email, administrator_phone, status, created_at
+            FROM new_school_schools';
+    if ($approvedOnly) {
+        $sql .= ' WHERE status = "approved"';
+    }
+    $sql .= ' ORDER BY school_name ASC';
+
+    return db()->query($sql)->fetchAll();
+}
+
+function new_school_fetch_all_teachers(bool $approvedOnly = false): array
+{
+    $sql = '
+        SELECT t.id, t.user_id, t.school_id, t.teacher_full_name, t.school_email, t.phone_number, t.role_department,
+               t.grade_level_supported, t.status, t.created_at, t.updated_at,
+               s.school_name AS linked_school_name,
+               s.status AS linked_school_status
+        FROM new_school_teachers t
+        LEFT JOIN new_school_schools s ON s.id = t.school_id';
+
+    if ($approvedOnly) {
+        $sql .= ' WHERE t.status = "approved" AND s.status = "approved"';
+    }
+
+    $sql .= ' ORDER BY s.school_name ASC, t.teacher_full_name ASC';
+
+    return db()->query($sql)->fetchAll();
+}
+
+function new_school_fetch_teachers_for_school(int $schoolId): array
+{
+    $stmt = db()->prepare(
+        'SELECT t.id, t.user_id, t.school_id, t.teacher_full_name, t.school_email, t.phone_number, t.role_department,
+                t.grade_level_supported, t.status, t.created_at, t.updated_at,
+                s.school_name AS linked_school_name,
+                s.status AS linked_school_status,
+                COUNT(DISTINCT st.id) AS students_total,
+                SUM(CASE WHEN st.parent_consent_status = "approved" THEN 1 ELSE 0 END) AS parent_approved,
+                SUM(CASE WHEN st.school_approval_status = "approved" THEN 1 ELSE 0 END) AS school_approved,
+                SUM(CASE WHEN st.teacher_approval_status = "approved" THEN 1 ELSE 0 END) AS teacher_approved,
+                COUNT(DISTINCT sub.id) AS submissions
+         FROM new_school_teachers t
+         LEFT JOIN new_school_schools s ON s.id = t.school_id
+         LEFT JOIN new_school_students st ON st.teacher_id = t.id
+         LEFT JOIN new_school_submissions sub ON sub.student_id = st.id
+         WHERE t.school_id = ?
+         GROUP BY t.id, t.user_id, t.school_id, t.teacher_full_name, t.school_email, t.phone_number, t.role_department,
+                  t.grade_level_supported, t.status, t.created_at, t.updated_at, s.school_name, s.status
+         ORDER BY submissions DESC, teacher_approved DESC, students_total DESC, t.teacher_full_name ASC'
+    );
+    $stmt->execute([$schoolId]);
+    return $stmt->fetchAll();
 }
 
 function new_school_fetch_students_for_school(array $school): array
 {
     $stmt = db()->prepare(
         'SELECT s.*, u.full_name AS user_full_name, u.email AS user_email,
+                t.teacher_full_name AS teacher_full_name,
+                t.status AS teacher_status,
+                sc.status AS school_status,
                 (SELECT COUNT(*) FROM new_school_business_interviews bi WHERE bi.student_id = s.id) AS interview_count,
-                (SELECT COUNT(*) FROM new_school_submissions sub WHERE sub.student_id = s.id) AS has_submission
+                (SELECT COUNT(*) FROM new_school_submissions sub WHERE sub.student_id = s.id) AS has_submission,
+                (SELECT sub.score FROM new_school_submissions sub WHERE sub.student_id = s.id LIMIT 1) AS submission_score,
+                (SELECT sub.rank_position FROM new_school_submissions sub WHERE sub.student_id = s.id LIMIT 1) AS submission_rank_position
          FROM new_school_students s
          INNER JOIN users u ON u.id = s.user_id
+         LEFT JOIN new_school_teachers t ON t.id = s.teacher_id
+         LEFT JOIN new_school_schools sc ON sc.id = s.school_id
          WHERE s.school_id = ? OR s.school_name = ?
          ORDER BY s.created_at DESC'
     );
@@ -1300,10 +1522,17 @@ function new_school_fetch_students_for_teacher(array $teacher): array
 {
     $stmt = db()->prepare(
         'SELECT s.*, u.full_name AS user_full_name, u.email AS user_email,
+                t.teacher_full_name AS teacher_full_name,
+                t.status AS teacher_status,
+                sc.status AS school_status,
                 (SELECT COUNT(*) FROM new_school_business_interviews bi WHERE bi.student_id = s.id) AS interview_count,
-                (SELECT COUNT(*) FROM new_school_submissions sub WHERE sub.student_id = s.id) AS has_submission
+                (SELECT COUNT(*) FROM new_school_submissions sub WHERE sub.student_id = s.id) AS has_submission,
+                (SELECT sub.score FROM new_school_submissions sub WHERE sub.student_id = s.id LIMIT 1) AS submission_score,
+                (SELECT sub.rank_position FROM new_school_submissions sub WHERE sub.student_id = s.id LIMIT 1) AS submission_rank_position
          FROM new_school_students s
          INNER JOIN users u ON u.id = s.user_id
+         LEFT JOIN new_school_teachers t ON t.id = s.teacher_id
+         LEFT JOIN new_school_schools sc ON sc.id = s.school_id
          WHERE s.teacher_id = ? OR s.school_id = ? OR s.school_name = ?
          ORDER BY s.created_at DESC'
     );
@@ -1313,6 +1542,19 @@ function new_school_fetch_students_for_teacher(array $teacher): array
 
 function new_school_public_leaderboards(): array
 {
+    $students = db()->query(
+        'SELECT s.id, s.full_name AS label, s.grade_level, s.teacher_id, s.school_id, s.parent_consent_status, s.school_approval_status,
+                s.teacher_approval_status, s.submission_status,
+                (SELECT COUNT(*) FROM new_school_business_interviews bi WHERE bi.student_id = s.id) AS interview_count,
+                (SELECT COUNT(*) FROM new_school_submissions sub WHERE sub.student_id = s.id) AS has_submission,
+                (SELECT sub.score FROM new_school_submissions sub WHERE sub.student_id = s.id LIMIT 1) AS submission_score,
+                (SELECT sub.rank_position FROM new_school_submissions sub WHERE sub.student_id = s.id LIMIT 1) AS submission_rank_position,
+                s.created_at
+         FROM new_school_students s
+         ORDER BY s.created_at DESC'
+    )->fetchAll();
+    $students = array_slice(new_school_rank_students($students), 0, 10);
+
     return [
         'schools' => db()->query(
             'SELECT sc.id, sc.school_name AS label,
@@ -1342,14 +1584,7 @@ function new_school_public_leaderboards(): array
              ORDER BY submissions DESC, teacher_approved DESC, students DESC
              LIMIT 10'
         )->fetchAll(),
-        'students' => db()->query(
-            'SELECT s.id, s.full_name AS label, s.grade_level,
-                    (SELECT COUNT(*) FROM new_school_business_interviews bi WHERE bi.student_id = s.id) AS interview_count,
-                    (SELECT COUNT(*) FROM new_school_submissions sub WHERE sub.student_id = s.id) AS submitted
-             FROM new_school_students s
-             ORDER BY interview_count DESC, submitted DESC, s.created_at DESC
-             LIMIT 10'
-        )->fetchAll(),
+        'students' => $students,
     ];
 }
 
