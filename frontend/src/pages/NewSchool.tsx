@@ -78,7 +78,9 @@ function clipText(text: string, max = 120) {
 }
 
 type RegistrationTag = 'student' | 'parent' | 'school' | 'teacher'
-type DashboardTabKey = 'overview' | 'activity' | 'rankings' | 'records' | 'approvals' | 'reviews' | 'notifications' | 'data'
+type DashboardTabKey = 'overview' | 'profile' | 'activity' | 'rankings' | 'records' | 'approvals' | 'reviews' | 'notifications' | 'data'
+type SchoolRecordsTabKey = 'students' | 'teachers' | 'interviews' | 'approvals' | 'projects'
+type DashboardTabConfig = { key: DashboardTabKey; label: string; hint: string; badge?: string }
 
 const registrationOptions: Array<{
   key: RegistrationTag
@@ -119,28 +121,32 @@ const participantCards = [
   },
 ]
 
-const dashboardTabsByRole: Record<string, Array<{ key: DashboardTabKey; label: string; hint: string }>> = {
+const dashboardTabsByRole: Record<string, DashboardTabConfig[]> = {
   student: [
     { key: 'overview', label: 'Overview', hint: 'Status and progress' },
+    { key: 'profile', label: 'Profile', hint: 'Approvals and identity' },
     { key: 'activity', label: 'Activity', hint: 'Business and submission work' },
     { key: 'rankings', label: 'Rankings', hint: 'Competition board' },
     { key: 'notifications', label: 'Alerts', hint: 'Unread updates' },
   ],
   parent: [
     { key: 'overview', label: 'Overview', hint: 'Consent and student snapshot' },
+    { key: 'profile', label: 'Profile', hint: 'Linked student details' },
     { key: 'rankings', label: 'Rankings', hint: 'Competition board' },
     { key: 'notifications', label: 'Alerts', hint: 'Unread updates' },
   ],
   school: [
     { key: 'overview', label: 'Overview', hint: 'School summary' },
-    { key: 'approvals', label: 'Approvals', hint: 'Teacher and student review' },
-    { key: 'rankings', label: 'Rankings', hint: 'School competition board' },
-    { key: 'records', label: 'Records', hint: 'Students and submissions' },
-    { key: 'reviews', label: 'Reviews', hint: 'Submission review tools' },
-    { key: 'notifications', label: 'Alerts', hint: 'Unread updates' },
+    { key: 'profile', label: 'Profile', hint: 'School identity' },
+    { key: 'approvals', label: 'Approvals', hint: 'Teacher & student review' },
+    { key: 'rankings', label: 'Rankings', hint: 'Competition board' },
+    { key: 'records', label: 'Records', hint: 'Students & submissions' },
+    { key: 'reviews', label: 'Reviews', hint: 'Submission tools' },
+    { key: 'notifications', label: 'Alerts', hint: 'Notifications' },
   ],
   teacher: [
     { key: 'overview', label: 'Overview', hint: 'Teacher summary' },
+    { key: 'profile', label: 'Profile', hint: 'Teacher identity' },
     { key: 'approvals', label: 'Approvals', hint: 'Student review tools' },
     { key: 'rankings', label: 'Rankings', hint: 'Teacher competition board' },
     { key: 'records', label: 'Records', hint: 'Students and submissions' },
@@ -149,6 +155,7 @@ const dashboardTabsByRole: Record<string, Array<{ key: DashboardTabKey; label: s
   ],
   admin: [
     { key: 'overview', label: 'Overview', hint: 'Platform summary' },
+    { key: 'profile', label: 'Profile', hint: 'Platform identity' },
     { key: 'data', label: 'Data', hint: 'Schools, parents, approvals' },
     { key: 'reviews', label: 'Reviews', hint: 'Submission decisions' },
     { key: 'rankings', label: 'Rankings', hint: 'Global leaderboard' },
@@ -210,6 +217,8 @@ export default function NewSchool() {
   const [parentTeacherId, setParentTeacherId] = useState('')
   const [parentParticipantId, setParentParticipantId] = useState('')
   const [schoolTeacherApprovalId, setSchoolTeacherApprovalId] = useState('')
+  const [schoolRecordsTab, setSchoolRecordsTab] = useState<SchoolRecordsTabKey>('students')
+  const [schoolSubmissionReviewId, setSchoolSubmissionReviewId] = useState('')
 
   useSeo({
     title: isDashboardRoute ? 'New School Dashboard' : 'What Problem Will You Solve?',
@@ -792,8 +801,6 @@ export default function NewSchool() {
   const teacherDashboard = dashboard?.role === 'teacher' ? dashboard : null
   const adminDashboard = adminSummary || (dashboard?.role === 'admin' ? dashboard : null)
   const dashboardRole = adminDashboard ? 'admin' : studentDashboard ? 'student' : parentDashboard ? 'parent' : schoolDashboard ? 'school' : teacherDashboard ? 'teacher' : ''
-  const dashboardTabs = dashboardRole ? dashboardTabsByRole[dashboardRole] || [] : []
-  const dashboardActiveTab = dashboardTabs.find((tab) => tab.key === dashboardTab) || dashboardTabs[0] || null
   const selectedBusinessId = studentDashboard?.submission?.source_business_id || ''
   const canStudentSubmit = !!studentDashboard?.can_submit
   const teacherScore = teacherDashboard
@@ -882,6 +889,30 @@ export default function NewSchool() {
   const schoolUnreadNotifications = schoolNotifications.filter((item: any) => !item.is_read)
   const teacherUnreadNotifications = teacherNotifications.filter((item: any) => !item.is_read)
   const adminUnreadNotifications = adminNotifications.filter((item: any) => !item.is_read)
+  const schoolRecordsTabs: Array<{ key: SchoolRecordsTabKey; label: string; hint: string; count: number }> = [
+    { key: 'students', label: 'Students', hint: 'Roster', count: schoolDashboard?.students?.length || 0 },
+    { key: 'teachers', label: 'Teachers', hint: 'Faculty list', count: schoolDashboard?.teachers?.length || 0 },
+    { key: 'interviews', label: 'Interviews', hint: 'Business visits', count: schoolBusinesses.length },
+    { key: 'approvals', label: 'Approvals', hint: 'Verified records', count: schoolApprovals.length },
+    { key: 'projects', label: 'Projects', hint: 'Final submissions', count: schoolSubmissions.length },
+  ]
+  const schoolSelectedSubmission = schoolSubmissions.find((row: any) => String(row.id) === String(schoolSubmissionReviewId)) || schoolSubmissions[0] || null
+  const schoolReviewQueue = schoolSubmissions.slice(0, 5)
+  const schoolWinnersQueue = schoolWinners.slice(0, 5)
+  const dashboardTabs = (() => {
+    const baseTabs = dashboardRole ? dashboardTabsByRole[dashboardRole] || [] : []
+    if (!schoolDashboard) return baseTabs
+    const schoolApprovalBadge = (Number(schoolDashboard.summary.teacher_pending || 0) + Number(schoolDashboard.summary.school_pending || 0)) || 0
+    const schoolReviewBadge = schoolReviewQueue.length || 0
+    const schoolAlertBadge = schoolUnreadNotifications.length || 0
+    return baseTabs.map((tab) => {
+      if (tab.key === 'approvals' && schoolApprovalBadge > 0) return { ...tab, badge: String(schoolApprovalBadge) }
+      if (tab.key === 'reviews' && schoolReviewBadge > 0) return { ...tab, badge: String(schoolReviewBadge) }
+      if (tab.key === 'notifications' && schoolAlertBadge > 0) return { ...tab, badge: String(schoolAlertBadge) }
+      return tab
+    })
+  })()
+  const dashboardActiveTab = dashboardTabs.find((tab) => tab.key === dashboardTab) || dashboardTabs[0] || null
   const dashboardHero = (() => {
     if (studentDashboard) {
       return {
@@ -917,7 +948,7 @@ export default function NewSchool() {
       return {
         eyebrow: 'Principal Workspace',
         title: schoolDashboard.school.school_name,
-        lead: 'Approve teachers, monitor student readiness, and keep the school leaderboard moving.',
+        lead: 'Approve teachers, keep school readiness high, and monitor performance from one view.',
         stats: [
           { label: 'Students', value: schoolDashboard.summary.students_total || 0 },
           { label: 'Teachers', value: schoolDashboard.summary.teacher_approved || 0 },
@@ -960,6 +991,18 @@ export default function NewSchool() {
     }
     return null
   })()
+  const dashboardThemeClass = dashboardRole ? `ns-dashboard-page--${dashboardRole}` : 'ns-dashboard-page--guest'
+  const isReferencePrincipalLayout = dashboardRole === 'school'
+  const dashboardStageId = 'dashboard-stage'
+  const openDashboardTab = (nextTab: DashboardTabKey) => {
+    setDashboardTab(nextTab)
+    if (typeof window === 'undefined') return
+    window.requestAnimationFrame(() => {
+      const stage = document.getElementById(dashboardStageId)
+      stage?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      stage instanceof HTMLElement ? stage.focus({ preventScroll: true }) : undefined
+    })
+  }
 
   return (
     <div className="ns-page">
@@ -1383,27 +1426,54 @@ export default function NewSchool() {
 
       {isDashboardRoute && (
         <>
-      <section className="block ns-section" id="dashboard">
+      <section className={`block ns-section ns-dashboard-page ${dashboardThemeClass}`} id="dashboard" data-dashboard-role={dashboardRole || 'guest'}>
         <div className="wrap">
-          <div className="ns-section__head reveal in">
-            <span className="eyebrow">Live Dashboard</span>
-            <h2>Role-based tracking for every account type.</h2>
-            <p>Student, parent, school, teacher, and admin views are driven from the same data tables.</p>
-          </div>
+          {!isReferencePrincipalLayout && (
+            <div className="ns-section__head reveal in">
+              <span className="eyebrow">Live Dashboard</span>
+              <h2>Role-based tracking for every account type.</h2>
+              <p>Student, parent, school, teacher, and admin views are driven from the same data tables.</p>
+            </div>
+          )}
 
           <div className="ns-dashboard-shell">
             <aside className="ns-dashboard-rail">
-              {dashboardHero && (
+              {isReferencePrincipalLayout && schoolDashboard && (
+                <>
+                  <div className="ns-principal-brand glass reveal in">
+                    <span className="ns-principal-brand__logo" aria-hidden="true">FC</span>
+                    <span className="ns-principal-brand__id">
+                      <strong>FRANTZ COUTARD</strong>
+                      <small>Principal Dashboard</small>
+                    </span>
+                  </div>
+
+                  <section className="ns-principal-workspace glass reveal in" aria-label="Principal workspace">
+                    <span className="eyebrow">{dashboardHero?.eyebrow || 'Principal Workspace'}</span>
+                    <h3 className="ns-principal-workspace__title">{schoolDashboard.school.school_name}</h3>
+                    <div className="ns-principal-workspace__stats">
+                      {(dashboardHero?.stats || []).map((stat) => (
+                        <div className="ns-principal-workspace__stat" key={stat.label}>
+                          <span>{stat.label}</span>
+                          <strong className={stat.label === 'Eligible' ? 'is-gold' : ''}>{String(stat.value)}</strong>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                </>
+              )}
+
+              {dashboardHero && !isReferencePrincipalLayout && (
                 <section className="ns-dashboard-hero glass reveal in" aria-label="Dashboard summary">
                   <div className="ns-dashboard-hero__copy">
                     <span className="eyebrow">{dashboardHero.eyebrow}</span>
                     <h3>{dashboardHero.title}</h3>
                     <p>{dashboardHero.lead}</p>
                     <div className="ns-dashboard-hero__actions">
-                      <button className="btn btn--solid" type="button" onClick={() => setDashboardTab(dashboardHero.primary.tab)}>
+                      <button className="btn btn--solid" type="button" onClick={() => openDashboardTab(dashboardHero.primary.tab)}>
                         {dashboardHero.primary.label}
                       </button>
-                      <button className="btn" type="button" onClick={() => setDashboardTab(dashboardHero.secondary.tab)}>
+                      <button className="btn" type="button" onClick={() => openDashboardTab(dashboardHero.secondary.tab)}>
                         {dashboardHero.secondary.label}
                       </button>
                     </div>
@@ -1425,19 +1495,34 @@ export default function NewSchool() {
                     <button
                       key={tab.key}
                       type="button"
+                      id={`dashboard-tab-${tab.key}`}
                       className={`ns-dashboard-tabs__btn ${dashboardTab === tab.key ? 'is-active' : ''}`}
                       role="tab"
                       aria-selected={dashboardTab === tab.key}
-                      onClick={() => setDashboardTab(tab.key)}
+                      aria-controls={dashboardStageId}
+                      onClick={() => openDashboardTab(tab.key)}
                     >
                       <strong>{tab.label}</strong>
                       <span>{tab.hint}</span>
+                      {tab.badge && <em className="ns-dashboard-tabs__badge">{tab.badge}</em>}
                     </button>
                   ))}
                 </div>
               )}
 
-              {dashboardActiveTab && (
+              {isReferencePrincipalLayout && schoolDashboard && (
+                <section className="ns-principal-readiness glass reveal in" aria-label="School readiness">
+                  <div className="ns-principal-readiness__head">
+                    <span>School readiness</span>
+                    <strong>{schoolReadinessProgress}%</strong>
+                  </div>
+                  <div className="ns-progress-track" aria-hidden="true">
+                    <span style={{ width: `${schoolReadinessProgress}%` }} />
+                  </div>
+                </section>
+              )}
+
+              {dashboardActiveTab && !isReferencePrincipalLayout && (
                 <section className="ns-dashboard-rail__note glass reveal in" aria-label="Current dashboard section">
                   <span className="eyebrow">Current section</span>
                   <h3>{dashboardActiveTab.label}</h3>
@@ -1446,8 +1531,25 @@ export default function NewSchool() {
               )}
             </aside>
 
-            <div className="ns-dashboard-stage">
-              {dashboardActiveTab && (
+            <div className="ns-dashboard-stage" id={dashboardStageId} role="region" aria-live="polite" tabIndex={-1}>
+              {isReferencePrincipalLayout && schoolDashboard && dashboardActiveTab && (
+                <header className="ns-principal-topbar glass reveal in" aria-label="Active dashboard view">
+                  <div className="ns-principal-topbar__view">
+                    <span className="eyebrow">Active View</span>
+                    <h3>{dashboardActiveTab.label}</h3>
+                    <p>{dashboardActiveTab.hint}</p>
+                  </div>
+                  <div className="ns-principal-topbar__meta">
+                    <span className="ns-principal-topbar__live"><i aria-hidden="true" />Live</span>
+                    <span className="ns-principal-topbar__role">Principal</span>
+                    <span className="ns-principal-topbar__avatar" aria-hidden="true">
+                      {(user?.full_name || schoolDashboard.school.principal_name || schoolDashboard.school.administrator_name || 'P').trim().charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                </header>
+              )}
+
+              {dashboardActiveTab && !isReferencePrincipalLayout && (
                 <section className="ns-dashboard-stage__head glass reveal in" aria-label="Selected dashboard section">
                   <div>
                     <span className="eyebrow">Active view</span>
@@ -1498,7 +1600,7 @@ export default function NewSchool() {
               )}
 
               {studentDashboard && (
-            <div className="ns-dash-grid" hidden={dashboardTab !== 'overview'}>
+            <div className="ns-dash-grid">
               <article className="glass ns-dash-card reveal in">
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">Student Status</span>
@@ -1539,12 +1641,13 @@ export default function NewSchool() {
                 </div>
                 <div className="ns-actions">
                   <button className="btn btn--sm" type="button" onClick={() => navigator.clipboard.writeText(studentDashboard.student.qr_url)}>Copy QR</button>
-                  <button className="btn btn--sm" type="button" onClick={() => setDashboardTab('activity')}>Open Activity</button>
-                  <button className="btn btn--sm btn--solid" type="button" onClick={() => setDashboardTab('rankings')}>View Rankings</button>
+                  <button className="btn btn--sm" type="button" onClick={() => openDashboardTab('activity')}>Open Activity</button>
+                  <button className="btn btn--sm" type="button" onClick={() => openDashboardTab('profile')}>View Profile</button>
+                  <button className="btn btn--sm btn--solid" type="button" onClick={() => openDashboardTab('rankings')}>View Rankings</button>
                 </div>
               </article>
 
-              <article className="glass ns-dash-card reveal in">
+              <article className="glass ns-dash-card reveal in" hidden={dashboardTab !== 'profile'}>
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">Approvals</span>
                   <span className="ns-board__badge">Parent / School / Teacher</span>
@@ -1561,7 +1664,7 @@ export default function NewSchool() {
                 </div>
               </article>
 
-              <article className="glass ns-dash-card reveal in">
+              <article className="glass ns-dash-card reveal in" hidden={dashboardTab !== 'profile'}>
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">Winner Status</span>
                   <span className="ns-board__badge">{studentDashboard.winner ? studentDashboard.winner.place : 'Pending'}</span>
@@ -1579,7 +1682,7 @@ export default function NewSchool() {
                 )}
               </article>
 
-              <article className="glass ns-dash-card reveal in">
+              <article className="glass ns-dash-card reveal in" hidden={dashboardTab !== 'profile'}>
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">About</span>
                   <span className="ns-board__badge">{studentDashboard.student.grade_level || 'Student'}</span>
@@ -1773,7 +1876,7 @@ export default function NewSchool() {
               )}
 
               {parentDashboard && (
-            <div className="ns-dash-grid" hidden={dashboardTab !== 'overview'}>
+            <div className="ns-dash-grid">
               <article className="glass ns-dash-card reveal in">
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">Parent Dashboard</span>
@@ -1792,16 +1895,24 @@ export default function NewSchool() {
                   </div>
                   <small>{parentReadinessProgress}% of the student workflow is complete</small>
                 </div>
-                <div className="ns-quick-stats">
-                  <div><span>Relationship</span><strong>{parentDashboard.parent.relationship_to_student}</strong></div>
-                  <div><span>Phone</span><strong>{parentDashboard.parent.phone_number}</strong></div>
-                  <div><span>Email</span><strong>{parentDashboard.parent.email}</strong></div>
-                  <div><span>Student School</span><strong>{parentDashboard.parent.student_school_name}</strong></div>
-                </div>
                 <div className="ns-actions">
-                  <button className="btn btn--sm btn--solid" type="button" onClick={() => setDashboardTab('rankings')}>View Rankings</button>
-                  <button className="btn btn--sm" type="button" onClick={() => setDashboardTab('notifications')}>Open Alerts</button>
+                  <button className="btn btn--sm" type="button" onClick={() => openDashboardTab('profile')}>View Profile</button>
+                  <button className="btn btn--sm btn--solid" type="button" onClick={() => openDashboardTab('rankings')}>View Rankings</button>
+                  <button className="btn btn--sm" type="button" onClick={() => openDashboardTab('notifications')}>Open Alerts</button>
                 </div>
+              </article>
+              <article className="glass ns-dash-card reveal in" hidden={dashboardTab !== 'profile'}>
+                <div className="ns-dash-card__head">
+                  <span className="eyebrow">Profile</span>
+                  <span className="ns-board__badge">{parentDashboard.student_context?.student?.participant_id || '-'}</span>
+                </div>
+                <div className="ns-approval-stack">
+                  <div className="ns-approval-row"><strong>Relationship</strong><span>{parentDashboard.parent.relationship_to_student}</span></div>
+                  <div className="ns-approval-row"><strong>Phone</strong><span>{parentDashboard.parent.phone_number}</span></div>
+                  <div className="ns-approval-row"><strong>Email</strong><span>{parentDashboard.parent.email}</span></div>
+                  <div className="ns-approval-row"><strong>Student School</strong><span>{parentDashboard.parent.student_school_name}</span></div>
+                </div>
+                <p className="ns-muted">This tab keeps the linked student context in one place and stays out of the way while you monitor progress.</p>
               </article>
               <article className="glass ns-dash-card reveal in" hidden={dashboardTab !== 'rankings'}>
                 <div className="ns-dash-card__head">
@@ -1839,15 +1950,15 @@ export default function NewSchool() {
               )}
 
               {schoolDashboard && (
-            <div className="ns-dash-grid" hidden={dashboardTab !== 'overview'}>
-              <article className="glass ns-dash-card ns-dash-card--wide reveal in">
+            <div className="ns-dash-grid">
+              <article className="glass ns-dash-card ns-dash-card--wide reveal in" hidden={dashboardTab !== 'overview'}>
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">School Dashboard</span>
                   <span className="ns-board__badge">{schoolDashboard.school.school_name}</span>
                 </div>
                 <div className="ns-dashboard-callout">
                   <div className="ns-dashboard-callout__head">
-                    <strong>Principal control room</strong>
+                    <strong>Principal Control Room</strong>
                     <span>{schoolDashboard.summary.submitted || 0} submissions</span>
                   </div>
                   <p>Approve teachers, keep school readiness high, and monitor performance from one view.</p>
@@ -1869,13 +1980,14 @@ export default function NewSchool() {
                   <div><span>Interviews</span><strong>{schoolDashboard.summary.interviews_total || 0}</strong></div>
                 </div>
                 <div className="ns-actions">
-                  <button className="btn btn--sm btn--solid" type="button" onClick={() => setDashboardTab('approvals')}>Manage Approvals</button>
-                  <button className="btn btn--sm" type="button" onClick={() => setDashboardTab('rankings')}>Open Rankings</button>
-                  <button className="btn btn--sm" type="button" onClick={() => setDashboardTab('records')}>View Records</button>
+                  <button className="btn btn--sm" type="button" onClick={() => openDashboardTab('profile')}>View Profile</button>
+                  <button className="btn btn--sm btn--solid" type="button" onClick={() => openDashboardTab('approvals')}>Manage Approvals</button>
+                  <button className="btn btn--sm" type="button" onClick={() => openDashboardTab('rankings')}>Open Rankings</button>
+                  <button className="btn btn--sm" type="button" onClick={() => openDashboardTab('records')}>View Records</button>
                 </div>
               </article>
 
-              <article className="glass ns-dash-card reveal in">
+              <article className="glass ns-dash-card reveal in" hidden={dashboardTab !== 'profile'}>
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">School Profile</span>
                   <span className="ns-board__badge">{schoolDashboard.school.status || 'registered'}</span>
@@ -1884,173 +1996,299 @@ export default function NewSchool() {
                   <div className="ns-approval-row"><strong>Principal</strong><span>{schoolDashboard.school.principal_name || '-'}</span></div>
                   <div className="ns-approval-row"><strong>Administrator</strong><span>{schoolDashboard.school.administrator_name || '-'}</span></div>
                   <div className="ns-approval-row"><strong>District</strong><span>{schoolDashboard.school.school_district || '-'}</span></div>
+                  <div className="ns-approval-row"><strong>School Email</strong><span>{currentSchoolEmail || '-'}</span></div>
                   <div className="ns-approval-row"><strong>Main Phone</strong><span>{schoolDashboard.school.main_phone || '-'}</span></div>
                 </div>
               </article>
-              <form className="glass ns-form ns-form--compact reveal in" onSubmit={submitSchoolTeacherApproval} hidden={dashboardTab !== 'approvals'}>
-                <div className="ns-form__head">
-                  <span className="eyebrow">Teacher Verification</span>
-                  <h3>Approve or reject teachers</h3>
-                  <p>Select a teacher from this school and record the principal review.</p>
+              <div className="ns-principal-pair" hidden={dashboardTab !== 'approvals'}>
+                <form className="glass ns-form ns-form--compact reveal in" onSubmit={submitSchoolTeacherApproval}>
+                  <div className="ns-form__head">
+                    <span className="eyebrow">Teacher Verification</span>
+                    <h3>Approve or reject teachers</h3>
+                    <p>Select a teacher from this school and record the principal review.</p>
+                  </div>
+                  <div className="ns-field-grid">
+                    <label className="ns-field ns-field--full">
+                      <span>Teacher</span>
+                      <select
+                        name="teacher_id"
+                        value={schoolTeacherApprovalId}
+                        onChange={(event) => setSchoolTeacherApprovalId(event.target.value)}
+                        required
+                      >
+                        <option value="">Select teacher</option>
+                        {schoolDashboard.teachers.map((teacher: any) => (
+                          <option key={teacher.id} value={teacher.id}>
+                            {teacher.teacher_full_name} - {teacher.status}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <input type="hidden" name="teacher_name" value={selectedSchoolTeacher?.teacher_full_name || ''} readOnly />
+                    <input type="hidden" name="teacher_email" value={selectedSchoolTeacher?.school_email || ''} readOnly />
+                    <input type="hidden" name="role" value={selectedSchoolTeacher?.role_department || 'Teacher'} readOnly />
+                    <label className="ns-field">
+                      <span>Status</span>
+                      <select name="approval_status" defaultValue="approved">
+                        <option value="approved">Approved</option>
+                        <option value="pending">Pending</option>
+                        <option value="rejected">Rejected</option>
+                      </select>
+                    </label>
+                    <label className="ns-field ns-field--full">
+                      <span>Notes</span>
+                      <textarea name="notes" rows={3} placeholder="Optional teacher review notes" />
+                    </label>
+                    <label className="ns-field ns-field--full">
+                      <span>Digital Signature</span>
+                      <input name="digital_signature" defaultValue={user?.full_name || schoolDashboard.school.principal_name || ''} required />
+                    </label>
+                  </div>
+                  <button className="btn btn--solid" type="submit" disabled={busy === 'school-teacher-approval'}>
+                    {busy === 'school-teacher-approval' ? 'Saving...' : 'Save Teacher Review'}
+                  </button>
+                </form>
+
+                <form className="glass ns-form ns-form--compact reveal in" onSubmit={submitSchoolApproval}>
+                  <div className="ns-form__head">
+                    <span className="eyebrow">School Approval</span>
+                    <h3>Verify student participation</h3>
+                    <p>Choose a student from this school and save the approval record with a digital signature.</p>
+                  </div>
+                  <div className="ns-field-grid">
+                    <label className="ns-field ns-field--full">
+                      <span>Student Participant ID</span>
+                      <select name="participant_id" defaultValue="" required>
+                        <option value="">Select student</option>
+                        {schoolDashboard.students.map((row: any) => (
+                          <option key={row.id} value={row.participant_id}>
+                            {row.full_name} - {row.participant_id}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="ns-field">
+                      <span>School Staff Name</span>
+                      <input name="school_staff_name" defaultValue={user?.full_name || schoolDashboard.school.administrator_name || ''} required />
+                    </label>
+                    <label className="ns-field">
+                      <span>Role</span>
+                      <input name="role" defaultValue="Administrator" required />
+                    </label>
+                    <label className="ns-field">
+                      <span>School Email</span>
+                      <input name="school_email" type="email" defaultValue={currentSchoolEmail} required />
+                    </label>
+                    <label className="ns-field">
+                      <span>Status</span>
+                      <select name="approval_status" defaultValue="approved">
+                        <option value="approved">Approved</option>
+                        <option value="pending">Pending</option>
+                        <option value="rejected">Rejected</option>
+                      </select>
+                    </label>
+                    <label className="ns-field ns-field--full">
+                      <span>Notes</span>
+                      <textarea name="notes" rows={3} placeholder="Optional approval notes" />
+                    </label>
+                    <label className="ns-field ns-field--full">
+                      <span>Digital Signature</span>
+                      <input name="digital_signature" placeholder="Type full legal name" required />
+                    </label>
+                  </div>
+                  <button className="btn btn--solid" type="submit" disabled={busy === 'school-approval'}>
+                    {busy === 'school-approval' ? 'Saving...' : 'Save School Approval'}
+                  </button>
+                </form>
+              </div>
+              <article className="glass ns-dash-card ns-dash-card--wide reveal in" hidden={dashboardTab !== 'records'}>
+                <div className="ns-dash-card__head">
+                  <span className="eyebrow">Records</span>
+                  <span className="ns-board__badge">
+                    {schoolRecordsTabs.find((tab) => tab.key === schoolRecordsTab)?.count || 0}
+                  </span>
                 </div>
-                <div className="ns-field-grid">
-                  <label className="ns-field ns-field--full">
-                    <span>Teacher</span>
-                    <select
-                      name="teacher_id"
-                      value={schoolTeacherApprovalId}
-                      onChange={(event) => setSchoolTeacherApprovalId(event.target.value)}
-                      required
+                <div className="ns-record-tabs" role="tablist" aria-label="School records">
+                  {schoolRecordsTabs.map((tab) => (
+                    <button
+                      key={tab.key}
+                      type="button"
+                      className={`ns-record-tabs__btn ${schoolRecordsTab === tab.key ? 'is-active' : ''}`}
+                      role="tab"
+                      aria-selected={schoolRecordsTab === tab.key}
+                      onClick={() => setSchoolRecordsTab(tab.key)}
                     >
-                      <option value="">Select teacher</option>
-                      {schoolDashboard.teachers.map((teacher: any) => (
-                        <option key={teacher.id} value={teacher.id}>
-                          {teacher.teacher_full_name} - {teacher.status}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <input type="hidden" name="teacher_name" value={selectedSchoolTeacher?.teacher_full_name || ''} readOnly />
-                  <input type="hidden" name="teacher_email" value={selectedSchoolTeacher?.school_email || ''} readOnly />
-                  <input type="hidden" name="role" value={selectedSchoolTeacher?.role_department || 'Teacher'} readOnly />
-                  <label className="ns-field">
-                    <span>Status</span>
-                    <select name="approval_status" defaultValue="approved">
-                      <option value="approved">Approved</option>
-                      <option value="pending">Pending</option>
-                      <option value="rejected">Rejected</option>
-                    </select>
-                  </label>
-                  <label className="ns-field ns-field--full">
-                    <span>Notes</span>
-                    <textarea name="notes" rows={3} placeholder="Optional teacher review notes" />
-                  </label>
-                  <label className="ns-field ns-field--full">
-                    <span>Digital Signature</span>
-                    <input name="digital_signature" defaultValue={user?.full_name || schoolDashboard.school.principal_name || ''} required />
-                  </label>
+                      <strong>{tab.label}</strong>
+                      <span>{tab.hint}</span>
+                      <em>{tab.count}</em>
+                    </button>
+                  ))}
                 </div>
-                <button className="btn btn--solid" type="submit" disabled={busy === 'school-teacher-approval'}>
-                  {busy === 'school-teacher-approval' ? 'Saving...' : 'Save Teacher Review'}
-                </button>
-              </form>
+                <div className="ns-record-panel">
+                  {schoolRecordsTab === 'students' && (
+                    <div className="ns-table-wrap">
+                      <table className="ns-table">
+                        <thead>
+                          <tr>
+                            <th>Participant ID</th>
+                            <th>Student</th>
+                            <th>Parent</th>
+                            <th>School</th>
+                            <th>Teacher</th>
+                            <th>Interviews</th>
+                            <th>Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {schoolDashboard.students.length > 0 ? schoolDashboard.students.map((row: any) => (
+                            <tr key={row.id}>
+                              <td>{row.participant_id}</td>
+                              <td>{row.full_name}</td>
+                              <td>{row.parent_consent_status}</td>
+                              <td>{row.school_approval_status}</td>
+                              <td>{row.teacher_approval_status}</td>
+                              <td>{row.interview_count}</td>
+                              <td>{row.submission_status}</td>
+                            </tr>
+                          )) : (
+                            <tr><td colSpan={7}>No students registered yet.</td></tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
 
-              <form className="glass ns-form ns-form--compact reveal in" onSubmit={submitSchoolApproval} hidden={dashboardTab !== 'approvals'}>
-                <div className="ns-form__head">
-                  <span className="eyebrow">School Approval</span>
-                  <h3>Verify student participation</h3>
-                  <p>Choose a student from this school and save the approval record with a digital signature.</p>
-                </div>
-                <div className="ns-field-grid">
-                  <label className="ns-field ns-field--full">
-                    <span>Student Participant ID</span>
-                    <select name="participant_id" defaultValue="" required>
-                      <option value="">Select student</option>
-                      {schoolDashboard.students.map((row: any) => (
-                        <option key={row.id} value={row.participant_id}>
-                          {row.full_name} - {row.participant_id}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="ns-field">
-                    <span>School Staff Name</span>
-                    <input name="school_staff_name" defaultValue={user?.full_name || schoolDashboard.school.administrator_name || ''} required />
-                  </label>
-                  <label className="ns-field">
-                    <span>Role</span>
-                    <input name="role" defaultValue="Administrator" required />
-                  </label>
-                  <label className="ns-field">
-                    <span>School Email</span>
-                    <input name="school_email" type="email" defaultValue={currentSchoolEmail} required />
-                  </label>
-                  <label className="ns-field">
-                    <span>Status</span>
-                    <select name="approval_status" defaultValue="approved">
-                      <option value="approved">Approved</option>
-                      <option value="pending">Pending</option>
-                      <option value="rejected">Rejected</option>
-                    </select>
-                  </label>
-                  <label className="ns-field ns-field--full">
-                    <span>Notes</span>
-                    <textarea name="notes" rows={3} placeholder="Optional approval notes" />
-                  </label>
-                  <label className="ns-field ns-field--full">
-                    <span>Digital Signature</span>
-                    <input name="digital_signature" placeholder="Type full legal name" required />
-                  </label>
-                </div>
-                <button className="btn btn--solid" type="submit" disabled={busy === 'school-approval'}>
-                  {busy === 'school-approval' ? 'Saving...' : 'Save School Approval'}
-                </button>
-              </form>
-              <article className="glass ns-dash-card ns-dash-card--wide reveal in" hidden={dashboardTab !== 'records'}>
-                <div className="ns-dash-card__head">
-                  <span className="eyebrow">Registered Students</span>
-                  <span className="ns-board__badge">{schoolDashboard.students.length}</span>
-                </div>
-                <div className="ns-table-wrap">
-                  <table className="ns-table">
-                    <thead>
-                      <tr>
-                        <th>Participant ID</th>
-                        <th>Student</th>
-                        <th>Parent</th>
-                        <th>School</th>
-                        <th>Teacher</th>
-                        <th>Interviews</th>
-                        <th>Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {schoolDashboard.students.map((row: any) => (
-                        <tr key={row.id}>
-                          <td>{row.participant_id}</td>
-                          <td>{row.full_name}</td>
-                          <td>{row.parent_consent_status}</td>
-                          <td>{row.school_approval_status}</td>
-                          <td>{row.teacher_approval_status}</td>
-                          <td>{row.interview_count}</td>
-                          <td>{row.submission_status}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </article>
+                  {schoolRecordsTab === 'teachers' && (
+                    <div className="ns-table-wrap">
+                      <table className="ns-table">
+                        <thead>
+                          <tr>
+                            <th>Rank</th>
+                            <th>Teacher</th>
+                            <th>Status</th>
+                            <th>Students</th>
+                            <th>Score</th>
+                            <th>Top Student</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {schoolDashboard.teachers.length > 0 ? schoolDashboard.teachers.map((row: any) => (
+                            <tr key={row.id}>
+                              <td>{row.rank_position ?? '-'}</td>
+                              <td>{row.teacher_full_name}</td>
+                              <td>{row.status}</td>
+                              <td>{row.students_total ?? 0}</td>
+                              <td>{row.ranking_score ?? 0}</td>
+                              <td>{row.top_student_name ? `${row.top_student_name} (${row.top_student_score ?? 0})` : '-'}</td>
+                            </tr>
+                          )) : (
+                            <tr><td colSpan={6}>No teachers registered yet.</td></tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
 
-              <article className="glass ns-dash-card ns-dash-card--wide reveal in" hidden={dashboardTab !== 'records'}>
-                <div className="ns-dash-card__head">
-                  <span className="eyebrow">Teacher List</span>
-                  <span className="ns-board__badge">{schoolDashboard.teachers.length}</span>
-                </div>
-                <div className="ns-table-wrap">
-                  <table className="ns-table">
-                    <thead>
-                      <tr>
-                        <th>Rank</th>
-                        <th>Teacher</th>
-                        <th>Status</th>
-                        <th>Students</th>
-                        <th>Score</th>
-                        <th>Top Student</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {schoolDashboard.teachers.map((row: any) => (
-                        <tr key={row.id}>
-                          <td>{row.rank_position ?? '-'}</td>
-                          <td>{row.teacher_full_name}</td>
-                          <td>{row.status}</td>
-                          <td>{row.students_total ?? 0}</td>
-                          <td>{row.ranking_score ?? 0}</td>
-                          <td>{row.top_student_name ? `${row.top_student_name} (${row.top_student_score ?? 0})` : '-'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  {schoolRecordsTab === 'interviews' && (
+                    <div className="ns-table-wrap">
+                      <table className="ns-table">
+                        <thead>
+                          <tr>
+                            <th>Participant ID</th>
+                            <th>Student</th>
+                            <th>Visit</th>
+                            <th>Business</th>
+                            <th>Category</th>
+                            <th>Challenge</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {schoolBusinesses.length > 0 ? schoolBusinesses.slice(0, 12).map((row: any) => (
+                            <tr key={row.id}>
+                              <td>{row.participant_id}</td>
+                              <td>{row.student_name}</td>
+                              <td>{row.visit_number}</td>
+                              <td>{row.business_name}</td>
+                              <td>{row.business_category}</td>
+                              <td>{clipText(row.main_challenge, 42)}</td>
+                            </tr>
+                          )) : (
+                            <tr><td colSpan={6}>No business interviews recorded yet.</td></tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  {schoolRecordsTab === 'approvals' && (
+                    <div className="ns-table-wrap">
+                      <table className="ns-table">
+                        <thead>
+                          <tr>
+                            <th>Participant ID</th>
+                            <th>Student</th>
+                            <th>Type</th>
+                            <th>Status</th>
+                            <th>Reviewer</th>
+                            <th>Approved At</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {schoolApprovals.length > 0 ? schoolApprovals.slice(0, 12).map((row: any) => (
+                            <tr key={row.id}>
+                              <td>{row.participant_id}</td>
+                              <td>{row.student_name}</td>
+                              <td>{row.approval_type}</td>
+                              <td>{row.status}</td>
+                              <td>{row.reviewer_name || row.reviewer_user_name || '-'}</td>
+                              <td>{row.approved_at || row.recorded_at || '-'}</td>
+                            </tr>
+                          )) : (
+                            <tr><td colSpan={6}>No approvals recorded yet.</td></tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  {schoolRecordsTab === 'projects' && (
+                    <div className="ns-table-wrap">
+                      <table className="ns-table">
+                        <thead>
+                          <tr>
+                            <th>Participant ID</th>
+                            <th>Student</th>
+                            <th>Business</th>
+                            <th>Problem</th>
+                            <th>Solution</th>
+                            <th>Status</th>
+                            <th>Score</th>
+                            <th>Rank</th>
+                            <th>Reviewer</th>
+                            <th>Submitted</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {schoolSubmissions.length > 0 ? schoolSubmissions.map((row: any) => (
+                            <tr key={row.id}>
+                              <td>{row.participant_id}</td>
+                              <td>{row.student_name}</td>
+                              <td>{row.source_business_name || '-'}</td>
+                              <td>{clipText(row.problem_identified, 36)}</td>
+                              <td>{clipText(row.proposed_solution, 36)}</td>
+                              <td>{row.status}</td>
+                              <td>{row.score ?? '-'}</td>
+                              <td>{row.rank_position ?? '-'}</td>
+                              <td>{row.reviewer_name || row.reviewer_user_name || '-'}</td>
+                              <td>{row.submission_date || '-'}</td>
+                            </tr>
+                          )) : (
+                            <tr><td colSpan={10}>No submissions have been recorded yet.</td></tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
               </article>
 
@@ -2123,202 +2361,148 @@ export default function NewSchool() {
                 </div>
               </article>
 
-              <article className="glass ns-dash-card ns-dash-card--wide reveal in" hidden={dashboardTab !== 'records'}>
-                <div className="ns-dash-card__head">
-                  <span className="eyebrow">Business Interviews</span>
-                  <span className="ns-board__badge">{schoolBusinesses.length}</span>
-                </div>
-                <div className="ns-table-wrap">
-                  <table className="ns-table">
-                    <thead>
-                      <tr>
-                        <th>Participant ID</th>
-                        <th>Student</th>
-                        <th>Visit</th>
-                        <th>Business</th>
-                        <th>Category</th>
-                        <th>Challenge</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {schoolBusinesses.slice(0, 12).map((row: any) => (
-                        <tr key={row.id}>
-                          <td>{row.participant_id}</td>
-                          <td>{row.student_name}</td>
-                          <td>{row.visit_number}</td>
-                          <td>{row.business_name}</td>
-                          <td>{row.business_category}</td>
-                          <td>{clipText(row.main_challenge, 42)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </article>
-              <article className="glass ns-dash-card ns-dash-card--wide reveal in" hidden={dashboardTab !== 'records'}>
-                <div className="ns-dash-card__head">
-                  <span className="eyebrow">Approval Records</span>
-                  <span className="ns-board__badge">{schoolApprovals.length}</span>
-                </div>
-                <div className="ns-table-wrap">
-                  <table className="ns-table">
-                    <thead>
-                      <tr>
-                        <th>Participant ID</th>
-                        <th>Student</th>
-                        <th>Type</th>
-                        <th>Status</th>
-                        <th>Reviewer</th>
-                        <th>Approved At</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {schoolApprovals.slice(0, 12).map((row: any) => (
-                        <tr key={row.id}>
-                          <td>{row.participant_id}</td>
-                          <td>{row.student_name}</td>
-                          <td>{row.approval_type}</td>
-                          <td>{row.status}</td>
-                          <td>{row.reviewer_name || row.reviewer_user_name || '-'}</td>
-                          <td>{row.approved_at || row.recorded_at || '-'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </article>
-
-              <form className="glass ns-form ns-form--compact reveal in" onSubmit={submitSubmissionReview} hidden={dashboardTab !== 'reviews'}>
-                <div className="ns-form__head">
-                  <span className="eyebrow">Submission Review</span>
-                  <h3>Approve or reject problem and solution submissions</h3>
-                  <p>Principal can review the submission list before final publishing.</p>
-                </div>
-                <div className="ns-field-grid">
-                  <label className="ns-field ns-field--full">
-                    <span>Submission</span>
-                    <select name="submission_id" defaultValue="" required>
-                      <option value="">Select submission</option>
-                      {schoolSubmissions.map((row: any) => (
-                        <option key={row.id} value={row.id}>
-                          #{row.id} - {row.student_name} - {row.status}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="ns-field">
-                    <span>Status</span>
-                    <select name="status" defaultValue="approved">
-                      <option value="approved">Approved</option>
-                      <option value="rejected">Rejected</option>
-                    </select>
-                  </label>
-                  <label className="ns-field">
-                    <span>Score</span>
-                    <input name="score" type="number" min="0" step="0.01" placeholder="Optional" />
-                  </label>
-                  <label className="ns-field">
-                    <span>Rank Position</span>
-                    <input name="rank_position" type="number" min="1" max="3" placeholder="Optional" />
-                  </label>
-                  <label className="ns-field ns-field--full">
-                    <span>Reviewer Notes</span>
-                    <textarea name="reviewer_notes" rows={3} placeholder="Optional review notes" />
-                  </label>
-                </div>
-                <button className="btn btn--solid" type="submit" disabled={busy === 'submission-review'}>
-                  {busy === 'submission-review' ? 'Saving...' : 'Save Submission Review'}
-                </button>
-              </form>
-
-              <article className="glass ns-dash-card ns-dash-card--wide reveal in" hidden={dashboardTab !== 'records'}>
-                <div className="ns-dash-card__head">
-                  <span className="eyebrow">Submitted Projects</span>
-                  <span className="ns-board__badge">{schoolSubmissions.length}</span>
-                </div>
-                <div className="ns-table-wrap">
-                  <table className="ns-table">
-                    <thead>
-                      <tr>
-                        <th>Participant ID</th>
-                        <th>Student</th>
-                        <th>Business</th>
-                        <th>Problem</th>
-                        <th>Solution</th>
-                        <th>Status</th>
-                        <th>Score</th>
-                        <th>Rank</th>
-                        <th>Reviewer</th>
-                        <th>Submitted</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {schoolSubmissions.map((row: any) => (
-                        <tr key={row.id}>
-                          <td>{row.participant_id}</td>
-                          <td>{row.student_name}</td>
-                          <td>{row.source_business_name || '-'}</td>
-                          <td>{clipText(row.problem_identified, 36)}</td>
-                          <td>{clipText(row.proposed_solution, 36)}</td>
-                          <td>{row.status}</td>
-                          <td>{row.score ?? '-'}</td>
-                          <td>{row.rank_position ?? '-'}</td>
-                          <td>{row.reviewer_name || row.reviewer_user_name || '-'}</td>
-                          <td>{row.submission_date || '-'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </article>
-              <article className="glass ns-dash-card reveal in" hidden={dashboardTab !== 'records'}>
-                <div className="ns-dash-card__head">
-                  <span className="eyebrow">School Winners</span>
-                  <span className="ns-board__badge">{schoolWinners.length}</span>
-                </div>
-                <div className="ns-notification-list">
-                  {schoolWinners.length > 0 ? (
-                    schoolWinners.slice(0, 5).map((winner: any) => (
-                      <div className="ns-notification-item" key={winner.id}>
-                        <strong>{winner.place} place</strong>
-                        <p>{winner.student_name} - {formatMoney(winner.scholarship_amount)}</p>
-                        <span>{winner.published_at || winner.announced_at || 'Published'}</span>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="ns-muted">No winners published for this school yet.</p>
-                  )}
-                </div>
-              </article>
-              <article className="glass ns-dash-card reveal in" hidden={dashboardTab !== 'notifications'}>
-                <div className="ns-dash-card__head">
-                  <span className="eyebrow">Notifications</span>
-                  <span className="ns-board__badge">{schoolUnreadNotifications.length} unread</span>
-                </div>
-                <div className="ns-notification-list">
-                  {schoolNotifications.length > 0 ? (
-                    schoolNotifications.slice(0, 5).map((item: any) => (
-                      <div className={`ns-notification-item ${item.is_read ? '' : 'is-unread'}`} key={item.id}>
-                        <strong>{item.title}</strong>
-                        <p>{item.message}</p>
-                        <span>{item.created_at}</span>
-                        {!item.is_read && (
-                          <button className="ns-notification-action" type="button" onClick={() => markNotificationRead(item.id)}>
-                            Mark as read
+              <div className="ns-review-grid" hidden={dashboardTab !== 'reviews'}>
+                <article className="glass ns-dash-card reveal in">
+                  <div className="ns-dash-card__head">
+                    <span className="eyebrow">Submissions Queue</span>
+                    <span className="ns-board__badge">{schoolReviewQueue.length}</span>
+                  </div>
+                  <div className="ns-review-queue">
+                    {schoolReviewQueue.length > 0 ? (
+                      schoolReviewQueue.map((row: any) => (
+                        <div
+                          className={`ns-review-queue__item ${String(schoolSelectedSubmission?.id || '') === String(row.id) ? 'is-active' : ''}`}
+                          key={row.id}
+                        >
+                          <div className="ns-review-queue__head">
+                            <strong>#{row.id} {row.student_name}</strong>
+                            <span>{row.status}</span>
+                          </div>
+                          <p>{clipText(row.problem_identified, 95)}</p>
+                          <div className="ns-review-queue__meta">
+                            <span>{row.source_business_name || '-'}</span>
+                            <span>{row.score ?? '-'}</span>
+                            <span>{row.rank_position ?? '-'}</span>
+                          </div>
+                          <button className="btn btn--sm" type="button" onClick={() => setSchoolSubmissionReviewId(String(row.id))}>
+                            Load Review
                           </button>
-                        )}
-                      </div>
-                    ))
-                  ) : (
-                    <p className="ns-muted">No school notifications yet.</p>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="ns-muted">No submissions waiting for review.</p>
+                    )}
+                  </div>
+                </article>
+
+                <form className="glass ns-form ns-form--compact reveal in" onSubmit={submitSubmissionReview}>
+                  <div className="ns-form__head">
+                    <span className="eyebrow">Submission Review</span>
+                    <h3>Approve or reject problem and solution submissions</h3>
+                    <p>Principal can review the submission list before final publishing.</p>
+                  </div>
+                  {schoolSelectedSubmission && (
+                    <div className="ns-submission-summary">
+                      <strong>Selected Submission</strong>
+                      <p>
+                        #{schoolSelectedSubmission.id} - {schoolSelectedSubmission.student_name}
+                      </p>
+                      <p>{schoolSelectedSubmission.source_business_name || 'No business attached yet'}</p>
+                    </div>
                   )}
-                </div>
-              </article>
+                  <div className="ns-field-grid">
+                    <label className="ns-field ns-field--full">
+                      <span>Submission</span>
+                      <select
+                        name="submission_id"
+                        value={schoolSubmissionReviewId || String(schoolSubmissions[0]?.id || '')}
+                        onChange={(event) => setSchoolSubmissionReviewId(event.target.value)}
+                        required
+                      >
+                        <option value="">Select submission</option>
+                        {schoolSubmissions.map((row: any) => (
+                          <option key={row.id} value={row.id}>
+                            #{row.id} - {row.student_name} - {row.status}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="ns-field">
+                      <span>Status</span>
+                      <select name="status" defaultValue="approved">
+                        <option value="approved">Approved</option>
+                        <option value="rejected">Rejected</option>
+                      </select>
+                    </label>
+                    <label className="ns-field">
+                      <span>Score</span>
+                      <input name="score" type="number" min="0" step="0.01" placeholder="Optional" />
+                    </label>
+                    <label className="ns-field">
+                      <span>Rank Position</span>
+                      <input name="rank_position" type="number" min="1" max="3" placeholder="Optional" />
+                    </label>
+                    <label className="ns-field ns-field--full">
+                      <span>Reviewer Notes</span>
+                      <textarea name="reviewer_notes" rows={3} placeholder="Optional review notes" />
+                    </label>
+                  </div>
+                  <button className="btn btn--solid" type="submit" disabled={busy === 'submission-review'}>
+                    {busy === 'submission-review' ? 'Saving...' : 'Save Submission Review'}
+                  </button>
+                </form>
+              </div>
+
+              <div className="ns-alert-grid" hidden={dashboardTab !== 'notifications'}>
+                <article className="glass ns-dash-card reveal in">
+                  <div className="ns-dash-card__head">
+                    <span className="eyebrow">School Winners</span>
+                    <span className="ns-board__badge">{schoolWinnersQueue.length}</span>
+                  </div>
+                  <div className="ns-notification-list">
+                    {schoolWinnersQueue.length > 0 ? (
+                      schoolWinnersQueue.map((winner: any) => (
+                        <div className="ns-notification-item" key={winner.id}>
+                          <strong>{winner.place} place</strong>
+                          <p>{winner.student_name} - {formatMoney(winner.scholarship_amount)}</p>
+                          <span>{winner.published_at || winner.announced_at || 'Published'}</span>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="ns-muted">No winners published for this school yet.</p>
+                    )}
+                  </div>
+                </article>
+                <article className="glass ns-dash-card reveal in">
+                  <div className="ns-dash-card__head">
+                    <span className="eyebrow">Notifications</span>
+                    <span className="ns-board__badge">{schoolUnreadNotifications.length} unread</span>
+                  </div>
+                  <div className="ns-notification-list">
+                    {schoolNotifications.length > 0 ? (
+                      schoolNotifications.slice(0, 5).map((item: any) => (
+                        <div className={`ns-notification-item ${item.is_read ? '' : 'is-unread'}`} key={item.id}>
+                          <strong>{item.title}</strong>
+                          <p>{item.message}</p>
+                          <span>{item.created_at}</span>
+                          {!item.is_read && (
+                            <button className="ns-notification-action" type="button" onClick={() => markNotificationRead(item.id)}>
+                              Mark as read
+                            </button>
+                          )}
+                        </div>
+                      ))
+                    ) : (
+                      <p className="ns-muted">No school notifications yet.</p>
+                    )}
+                  </div>
+                </article>
+              </div>
             </div>
               )}
 
               {teacherDashboard && (
-            <div className="ns-dash-grid" hidden={dashboardTab !== 'overview'}>
+            <div className="ns-dash-grid">
               <article className="glass ns-dash-card ns-dash-card--wide reveal in">
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">Teacher Dashboard</span>
@@ -2354,9 +2538,26 @@ export default function NewSchool() {
                   <p>Progress toward the Community Leadership Educator Award.</p>
                 </div>
                 <div className="ns-actions">
-                  <button className="btn btn--sm btn--solid" type="button" onClick={() => setDashboardTab('approvals')}>Review Approvals</button>
-                  <button className="btn btn--sm" type="button" onClick={() => setDashboardTab('reviews')}>Open Reviews</button>
-                  <button className="btn btn--sm" type="button" onClick={() => setDashboardTab('rankings')}>View Rankings</button>
+                  <button className="btn btn--sm" type="button" onClick={() => openDashboardTab('profile')}>View Profile</button>
+                  <button className="btn btn--sm btn--solid" type="button" onClick={() => openDashboardTab('approvals')}>Review Approvals</button>
+                  <button className="btn btn--sm" type="button" onClick={() => openDashboardTab('reviews')}>Open Reviews</button>
+                  <button className="btn btn--sm" type="button" onClick={() => openDashboardTab('rankings')}>View Rankings</button>
+                </div>
+              </article>
+              <article className="glass ns-dash-card reveal in" hidden={dashboardTab !== 'profile'}>
+                <div className="ns-dash-card__head">
+                  <span className="eyebrow">Profile</span>
+                  <span className="ns-board__badge">{teacherDashboard.teacher.status || 'active'}</span>
+                </div>
+                <div className="ns-approval-stack">
+                  <div className="ns-approval-row"><strong>Teacher</strong><span>{teacherDashboard.teacher.teacher_full_name}</span></div>
+                  <div className="ns-approval-row"><strong>School</strong><span>{teacherDashboard.school?.school_name || teacherDashboard.teacher.linked_school_name || '-'}</span></div>
+                  <div className="ns-approval-row"><strong>Email</strong><span>{teacherDashboard.teacher.school_email || user?.email || '-'}</span></div>
+                  <div className="ns-approval-row"><strong>Role</strong><span>{teacherDashboard.teacher.role_department || 'Teacher'}</span></div>
+                </div>
+                <div className="ns-actions">
+                  <button className="btn btn--sm btn--solid" type="button" onClick={() => openDashboardTab('approvals')}>Open Approvals</button>
+                  <button className="btn btn--sm" type="button" onClick={() => openDashboardTab('rankings')}>View Rankings</button>
                 </div>
               </article>
               <form className="glass ns-form ns-form--compact reveal in" onSubmit={submitTeacherApproval} hidden={dashboardTab !== 'approvals'}>
@@ -2826,7 +3027,7 @@ export default function NewSchool() {
               )}
 
               {adminDashboard && (
-            <div className="ns-dash-grid" hidden={dashboardTab !== 'overview'}>
+            <div className="ns-dash-grid">
               <article className="glass ns-dash-card ns-dash-card--wide reveal in">
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">Admin Dashboard</span>
@@ -2857,6 +3058,9 @@ export default function NewSchool() {
                   ))}
                 </div>
                 <div className="ns-actions">
+                  <button className="btn btn--sm" type="button" onClick={() => openDashboardTab('profile')}>
+                    View Profile
+                  </button>
                   {['students', 'parents', 'schools', 'teachers', 'businesses', 'submissions', 'winners', 'approvals', 'notifications'].map((type) => (
                     <button key={type} className="btn btn--sm" type="button" onClick={() => exportCsv(type)} disabled={busy === `export-${type}`}>
                       {busy === `export-${type}` ? `Exporting ${type}...` : `Export ${type}`}
@@ -2880,6 +3084,23 @@ export default function NewSchool() {
                   <div><span>Eligible</span><strong>{adminStudentSummary.eligible_to_submit || 0}</strong></div>
                   <div><span>Submitted</span><strong>{adminStudentSummary.submitted || 0}</strong></div>
                   <div><span>Interviews</span><strong>{adminStudentSummary.interviews_total || 0}</strong></div>
+                </div>
+              </article>
+
+              <article className="glass ns-dash-card reveal in" hidden={dashboardTab !== 'profile'}>
+                <div className="ns-dash-card__head">
+                  <span className="eyebrow">Profile</span>
+                  <span className="ns-board__badge">{user?.role || 'admin'}</span>
+                </div>
+                <div className="ns-approval-stack">
+                  <div className="ns-approval-row"><strong>User</strong><span>{user?.full_name || '-'}</span></div>
+                  <div className="ns-approval-row"><strong>Email</strong><span>{user?.email || '-'}</span></div>
+                  <div className="ns-approval-row"><strong>Access</strong><span>Schools, teachers, students, approvals, results</span></div>
+                  <div className="ns-approval-row"><strong>Mode</strong><span>Platform admin and review control</span></div>
+                </div>
+                <div className="ns-actions">
+                  <button className="btn btn--sm btn--solid" type="button" onClick={() => openDashboardTab('data')}>Open Data</button>
+                  <button className="btn btn--sm" type="button" onClick={() => openDashboardTab('rankings')}>View Rankings</button>
                 </div>
               </article>
 
