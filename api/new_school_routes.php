@@ -73,6 +73,108 @@ function new_school_upsert_user_account(string $fullName, string $email, string 
     return $user;
 }
 
+/* ---- Records CRUD helpers (role-scoped: admin / school / teacher / student / parent) ---- */
+function ns_manage_require_user(): array
+{
+    $user = require_login();
+    if (!in_array($user['role'], ['student', 'parent', 'school', 'teacher', 'admin', 'super_admin', 'editor'], true)) {
+        json(['error' => 'This action requires a New School account.'], 403);
+    }
+    return $user;
+}
+
+/**
+ * Resolve the access scope for the signed-in user. Returns:
+ *   ['kind' => 'admin']                                       full access
+ *   ['kind' => 'school',  'school_id'  => int]                this school only
+ *   ['kind' => 'teacher', 'teacher_id' => int, 'school_id'=>int]  this teacher's class
+ *   ['kind' => 'student', 'student_id' => int]                this student only
+ *   ['kind' => 'parent',  'student_id' => int]                the linked student only
+ */
+function ns_manage_scope(array $user): array
+{
+    $role = (string) $user['role'];
+    if (in_array($role, ['admin', 'super_admin', 'editor'], true)) {
+        return ['kind' => 'admin'];
+    }
+    if ($role === 'school') {
+        $school = new_school_fetch_school_by_user_id((int) $user['id']);
+        if (!$school) {
+            json(['error' => 'No school is linked to this account.'], 403);
+        }
+        return ['kind' => 'school', 'school_id' => (int) $school['id']];
+    }
+    if ($role === 'teacher') {
+        $teacher = new_school_fetch_teacher_by_user_id((int) $user['id']);
+        if (!$teacher) {
+            json(['error' => 'No teacher profile is linked to this account.'], 403);
+        }
+        return ['kind' => 'teacher', 'teacher_id' => (int) $teacher['id'], 'school_id' => (int) $teacher['school_id']];
+    }
+    if ($role === 'student') {
+        $student = new_school_fetch_student_by_user_id((int) $user['id']);
+        if (!$student) {
+            json(['error' => 'No student profile is linked to this account.'], 403);
+        }
+        return ['kind' => 'student', 'student_id' => (int) $student['id']];
+    }
+    if ($role === 'parent') {
+        $parent = new_school_fetch_parent_by_user_id((int) $user['id']);
+        if (!$parent) {
+            json(['error' => 'No parent profile is linked to this account.'], 403);
+        }
+        return ['kind' => 'parent', 'student_id' => (int) $parent['student_id']];
+    }
+    json(['error' => 'This action is not allowed for your account.'], 403);
+}
+
+function ns_manage_assert_student(array $student, array $scope): void
+{
+    switch ($scope['kind']) {
+        case 'admin':
+            return;
+        case 'school':
+            if ((int) ($student['school_id'] ?? 0) === (int) $scope['school_id']) return;
+            break;
+        case 'teacher':
+            if ((int) ($student['teacher_id'] ?? 0) === (int) $scope['teacher_id']) return;
+            break;
+        case 'student':
+        case 'parent':
+            if ((int) ($student['id'] ?? 0) === (int) $scope['student_id']) return;
+            break;
+    }
+    json(['error' => 'This record is outside your access.'], 403);
+}
+
+// Whether the scope may create/delete a whole record of the given entity.
+function ns_manage_can_write_entity(array $scope, string $entity, string $op): bool
+{
+    $kind = $scope['kind'];
+    if ($kind === 'admin') return true;
+    if ($kind === 'school') return true; // principal manages everything in the school
+    if ($kind === 'teacher') {
+        // teacher manages their students + those students' interviews/approvals/submissions
+        return in_array($entity, ['student', 'interview', 'approval', 'submission'], true);
+    }
+    if ($kind === 'student' || $kind === 'parent') {
+        // self-service: own interviews + submission only (no create/delete of people/approvals)
+        return in_array($entity, ['interview', 'submission'], true);
+    }
+    return false;
+}
+
+function ns_manage_random_password(): string
+{
+    return 'Ns!' . bin2hex(random_bytes(6)) . 'A1';
+}
+
+function ns_manage_bool(array $body, string $key): int
+{
+    $v = $body[$key] ?? false;
+    return ($v === true || $v === 1 || $v === '1' || $v === 'true' || $v === 'yes') ? 1 : 0;
+}
+
 function new_school_build_student_context(array $student): array
 {
     $refreshed = new_school_refresh_student_status((int) $student['id']);
@@ -2541,6 +2643,494 @@ function new_school_handle_route(string $method, string $route): bool
                 }
                 json(['error' => app_debug() ? $e->getMessage() : 'Unable to publish winners.'], 500);
             }
+        }
+
+        /* =================== Records CRUD (school principal + admin) =================== */
+
+        // ----- Students -----
+        case $key === 'POST new-school/manage/student': {
+            $user = ns_manage_require_user();
+            $scope = ns_manage_scope($user);
+            if (!ns_manage_can_write_entity($scope, 'student', 'create')) {
+                json(['error' => 'Your role cannot create student records.'], 403);
+            }
+            $fullName = field($body, 'full_name');
+            $email = require_email(field($body, 'email'));
+            if ($fullName === '' || $email === '') {
+                json(['error' => 'Student name and email are required.'], 422);
+            }
+            $schoolId = $scope['school_id'] ?? (((int) ($body['school_id'] ?? 0)) ?: null);
+            $school = $schoolId ? new_school_fetch_school_by_id($schoolId) : null;
+            $schoolName = $school ? (string) $school['school_name'] : field($body, 'school_name');
+            $teacherId = ((int) ($body['teacher_id'] ?? 0)) ?: null;
+            if ($scope['kind'] === 'teacher') {
+                $teacherId = (int) $scope['teacher_id']; // a teacher always creates into their own class
+            }
+            if ($teacherId) {
+                $teacher = new_school_fetch_teacher_by_id($teacherId);
+                if (!$teacher || ($schoolId && (int) $teacher['school_id'] !== (int) $schoolId)) {
+                    json(['error' => 'Selected teacher is not part of your school.'], 422);
+                }
+            }
+            $password = field($body, 'password') ?: ns_manage_random_password();
+            $account = new_school_upsert_user_account($fullName, $email, $password, 'student');
+            $pdo = db();
+            $pdo->prepare('UPDATE users SET approval_status = "approved" WHERE id = ?')->execute([(int) $account['id']]);
+            $exists = $pdo->prepare('SELECT id FROM new_school_students WHERE user_id = ? LIMIT 1');
+            $exists->execute([(int) $account['id']]);
+            if ($exists->fetch()) {
+                json(['error' => 'A student record already exists for this email.'], 409);
+            }
+            $participantId = new_school_generate_participant_id();
+            $qrToken = new_school_generate_qr_token();
+            $qrUrl = new_school_qr_url($qrToken);
+            $username = field($body, 'student_username') ?: ('stu_' . strtolower(bin2hex(random_bytes(4))));
+            $insert = $pdo->prepare(
+                'INSERT INTO new_school_students (
+                    user_id, school_id, teacher_id, participant_id, qr_token, qr_url,
+                    full_name, student_username, age, date_of_birth, email, phone_number,
+                    home_address, school_name, grade_level, parent_name, parent_phone, parent_email,
+                    parent_consent_status, school_approval_status, teacher_approval_status, submission_status, overall_status
+                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "pending", "pending", "pending", "locked", "student_registered")'
+            );
+            $insert->execute([
+                (int) $account['id'], $schoolId, $teacherId, $participantId, $qrToken, $qrUrl,
+                $fullName, $username, (int) ($body['age'] ?? 0), field($body, 'date_of_birth') ?: '2010-01-01',
+                $email, field($body, 'phone_number'), field($body, 'home_address'), $schoolName,
+                field($body, 'grade_level'), field($body, 'parent_name'), field($body, 'parent_phone'), field($body, 'parent_email'),
+            ]);
+            $studentId = (int) $pdo->lastInsertId();
+            $student = new_school_refresh_student_status($studentId) ?: new_school_fetch_student_by_id($studentId);
+            json(['message' => 'Student created.', 'student' => $student], 201);
+        }
+
+        case $method === 'PUT' && preg_match('#^new-school/manage/student/(\d+)$#', $route, $m) === 1: {
+            $user = ns_manage_require_user();
+            $scope = ns_manage_scope($user);
+            $student = new_school_fetch_student_by_id((int) $m[1]);
+            if (!$student) {
+                json(['error' => 'Student not found.'], 404);
+            }
+            ns_manage_assert_student($student, $scope);
+            $fields = [];
+            $values = [];
+            $textMap = [
+                'full_name' => 'full_name', 'email' => 'email', 'phone_number' => 'phone_number',
+                'home_address' => 'home_address', 'grade_level' => 'grade_level',
+                'parent_name' => 'parent_name', 'parent_phone' => 'parent_phone', 'parent_email' => 'parent_email',
+            ];
+            foreach ($textMap as $bk => $col) {
+                if (array_key_exists($bk, $body)) { $fields[] = "$col = ?"; $values[] = field($body, $bk); }
+            }
+            if (array_key_exists('age', $body)) { $fields[] = 'age = ?'; $values[] = (int) $body['age']; }
+            if (array_key_exists('date_of_birth', $body) && field($body, 'date_of_birth') !== '') { $fields[] = 'date_of_birth = ?'; $values[] = field($body, 'date_of_birth'); }
+            $scopeSchool = $scope['school_id'] ?? null;
+            $canApprove = in_array($scope['kind'], ['admin', 'school', 'teacher'], true);
+            if ($canApprove && array_key_exists('teacher_id', $body)) {
+                $tid = ((int) ($body['teacher_id'] ?? 0)) ?: null;
+                if ($tid) {
+                    $t = new_school_fetch_teacher_by_id($tid);
+                    if (!$t || ($scopeSchool !== null && (int) $t['school_id'] !== (int) $scopeSchool)) { json(['error' => 'Invalid teacher.'], 422); }
+                }
+                $fields[] = 'teacher_id = ?'; $values[] = $tid;
+            }
+            if ($canApprove) {
+                foreach (['parent_consent_status', 'school_approval_status', 'teacher_approval_status'] as $sc) {
+                    if (array_key_exists($sc, $body)) {
+                        $sv = field($body, $sc);
+                        if (!in_array($sv, ['pending', 'approved', 'rejected'], true)) { json(['error' => 'Invalid status.'], 422); }
+                        $fields[] = "$sc = ?"; $values[] = $sv;
+                    }
+                }
+                if (array_key_exists('submission_status', $body)) {
+                    $sv = field($body, 'submission_status');
+                    if (!in_array($sv, ['locked', 'eligible', 'submitted', 'complete'], true)) { json(['error' => 'Invalid submission status.'], 422); }
+                    $fields[] = 'submission_status = ?'; $values[] = $sv;
+                }
+            }
+            if (!$fields) {
+                json(['error' => 'No changes provided.'], 422);
+            }
+            $fields[] = 'updated_at = NOW()';
+            $values[] = (int) $student['id'];
+            db()->prepare('UPDATE new_school_students SET ' . implode(', ', $fields) . ' WHERE id = ?')->execute($values);
+            $fresh = new_school_refresh_student_status((int) $student['id']) ?: new_school_fetch_student_by_id((int) $student['id']);
+            json(['message' => 'Student updated.', 'student' => $fresh]);
+        }
+
+        case $method === 'DELETE' && preg_match('#^new-school/manage/student/(\d+)$#', $route, $m) === 1: {
+            $user = ns_manage_require_user();
+            $scope = ns_manage_scope($user);
+            if (!ns_manage_can_write_entity($scope, 'student', 'delete')) {
+                json(['error' => 'Your role cannot delete student records.'], 403);
+            }
+            $student = new_school_fetch_student_by_id((int) $m[1]);
+            if (!$student) {
+                json(['error' => 'Student not found.'], 404);
+            }
+            ns_manage_assert_student($student, $scope);
+            db()->prepare('DELETE FROM new_school_students WHERE id = ?')->execute([(int) $student['id']]);
+            db()->prepare('DELETE FROM users WHERE id = ? AND role = "student"')->execute([(int) $student['user_id']]);
+            json(['message' => 'Student deleted.']);
+        }
+
+        // ----- Teachers -----
+        case $key === 'POST new-school/manage/teacher': {
+            $user = ns_manage_require_user();
+            $scope = ns_manage_scope($user);
+            if (!ns_manage_can_write_entity($scope, 'teacher', 'create')) {
+                json(['error' => 'Only a principal or admin can add teachers.'], 403);
+            }
+            $name = field($body, 'teacher_full_name') ?: field($body, 'full_name');
+            $email = require_email(field($body, 'school_email') ?: field($body, 'email'));
+            if ($name === '' || $email === '') {
+                json(['error' => 'Teacher name and email are required.'], 422);
+            }
+            $schoolId = $scope['school_id'] ?? 0;
+            if (!$schoolId) {
+                $schoolId = (int) ($body['school_id'] ?? 0);
+                if (!$schoolId) { json(['error' => 'school_id is required.'], 422); }
+            }
+            $password = field($body, 'password') ?: ns_manage_random_password();
+            $account = new_school_upsert_user_account($name, $email, $password, 'teacher');
+            $pdo = db();
+            $pdo->prepare('UPDATE users SET approval_status = "approved" WHERE id = ?')->execute([(int) $account['id']]);
+            $exists = $pdo->prepare('SELECT id FROM new_school_teachers WHERE user_id = ? LIMIT 1');
+            $exists->execute([(int) $account['id']]);
+            if ($exists->fetch()) {
+                json(['error' => 'A teacher record already exists for this email.'], 409);
+            }
+            $insert = $pdo->prepare(
+                'INSERT INTO new_school_teachers (user_id, school_id, teacher_full_name, school_email, phone_number, role_department, grade_level_supported, status)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, "approved")'
+            );
+            $insert->execute([
+                (int) $account['id'], $schoolId, $name, $email, field($body, 'phone_number'),
+                field($body, 'role_department') ?: 'Teacher', field($body, 'grade_level_supported') ?: '9-12',
+            ]);
+            json(['message' => 'Teacher created.', 'teacher' => new_school_fetch_teacher_by_id((int) $pdo->lastInsertId())], 201);
+        }
+
+        case $method === 'PUT' && preg_match('#^new-school/manage/teacher/(\d+)$#', $route, $m) === 1: {
+            $user = ns_manage_require_user();
+            $scope = ns_manage_scope($user);
+            if (!ns_manage_can_write_entity($scope, 'teacher', 'update')) {
+                json(['error' => 'Only a principal or admin can edit teachers.'], 403);
+            }
+            $teacher = new_school_fetch_teacher_by_id((int) $m[1]);
+            if (!$teacher) {
+                json(['error' => 'Teacher not found.'], 404);
+            }
+            $scopeSchool = $scope['school_id'] ?? null;
+            if ($scopeSchool !== null && (int) $teacher['school_id'] !== (int) $scopeSchool) {
+                json(['error' => 'This record does not belong to your school.'], 403);
+            }
+            $fields = [];
+            $values = [];
+            $map = ['teacher_full_name' => 'teacher_full_name', 'school_email' => 'school_email', 'phone_number' => 'phone_number', 'role_department' => 'role_department', 'grade_level_supported' => 'grade_level_supported'];
+            foreach ($map as $bk => $col) {
+                if (array_key_exists($bk, $body)) { $fields[] = "$col = ?"; $values[] = field($body, $bk); }
+            }
+            if (array_key_exists('status', $body)) {
+                $sv = field($body, 'status');
+                if (!in_array($sv, ['registered', 'approved', 'rejected'], true)) { json(['error' => 'Invalid status.'], 422); }
+                $fields[] = 'status = ?'; $values[] = $sv;
+            }
+            if (!$fields) {
+                json(['error' => 'No changes provided.'], 422);
+            }
+            $fields[] = 'updated_at = NOW()';
+            $values[] = (int) $teacher['id'];
+            db()->prepare('UPDATE new_school_teachers SET ' . implode(', ', $fields) . ' WHERE id = ?')->execute($values);
+            if (array_key_exists('status', $body)) {
+                db()->prepare('UPDATE users SET approval_status = ? WHERE id = ?')->execute([field($body, 'status'), (int) $teacher['user_id']]);
+            }
+            json(['message' => 'Teacher updated.', 'teacher' => new_school_fetch_teacher_by_id((int) $teacher['id'])]);
+        }
+
+        case $method === 'DELETE' && preg_match('#^new-school/manage/teacher/(\d+)$#', $route, $m) === 1: {
+            $user = ns_manage_require_user();
+            $scope = ns_manage_scope($user);
+            if (!ns_manage_can_write_entity($scope, 'teacher', 'delete')) {
+                json(['error' => 'Only a principal or admin can remove teachers.'], 403);
+            }
+            $teacher = new_school_fetch_teacher_by_id((int) $m[1]);
+            if (!$teacher) {
+                json(['error' => 'Teacher not found.'], 404);
+            }
+            $scopeSchool = $scope['school_id'] ?? null;
+            if ($scopeSchool !== null && (int) $teacher['school_id'] !== (int) $scopeSchool) {
+                json(['error' => 'This record does not belong to your school.'], 403);
+            }
+            db()->prepare('DELETE FROM new_school_teachers WHERE id = ?')->execute([(int) $teacher['id']]);
+            db()->prepare('DELETE FROM users WHERE id = ? AND role = "teacher"')->execute([(int) $teacher['user_id']]);
+            json(['message' => 'Teacher deleted.']);
+        }
+
+        // ----- Interviews (business) -----
+        case $key === 'POST new-school/manage/interview': {
+            $user = ns_manage_require_user();
+            $scope = ns_manage_scope($user);
+            $studentId = (int) ($body['student_id'] ?? 0);
+            $student = $studentId ? new_school_fetch_student_by_id($studentId) : null;
+            if (!$student) {
+                json(['error' => 'Select a valid student.'], 422);
+            }
+            ns_manage_assert_student($student, $scope);
+            $visit = ((int) ($body['visit_number'] ?? 0)) ?: 1;
+            $pdo = db();
+            $dup = $pdo->prepare('SELECT id FROM new_school_business_interviews WHERE student_id = ? AND visit_number = ?');
+            $dup->execute([$studentId, $visit]);
+            if ($dup->fetch()) {
+                json(['error' => 'A visit with this number already exists for the student.'], 409);
+            }
+            $insert = $pdo->prepare(
+                'INSERT INTO new_school_business_interviews (student_id, visit_number, business_name, owner_name, business_phone, business_address, business_category, date_of_visit, has_website, has_google_profile, uses_social_media, uses_digital_signage, offers_rewards, has_online_ordering, has_delivery_options, main_challenge, student_notes)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+            );
+            $insert->execute([
+                $studentId, $visit, field($body, 'business_name'), field($body, 'owner_name'), field($body, 'business_phone'),
+                field($body, 'business_address'), field($body, 'business_category'), field($body, 'date_of_visit') ?: date('Y-m-d'),
+                ns_manage_bool($body, 'has_website'), ns_manage_bool($body, 'has_google_profile'), ns_manage_bool($body, 'uses_social_media'),
+                ns_manage_bool($body, 'uses_digital_signage'), ns_manage_bool($body, 'offers_rewards'), ns_manage_bool($body, 'has_online_ordering'),
+                ns_manage_bool($body, 'has_delivery_options'), field($body, 'main_challenge'), field($body, 'student_notes'),
+            ]);
+            $interviewId = (int) $pdo->lastInsertId();
+            new_school_refresh_student_status($studentId);
+            json(['message' => 'Interview created.', 'id' => $interviewId], 201);
+        }
+
+        case $method === 'PUT' && preg_match('#^new-school/manage/interview/(\d+)$#', $route, $m) === 1: {
+            $user = ns_manage_require_user();
+            $scope = ns_manage_scope($user);
+            $pdo = db();
+            $row = $pdo->prepare('SELECT * FROM new_school_business_interviews WHERE id = ?');
+            $row->execute([(int) $m[1]]);
+            $iv = $row->fetch();
+            if (!$iv) {
+                json(['error' => 'Interview not found.'], 404);
+            }
+            $student = new_school_fetch_student_by_id((int) $iv['student_id']);
+            if ($student) { ns_manage_assert_student($student, $scope); }
+            $fields = [];
+            $values = [];
+            $map = ['business_name' => 'business_name', 'owner_name' => 'owner_name', 'business_phone' => 'business_phone', 'business_address' => 'business_address', 'business_category' => 'business_category', 'main_challenge' => 'main_challenge', 'student_notes' => 'student_notes'];
+            foreach ($map as $bk => $col) {
+                if (array_key_exists($bk, $body)) { $fields[] = "$col = ?"; $values[] = field($body, $bk); }
+            }
+            if (array_key_exists('date_of_visit', $body) && field($body, 'date_of_visit') !== '') { $fields[] = 'date_of_visit = ?'; $values[] = field($body, 'date_of_visit'); }
+            if (array_key_exists('visit_number', $body)) { $fields[] = 'visit_number = ?'; $values[] = (int) $body['visit_number']; }
+            foreach (['has_website', 'has_google_profile', 'uses_social_media', 'uses_digital_signage', 'offers_rewards', 'has_online_ordering', 'has_delivery_options'] as $bk) {
+                if (array_key_exists($bk, $body)) { $fields[] = "$bk = ?"; $values[] = ns_manage_bool($body, $bk); }
+            }
+            if (!$fields) {
+                json(['error' => 'No changes provided.'], 422);
+            }
+            $fields[] = 'updated_at = NOW()';
+            $values[] = (int) $iv['id'];
+            $pdo->prepare('UPDATE new_school_business_interviews SET ' . implode(', ', $fields) . ' WHERE id = ?')->execute($values);
+            json(['message' => 'Interview updated.']);
+        }
+
+        case $method === 'DELETE' && preg_match('#^new-school/manage/interview/(\d+)$#', $route, $m) === 1: {
+            $user = ns_manage_require_user();
+            $scope = ns_manage_scope($user);
+            $pdo = db();
+            $row = $pdo->prepare('SELECT * FROM new_school_business_interviews WHERE id = ?');
+            $row->execute([(int) $m[1]]);
+            $iv = $row->fetch();
+            if (!$iv) {
+                json(['error' => 'Interview not found.'], 404);
+            }
+            $student = new_school_fetch_student_by_id((int) $iv['student_id']);
+            if ($student) { ns_manage_assert_student($student, $scope); }
+            $pdo->prepare('DELETE FROM new_school_business_interviews WHERE id = ?')->execute([(int) $iv['id']]);
+            new_school_refresh_student_status((int) $iv['student_id']);
+            json(['message' => 'Interview deleted.']);
+        }
+
+        // ----- Approvals -----
+        case $key === 'POST new-school/manage/approval': {
+            $user = ns_manage_require_user();
+            $scope = ns_manage_scope($user);
+            if (!ns_manage_can_write_entity($scope, 'approval', 'create')) {
+                json(['error' => 'Your role cannot record approvals.'], 403);
+            }
+            $studentId = (int) ($body['student_id'] ?? 0);
+            $student = $studentId ? new_school_fetch_student_by_id($studentId) : null;
+            if (!$student) {
+                json(['error' => 'Select a valid student.'], 422);
+            }
+            ns_manage_assert_student($student, $scope);
+            $type = field($body, 'approval_type');
+            if (!in_array($type, ['school', 'teacher'], true)) {
+                json(['error' => 'Invalid approval type.'], 422);
+            }
+            $status = field($body, 'status') ?: 'approved';
+            if (!in_array($status, ['pending', 'approved', 'rejected'], true)) {
+                json(['error' => 'Invalid status.'], 422);
+            }
+            $pdo = db();
+            $approvedAt = in_array($status, ['approved', 'rejected'], true) ? date('Y-m-d H:i:s') : null;
+            $stmt = $pdo->prepare(
+                'INSERT INTO new_school_approvals (student_id, approval_type, reviewer_user_id, reviewer_name, reviewer_email, reviewer_role, status, notes, digital_signature, approved_at, recorded_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+                 ON DUPLICATE KEY UPDATE reviewer_user_id=VALUES(reviewer_user_id), reviewer_name=VALUES(reviewer_name), reviewer_email=VALUES(reviewer_email), reviewer_role=VALUES(reviewer_role), status=VALUES(status), notes=VALUES(notes), digital_signature=VALUES(digital_signature), approved_at=VALUES(approved_at), updated_at=NOW()'
+            );
+            $stmt->execute([
+                $studentId, $type, (int) $user['id'], field($body, 'reviewer_name') ?: (string) $user['full_name'],
+                field($body, 'reviewer_email') ?: (string) $user['email'], field($body, 'reviewer_role') ?: ucfirst($type),
+                $status, field($body, 'notes') ?: null, field($body, 'digital_signature') ?: (string) $user['full_name'], $approvedAt,
+            ]);
+            $col = $type === 'school' ? 'school_approval_status' : 'teacher_approval_status';
+            $pdo->prepare("UPDATE new_school_students SET $col = ?, updated_at = NOW() WHERE id = ?")->execute([$status, $studentId]);
+            new_school_refresh_student_status($studentId);
+            json(['message' => 'Approval saved.'], 201);
+        }
+
+        case $method === 'PUT' && preg_match('#^new-school/manage/approval/(\d+)$#', $route, $m) === 1: {
+            $user = ns_manage_require_user();
+            $scope = ns_manage_scope($user);
+            if (!ns_manage_can_write_entity($scope, 'approval', 'update')) {
+                json(['error' => 'Your role cannot edit approvals.'], 403);
+            }
+            $pdo = db();
+            $row = $pdo->prepare('SELECT * FROM new_school_approvals WHERE id = ?');
+            $row->execute([(int) $m[1]]);
+            $ap = $row->fetch();
+            if (!$ap) {
+                json(['error' => 'Approval not found.'], 404);
+            }
+            $student = new_school_fetch_student_by_id((int) $ap['student_id']);
+            if ($student) { ns_manage_assert_student($student, $scope); }
+            $status = array_key_exists('status', $body) ? field($body, 'status') : (string) $ap['status'];
+            if (!in_array($status, ['pending', 'approved', 'rejected'], true)) {
+                json(['error' => 'Invalid status.'], 422);
+            }
+            $approvedAt = in_array($status, ['approved', 'rejected'], true) ? date('Y-m-d H:i:s') : null;
+            $pdo->prepare('UPDATE new_school_approvals SET status = ?, notes = ?, reviewer_name = ?, digital_signature = ?, approved_at = ?, updated_at = NOW() WHERE id = ?')
+                ->execute([
+                    $status,
+                    array_key_exists('notes', $body) ? field($body, 'notes') : $ap['notes'],
+                    field($body, 'reviewer_name') ?: $ap['reviewer_name'],
+                    field($body, 'digital_signature') ?: $ap['digital_signature'],
+                    $approvedAt, (int) $ap['id'],
+                ]);
+            $col = $ap['approval_type'] === 'school' ? 'school_approval_status' : 'teacher_approval_status';
+            $pdo->prepare("UPDATE new_school_students SET $col = ?, updated_at = NOW() WHERE id = ?")->execute([$status, (int) $ap['student_id']]);
+            new_school_refresh_student_status((int) $ap['student_id']);
+            json(['message' => 'Approval updated.']);
+        }
+
+        case $method === 'DELETE' && preg_match('#^new-school/manage/approval/(\d+)$#', $route, $m) === 1: {
+            $user = ns_manage_require_user();
+            $scope = ns_manage_scope($user);
+            if (!ns_manage_can_write_entity($scope, 'approval', 'delete')) {
+                json(['error' => 'Your role cannot delete approvals.'], 403);
+            }
+            $pdo = db();
+            $row = $pdo->prepare('SELECT * FROM new_school_approvals WHERE id = ?');
+            $row->execute([(int) $m[1]]);
+            $ap = $row->fetch();
+            if (!$ap) {
+                json(['error' => 'Approval not found.'], 404);
+            }
+            $student = new_school_fetch_student_by_id((int) $ap['student_id']);
+            if ($student) { ns_manage_assert_student($student, $scope); }
+            $pdo->prepare('DELETE FROM new_school_approvals WHERE id = ?')->execute([(int) $ap['id']]);
+            $col = $ap['approval_type'] === 'school' ? 'school_approval_status' : 'teacher_approval_status';
+            $pdo->prepare("UPDATE new_school_students SET $col = 'pending', updated_at = NOW() WHERE id = ?")->execute([(int) $ap['student_id']]);
+            new_school_refresh_student_status((int) $ap['student_id']);
+            json(['message' => 'Approval deleted.']);
+        }
+
+        // ----- Submissions (projects) -----
+        case $key === 'POST new-school/manage/submission': {
+            $user = ns_manage_require_user();
+            $scope = ns_manage_scope($user);
+            $studentId = (int) ($body['student_id'] ?? 0);
+            $student = $studentId ? new_school_fetch_student_by_id($studentId) : null;
+            if (!$student) {
+                json(['error' => 'Select a valid student.'], 422);
+            }
+            ns_manage_assert_student($student, $scope);
+            $pdo = db();
+            $exists = $pdo->prepare('SELECT id FROM new_school_submissions WHERE student_id = ?');
+            $exists->execute([$studentId]);
+            if ($exists->fetch()) {
+                json(['error' => 'A submission already exists for this student.'], 409);
+            }
+            $status = field($body, 'status') ?: 'submitted';
+            if (!in_array($status, ['draft', 'submitted', 'approved', 'rejected', 'winner'], true)) {
+                json(['error' => 'Invalid status.'], 422);
+            }
+            $insert = $pdo->prepare(
+                'INSERT INTO new_school_submissions (student_id, source_business_id, problem_identified, why_it_matters, proposed_solution, how_it_helps, expected_impact, video_url, written_url, submission_date, status, score, rank_position)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?)'
+            );
+            $insert->execute([
+                $studentId, ((int) ($body['source_business_id'] ?? 0)) ?: null,
+                field($body, 'problem_identified'), field($body, 'why_it_matters'), field($body, 'proposed_solution'),
+                field($body, 'how_it_helps'), field($body, 'expected_impact'),
+                field($body, 'video_url') ?: null, field($body, 'written_url') ?: null,
+                $status, (($body['score'] ?? '') !== '' ? (float) $body['score'] : null), ((int) ($body['rank_position'] ?? 0)) ?: null,
+            ]);
+            $submissionId = (int) $pdo->lastInsertId();
+            new_school_refresh_student_status($studentId);
+            json(['message' => 'Submission created.', 'id' => $submissionId], 201);
+        }
+
+        case $method === 'PUT' && preg_match('#^new-school/manage/submission/(\d+)$#', $route, $m) === 1: {
+            $user = ns_manage_require_user();
+            $scope = ns_manage_scope($user);
+            $pdo = db();
+            $row = $pdo->prepare('SELECT * FROM new_school_submissions WHERE id = ?');
+            $row->execute([(int) $m[1]]);
+            $sub = $row->fetch();
+            if (!$sub) {
+                json(['error' => 'Submission not found.'], 404);
+            }
+            $student = new_school_fetch_student_by_id((int) $sub['student_id']);
+            if ($student) { ns_manage_assert_student($student, $scope); }
+            $fields = [];
+            $values = [];
+            $map = ['problem_identified' => 'problem_identified', 'why_it_matters' => 'why_it_matters', 'proposed_solution' => 'proposed_solution', 'how_it_helps' => 'how_it_helps', 'expected_impact' => 'expected_impact', 'video_url' => 'video_url', 'written_url' => 'written_url', 'reviewer_notes' => 'reviewer_notes'];
+            foreach ($map as $bk => $col) {
+                if (array_key_exists($bk, $body)) { $fields[] = "$col = ?"; $values[] = field($body, $bk); }
+            }
+            if (array_key_exists('status', $body)) {
+                $sv = field($body, 'status');
+                if (!in_array($sv, ['draft', 'submitted', 'approved', 'rejected', 'winner'], true)) { json(['error' => 'Invalid status.'], 422); }
+                $fields[] = 'status = ?'; $values[] = $sv;
+            }
+            if (array_key_exists('score', $body)) { $fields[] = 'score = ?'; $values[] = (($body['score'] !== '' && $body['score'] !== null) ? (float) $body['score'] : null); }
+            if (array_key_exists('rank_position', $body)) { $fields[] = 'rank_position = ?'; $values[] = ((int) ($body['rank_position'] ?? 0)) ?: null; }
+            if (array_key_exists('source_business_id', $body)) { $fields[] = 'source_business_id = ?'; $values[] = ((int) ($body['source_business_id'] ?? 0)) ?: null; }
+            if (!$fields) {
+                json(['error' => 'No changes provided.'], 422);
+            }
+            $fields[] = 'updated_at = NOW()';
+            $values[] = (int) $sub['id'];
+            $pdo->prepare('UPDATE new_school_submissions SET ' . implode(', ', $fields) . ' WHERE id = ?')->execute($values);
+            new_school_refresh_student_status((int) $sub['student_id']);
+            json(['message' => 'Submission updated.']);
+        }
+
+        case $method === 'DELETE' && preg_match('#^new-school/manage/submission/(\d+)$#', $route, $m) === 1: {
+            $user = ns_manage_require_user();
+            $scope = ns_manage_scope($user);
+            $pdo = db();
+            $row = $pdo->prepare('SELECT * FROM new_school_submissions WHERE id = ?');
+            $row->execute([(int) $m[1]]);
+            $sub = $row->fetch();
+            if (!$sub) {
+                json(['error' => 'Submission not found.'], 404);
+            }
+            $student = new_school_fetch_student_by_id((int) $sub['student_id']);
+            if ($student) { ns_manage_assert_student($student, $scope); }
+            $pdo->prepare('DELETE FROM new_school_submissions WHERE id = ?')->execute([(int) $sub['id']]);
+            new_school_refresh_student_status((int) $sub['student_id']);
+            json(['message' => 'Submission deleted.']);
         }
 
         default:
