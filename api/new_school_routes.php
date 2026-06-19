@@ -639,6 +639,9 @@ function new_school_handle_route(string $method, string $route): bool
             $parentPhone = field($body, 'parent_phone');
             $parentEmail = require_email(field($body, 'parent_email'));
 
+            $schoolId = (int) ($body['school_id'] ?? 0);
+            $teacherId = (int) ($body['teacher_id'] ?? 0);
+
             if ($fullName === '') json(['error' => 'Student full name is required.'], 422);
             if ($username === '') json(['error' => 'Student username is required.'], 422);
             if ($password === '' || strlen($password) < 6) json(['error' => 'Password must be at least 6 characters.'], 422);
@@ -655,10 +658,16 @@ function new_school_handle_route(string $method, string $route): bool
             if (!$dateOfBirth) {
                 json(['error' => 'Date of birth is invalid.'], 422);
             }
+            $today = new DateTime('today');
+            if ($dateOfBirth > $today) {
+                json(['error' => 'Date of birth cannot be in the future.'], 422);
+            }
+            $derivedAge = (int) $dateOfBirth->diff($today)->y;
+            if ($derivedAge < 11 || $derivedAge > 19) {
+                json(['error' => 'Date of birth does not match an eligible age (11-19).'], 422);
+            }
 
             $pdo = db();
-            $schoolId = (int) ($body['school_id'] ?? 0);
-            $teacherId = (int) ($body['teacher_id'] ?? 0);
             $school = $schoolId > 0
                 ? new_school_fetch_school_by_id($schoolId)
                 : ($schoolName !== '' ? new_school_fetch_school_by_name($schoolName) : null);
@@ -669,17 +678,22 @@ function new_school_handle_route(string $method, string $route): bool
             if ((string) ($school['status'] ?? '') !== 'approved') {
                 json(['error' => 'This school must be approved before students can register under it.'], 422);
             }
+            $schoolId = (int) $school['id']; // resolve to the real id (school may have been matched by name)
 
+            // Teacher is optional at registration; the school/teacher can assign one later.
             $teacher = $teacherId > 0 ? new_school_fetch_teacher_by_id($teacherId) : null;
-            if (!$teacher) {
-                json(['error' => 'Choose a teacher from this school before submitting.'], 422);
+            if ($teacherId > 0) {
+                if (!$teacher) {
+                    json(['error' => 'Choose a valid teacher from this school.'], 422);
+                }
+                if ((int) ($teacher['school_id'] ?? 0) !== (int) $school['id']) {
+                    json(['error' => 'The selected teacher does not belong to the chosen school.'], 422);
+                }
+                if ((string) ($teacher['status'] ?? '') === 'rejected') {
+                    json(['error' => 'The selected teacher has been rejected. Choose another teacher.'], 422);
+                }
             }
-            if ((int) ($teacher['school_id'] ?? 0) !== (int) $school['id']) {
-                json(['error' => 'The selected teacher does not belong to the chosen school.'], 422);
-            }
-            if ((string) ($teacher['status'] ?? '') === 'rejected') {
-                json(['error' => 'The selected teacher has been rejected. Choose another teacher.'], 422);
-            }
+            $teacherId = $teacher ? (int) $teacher['id'] : null;
 
             $checkUsername = $pdo->prepare('SELECT user_id FROM new_school_students WHERE student_username = ? LIMIT 1');
             $checkUsername->execute([$username]);
@@ -793,14 +807,16 @@ function new_school_handle_route(string $method, string $route): bool
                 'The QR consent link is ready for ' . $fullName . '.',
                 ['participant_id' => $participantId, 'school_name' => $studentSchool, 'qr_url' => $qrUrl]
             );
-            new_school_add_notification(
-                $studentId,
-                'teacher',
-                'registration',
-                'New student assigned',
-                $fullName . ' has been assigned to ' . $teacher['teacher_full_name'] . ' at ' . $studentSchool . '.',
-                ['participant_id' => $participantId, 'school_name' => $studentSchool, 'teacher_name' => (string) $teacher['teacher_full_name']]
-            );
+            if ($teacher) {
+                new_school_add_notification(
+                    $studentId,
+                    'teacher',
+                    'registration',
+                    'New student assigned',
+                    $fullName . ' has been assigned to ' . $teacher['teacher_full_name'] . ' at ' . $studentSchool . '.',
+                    ['participant_id' => $participantId, 'school_name' => $studentSchool, 'teacher_name' => (string) $teacher['teacher_full_name']]
+                );
+            }
             new_school_add_notification(
                 $studentId,
                 'admin',
@@ -1460,8 +1476,10 @@ function new_school_handle_route(string $method, string $route): bool
                 $link->execute([(int) $school['id'], (int) $student['id']]);
                 $student['school_id'] = (int) $school['id'];
             }
-            if ($school && strcasecmp((string) $student['school_name'], (string) $school['school_name']) !== 0) {
-                json(['error' => 'This student does not match your school name.'], 403);
+            // Belongs-to-school is decided by id (set above when names matched); don't reject a
+            // correctly id-linked student just because the denormalised school_name differs.
+            if ($school && (int) $student['school_id'] !== (int) $school['id']) {
+                json(['error' => 'This student is not part of your school.'], 403);
             }
 
             $pdo = db();
@@ -2969,6 +2987,20 @@ function new_school_handle_route(string $method, string $route): bool
             $status = field($body, 'status') ?: 'approved';
             if (!in_array($status, ['pending', 'approved', 'rejected'], true)) {
                 json(['error' => 'Invalid status.'], 422);
+            }
+            // Enforce approval ordering: parent consent first, then school, then teacher.
+            if ($status === 'approved') {
+                if ($type === 'school' && (string) ($student['parent_consent_status'] ?? '') !== 'approved') {
+                    json(['error' => 'Parent consent must be approved before school approval.'], 422);
+                }
+                if ($type === 'teacher') {
+                    if ((string) ($student['parent_consent_status'] ?? '') !== 'approved') {
+                        json(['error' => 'Parent consent must be approved before teacher approval.'], 422);
+                    }
+                    if ((string) ($student['school_approval_status'] ?? '') !== 'approved') {
+                        json(['error' => 'School approval must be completed before teacher approval.'], 422);
+                    }
+                }
             }
             $pdo = db();
             $approvedAt = in_array($status, ['approved', 'rejected'], true) ? date('Y-m-d H:i:s') : null;

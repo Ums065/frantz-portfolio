@@ -765,32 +765,6 @@ export default function NewSchool() {
     }
   }
 
-  const submitTeacherApproval = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    setBusy('teacher-approval')
-    try {
-      const fd = new FormData(event.currentTarget)
-      const payload = {
-        participant_id: value(fd, 'participant_id'),
-        student_id: Number(value(fd, 'student_id') || 0) || undefined,
-        teacher_name: value(fd, 'teacher_name'),
-        teacher_email: value(fd, 'teacher_email'),
-        role: value(fd, 'role'),
-        approval_status: value(fd, 'approval_status') || 'approved',
-        notes: value(fd, 'notes'),
-        digital_signature: value(fd, 'digital_signature'),
-      }
-      const res = await api.post<any>('new-school/teacher/approve', payload)
-      showNotice('success', res.message || 'Teacher approval saved.')
-      event.currentTarget.reset()
-      await reloadDashboard()
-      await reloadOverview()
-    } catch (err) {
-      handleError(err, 'Teacher approval failed.')
-    } finally {
-      setBusy('')
-    }
-  }
 
   const approveTeacherInline = async (teacher: any, status: 'approved' | 'pending' | 'rejected') => {
     setBusy(`teacher-${teacher.id}-${status}`)
@@ -2445,6 +2419,13 @@ export default function NewSchool() {
                       <tbody>
                         {filteredApprovalStudents.length > 0 ? rows.map((row: any) => {
                           const parentReady = String(row.parent_consent_status || '').toLowerCase() === 'approved'
+                          const schoolReady = String(row.school_approval_status || '').toLowerCase() === 'approved'
+                          // Principal records a school approval (needs parent consent); a teacher
+                          // records a teacher approval (needs parent consent + school approval first).
+                          const canApprove = schoolDashboard ? parentReady : (parentReady && schoolReady)
+                          const blockedReason = schoolDashboard
+                            ? 'Parent consent must be approved first'
+                            : 'Parent consent and school approval are required first'
                           const rowBusy = busy.startsWith(`student-${row.id}-`)
                           return (
                             <tr
@@ -2465,8 +2446,8 @@ export default function NewSchool() {
                                   <button
                                     type="button"
                                     className="ns-row-btn ns-row-btn--approve"
-                                    disabled={rowBusy || !parentReady}
-                                    title={parentReady ? 'Approve school participation' : 'Parent consent must be approved first'}
+                                    disabled={rowBusy || !canApprove}
+                                    title={canApprove ? 'Approve' : blockedReason}
                                     onClick={(event) => { event.stopPropagation(); approveStudentInline(row, 'approved') }}
                                   >
                                     {busy === `student-${row.id}-approved` ? '…' : 'Approve'}
