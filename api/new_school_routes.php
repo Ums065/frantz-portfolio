@@ -152,10 +152,14 @@ function ns_manage_can_write_entity(array $scope, string $entity, string $op): b
 {
     $kind = $scope['kind'];
     if ($kind === 'admin') return true;
-    if ($kind === 'school') return true; // principal manages everything in the school
+    if ($kind === 'school') {
+        // principal manages roster + participation approvals only; submission/interview
+        // CONTENT is admin-only (data isolation).
+        return in_array($entity, ['student', 'teacher', 'approval'], true);
+    }
     if ($kind === 'teacher') {
-        // teacher manages their students + those students' interviews/approvals/submissions
-        return in_array($entity, ['student', 'interview', 'approval', 'submission'], true);
+        // teacher is read-only; participation approve/deny is a dedicated route, not a manage write.
+        return false;
     }
     if ($kind === 'student' || $kind === 'parent') {
         // self-service: own interviews + submission only (no create/delete of people/approvals)
@@ -173,6 +177,68 @@ function ns_manage_bool(array $body, string $key): int
 {
     $v = $body[$key] ?? false;
     return ($v === true || $v === 1 || $v === '1' || $v === 'true' || $v === 'yes') ? 1 : 0;
+}
+
+/**
+ * School leaderboard ranked by number of students joined, with day-over-day
+ * rank movement. A daily snapshot is stored so movement can be compared to the
+ * previous day. Returns rows: school_id, school_name, status, student_count,
+ * rank, previous_rank, movement (+ = climbed, - = dropped, 0 = no prior/new).
+ */
+function new_school_school_rankings(): array
+{
+    $pdo = db();
+    $rows = $pdo->query(
+        'SELECT s.id, s.school_name, s.status, COUNT(st.id) AS student_count
+         FROM new_school_schools s
+         LEFT JOIN new_school_students st ON st.school_id = s.id
+         GROUP BY s.id, s.school_name, s.status
+         ORDER BY student_count DESC, s.created_at ASC, s.id ASC'
+    )->fetchAll();
+
+    $today = date('Y-m-d');
+    $ranked = [];
+    $rank = 0;
+    foreach ($rows as $r) {
+        $rank++;
+        $ranked[] = [
+            'school_id' => (int) $r['id'],
+            'school_name' => (string) $r['school_name'],
+            'status' => (string) $r['status'],
+            'student_count' => (int) $r['student_count'],
+            'rank' => $rank,
+        ];
+    }
+
+    // Persist today's snapshot (idempotent) for day-over-day movement.
+    $ins = $pdo->prepare(
+        'INSERT INTO new_school_school_rank_snapshots (school_id, rank_position, student_count, snapshot_date)
+         VALUES (?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE rank_position = VALUES(rank_position), student_count = VALUES(student_count)'
+    );
+    foreach ($ranked as $r) {
+        $ins->execute([$r['school_id'], $r['rank'], $r['student_count'], $today]);
+    }
+
+    // Compare against the most recent snapshot from a previous day.
+    $prevStmt = $pdo->prepare(
+        'SELECT rank_position FROM new_school_school_rank_snapshots
+         WHERE school_id = ? AND snapshot_date < ? ORDER BY snapshot_date DESC LIMIT 1'
+    );
+    foreach ($ranked as &$row) {
+        $prevStmt->execute([$row['school_id'], $today]);
+        $prev = $prevStmt->fetchColumn();
+        if ($prev === false) {
+            $row['previous_rank'] = null;
+            $row['movement'] = 0;
+        } else {
+            $row['previous_rank'] = (int) $prev;
+            $row['movement'] = (int) $prev - $row['rank']; // + climbed, - dropped
+        }
+    }
+    unset($row);
+
+    return $ranked;
 }
 
 function new_school_build_student_context(array $student): array
@@ -216,6 +282,7 @@ function new_school_build_student_context(array $student): array
             'submission_score' => $submission['score'] ?? null,
             'has_submission' => $submission ? 1 : 0,
         ])),
+        'student_points' => new_school_points_total('student', $studentId),
         'rankings' => [
             'school' => [
                 'position' => new_school_find_student_rank_position($schoolStudents, $studentId),
@@ -325,6 +392,11 @@ function new_school_handle_route(string $method, string $route): bool
     $key = $method . ' ' . $route;
 
     switch (true) {
+        case $key === 'GET new-school/school-rankings': {
+            require_login();
+            json(['schools' => new_school_school_rankings()]);
+        }
+
         case $key === 'GET new-school/overview': {
             $payload = [
                 'challenge' => [
@@ -462,7 +534,7 @@ function new_school_handle_route(string $method, string $route): bool
                 $students = new_school_rank_students(new_school_fetch_students_for_school($school));
                 $teachers = new_school_rank_teachers(new_school_fetch_teachers_for_school((int) $school['id']), $students);
                 $studentIds = array_map(static fn(array $row): int => (int) $row['id'], $students);
-                json([
+                json(new_school_redact_dashboard([
                     'role' => 'school',
                     'user' => $user,
                     'school' => $school,
@@ -479,7 +551,7 @@ function new_school_handle_route(string $method, string $route): bool
                         'students' => $students,
                         'teachers' => $teachers,
                     ],
-                ]);
+                ], ['kind' => 'school']));
             }
 
             if ($user['role'] === 'teacher') {
@@ -491,10 +563,11 @@ function new_school_handle_route(string $method, string $route): bool
                 $school = new_school_fetch_school_by_id((int) $teacher['school_id']);
                 $schoolTeachers = $school ? new_school_rank_teachers(new_school_fetch_teachers_for_school((int) $school['id']), $students) : [];
                 $studentIds = array_map(static fn(array $row): int => (int) $row['id'], $students);
-                json([
+                json(new_school_redact_dashboard([
                     'role' => 'teacher',
                     'user' => $user,
                     'teacher' => $teacher,
+                    'teacher_points' => new_school_points_total('teacher', (int) $teacher['id']),
                     'school' => $school,
                     'summary' => new_school_student_status_summary($students),
                     'students' => $students,
@@ -508,7 +581,7 @@ function new_school_handle_route(string $method, string $route): bool
                         'students' => $students,
                         'teachers' => array_slice($schoolTeachers, 0, 10),
                     ],
-                ]);
+                ], ['kind' => 'teacher']));
             }
 
             if (in_array($user['role'], ['admin', 'super_admin', 'editor'], true)) {
@@ -1294,8 +1367,10 @@ function new_school_handle_route(string $method, string $route): bool
 
         case $key === 'POST new-school/submission/review': {
             $user = require_login();
-            if (!in_array($user['role'], ['teacher', 'school', 'admin', 'super_admin', 'editor'], true)) {
-                json(['error' => 'Submission review requires a teacher, school, or admin account.'], 403);
+            // Data isolation: only admin reviews/scores submission CONTENT. Teacher/school are
+            // restricted to counts + participation approval and never see project content.
+            if (!in_array($user['role'], ['admin', 'super_admin', 'editor'], true)) {
+                json(['error' => 'Submission review and scoring is restricted to admin accounts.'], 403);
             }
 
             $submissionId = (int) ($body['submission_id'] ?? 0);
@@ -1319,20 +1394,6 @@ function new_school_handle_route(string $method, string $route): bool
             $student = new_school_fetch_student_by_id((int) $submission['student_id']);
             if (!$student) {
                 json(['error' => 'Student not found.'], 404);
-            }
-
-            if ($user['role'] === 'teacher') {
-                $teacher = new_school_fetch_teacher_by_user_id((int) $user['id']);
-                if (!$teacher || ((int) $student['teacher_id'] !== (int) $teacher['id'] && (int) $student['school_id'] !== (int) $teacher['school_id'])) {
-                    json(['error' => 'This submission is not assigned to your teacher account.'], 403);
-                }
-            }
-
-            if ($user['role'] === 'school') {
-                $school = new_school_fetch_school_by_user_id((int) $user['id']);
-                if (!$school || ((int) $student['school_id'] !== (int) $school['id'] && strcasecmp((string) $student['school_name'], (string) $school['school_name']) !== 0)) {
-                    json(['error' => 'This submission is not assigned to your school account.'], 403);
-                }
             }
 
             $notes = field($body, 'reviewer_notes');
@@ -1718,19 +1779,19 @@ function new_school_handle_route(string $method, string $route): bool
                     if ((int) $student['teacher_id'] !== (int) $teacher['id'] && (int) $student['school_id'] !== (int) $teacher['school_id']) {
                         json(['error' => 'This student is not assigned to your teacher account.'], 403);
                     }
-                    json(array_merge([
+                    json(new_school_redact_student_context(array_merge([
                         'role' => 'teacher',
                         'user' => $user,
                         'teacher' => $teacher,
-                    ], new_school_build_student_context($student)));
+                    ], new_school_build_student_context($student)), ['kind' => 'teacher']));
                 }
-                json([
+                json(new_school_redact_dashboard([
                     'role' => 'teacher',
                     'user' => $user,
                     'teacher' => $teacher,
                     'students' => new_school_fetch_students_for_teacher($teacher),
                     'summary' => new_school_student_status_summary(new_school_fetch_students_for_teacher($teacher)),
-                ]);
+                ], ['kind' => 'teacher']));
             }
 
             if ($user['role'] === 'school') {
@@ -1747,11 +1808,11 @@ function new_school_handle_route(string $method, string $route): bool
                     if ((int) $student['school_id'] !== (int) $school['id'] && strcasecmp((string) $student['school_name'], (string) $school['school_name']) !== 0) {
                         json(['error' => 'This student is not assigned to your school account.'], 403);
                     }
-                    json(array_merge([
+                    json(new_school_redact_student_context(array_merge([
                         'role' => 'school',
                         'user' => $user,
                         'school' => $school,
-                    ], new_school_build_student_context($student)));
+                    ], new_school_build_student_context($student)), ['kind' => 'school']));
                 }
                 $students = new_school_fetch_students_for_school($school);
                 json([
@@ -1783,6 +1844,11 @@ function new_school_handle_route(string $method, string $route): bool
 
         case $key === 'POST new-school/business': {
             $user = require_login();
+            // Data isolation: interview content is entered by the student (or parent on their
+            // behalf) and managed by admin. Teacher/school are read-only for interview content.
+            if (in_array($user['role'], ['teacher', 'school'], true)) {
+                json(['error' => 'Interviews are entered by students; your role is read-only for interview content.'], 403);
+            }
             $student = null;
             $studentId = (int) ($body['student_id'] ?? 0);
 
@@ -1797,20 +1863,6 @@ function new_school_handle_route(string $method, string $route): bool
 
             if (!$student) {
                 json(['error' => 'Student profile not found.'], 404);
-            }
-
-            if ($user['role'] === 'teacher') {
-                $teacher = new_school_fetch_teacher_by_user_id((int) $user['id']);
-                if (!$teacher || ((int) $student['teacher_id'] !== (int) $teacher['id'] && (int) $student['school_id'] !== (int) $teacher['school_id'])) {
-                    json(['error' => 'This student is not assigned to your teacher account.'], 403);
-                }
-            }
-
-            if ($user['role'] === 'school') {
-                $school = new_school_fetch_school_by_user_id((int) $user['id']);
-                if (!$school || ((int) $student['school_id'] !== (int) $school['id'] && strcasecmp((string) $student['school_name'], (string) $school['school_name']) !== 0)) {
-                    json(['error' => 'This student is not assigned to your school account.'], 403);
-                }
             }
 
             $businessName = field($body, 'business_name');
@@ -1904,6 +1956,9 @@ function new_school_handle_route(string $method, string $route): bool
                 $insert->execute($values);
                 $interviewId = (int) $pdo->lastInsertId();
             }
+
+            // Auto points: every interview earns the student +5 and their teacher +2 (idempotent).
+            new_school_points_award_auto((int) $student['id'], 'interview', $interviewId);
 
             $student = new_school_refresh_student_status((int) $student['id']);
             $businessStmt = $pdo->prepare('SELECT * FROM new_school_business_interviews WHERE id = ? LIMIT 1');
@@ -2081,6 +2136,9 @@ function new_school_handle_route(string $method, string $route): bool
                 ]);
                 $submissionId = (int) $pdo->lastInsertId();
             }
+
+            // Auto points: the project submission earns the student +5 and their teacher +2.
+            new_school_points_award_auto((int) $student['id'], 'project', $submissionId);
 
             $student = new_school_refresh_student_status((int) $student['id']);
             new_school_add_notification(
@@ -2554,6 +2612,37 @@ function new_school_handle_route(string $method, string $route): bool
             }
         }
 
+        case $key === 'POST admin/new-school/points': {
+            // Admin bonus points on approval (student up to 15, teacher up to 8, default 3).
+            // Idempotent: re-submitting REPLACES the bonus for this interview/project.
+            $reviewer = require_admin();
+            $sourceType = field($body, 'source_type');
+            $sourceId = (int) ($body['source_id'] ?? 0);
+            if (!in_array($sourceType, ['interview', 'project'], true) || $sourceId <= 0) {
+                json(['error' => 'A valid source_type (interview|project) and source_id are required.'], 422);
+            }
+            $pdo = db();
+            $srcStmt = $sourceType === 'interview'
+                ? $pdo->prepare('SELECT student_id FROM new_school_business_interviews WHERE id = ? LIMIT 1')
+                : $pdo->prepare('SELECT student_id FROM new_school_submissions WHERE id = ? LIMIT 1');
+            $srcStmt->execute([$sourceId]);
+            $src = $srcStmt->fetch();
+            if (!$src) {
+                json(['error' => 'The selected ' . $sourceType . ' was not found.'], 404);
+            }
+            $studentId = (int) $src['student_id'];
+            $studentPoints = (int) ($body['student_points'] ?? 0);
+            $teacherPoints = array_key_exists('teacher_points', $body) ? (int) $body['teacher_points'] : NS_POINTS_TEACHER_BONUS_DEFAULT;
+            new_school_points_award_bonus($studentId, $sourceType, $sourceId, $studentPoints, $teacherPoints, (int) $reviewer['id']);
+            $teacherId = new_school_points_teacher_for_student($studentId);
+            json([
+                'success' => true,
+                'student_id' => $studentId,
+                'student_points_total' => new_school_points_total('student', $studentId),
+                'teacher_points_total' => $teacherId > 0 ? new_school_points_total('teacher', $teacherId) : 0,
+            ]);
+        }
+
         case $key === 'POST admin/new-school/winners/publish': {
             require_admin();
             $winners = $body['winners'] ?? [];
@@ -2725,6 +2814,9 @@ function new_school_handle_route(string $method, string $route): bool
         case $method === 'PUT' && preg_match('#^new-school/manage/student/(\d+)$#', $route, $m) === 1: {
             $user = ns_manage_require_user();
             $scope = ns_manage_scope($user);
+            if (!ns_manage_can_write_entity($scope, 'student', 'update')) {
+                json(['error' => 'Your role cannot modify student records.'], 403);
+            }
             $student = new_school_fetch_student_by_id((int) $m[1]);
             if (!$student) {
                 json(['error' => 'Student not found.'], 404);
@@ -2889,6 +2981,9 @@ function new_school_handle_route(string $method, string $route): bool
         case $key === 'POST new-school/manage/interview': {
             $user = ns_manage_require_user();
             $scope = ns_manage_scope($user);
+            if (!ns_manage_can_write_entity($scope, 'interview', 'create')) {
+                json(['error' => 'Interview content is managed by admin only.'], 403);
+            }
             $studentId = (int) ($body['student_id'] ?? 0);
             $student = $studentId ? new_school_fetch_student_by_id($studentId) : null;
             if (!$student) {
@@ -2914,6 +3009,7 @@ function new_school_handle_route(string $method, string $route): bool
                 ns_manage_bool($body, 'has_delivery_options'), field($body, 'main_challenge'), field($body, 'student_notes'),
             ]);
             $interviewId = (int) $pdo->lastInsertId();
+            new_school_points_award_auto($studentId, 'interview', $interviewId);
             new_school_refresh_student_status($studentId);
             json(['message' => 'Interview created.', 'id' => $interviewId], 201);
         }
@@ -2921,6 +3017,9 @@ function new_school_handle_route(string $method, string $route): bool
         case $method === 'PUT' && preg_match('#^new-school/manage/interview/(\d+)$#', $route, $m) === 1: {
             $user = ns_manage_require_user();
             $scope = ns_manage_scope($user);
+            if (!ns_manage_can_write_entity($scope, 'interview', 'update')) {
+                json(['error' => 'Interview content is managed by admin only.'], 403);
+            }
             $pdo = db();
             $row = $pdo->prepare('SELECT * FROM new_school_business_interviews WHERE id = ?');
             $row->execute([(int) $m[1]]);
@@ -2953,6 +3052,9 @@ function new_school_handle_route(string $method, string $route): bool
         case $method === 'DELETE' && preg_match('#^new-school/manage/interview/(\d+)$#', $route, $m) === 1: {
             $user = ns_manage_require_user();
             $scope = ns_manage_scope($user);
+            if (!ns_manage_can_write_entity($scope, 'interview', 'delete')) {
+                json(['error' => 'Interview content is managed by admin only.'], 403);
+            }
             $pdo = db();
             $row = $pdo->prepare('SELECT * FROM new_school_business_interviews WHERE id = ?');
             $row->execute([(int) $m[1]]);
@@ -3080,6 +3182,9 @@ function new_school_handle_route(string $method, string $route): bool
         case $key === 'POST new-school/manage/submission': {
             $user = ns_manage_require_user();
             $scope = ns_manage_scope($user);
+            if (!ns_manage_can_write_entity($scope, 'submission', 'create')) {
+                json(['error' => 'Submission content is managed by admin only.'], 403);
+            }
             $studentId = (int) ($body['student_id'] ?? 0);
             $student = $studentId ? new_school_fetch_student_by_id($studentId) : null;
             if (!$student) {
@@ -3108,6 +3213,7 @@ function new_school_handle_route(string $method, string $route): bool
                 $status, (($body['score'] ?? '') !== '' ? (float) $body['score'] : null), ((int) ($body['rank_position'] ?? 0)) ?: null,
             ]);
             $submissionId = (int) $pdo->lastInsertId();
+            new_school_points_award_auto($studentId, 'project', $submissionId);
             new_school_refresh_student_status($studentId);
             json(['message' => 'Submission created.', 'id' => $submissionId], 201);
         }
@@ -3115,6 +3221,9 @@ function new_school_handle_route(string $method, string $route): bool
         case $method === 'PUT' && preg_match('#^new-school/manage/submission/(\d+)$#', $route, $m) === 1: {
             $user = ns_manage_require_user();
             $scope = ns_manage_scope($user);
+            if (!ns_manage_can_write_entity($scope, 'submission', 'update')) {
+                json(['error' => 'Submission content is managed by admin only.'], 403);
+            }
             $pdo = db();
             $row = $pdo->prepare('SELECT * FROM new_school_submissions WHERE id = ?');
             $row->execute([(int) $m[1]]);
@@ -3151,6 +3260,9 @@ function new_school_handle_route(string $method, string $route): bool
         case $method === 'DELETE' && preg_match('#^new-school/manage/submission/(\d+)$#', $route, $m) === 1: {
             $user = ns_manage_require_user();
             $scope = ns_manage_scope($user);
+            if (!ns_manage_can_write_entity($scope, 'submission', 'delete')) {
+                json(['error' => 'Submission content is managed by admin only.'], 403);
+            }
             $pdo = db();
             $row = $pdo->prepare('SELECT * FROM new_school_submissions WHERE id = ?');
             $row->execute([(int) $m[1]]);

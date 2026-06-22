@@ -46,6 +46,10 @@ $findLeaderboardRow = static function (array $rows, string $label) use ($fail): 
     $fail('Missing leaderboard row: ' . $label);
 };
 
+// Create the points ledger BEFORE the test transaction: CREATE TABLE implicitly commits,
+// which would otherwise break this test's rollback isolation.
+new_school_points_ensure_schema();
+
 $startedTransaction = false;
 if (!$pdo->inTransaction()) {
     $pdo->beginTransaction();
@@ -119,11 +123,11 @@ try {
     $assert((int) ($teacherRow['submissions'] ?? 0) === 1, 'Teacher leaderboard should report one submission.');
 
     $assert((int) ($studentRow1['interview_count'] ?? 0) === 10, 'Ariana Carter should have 10 interviews on the student leaderboard.');
-    $assert((int) ($studentRow1['submitted'] ?? 0) === 1, 'Ariana Carter should have one submitted project.');
+    $assert((int) ($studentRow1['has_submission'] ?? 0) === 1, 'Ariana Carter should have one submitted project.');
     $assert((int) ($studentRow2['interview_count'] ?? 0) === 10, 'Jayden Brooks should have 10 interviews on the student leaderboard.');
-    $assert((int) ($studentRow2['submitted'] ?? 0) === 0, 'Jayden Brooks should not yet have a submitted project.');
+    $assert((int) ($studentRow2['has_submission'] ?? 0) === 0, 'Jayden Brooks should not yet have a submitted project.');
     $assert((int) ($studentRow3['interview_count'] ?? 0) === 2, 'Maya Patel should have 2 interviews on the student leaderboard.');
-    $assert((int) ($studentRow3['submitted'] ?? 0) === 0, 'Maya Patel should not yet have a submitted project.');
+    $assert((int) ($studentRow3['has_submission'] ?? 0) === 0, 'Maya Patel should not yet have a submitted project.');
 
     $studentIds = [
         (int) $students['student1']['id'],
@@ -202,6 +206,133 @@ try {
     $assert((int) ($publicSummary['parents'] ?? 0) >= 3, 'Public summary should include at least the demo parents.');
     $assert((int) ($publicSummary['schools'] ?? 0) >= 1, 'Public summary should include at least the demo school.');
     $assert((int) ($publicSummary['teachers'] ?? 0) >= 1, 'Public summary should include at least the demo teacher.');
+
+    // ---- Data isolation: role-based redaction + permission matrix ----
+    require_once __DIR__ . '/../api/new_school_routes.php';
+
+    $sampleBusiness = [
+        'id' => 1, 'student_id' => 2, 'visit_number' => 3, 'business_name' => 'Cafe', 'business_category' => 'Food',
+        'owner_name' => 'Jane', 'business_phone' => '555', 'business_address' => 'Main St',
+        'main_challenge' => 'secret challenge', 'student_notes' => 'secret notes',
+        'student_name' => 'Alpha', 'participant_id' => 'P1', 'student_email' => 'alpha@example.test',
+    ];
+    $sampleSubmission = [
+        'id' => 1, 'student_id' => 2, 'status' => 'approved', 'score' => 90, 'rank_position' => 1,
+        'problem_identified' => 'secret problem', 'proposed_solution' => 'secret solution',
+        'why_it_matters' => 'x', 'how_it_helps' => 'y', 'expected_impact' => 'z',
+        'video_url' => 'http://v', 'written_url' => 'http://w', 'reviewer_notes' => 'rn',
+        'student_name' => 'Alpha', 'student_email' => 'alpha@example.test',
+    ];
+    $sampleStudent = [
+        'id' => 2, 'full_name' => 'Alpha', 'participant_id' => 'P1', 'interview_count' => 5, 'has_submission' => 1,
+        'submission_status' => 'submitted', 'email' => 'alpha@example.test', 'home_address' => '1 Main',
+        'parent_name' => 'Mom', 'parent_phone' => '555', 'parent_email' => 'mom@example.test', 'phone_number' => '999',
+    ];
+
+    // Teacher view: no interview/submission content, no student PII, but counts kept.
+    $teacherPayload = new_school_redact_dashboard([
+        'businesses' => [$sampleBusiness],
+        'submissions' => [$sampleSubmission],
+        'students' => [$sampleStudent],
+        'rankings' => ['students' => [$sampleStudent]],
+        'parent' => ['name' => 'Mom'],
+    ], ['kind' => 'teacher']);
+    foreach (['owner_name', 'business_phone', 'business_address', 'main_challenge', 'student_notes', 'student_email'] as $k) {
+        $assert(!array_key_exists($k, $teacherPayload['businesses'][0]), "Teacher must not see interview key: $k");
+    }
+    foreach (['problem_identified', 'proposed_solution', 'why_it_matters', 'how_it_helps', 'expected_impact', 'video_url', 'written_url', 'reviewer_notes'] as $k) {
+        $assert(!array_key_exists($k, $teacherPayload['submissions'][0]), "Teacher must not see submission key: $k");
+    }
+    $assert((int) ($teacherPayload['submissions'][0]['score'] ?? 0) === 90, 'Teacher should still see submission score.');
+    foreach (['email', 'home_address', 'parent_name', 'parent_phone', 'parent_email', 'phone_number'] as $k) {
+        $assert(!array_key_exists($k, $teacherPayload['students'][0]), "Teacher must not see student PII: $k");
+        $assert(!array_key_exists($k, $teacherPayload['rankings']['students'][0]), "Teacher must not see PII in rankings: $k");
+    }
+    $assert((int) ($teacherPayload['students'][0]['interview_count'] ?? 0) === 5, 'Teacher should see interview_count.');
+    $assert((int) ($teacherPayload['students'][0]['has_submission'] ?? 0) === 1, 'Teacher should see has_submission.');
+    $assert(!array_key_exists('parent', $teacherPayload), 'Teacher payload must not include parent block.');
+
+    // School view: content stripped, but full roster (PII) kept.
+    $schoolPayload = new_school_redact_dashboard([
+        'businesses' => [$sampleBusiness], 'submissions' => [$sampleSubmission], 'students' => [$sampleStudent],
+    ], ['kind' => 'school']);
+    $assert(!array_key_exists('main_challenge', $schoolPayload['businesses'][0]), 'School must not see interview content.');
+    $assert(!array_key_exists('problem_identified', $schoolPayload['submissions'][0]), 'School must not see submission content.');
+    $assert(array_key_exists('home_address', $schoolPayload['students'][0]), 'School keeps full student roster (incl. PII).');
+
+    // Admin view: untouched.
+    $adminPayload = new_school_redact_dashboard([
+        'businesses' => [$sampleBusiness], 'submissions' => [$sampleSubmission],
+    ], ['kind' => 'admin']);
+    $assert(array_key_exists('main_challenge', $adminPayload['businesses'][0]), 'Admin keeps interview content.');
+    $assert(array_key_exists('problem_identified', $adminPayload['submissions'][0]), 'Admin keeps submission content.');
+
+    // Default-deny: an unknown role must be at least as restricted as teacher.
+    $unknownPayload = new_school_redact_dashboard([
+        'businesses' => [$sampleBusiness], 'submissions' => [$sampleSubmission], 'students' => [$sampleStudent],
+    ], ['kind' => 'mystery']);
+    $assert(!array_key_exists('main_challenge', $unknownPayload['businesses'][0]), 'Unknown role must not see interview content (default-deny).');
+    $assert(!array_key_exists('home_address', $unknownPayload['students'][0]), 'Unknown role must not see student PII (default-deny).');
+
+    // Single-student context (GET businesses drill-down) redaction for teacher.
+    $teacherCtx = new_school_redact_student_context([
+        'student' => $sampleStudent,
+        'interviews' => [$sampleBusiness],
+        'submission' => $sampleSubmission,
+        'parent' => ['name' => 'Mom'],
+        'rankings' => ['school' => ['leaderboard' => [$sampleStudent]], 'teacher' => ['leaderboard' => [$sampleStudent]]],
+    ], ['kind' => 'teacher']);
+    $assert(!array_key_exists('main_challenge', $teacherCtx['interviews'][0]), 'Teacher context must not expose interview content.');
+    $assert(!array_key_exists('problem_identified', $teacherCtx['submission']), 'Teacher context must not expose submission content.');
+    $assert(!array_key_exists('home_address', $teacherCtx['student']), 'Teacher context must not expose student PII.');
+    $assert($teacherCtx['parent'] === null, 'Teacher context must null the parent block.');
+    $assert(!array_key_exists('home_address', $teacherCtx['rankings']['school']['leaderboard'][0]), 'Teacher context must strip PII from ranking leaderboards.');
+
+    // Permission matrix.
+    $assert(ns_manage_can_write_entity(['kind' => 'teacher'], 'interview', 'create') === false, 'Teacher cannot write interviews.');
+    $assert(ns_manage_can_write_entity(['kind' => 'teacher'], 'submission', 'update') === false, 'Teacher cannot write submissions.');
+    $assert(ns_manage_can_write_entity(['kind' => 'teacher'], 'student', 'update') === false, 'Teacher cannot write students.');
+    $assert(ns_manage_can_write_entity(['kind' => 'school'], 'interview', 'create') === false, 'School cannot write interview content.');
+    $assert(ns_manage_can_write_entity(['kind' => 'school'], 'submission', 'update') === false, 'School cannot write submission content.');
+    $assert(ns_manage_can_write_entity(['kind' => 'school'], 'student', 'update') === true, 'School can manage the student roster.');
+    $assert(ns_manage_can_write_entity(['kind' => 'school'], 'approval', 'create') === true, 'School can record approvals.');
+    $assert(ns_manage_can_write_entity(['kind' => 'admin'], 'submission', 'delete') === true, 'Admin can write everything.');
+    $assert(ns_manage_can_write_entity(['kind' => 'mystery'], 'student', 'update') === false, 'Unknown role cannot write (default-deny).');
+
+    // ---- Points engine: auto award, bonus clamp, replace-on-reapprove, ranking ----
+    $pStudent = new_school_fetch_student_by_user_id((int) $studentUsers['student1']['id']);
+    $assert(is_array($pStudent), 'Points test: demo student row should exist.');
+    $pSid = (int) $pStudent['id'];
+    $pTid = (int) ($pStudent['teacher_id'] ?? 0);
+    $beforeS = new_school_points_total('student', $pSid);
+    $beforeT = $pTid > 0 ? new_school_points_total('teacher', $pTid) : 0;
+
+    // Auto: +5 student / +2 teacher per source, idempotent on repeat.
+    new_school_points_award_auto($pSid, 'interview', 900001);
+    new_school_points_award_auto($pSid, 'interview', 900001);
+    $assert(new_school_points_total('student', $pSid) === $beforeS + 5, 'Auto interview adds exactly 5 student points (idempotent).');
+    if ($pTid > 0) {
+        $assert(new_school_points_total('teacher', $pTid) === $beforeT + 2, 'Auto interview adds exactly 2 teacher points (idempotent).');
+    }
+    new_school_points_award_auto($pSid, 'project', 900002);
+    $assert(new_school_points_total('student', $pSid) === $beforeS + 10, 'Project auto adds another 5 student points.');
+
+    // Bonus: clamp to max, then replace (not stack) on re-approve.
+    new_school_points_award_bonus($pSid, 'project', 900002, 100, 100, 1);
+    $assert(new_school_points_total('student', $pSid) === $beforeS + 10 + 15, 'Student bonus clamps to 15.');
+    if ($pTid > 0) {
+        $assert(new_school_points_total('teacher', $pTid) === $beforeT + 4 + 8, 'Teacher bonus clamps to 8.');
+    }
+    new_school_points_award_bonus($pSid, 'project', 900002, 4, 2, 1);
+    $assert(new_school_points_total('student', $pSid) === $beforeS + 10 + 4, 'Re-approving REPLACES the student bonus (4), not stacks.');
+
+    // Ranking reflects points.
+    $rankedSample = new_school_rank_students([
+        ['id' => $pSid, 'full_name' => 'Pointy', 'interview_count' => 0],
+        ['id' => -777, 'full_name' => 'Zero', 'interview_count' => 0],
+    ]);
+    $assert((int) $rankedSample[0]['id'] === $pSid, 'Student with points ranks above a zero-points student.');
+    $assert((int) ($rankedSample[0]['student_points'] ?? 0) > 0, 'Ranked student carries student_points.');
 
     echo json_encode([
         'status' => 'passed',

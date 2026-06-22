@@ -763,6 +763,136 @@ function new_school_qr_url(string $token): string
     return '/new-school/parent/' . rawurlencode($token);
 }
 
+/* ============================================================================
+ * Points engine (drives student + teacher rankings).
+ *  - Each interview/project a student submits: student +5, their teacher +2 (auto).
+ *  - On admin approval: admin awards a bonus — student up to 15, teacher up to 8 (default 3).
+ * Points live in an idempotent ledger (one row per recipient/source/kind) so re-approving
+ * REPLACES the bonus rather than stacking. A recipient's total = SUM(points).
+ * ==========================================================================*/
+const NS_POINTS_STUDENT_AUTO = 5;
+const NS_POINTS_TEACHER_AUTO = 2;
+const NS_POINTS_STUDENT_BONUS_MAX = 15;
+const NS_POINTS_TEACHER_BONUS_MAX = 8;
+const NS_POINTS_TEACHER_BONUS_DEFAULT = 3;
+
+function new_school_points_ensure_schema(): void
+{
+    static $ready = false;
+    if ($ready) {
+        return;
+    }
+    db()->exec(
+        "CREATE TABLE IF NOT EXISTS new_school_points (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            recipient_role ENUM('student','teacher') NOT NULL,
+            recipient_id INT NOT NULL,
+            source_type ENUM('interview','project') NOT NULL,
+            source_id INT NOT NULL,
+            kind ENUM('auto','bonus') NOT NULL,
+            points INT NOT NULL DEFAULT 0,
+            awarded_by_user_id INT NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uniq_points_source (recipient_role, recipient_id, source_type, source_id, kind),
+            INDEX idx_points_recipient (recipient_role, recipient_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+    $ready = true;
+}
+
+function new_school_points_award(string $role, int $recipientId, string $sourceType, int $sourceId, string $kind, int $points, ?int $awardedBy = null): void
+{
+    if ($recipientId <= 0 || $sourceId <= 0) {
+        return;
+    }
+    if (!in_array($role, ['student', 'teacher'], true)
+        || !in_array($sourceType, ['interview', 'project'], true)
+        || !in_array($kind, ['auto', 'bonus'], true)) {
+        return;
+    }
+    new_school_points_ensure_schema();
+    $stmt = db()->prepare(
+        'INSERT INTO new_school_points (recipient_role, recipient_id, source_type, source_id, kind, points, awarded_by_user_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE points = VALUES(points), awarded_by_user_id = VALUES(awarded_by_user_id), updated_at = NOW()'
+    );
+    $stmt->execute([$role, $recipientId, $sourceType, $sourceId, $kind, $points, $awardedBy]);
+    $GLOBALS['__ns_points_dirty'] = true;
+}
+
+function new_school_points_clear(string $sourceType, int $sourceId, string $kind): void
+{
+    if ($sourceId <= 0) {
+        return;
+    }
+    new_school_points_ensure_schema();
+    $stmt = db()->prepare('DELETE FROM new_school_points WHERE source_type = ? AND source_id = ? AND kind = ?');
+    $stmt->execute([$sourceType, $sourceId, $kind]);
+    $GLOBALS['__ns_points_dirty'] = true;
+}
+
+function new_school_points_teacher_for_student(int $studentId): int
+{
+    $stmt = db()->prepare('SELECT teacher_id FROM new_school_students WHERE id = ? LIMIT 1');
+    $stmt->execute([$studentId]);
+    $row = $stmt->fetch();
+    return $row ? (int) ($row['teacher_id'] ?? 0) : 0;
+}
+
+function new_school_points_award_auto(int $studentId, string $sourceType, int $sourceId): void
+{
+    if ($studentId <= 0 || $sourceId <= 0) {
+        return;
+    }
+    new_school_points_award('student', $studentId, $sourceType, $sourceId, 'auto', NS_POINTS_STUDENT_AUTO);
+    $teacherId = new_school_points_teacher_for_student($studentId);
+    if ($teacherId > 0) {
+        new_school_points_award('teacher', $teacherId, $sourceType, $sourceId, 'auto', NS_POINTS_TEACHER_AUTO);
+    }
+}
+
+function new_school_points_award_bonus(int $studentId, string $sourceType, int $sourceId, int $studentPoints, int $teacherPoints, ?int $awardedBy = null): void
+{
+    if ($studentId <= 0 || $sourceId <= 0) {
+        return;
+    }
+    $studentPoints = max(0, min(NS_POINTS_STUDENT_BONUS_MAX, $studentPoints));
+    $teacherPoints = max(0, min(NS_POINTS_TEACHER_BONUS_MAX, $teacherPoints));
+    new_school_points_award('student', $studentId, $sourceType, $sourceId, 'bonus', $studentPoints, $awardedBy);
+    $teacherId = new_school_points_teacher_for_student($studentId);
+    if ($teacherId > 0) {
+        new_school_points_award('teacher', $teacherId, $sourceType, $sourceId, 'bonus', $teacherPoints, $awardedBy);
+    }
+}
+
+function new_school_points_totals_map(string $role): array
+{
+    static $cache = [];
+    if (!empty($GLOBALS['__ns_points_dirty'])) {
+        $cache = [];
+        $GLOBALS['__ns_points_dirty'] = false;
+    }
+    if (array_key_exists($role, $cache)) {
+        return $cache[$role];
+    }
+    new_school_points_ensure_schema();
+    $stmt = db()->prepare('SELECT recipient_id, COALESCE(SUM(points), 0) AS total FROM new_school_points WHERE recipient_role = ? GROUP BY recipient_id');
+    $stmt->execute([$role]);
+    $map = [];
+    foreach ($stmt->fetchAll() as $row) {
+        $map[(int) $row['recipient_id']] = (int) $row['total'];
+    }
+    $cache[$role] = $map;
+    return $map;
+}
+
+function new_school_points_total(string $role, int $recipientId): int
+{
+    $map = new_school_points_totals_map($role);
+    return (int) ($map[$recipientId] ?? 0);
+}
+
 function new_school_student_performance_score(array $student): float
 {
     $interviewCount = min(10, max(0, (int) ($student['interview_count'] ?? 0)));
@@ -801,16 +931,25 @@ function new_school_student_performance_score(array $student): float
 
 function new_school_rank_students(array $students): array
 {
+    $pointsMap = new_school_points_totals_map('student');
     $ranked = [];
     foreach ($students as $student) {
         if (!is_array($student)) {
             continue;
         }
         $student['performance_score'] = new_school_student_performance_score($student);
+        $student['student_points'] = (int) ($pointsMap[(int) ($student['id'] ?? 0)] ?? ($student['student_points'] ?? 0));
         $ranked[] = $student;
     }
 
     usort($ranked, static function (array $left, array $right): int {
+        // Primary: total points (auto + admin bonus). Falls back to the workflow score on ties.
+        $leftPoints = (int) ($left['student_points'] ?? 0);
+        $rightPoints = (int) ($right['student_points'] ?? 0);
+        if ($leftPoints !== $rightPoints) {
+            return $rightPoints <=> $leftPoints;
+        }
+
         $leftScore = (float) ($left['performance_score'] ?? 0);
         $rightScore = (float) ($right['performance_score'] ?? 0);
         if ($leftScore !== $rightScore) {
@@ -844,6 +983,7 @@ function new_school_rank_students(array $students): array
 
 function new_school_rank_teachers(array $teachers, array $students): array
 {
+    $teacherPointsMap = new_school_points_totals_map('teacher');
     $teacherGroups = [];
     foreach ($students as $student) {
         $teacherId = (int) ($student['teacher_id'] ?? 0);
@@ -868,6 +1008,7 @@ function new_school_rank_teachers(array $teachers, array $students): array
         }
 
         $teacher['students_total'] = count($teacherStudents);
+        $teacher['teacher_points'] = (int) ($teacherPointsMap[(int) ($teacher['id'] ?? 0)] ?? 0);
         $teacher['ranking_score'] = round($totalScore, 2);
         $teacher['average_student_score'] = $teacherStudents !== [] ? round($totalScore / count($teacherStudents), 2) : 0;
         $teacher['top_student_name'] = $topStudent['full_name'] ?? null;
@@ -878,6 +1019,13 @@ function new_school_rank_teachers(array $teachers, array $students): array
     }
 
     usort($ranked, static function (array $left, array $right): int {
+        // Primary: teacher total points (auto +2 per student submission + admin bonus).
+        $leftPoints = (int) ($left['teacher_points'] ?? 0);
+        $rightPoints = (int) ($right['teacher_points'] ?? 0);
+        if ($leftPoints !== $rightPoints) {
+            return $rightPoints <=> $leftPoints;
+        }
+
         $leftScore = (float) ($left['ranking_score'] ?? 0);
         $rightScore = (float) ($right['ranking_score'] ?? 0);
         if ($leftScore !== $rightScore) {
@@ -1244,6 +1392,140 @@ function new_school_fetch_winners_by_student_ids(array $studentIds): array
     );
     $stmt->execute($studentIds);
     return $stmt->fetchAll();
+}
+
+/* ============================================================================
+ * Role-based data redaction (privacy / data isolation).
+ *
+ * Teacher and school must NOT see student submission/interview CONTENT, and the
+ * teacher must not see student PII. Only admin sees everything. These helpers are
+ * a default-deny whitelist: any role that is not explicitly 'admin' (including an
+ * unknown/empty kind) gets the most restricted view, so a future column can never
+ * silently leak. Always redact at the call site, never inside the fetch/builder.
+ * ==========================================================================*/
+
+// Interview metadata visible to teacher + school (content fields are dropped).
+const NS_INTERVIEW_SAFE_KEYS = [
+    'id', 'student_id', 'visit_number', 'business_name', 'business_category',
+    'date_of_visit', 'created_at', 'updated_at',
+    'student_name', 'participant_id', 'grade_level', 'school_name',
+];
+
+// Submission status/score visible to teacher + school (project content is dropped).
+const NS_SUBMISSION_SAFE_KEYS = [
+    'id', 'student_id', 'status', 'score', 'rank_position', 'submission_date',
+    'reviewed_at', 'created_at', 'updated_at',
+    'source_business_name', 'source_business_category', 'reviewer_name',
+    'student_name', 'participant_id', 'grade_level', 'school_name',
+];
+
+// Student fields visible to TEACHER only (PII dropped). School keeps the full roster row.
+const NS_STUDENT_SAFE_KEYS = [
+    'id', 'full_name', 'participant_id', 'grade_level', 'school_id', 'teacher_id',
+    'school_name', 'teacher_full_name', 'teacher_status', 'school_status',
+    'parent_consent_status', 'school_approval_status', 'teacher_approval_status',
+    'submission_status', 'overall_status',
+    'interview_count', 'has_submission', 'submission_score', 'submission_rank_position',
+    'performance_score', 'student_points', 'rank_position', 'created_at', 'updated_at',
+];
+
+// Approval workflow fields visible to teacher (student_email / reviewer_email / notes / signature dropped).
+const NS_APPROVAL_SAFE_KEYS = [
+    'id', 'student_id', 'approval_type', 'status', 'reviewer_name', 'reviewer_role',
+    'approved_at', 'recorded_at', 'created_at', 'updated_at',
+    'student_name', 'participant_id', 'grade_level', 'school_name',
+];
+
+function new_school_pick(array $row, array $allow): array
+{
+    return array_intersect_key($row, array_flip($allow));
+}
+
+function new_school_redact_rows(array $rows, array $allow): array
+{
+    return array_map(
+        static fn($row) => is_array($row) ? new_school_pick($row, $allow) : $row,
+        $rows
+    );
+}
+
+/**
+ * Redact an assembled teacher/school dashboard payload in place of role.
+ * admin -> untouched; school -> hide interview+submission content (keep roster);
+ * teacher/default -> also strip student PII + parent + approval emails.
+ */
+function new_school_redact_dashboard(array $payload, array $scope): array
+{
+    $kind = $scope['kind'] ?? '';
+    if ($kind === 'admin') {
+        return $payload;
+    }
+
+    if (isset($payload['businesses'])) {
+        $payload['businesses'] = new_school_redact_rows($payload['businesses'], NS_INTERVIEW_SAFE_KEYS);
+    }
+    if (isset($payload['submissions'])) {
+        $payload['submissions'] = new_school_redact_rows($payload['submissions'], NS_SUBMISSION_SAFE_KEYS);
+    }
+
+    if ($kind !== 'school') {
+        // teacher + default (most restricted): strip student PII everywhere it appears.
+        if (isset($payload['students'])) {
+            $payload['students'] = new_school_redact_rows($payload['students'], NS_STUDENT_SAFE_KEYS);
+        }
+        if (isset($payload['rankings']['students'])) {
+            $payload['rankings']['students'] = new_school_redact_rows($payload['rankings']['students'], NS_STUDENT_SAFE_KEYS);
+        }
+        if (isset($payload['approvals'])) {
+            $payload['approvals'] = new_school_redact_rows($payload['approvals'], NS_APPROVAL_SAFE_KEYS);
+        }
+        if (isset($payload['winners'])) {
+            $payload['winners'] = array_map(
+                static fn($w) => is_array($w) ? array_diff_key($w, array_flip(['student_email', 'reviewer_email'])) : $w,
+                $payload['winners']
+            );
+        }
+        unset($payload['parent']);
+    }
+
+    return $payload;
+}
+
+/**
+ * Redact a single-student context (from new_school_build_student_context) by role.
+ * Used by GET new-school/businesses?student_id=X for teacher/school drill-downs.
+ */
+function new_school_redact_student_context(array $ctx, array $scope): array
+{
+    $kind = $scope['kind'] ?? '';
+    if ($kind === 'admin') {
+        return $ctx;
+    }
+
+    if (isset($ctx['interviews'])) {
+        $ctx['interviews'] = new_school_redact_rows($ctx['interviews'], NS_INTERVIEW_SAFE_KEYS);
+    }
+    if (isset($ctx['submission']) && is_array($ctx['submission'])) {
+        $ctx['submission'] = new_school_pick($ctx['submission'], NS_SUBMISSION_SAFE_KEYS);
+    }
+
+    if ($kind !== 'school') {
+        if (isset($ctx['student']) && is_array($ctx['student'])) {
+            $ctx['student'] = new_school_pick($ctx['student'], NS_STUDENT_SAFE_KEYS);
+        }
+        if (isset($ctx['approvals'])) {
+            $ctx['approvals'] = new_school_redact_rows($ctx['approvals'], NS_APPROVAL_SAFE_KEYS);
+        }
+        // Nested ranking leaderboards embed full rows of OTHER students - strip their PII too.
+        foreach (['school', 'teacher'] as $rk) {
+            if (isset($ctx['rankings'][$rk]['leaderboard'])) {
+                $ctx['rankings'][$rk]['leaderboard'] = new_school_redact_rows($ctx['rankings'][$rk]['leaderboard'], NS_STUDENT_SAFE_KEYS);
+            }
+        }
+        $ctx['parent'] = null;
+    }
+
+    return $ctx;
 }
 
 function new_school_fetch_notifications_for_scope(array $studentIds, array $roles, int $limit = 12): array

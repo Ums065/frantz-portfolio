@@ -129,6 +129,75 @@ function PagedRows<T>({ items, size = TABLE_PAGE_SIZE, children }: { items: T[];
   )
 }
 
+// Day-over-day rank movement indicator (▲ green up / ▼ red down / — flat / NEW).
+function SchoolRankMovement({ movement, previousRank }: { movement: number; previousRank: number | null }) {
+  if (previousRank === null) {
+    return <span className="ns-rank-move ns-rank-move--new" title="New on the board">NEW</span>
+  }
+  if (movement > 0) {
+    return <span className="ns-rank-move ns-rank-move--up" title={`Up ${movement} place${movement > 1 ? 's' : ''} since yesterday`}><i aria-hidden="true">▲</i>{movement}</span>
+  }
+  if (movement < 0) {
+    return <span className="ns-rank-move ns-rank-move--down" title={`Down ${Math.abs(movement)} place${Math.abs(movement) > 1 ? 's' : ''} since yesterday`}><i aria-hidden="true">▼</i>{Math.abs(movement)}</span>
+  }
+  return <span className="ns-rank-move ns-rank-move--flat" title="No change since yesterday">—</span>
+}
+
+// School leaderboard ranked by students joined — shown in every role's Rankings tab.
+function SchoolRankBoard({ schools, mySchoolId, hidden }: { schools: any[]; mySchoolId?: number | null; hidden?: boolean }) {
+  const max = Math.max(1, ...schools.map((s) => Number(s.student_count) || 0))
+  return (
+    <article className="glass ns-dash-card ns-dash-card--wide reveal in ns-leaderboard-card" hidden={hidden}>
+      <div className="ns-dash-card__head">
+        <span className="eyebrow">School Rankings</span>
+        <span className="ns-board__badge">🏫 By students joined</span>
+      </div>
+      <p className="ns-leaderboard-tagline">
+        Schools rise on the board as more students join. The arrow beside each rank shows the change since yesterday — recruit more students to climb higher.
+      </p>
+      {schools.length === 0 ? (
+        <p className="ns-muted" style={{ marginTop: 16 }}>No schools ranked yet.</p>
+      ) : (
+        <div className="ns-leaderboard" role="list">
+          <div className="ns-leaderboard__head ns-leaderboard__head--school" aria-hidden="true">
+            <span>Rank</span>
+            <span />
+            <span>School</span>
+            <span>Students</span>
+          </div>
+          {schools.map((s) => {
+            const me = mySchoolId != null && Number(s.school_id) === Number(mySchoolId)
+            const rank = Number(s.rank) || 0
+            const pct = Math.max(6, Math.round(((Number(s.student_count) || 0) / max) * 100))
+            return (
+              <div
+                key={s.school_id}
+                role="listitem"
+                className={`ns-leader-row ns-leader-row--school ${rank >= 1 && rank <= 3 ? 'is-podium' : ''} ${me ? 'is-me' : ''}`}
+                data-rank={rank}
+              >
+                <span className="ns-leader-rank ns-leader-rank--move">
+                  <b>{rank >= 1 && rank <= 3 ? ['🥇', '🥈', '🥉'][rank - 1] : rank}</b>
+                  <SchoolRankMovement movement={Number(s.movement) || 0} previousRank={s.previous_rank ?? null} />
+                </span>
+                <span className="ns-leader-avatar" aria-hidden="true">{String(s.school_name || '?').trim().charAt(0).toUpperCase()}</span>
+                <div className="ns-leader-id">
+                  <strong>{s.school_name}{me ? ' (you)' : ''}</strong>
+                  <span>{s.status}</span>
+                </div>
+                <div className="ns-leader-score">
+                  <div className="ns-leader-bar"><span style={{ width: `${pct}%` }} /></div>
+                  <strong>{s.student_count}<small>joined</small></strong>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </article>
+  )
+}
+
 type RegistrationTag = 'student' | 'parent' | 'school' | 'teacher'
 type DashboardTabKey = 'overview' | 'profile' | 'activity' | 'rankings' | 'records' | 'approvals' | 'reviews' | 'notifications' | 'data'
 type SchoolRecordsTabKey = 'students' | 'teachers' | 'interviews' | 'approvals' | 'projects'
@@ -295,7 +364,6 @@ const dashboardTabsByRole: Record<string, DashboardTabConfig[]> = {
     { key: 'approvals', label: 'Approvals', hint: 'Teacher & student review' },
     { key: 'rankings', label: 'Rankings', hint: 'Competition board' },
     { key: 'records', label: 'Records', hint: 'Students & submissions' },
-    { key: 'reviews', label: 'Reviews', hint: 'Submission tools' },
     { key: 'notifications', label: 'Alerts', hint: 'Notifications' },
   ],
   teacher: [
@@ -304,7 +372,6 @@ const dashboardTabsByRole: Record<string, DashboardTabConfig[]> = {
     { key: 'approvals', label: 'Approvals', hint: 'Student review tools' },
     { key: 'rankings', label: 'Rankings', hint: 'Teacher competition board' },
     { key: 'records', label: 'Records', hint: 'Students and submissions' },
-    { key: 'reviews', label: 'Reports', hint: 'Leaderboards and exports' },
     { key: 'notifications', label: 'Alerts', hint: 'Unread updates' },
   ],
   admin: [
@@ -316,6 +383,21 @@ const dashboardTabsByRole: Record<string, DashboardTabConfig[]> = {
     { key: 'notifications', label: 'Alerts', hint: 'Unread updates' },
   ],
 }
+
+// Record fields hidden from teacher & school in the records detail modal (data isolation:
+// project/interview CONTENT is admin-only). Mirrors the server-side redaction allowlists.
+const NS_CONTENT_FIELD_KEYS = new Set<string>([
+  'owner_name', 'business_phone', 'business_address', 'main_challenge', 'student_notes',
+  'has_website', 'has_google_profile', 'uses_social_media', 'uses_digital_signage',
+  'offers_rewards', 'has_online_ordering', 'has_delivery_options',
+  'problem_identified', 'why_it_matters', 'proposed_solution', 'how_it_helps',
+  'expected_impact', 'video_url', 'written_url', 'reviewer_notes',
+])
+// Student PII keys additionally hidden from the teacher (school keeps roster PII).
+const NS_PII_FIELD_KEYS = new Set<string>([
+  'email', 'phone_number', 'home_address', 'parent_name', 'parent_phone', 'parent_email',
+  'age', 'date_of_birth',
+])
 
 const movementSteps = [
   {
@@ -376,6 +458,7 @@ export default function NewSchool() {
   const [approvalDetail, setApprovalDetail] = useState<{ type: 'student' | 'teacher'; id: number } | null>(null)
   const [schoolRankingTab, setSchoolRankingTab] = useState<'students' | 'teachers'>('students')
   const [studentRankTab, setStudentRankTab] = useState<'school' | 'class'>('school')
+  const [schoolRankings, setSchoolRankings] = useState<any[]>([])
   const [recordModal, setRecordModal] = useState<{ entity: RecordEntity; mode: 'view' | 'edit' | 'create'; id: number | null } | null>(null)
   const [recordForm, setRecordForm] = useState<Record<string, any>>({})
   const [recordBusy, setRecordBusy] = useState(false)
@@ -493,6 +576,9 @@ export default function NewSchool() {
     if (user) {
       if (hasApprovedChallengeAccess) {
         reloadDashboard().catch((err) => handleError(err, 'Could not load dashboard data.'))
+        api.get<any>('new-school/school-rankings')
+          .then((data) => setSchoolRankings(Array.isArray(data?.schools) ? data.schools : []))
+          .catch(() => setSchoolRankings([]))
       } else {
         setDashboard(null)
         setAdminSummary(null)
@@ -839,8 +925,9 @@ export default function NewSchool() {
       if (!submissionId) {
         throw new Error('Select a submission to review.')
       }
+      const status = value(fd, 'status') || 'submitted'
       const payload = {
-        status: value(fd, 'status') || 'submitted',
+        status,
         score: value(fd, 'score'),
         rank_position: Number(value(fd, 'rank_position') || 0) || undefined,
         place: value(fd, 'place'),
@@ -848,12 +935,49 @@ export default function NewSchool() {
         reviewer_notes: value(fd, 'reviewer_notes'),
       }
       const res = await api.put<any>(`admin/new-school/submission/${submissionId}`, payload)
+      // On approval, award the bonus points (student up to 15, teacher up to 8, default 3).
+      if (status === 'approved' || status === 'winner') {
+        const teacherRaw = value(fd, 'teacher_award_points')
+        await api.post('admin/new-school/points', {
+          source_type: 'project',
+          source_id: submissionId,
+          student_points: Number(value(fd, 'student_award_points') || 0),
+          teacher_points: teacherRaw === '' ? 3 : Number(teacherRaw || 0),
+        })
+      }
       showNotice('success', res.message || 'Submission updated.')
       event.currentTarget.reset()
       await reloadDashboard()
       await reloadOverview()
     } catch (err) {
       handleError(err, 'Could not update submission.')
+    } finally {
+      setBusy('')
+    }
+  }
+
+  const submitInterviewPoints = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setBusy('interview-points')
+    try {
+      const fd = new FormData(event.currentTarget)
+      const interviewId = Number(value(fd, 'interview_id') || 0)
+      if (!interviewId) {
+        throw new Error('Select an interview to award points.')
+      }
+      const teacherRaw = value(fd, 'teacher_award_points')
+      await api.post('admin/new-school/points', {
+        source_type: 'interview',
+        source_id: interviewId,
+        student_points: Number(value(fd, 'student_award_points') || 0),
+        teacher_points: teacherRaw === '' ? 3 : Number(teacherRaw || 0),
+      })
+      showNotice('success', 'Interview points awarded.')
+      event.currentTarget.reset()
+      await reloadDashboard()
+      await reloadOverview()
+    } catch (err) {
+      handleError(err, 'Could not award interview points.')
     } finally {
       setBusy('')
     }
@@ -1004,7 +1128,7 @@ export default function NewSchool() {
       rank: Number(r.rank_position) || 0,
       name: r.full_name,
       sub: `${r.interview_count || 0}/10 interviews`,
-      score: Number(r.performance_score) || 0,
+      score: Number(r.student_points) || 0,
       tag: r.submission_status || '—',
       isMe: String(r.participant_id || '') === String(studentDashboard?.student?.participant_id || ''),
     }))
@@ -1022,6 +1146,8 @@ export default function NewSchool() {
   // just fed their own scoped collections (active* === school data for the principal). ----
   const isManagerLayout = !!schoolDashboard || !!teacherDashboard
   const activeManagesTeachers = !!schoolDashboard // only the principal manages teacher records
+  const isTeacherLayout = !!teacherDashboard // teacher: read-only, no content/PII, counts only
+  const isSchoolLayout = !!schoolDashboard // principal: roster + approvals, no content/scoring
   const activeStudents = schoolDashboard ? asArray<any>(schoolDashboard.students) : asArray<any>(teacherDashboard?.students)
   const activeTeachers = asArray<any>(schoolDashboard?.teachers)
   const activeBusinesses = schoolDashboard ? schoolBusinesses : teacherBusinesses
@@ -1033,16 +1159,21 @@ export default function NewSchool() {
   const activeNotifications = schoolDashboard ? schoolNotifications : teacherNotifications
   const activeUnreadNotifications = activeNotifications.filter((item: any) => !item.is_read)
   const activeSummary = (schoolDashboard?.summary || teacherDashboard?.summary || {}) as Record<string, any>
+  const myDashboardSchoolId = schoolDashboard?.school?.id
+    ?? teacherDashboard?.teacher?.school_id ?? teacherDashboard?.school?.id
+    ?? studentDashboard?.student?.school_id
+    ?? parentDashboard?.student_context?.student?.school_id
+    ?? null
   const schoolLeaderRows = (schoolRankingTab === 'students'
     ? activeRankedStudents.map((r: any) => ({
         id: Number(r.id), type: 'student' as const, rank: Number(r.rank_position) || 0,
         name: r.full_name, sub: r.teacher_full_name ? `Mentor · ${r.teacher_full_name}` : r.school_name || '—',
-        score: Number(r.performance_score) || 0, tag: r.submission_status || '—', tagType: 'status' as const,
+        score: Number(r.student_points) || 0, tag: r.submission_status || '—', tagType: 'status' as const,
       }))
     : activeRankedTeachers.map((r: any) => ({
         id: Number(r.id), type: 'teacher' as const, rank: Number(r.rank_position) || 0,
         name: r.teacher_full_name, sub: r.role_department || 'Faculty',
-        score: Number(r.ranking_score) || 0, tag: `${r.students_total ?? 0} students`, tagType: 'count' as const,
+        score: Number(r.teacher_points) || 0, tag: `${r.students_total ?? 0} students`, tagType: 'count' as const,
       }))
   ).slice().sort((a, b) => (a.rank || 999) - (b.rank || 999))
   const schoolLeaderMax = Math.max(1, ...schoolLeaderRows.map((r) => r.score))
@@ -1156,16 +1287,30 @@ export default function NewSchool() {
     })
     return out
   }
+  // Detail-modal field visibility + write permission by role (manager layout = school/teacher only).
+  const visibleRecordFields = (entity: RecordEntity) =>
+    RECORD_DEFS[entity].fields.filter((f) => {
+      if (f.key === 'password') return false
+      if (NS_CONTENT_FIELD_KEYS.has(f.key)) return false // content hidden from teacher & school
+      if (isTeacherLayout && NS_PII_FIELD_KEYS.has(f.key)) return false // PII hidden from teacher
+      return true
+    })
+  const canWriteRecordEntity = (entity: RecordEntity) => isSchoolLayout && ['student', 'teacher', 'approval'].includes(entity)
   const openRecordView = (entity: RecordEntity, id: number) => setRecordModal({ entity, mode: 'view', id })
-  const openRecordCreate = (entity: RecordEntity) => { setRecordForm(defaultFormFor(entity)); setRecordModal({ entity, mode: 'create', id: null }) }
+  const openRecordCreate = (entity: RecordEntity) => {
+    if (!canWriteRecordEntity(entity)) return
+    setRecordForm(defaultFormFor(entity)); setRecordModal({ entity, mode: 'create', id: null })
+  }
   const startRecordEdit = () => {
     if (!recordModal || !recordCurrent) return
+    if (!canWriteRecordEntity(recordModal.entity)) return
     setRecordForm(formFromRecord(recordModal.entity, recordCurrent))
     setRecordModal({ ...recordModal, mode: 'edit' })
   }
   const setRecordField = (key: string, value: any) => setRecordForm((prev) => ({ ...prev, [key]: value }))
   const saveRecord = async () => {
     if (!recordModal) return
+    if (!canWriteRecordEntity(recordModal.entity)) { showNotice('error', 'Your role cannot modify this record.'); return }
     const def = RECORD_DEFS[recordModal.entity]
     setRecordBusy(true)
     try {
@@ -1187,6 +1332,7 @@ export default function NewSchool() {
   }
   const deleteRecord = async () => {
     if (!recordModal || recordModal.id == null) return
+    if (!canWriteRecordEntity(recordModal.entity)) return
     const def = RECORD_DEFS[recordModal.entity]
     if (typeof window !== 'undefined' && !window.confirm(`Delete this ${def.label.toLowerCase()}? This cannot be undone.`)) return
     setRecordBusy(true)
@@ -1209,11 +1355,9 @@ export default function NewSchool() {
     const baseTabs = dashboardRole ? dashboardTabsByRole[dashboardRole] || [] : []
     if (!isManagerLayout) return baseTabs
     const approvalBadge = (Number(activeSummary.teacher_pending || 0) + Number(activeSummary.school_pending || 0) + Number(activeSummary.parent_pending || 0)) || 0
-    const reviewBadge = schoolReviewQueue.length || 0
     const alertBadge = activeUnreadNotifications.length || 0
     return baseTabs.map((tab) => {
       if (tab.key === 'approvals' && approvalBadge > 0) return { ...tab, badge: String(approvalBadge) }
-      if (tab.key === 'reviews' && reviewBadge > 0) return { ...tab, badge: String(reviewBadge) }
       if (tab.key === 'notifications' && alertBadge > 0) return { ...tab, badge: String(alertBadge) }
       return tab
     })
@@ -1226,7 +1370,7 @@ export default function NewSchool() {
         title: studentDashboard.student.full_name,
         lead: 'Track your progress, keep the competition moving, and jump directly to the next step.',
         stats: [
-          { label: 'Performance', value: studentDashboard.performance_score || 0 },
+          { label: 'Points', value: studentDashboard.student_points || 0 },
           { label: 'Interviews', value: studentDashboard.interview_count || 0 },
           { label: 'School Rank', value: `#${studentDashboard.rankings?.school?.position || '-'}` },
           { label: 'Teacher Rank', value: `#${studentDashboard.rankings?.teacher?.position || '-'}` },
@@ -1274,7 +1418,7 @@ export default function NewSchool() {
           { label: 'Students', value: teacherDashboard.summary.students_total || 0 },
           { label: 'Submitted', value: teacherDashboard.summary.submitted || 0 },
           { label: 'Approved', value: teacherDashboard.summary.teacher_approved || 0 },
-          { label: 'Score', value: teacherScore },
+          { label: 'Points', value: teacherDashboard.teacher_points || 0 },
         ],
         primary: { label: 'Review Approvals', tab: 'approvals' as DashboardTabKey },
         secondary: { label: 'Open Rankings', tab: 'rankings' as DashboardTabKey },
@@ -2095,6 +2239,8 @@ export default function NewSchool() {
                 )}
               </article>
 
+              <SchoolRankBoard schools={schoolRankings} mySchoolId={myDashboardSchoolId} hidden={dashboardTab !== 'rankings' && dashboardTab !== 'overview'} />
+
               <article className="glass ns-dash-card reveal in" hidden={dashboardTab !== 'notifications'}>
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">Notifications</span>
@@ -2260,6 +2406,7 @@ export default function NewSchool() {
                   <div className="ns-approval-row"><strong>Participant ID</strong><span>{parentDashboard.student_context?.student?.participant_id || '-'}</span></div>
                 </div>
               </article>
+              <SchoolRankBoard schools={schoolRankings} mySchoolId={myDashboardSchoolId} hidden={dashboardTab !== 'rankings' && dashboardTab !== 'overview'} />
               <article className="glass ns-dash-card reveal in" hidden={dashboardTab !== 'notifications'}>
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">Notifications</span>
@@ -2544,12 +2691,14 @@ export default function NewSchool() {
                     <span className="ns-board__badge">
                       {schoolRecordsTabs.find((tab) => tab.key === schoolRecordsTab)?.count || 0}
                     </span>
-                    <button type="button" className="ns-row-btn ns-row-btn--approve" onClick={() => openRecordCreate(RECORDS_TAB_ENTITY[schoolRecordsTab])}>
-                      + Add {RECORD_DEFS[RECORDS_TAB_ENTITY[schoolRecordsTab]].label}
-                    </button>
+                    {isSchoolLayout && ['students', 'teachers', 'approvals'].includes(schoolRecordsTab) && (
+                      <button type="button" className="ns-row-btn ns-row-btn--approve" onClick={() => openRecordCreate(RECORDS_TAB_ENTITY[schoolRecordsTab])}>
+                        + Add {RECORD_DEFS[RECORDS_TAB_ENTITY[schoolRecordsTab]].label}
+                      </button>
+                    )}
                   </div>
                 </div>
-                <p className="ns-record-hint">Tap any row to open its detail card — edit or delete from there.</p>
+                <p className="ns-record-hint">{isTeacherLayout ? 'Tap any row to view its detail card.' : 'Tap any row to open its detail card — edit or delete from there.'}</p>
                 <div className="ns-record-tabs" role="tablist" aria-label="School records">
                   {schoolRecordsTabs.map((tab) => (
                     <button
@@ -2579,6 +2728,7 @@ export default function NewSchool() {
                             <th>School</th>
                             <th>Teacher</th>
                             <th>Interviews</th>
+                            <th>Submitted</th>
                             <th>Status</th>
                           </tr>
                         </thead>
@@ -2590,11 +2740,17 @@ export default function NewSchool() {
                               <td>{row.parent_consent_status}</td>
                               <td>{row.school_approval_status}</td>
                               <td>{row.teacher_approval_status}</td>
-                              <td>{row.interview_count}</td>
+                              <td>
+                                <div className="ns-count-cell">
+                                  <span>{Number(row.interview_count) || 0}/10</span>
+                                  <div className="ns-leader-bar"><span style={{ width: `${Math.min(100, Math.round(((Number(row.interview_count) || 0) / 10) * 100))}%` }} /></div>
+                                </div>
+                              </td>
+                              <td>{Number(row.has_submission) > 0 ? 'Yes' : 'No'}</td>
                               <td>{row.submission_status}</td>
                             </tr>
                           )) : (
-                            <tr><td colSpan={7}>No students registered yet.</td></tr>
+                            <tr><td colSpan={8}>No students registered yet.</td></tr>
                           )}
                         </tbody>
                       </table>
@@ -2646,7 +2802,6 @@ export default function NewSchool() {
                             <th>Visit</th>
                             <th>Business</th>
                             <th>Category</th>
-                            <th>Challenge</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -2657,10 +2812,9 @@ export default function NewSchool() {
                               <td>{row.visit_number}</td>
                               <td>{row.business_name}</td>
                               <td>{row.business_category}</td>
-                              <td>{clipText(row.main_challenge, 42)}</td>
                             </tr>
                           )) : (
-                            <tr><td colSpan={6}>No business interviews recorded yet.</td></tr>
+                            <tr><td colSpan={5}>No business interviews recorded yet.</td></tr>
                           )}
                         </tbody>
                       </table>
@@ -2710,8 +2864,6 @@ export default function NewSchool() {
                             <th>Participant ID</th>
                             <th>Student</th>
                             <th>Business</th>
-                            <th>Problem</th>
-                            <th>Solution</th>
                             <th>Status</th>
                             <th>Score</th>
                             <th>Rank</th>
@@ -2725,8 +2877,6 @@ export default function NewSchool() {
                               <td>{row.participant_id}</td>
                               <td>{row.student_name}</td>
                               <td>{row.source_business_name || '-'}</td>
-                              <td>{clipText(row.problem_identified, 36)}</td>
-                              <td>{clipText(row.proposed_solution, 36)}</td>
                               <td>{row.status}</td>
                               <td>{row.score ?? '-'}</td>
                               <td>{row.rank_position ?? '-'}</td>
@@ -2734,7 +2884,7 @@ export default function NewSchool() {
                               <td>{row.submission_date || '-'}</td>
                             </tr>
                           )) : (
-                            <tr><td colSpan={10}>No submissions have been recorded yet.</td></tr>
+                            <tr><td colSpan={8}>No submissions have been recorded yet.</td></tr>
                           )}
                         </tbody>
                       </table>
@@ -2840,101 +2990,10 @@ export default function NewSchool() {
                 )}
               </article>
 
-              <div className="ns-review-grid" hidden={dashboardTab !== 'reviews'}>
-                <article className="glass ns-dash-card reveal in">
-                  <div className="ns-dash-card__head">
-                    <span className="eyebrow">Submissions Queue</span>
-                    <span className="ns-board__badge">{schoolReviewQueue.length}</span>
-                  </div>
-                  <div className="ns-review-queue">
-                    {schoolReviewQueue.length > 0 ? (
-                      schoolReviewQueue.map((row: any) => (
-                        <div
-                          className={`ns-review-queue__item ${String(schoolSelectedSubmission?.id || '') === String(row.id) ? 'is-active' : ''}`}
-                          key={row.id}
-                        >
-                          <div className="ns-review-queue__head">
-                            <strong>#{row.id} {row.student_name}</strong>
-                            <span>{row.status}</span>
-                          </div>
-                          <p>{clipText(row.problem_identified, 95)}</p>
-                          <div className="ns-review-queue__meta">
-                            <span>{row.source_business_name || '-'}</span>
-                            <span>{row.score ?? '-'}</span>
-                            <span>{row.rank_position ?? '-'}</span>
-                          </div>
-                          <button className="btn btn--sm" type="button" onClick={() => loadSubmissionReview(row)}>
-                            Load Review
-                          </button>
-                        </div>
-                      ))
-                    ) : (
-                      <p className="ns-muted">No submissions waiting for review.</p>
-                    )}
-                  </div>
-                </article>
+              <SchoolRankBoard schools={schoolRankings} mySchoolId={myDashboardSchoolId} hidden={dashboardTab !== 'rankings' && dashboardTab !== 'overview'} />
 
-                <form id="ns-review-form" className="glass ns-form ns-form--compact reveal in" onSubmit={submitSubmissionReview}>
-                  <div className="ns-form__head">
-                    <span className="eyebrow">Submission Review</span>
-                    <h3>Approve or reject problem and solution submissions</h3>
-                    <p>Pick a submission from the queue (or the dropdown) to load its current review, then update and save.</p>
-                  </div>
-                  {schoolSelectedSubmission && (
-                    <div className="ns-submission-summary">
-                      <strong>Selected Submission</strong>
-                      <p>
-                        #{schoolSelectedSubmission.id} - {schoolSelectedSubmission.student_name}
-                      </p>
-                      <p>{clipText(schoolSelectedSubmission.problem_identified, 120) || schoolSelectedSubmission.source_business_name || 'No business attached yet'}</p>
-                    </div>
-                  )}
-                  <div className="ns-field-grid">
-                    <label className="ns-field ns-field--full">
-                      <span>Submission</span>
-                      <select
-                        name="submission_id"
-                        value={schoolSubmissionReviewId || String(activeSubmissions[0]?.id || '')}
-                        onChange={(event) => {
-                          const found = activeSubmissions.find((row: any) => String(row.id) === event.target.value)
-                          if (found) loadSubmissionReview(found)
-                          else setSchoolSubmissionReviewId(event.target.value)
-                        }}
-                        required
-                      >
-                        <option value="">Select submission</option>
-                        {activeSubmissions.map((row: any) => (
-                          <option key={row.id} value={row.id}>
-                            #{row.id} - {row.student_name} - {row.status}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="ns-field">
-                      <span>Status</span>
-                      <select name="status" value={reviewForm.status} onChange={(event) => setReviewForm((f) => ({ ...f, status: event.target.value }))}>
-                        <option value="approved">Approved</option>
-                        <option value="rejected">Rejected</option>
-                      </select>
-                    </label>
-                    <label className="ns-field">
-                      <span>Score</span>
-                      <input name="score" type="number" min="0" step="0.01" placeholder="Optional" value={reviewForm.score} onChange={(event) => setReviewForm((f) => ({ ...f, score: event.target.value }))} />
-                    </label>
-                    <label className="ns-field">
-                      <span>Rank Position</span>
-                      <input name="rank_position" type="number" min="1" max="3" placeholder="Optional" value={reviewForm.rank_position} onChange={(event) => setReviewForm((f) => ({ ...f, rank_position: event.target.value }))} />
-                    </label>
-                    <label className="ns-field ns-field--full">
-                      <span>Reviewer Notes</span>
-                      <textarea name="reviewer_notes" rows={3} placeholder="Optional review notes" value={reviewForm.reviewer_notes} onChange={(event) => setReviewForm((f) => ({ ...f, reviewer_notes: event.target.value }))} />
-                    </label>
-                  </div>
-                  <button className="btn btn--solid" type="submit" disabled={busy === 'submission-review' || !schoolSelectedSubmission}>
-                    {busy === 'submission-review' ? 'Saving...' : 'Save Submission Review'}
-                  </button>
-                </form>
-              </div>
+              {/* Submission review/scoring is admin-only (data isolation): teacher & school
+                  cannot see project content or score submissions, so the Reviews tool is removed. */}
 
               <div className="ns-alert-grid" hidden={dashboardTab !== 'notifications'}>
                 <article className="glass ns-dash-card reveal in">
@@ -3171,7 +3230,7 @@ export default function NewSchool() {
                         <div className="ns-detail-section">
                           <span className="ns-detail-section__title">Details</span>
                           <div className="ns-detail-grid">
-                            {RECORD_DEFS[recordModal.entity].fields.filter((f) => f.key !== 'password').map((f) => {
+                            {visibleRecordFields(recordModal.entity).map((f) => {
                               let val: any
                               if (f.type === 'checkbox') val = (recordCurrent[f.key] === 1 || recordCurrent[f.key] === true || recordCurrent[f.key] === '1') ? 'Yes' : 'No'
                               else if (f.type === 'teacherRef') val = recordCurrent.teacher_full_name || '—'
@@ -3189,17 +3248,19 @@ export default function NewSchool() {
                             })}
                           </div>
                         </div>
-                        <div className="ns-detail-actions">
-                          <button type="button" className="ns-row-btn ns-row-btn--approve" onClick={startRecordEdit}>Edit</button>
-                          <button type="button" className="ns-row-btn ns-row-btn--reject" disabled={recordBusy} onClick={deleteRecord}>{recordBusy ? 'Working…' : 'Delete'}</button>
-                        </div>
+                        {canWriteRecordEntity(recordModal.entity) && (
+                          <div className="ns-detail-actions">
+                            <button type="button" className="ns-row-btn ns-row-btn--approve" onClick={startRecordEdit}>Edit</button>
+                            <button type="button" className="ns-row-btn ns-row-btn--reject" disabled={recordBusy} onClick={deleteRecord}>{recordBusy ? 'Working…' : 'Delete'}</button>
+                          </div>
+                        )}
                       </>
                     )}
 
                     {(recordModal.mode === 'edit' || recordModal.mode === 'create') && (
                       <form className="ns-record-form" onSubmit={(event) => { event.preventDefault(); saveRecord() }}>
                         <div className="ns-field-grid">
-                          {RECORD_DEFS[recordModal.entity].fields
+                          {visibleRecordFields(recordModal.entity)
                             .filter((f) => (recordModal.mode === 'create' ? !f.editOnly : !f.createOnly))
                             .map((f) => (
                               <label className={`ns-field ${f.full || f.type === 'textarea' ? 'ns-field--full' : ''} ${f.type === 'checkbox' ? 'ns-field--check' : ''}`} key={f.key}>
@@ -3601,6 +3662,14 @@ export default function NewSchool() {
                     <span>Scholarship Amount</span>
                     <input name="scholarship_amount" type="number" min="1" step="1" placeholder="2500" />
                   </label>
+                  <label className="ns-field">
+                    <span>Student Bonus Points (max 15)</span>
+                    <input name="student_award_points" type="number" min="0" max="15" placeholder="0–15" />
+                  </label>
+                  <label className="ns-field">
+                    <span>Teacher Bonus Points (max 8)</span>
+                    <input name="teacher_award_points" type="number" min="0" max="8" defaultValue="3" />
+                  </label>
                   <label className="ns-field ns-field--full">
                     <span>Reviewer Notes</span>
                     <textarea name="reviewer_notes" rows={3} placeholder="Optional review notes" />
@@ -3608,6 +3677,38 @@ export default function NewSchool() {
                 </div>
                 <button className="btn btn--solid" type="submit" disabled={busy === 'admin-review'}>
                   {busy === 'admin-review' ? 'Saving...' : 'Update Submission'}
+                </button>
+              </form>
+
+              <form className="glass ns-form ns-form--compact reveal in" onSubmit={submitInterviewPoints} hidden={dashboardTab !== 'reviews'}>
+                <div className="ns-form__head">
+                  <span className="eyebrow">Interview Points</span>
+                  <h3>Award bonus points for an interview</h3>
+                  <p>Approve a student's business interview and grant bonus points (student up to 15, teacher up to 8, default 3).</p>
+                </div>
+                <div className="ns-field-grid">
+                  <label className="ns-field ns-field--full">
+                    <span>Interview</span>
+                    <select name="interview_id" defaultValue="" required>
+                      <option value="">Select interview</option>
+                      {adminBusinesses.map((row: any) => (
+                        <option key={row.id} value={row.id}>
+                          #{row.id} - {row.student_name} - Visit {row.visit_number} - {row.business_name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="ns-field">
+                    <span>Student Bonus Points (max 15)</span>
+                    <input name="student_award_points" type="number" min="0" max="15" placeholder="0–15" />
+                  </label>
+                  <label className="ns-field">
+                    <span>Teacher Bonus Points (max 8)</span>
+                    <input name="teacher_award_points" type="number" min="0" max="8" defaultValue="3" />
+                  </label>
+                </div>
+                <button className="btn btn--solid" type="submit" disabled={busy === 'interview-points'}>
+                  {busy === 'interview-points' ? 'Saving...' : 'Award Interview Points'}
                 </button>
               </form>
 

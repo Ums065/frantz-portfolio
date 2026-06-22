@@ -54,3 +54,35 @@ CREATE TABLE IF NOT EXISTS new_school_notifications (
   CONSTRAINT fk_new_school_notifications_student
     FOREIGN KEY (student_id) REFERENCES new_school_students(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
+
+-- School ranking daily snapshots (powers the by-students-joined leaderboard + day-over-day movement arrows)
+CREATE TABLE IF NOT EXISTS new_school_school_rank_snapshots (
+  id            INT AUTO_INCREMENT PRIMARY KEY,
+  school_id     INT NOT NULL,
+  rank_position INT NOT NULL,
+  student_count INT NOT NULL,
+  snapshot_date DATE NOT NULL,
+  created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_school_snapshot_date (school_id, snapshot_date),
+  KEY idx_snapshot_date (snapshot_date),
+  CONSTRAINT fk_school_rank_snapshot_school FOREIGN KEY (school_id) REFERENCES new_school_schools(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+-- Points ledger: drives student + teacher rankings.
+--   auto  = +5 student / +2 teacher per interview & project submission
+--   bonus = admin-assigned on approval (student up to 15, teacher up to 8, default 3)
+-- One row per (recipient, source, kind) so re-approving REPLACES the bonus instead of stacking.
+CREATE TABLE IF NOT EXISTS new_school_points (
+  id                 INT AUTO_INCREMENT PRIMARY KEY,
+  recipient_role     ENUM('student','teacher') NOT NULL,
+  recipient_id       INT NOT NULL,
+  source_type        ENUM('interview','project') NOT NULL,
+  source_id          INT NOT NULL,
+  kind               ENUM('auto','bonus') NOT NULL,
+  points             INT NOT NULL DEFAULT 0,
+  awarded_by_user_id INT NULL,
+  created_at         TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at         TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_points_source (recipient_role, recipient_id, source_type, source_id, kind),
+  KEY idx_points_recipient (recipient_role, recipient_id)
+) ENGINE=InnoDB;
