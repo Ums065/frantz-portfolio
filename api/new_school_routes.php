@@ -400,8 +400,16 @@ function new_school_handle_route(string $method, string $route): bool
         case $key === 'GET new-school/overview': {
             $payload = [
                 'challenge' => [
-                    'title' => 'What Problem Will You Solve?',
+                    'title' => 'WHAT PROBLEM WILL YOU SOLVE?',
                     'subtitle' => 'Join New York\'s Largest Student Problem-Solving Movement',
+                    'lead' => 'Students interview 10 local businesses, identify a community problem, develop a solution, and compete for scholarships, school grants, and statewide recognition.',
+                    'registration_open' => '2026-06-25',
+                    'winners_announced' => '2026-12-22',
+                    'school_grant_amount' => 25000,
+                    'student_scholarship_max_amount' => 10000,
+                    'educator_award_label' => 'Educator Recognition Award',
+                    'age_range' => '11-19',
+                    'grade_range' => '6-12',
                     'deadline' => '2026-08-25',
                     'website' => 'FrantzCoutard.com',
                 ],
