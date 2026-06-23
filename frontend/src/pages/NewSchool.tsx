@@ -1824,18 +1824,23 @@ export default function NewSchool() {
                 <label className="ns-field"><span>Phone Number</span><input name="phone_number" required /></label>
                 <label className="ns-field ns-field--full"><span>Home Address</span><input name="home_address" required /></label>
                 <label className="ns-field ns-field--full">
-                  <span>School Search</span>
-                  <input
+                  <span>Select School</span>
+                  <select
                     name="school_name"
-                    list="approved-school-list"
                     value={studentSchoolSearch}
                     onChange={(event) => {
                       setStudentSchoolSearch(event.target.value)
                       setStudentTeacherId('')
                     }}
-                    placeholder="Search approved schools"
                     required
-                  />
+                  >
+                    <option value="">{schools.length ? 'Select your school' : 'No approved schools yet'}</option>
+                    {schools.map((school: any) => (
+                      <option key={school.id} value={school.school_name}>
+                        {school.school_name}{school.school_district ? ` — ${school.school_district}` : ''}
+                      </option>
+                    ))}
+                  </select>
                 </label>
                 <input type="hidden" name="school_id" value={matchedStudentSchool?.id || ''} readOnly />
                 {matchedStudentSchool ? (
@@ -1915,17 +1920,22 @@ export default function NewSchool() {
                 </label>
                 <label className="ns-field ns-field--full"><span>Home Address</span><input name="home_address" required /></label>
                 <label className="ns-field ns-field--full">
-                  <span>School Search</span>
-                  <input
+                  <span>Select School</span>
+                  <select
                     name="school_name"
-                    list="approved-school-list"
                     value={parentSchoolSearch}
                     onChange={(event) => {
                       setParentSchoolSearch(event.target.value)
                       setParentTeacherId('')
                     }}
-                    placeholder="Search approved schools"
-                  />
+                  >
+                    <option value="">{schools.length ? "Select the student's school" : 'No approved schools yet'}</option>
+                    {schools.map((school: any) => (
+                      <option key={school.id} value={school.school_name}>
+                        {school.school_name}{school.school_district ? ` — ${school.school_district}` : ''}
+                      </option>
+                    ))}
+                  </select>
                 </label>
                 <input type="hidden" name="school_id" value={matchedParentSchool?.id || ''} readOnly />
                 {matchedParentSchool ? (
@@ -2008,15 +2018,20 @@ export default function NewSchool() {
               <div className="ns-field-grid">
                 <label className="ns-field ns-field--full"><span>Teacher Full Name</span><input name="teacher_full_name" required /></label>
                 <label className="ns-field ns-field--full">
-                  <span>School Search</span>
-                  <input
+                  <span>Select School</span>
+                  <select
                     name="school_name"
-                    list="approved-school-list"
                     value={teacherSchoolSearch}
                     onChange={(event) => setTeacherSchoolSearch(event.target.value)}
-                    placeholder="Search approved schools"
                     required
-                  />
+                  >
+                    <option value="">{schools.length ? 'Select your school' : 'No approved schools yet'}</option>
+                    {schools.map((school: any) => (
+                      <option key={school.id} value={school.school_name}>
+                        {school.school_name}{school.school_district ? ` — ${school.school_district}` : ''}
+                      </option>
+                    ))}
+                  </select>
                 </label>
                 <input type="hidden" name="school_id" value={approvedSchool(teacherSchoolSearch)?.id || ''} readOnly />
                 <label className="ns-field"><span>School Email</span><input name="school_email" type="email" required /></label>
@@ -2041,12 +2056,6 @@ export default function NewSchool() {
               </button>
             </form>
           </div>
-
-          <datalist id="approved-school-list">
-            {schools.map((school: any) => (
-              <option value={school.school_name} key={school.id} />
-            ))}
-          </datalist>
         </div>
       </section>
 

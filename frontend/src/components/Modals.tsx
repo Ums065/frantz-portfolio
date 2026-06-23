@@ -81,6 +81,8 @@ type RegisterFormState = {
   phoneNumber: string
   homeAddress: string
   schoolName: string
+  schoolId: string
+  teacherId: string
   gradeLevel: string
   parentName: string
   parentPhone: string
@@ -111,6 +113,8 @@ const createRegisterForm = (): RegisterFormState => ({
   phoneNumber: '',
   homeAddress: '',
   schoolName: '',
+  schoolId: '',
+  teacherId: '',
   gradeLevel: '',
   parentName: '',
   parentPhone: '',
@@ -138,6 +142,18 @@ const usernamePattern = /^[A-Za-z0-9._-]{3,30}$/
 
 const normalizeSpaces = (value: string) => value.replace(/\s+/g, ' ').trim()
 const digitsOnly = (value: string) => value.replace(/\D+/g, '').slice(0, 15)
+
+/** Whole-years age from a YYYY-MM-DD date of birth, or '' if blank/invalid. */
+const ageFromDob = (dob: string): string => {
+  if (!dob) return ''
+  const d = new Date(`${dob}T00:00:00`)
+  if (Number.isNaN(d.getTime())) return ''
+  const today = new Date()
+  let age = today.getFullYear() - d.getFullYear()
+  const m = today.getMonth() - d.getMonth()
+  if (m < 0 || (m === 0 && today.getDate() < d.getDate())) age -= 1
+  return age >= 0 && age < 150 ? String(age) : ''
+}
 
 const requireText = (value: string, label: string, minLength = 1) => {
   const cleaned = normalizeSpaces(value)
@@ -209,6 +225,9 @@ const validateRegisterForm = (form: RegisterFormState, termsAccepted: boolean) =
       requireEmail(form.email, 'Student email')
       requirePhone(form.phoneNumber, 'Phone number')
       requireText(form.schoolName, 'School name', 2)
+      if (!form.teacherId) {
+        throw new Error('Please select a teacher.')
+      }
       requireText(form.gradeLevel, 'Grade level', 1)
       requireText(form.homeAddress, 'Home address', 8)
       requireText(form.parentName, 'Parent / Guardian name', 3)
@@ -271,6 +290,8 @@ export function AuthModal({
   const [done, setDone] = useState<{ title: string; message: string } | null>(null)
   const [termsAccepted, setTermsAccepted] = useState(false)
   const [termsSig, setTermsSig] = useState('')
+  const [nsSchools, setNsSchools] = useState<any[]>([])
+  const [nsTeachers, setNsTeachers] = useState<any[]>([])
 
   useEffect(() => {
     if (open) {
@@ -282,6 +303,18 @@ export function AuthModal({
     }
     document.body.style.overflow = open ? 'hidden' : ''
   }, [open, mode])
+
+  // Load the approved schools + teachers so challenge registration uses the same
+  // dropdowns as the /new-school challenge page.
+  useEffect(() => {
+    if (!open) return
+    api.get<any>('new-school/overview')
+      .then((d) => {
+        setNsSchools(Array.isArray(d?.schools) ? d.schools : [])
+        setNsTeachers(Array.isArray(d?.teachers) ? d.teachers : [])
+      })
+      .catch(() => {})
+  }, [open])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
@@ -435,6 +468,8 @@ export function AuthModal({
           phoneNumber: digitsOnly(form.phoneNumber),
           homeAddress: normalizeSpaces(form.homeAddress),
           schoolName: normalizeSpaces(form.schoolName),
+          schoolId: form.schoolId,
+          teacherId: form.teacherId,
           gradeLevel: normalizeSpaces(form.gradeLevel),
           parentName: normalizeSpaces(form.parentName),
           parentPhone: digitsOnly(form.parentPhone),
@@ -509,11 +544,37 @@ export function AuthModal({
                       <>
                         {renderTextField('fullName', 'Student Full Name', { full: true, placeholder: 'Student full name', autoComplete: 'name', minLength: 3 })}
                         {renderTextField('studentUsername', 'Student Username', { placeholder: 'Choose a username', minLength: 3, maxLength: 30, pattern: '[A-Za-z0-9._-]+' })}
-                        {renderTextField('age', 'Age', { type: 'number', placeholder: '11-19', min: 11, max: 19 })}
-                        {renderTextField('dateOfBirth', 'Date of Birth', { type: 'date' })}
+                        <div className="field">
+                          <label>Date of Birth</label>
+                          <input type="date" value={form.dateOfBirth} onChange={(e) => setForm((p) => ({ ...p, dateOfBirth: e.target.value, age: ageFromDob(e.target.value) }))} />
+                        </div>
+                        <div className="field">
+                          <label>Age</label>
+                          <input type="number" value={form.age} readOnly placeholder="Auto from date of birth" />
+                        </div>
                         {renderTextField('email', 'Student Email', { type: 'email', full: true, placeholder: 'student@example.com', autoComplete: 'email' })}
                         {renderTextField('phoneNumber', 'Phone Number', { type: 'tel', placeholder: 'Student phone number', autoComplete: 'tel', inputMode: 'numeric', pattern: '[0-9]*', maxLength: 15 })}
-                        {renderTextField('schoolName', 'School Name', { placeholder: 'Current school name' })}
+                        <div className="field">
+                          <label>School</label>
+                          <select value={form.schoolId} required onChange={(e) => {
+                            const sc = nsSchools.find((s: any) => String(s.id) === e.target.value)
+                            setForm((p) => ({ ...p, schoolId: e.target.value, schoolName: sc?.school_name || '', teacherId: '' }))
+                          }}>
+                            <option value="">{nsSchools.length ? 'Select your school' : 'No approved schools yet'}</option>
+                            {nsSchools.map((s: any) => (
+                              <option key={s.id} value={s.id}>{s.school_name}{s.school_district ? ` — ${s.school_district}` : ''}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="field">
+                          <label>Teacher</label>
+                          <select value={form.teacherId} required onChange={(e) => updateField('teacherId', e.target.value)}>
+                            <option value="">{form.schoolId ? 'Select a teacher' : 'Choose a school first'}</option>
+                            {nsTeachers.filter((t: any) => String(t.school_id) === String(form.schoolId)).map((t: any) => (
+                              <option key={t.id} value={t.id}>{t.teacher_full_name}{t.role_department ? ` — ${t.role_department}` : ''}</option>
+                            ))}
+                          </select>
+                        </div>
                         {renderTextField('gradeLevel', 'Grade Level', { placeholder: 'Example: 9th Grade' })}
                         {renderTextField('homeAddress', 'Home Address', { as: 'textarea', full: true, placeholder: 'Street address, city, state, zip', rows: 3 })}
                         {renderTextField('parentName', 'Parent / Guardian Name', { placeholder: 'Parent or guardian', minLength: 3 })}
@@ -557,7 +618,18 @@ export function AuthModal({
                     {form.role === 'teacher' && (
                       <>
                         {renderTextField('fullName', 'Teacher Full Name', { full: true, placeholder: 'Teacher full name', autoComplete: 'name', minLength: 3 })}
-                        {renderTextField('schoolName', 'School Name', { placeholder: 'School name' })}
+                        <div className="field">
+                          <label>School</label>
+                          <select value={form.schoolId} required onChange={(e) => {
+                            const sc = nsSchools.find((s: any) => String(s.id) === e.target.value)
+                            setForm((p) => ({ ...p, schoolId: e.target.value, schoolName: sc?.school_name || '' }))
+                          }}>
+                            <option value="">{nsSchools.length ? 'Select your school' : 'No approved schools yet'}</option>
+                            {nsSchools.map((s: any) => (
+                              <option key={s.id} value={s.id}>{s.school_name}{s.school_district ? ` — ${s.school_district}` : ''}</option>
+                            ))}
+                          </select>
+                        </div>
                         {renderTextField('email', 'School Email', { type: 'email', placeholder: 'teacher@school.edu', autoComplete: 'email' })}
                         {renderTextField('phoneNumber', 'Phone Number', { type: 'tel', placeholder: 'Teacher phone number', autoComplete: 'tel', inputMode: 'numeric', pattern: '[0-9]*', maxLength: 15 })}
                         {renderTextField('roleDepartment', 'Role / Department', { placeholder: 'Example: Social Studies' })}

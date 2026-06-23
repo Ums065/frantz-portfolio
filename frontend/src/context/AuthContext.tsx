@@ -14,6 +14,8 @@ export interface RegistrationInput {
   phoneNumber?: string
   homeAddress?: string
   schoolName?: string
+  schoolId?: string
+  teacherId?: string
   gradeLevel?: string
   parentName?: string
   parentPhone?: string
@@ -135,6 +137,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           phone_number: input.phoneNumber ?? '',
           home_address: input.homeAddress ?? '',
           school_name: input.schoolName ?? '',
+          school_id: input.schoolId ?? '',
+          teacher_id: input.teacherId ?? '',
           grade_level: input.gradeLevel ?? '',
           parent_name: input.parentName ?? '',
           parent_phone: input.parentPhone ?? '',
@@ -173,6 +177,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         payload = await api.post<AuthResponseLike>('new-school/teacher/register', {
           teacher_full_name: input.fullName,
           school_name: input.schoolName ?? '',
+          school_id: input.schoolId ?? '',
           school_email: input.email,
           phone_number: input.phoneNumber ?? '',
           role_department: input.roleDepartment ?? '',

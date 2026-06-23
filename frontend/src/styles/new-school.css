@@ -766,6 +766,21 @@
   box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.12);
 }
 
+/* Select dropdowns (e.g. "Select School") match the register popup's .field select styling */
+.ns-field select {
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 13px 15px;
+  color: #fff;
+  font-size: 14px;
+}
+
+.ns-field select option {
+  background: #111;
+  color: #fff;
+}
+
 .ns-check-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
