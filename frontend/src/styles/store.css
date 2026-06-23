@@ -276,3 +276,86 @@
   .store-page .steps .step span { display:none; }
   .store-page .hero-stats { grid-template-columns:1fr; }
 }
+.store-page .btn--full { width:100%; justify-content:center; }
+.store-page .hero-cart-panel {
+  margin:26px auto 0;
+  max-width:920px;
+  border:1px solid var(--line);
+  border-radius:18px;
+  padding:18px 20px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:18px;
+  text-align:left;
+  background:linear-gradient(180deg,rgba(26,22,12,0.84),rgba(10,10,8,0.94));
+  box-shadow:0 18px 50px -26px rgba(0,0,0,0.7);
+}
+.store-page .hero-cart-panel strong { display:block; font-size:18px; color:#fff; margin-top:4px; }
+.store-page .hero-cart-panel p { margin:6px 0 0; font-size:13px; color:var(--muted); }
+.store-page .hero-cart-panel__eyebrow { font-size:10.5px; letter-spacing:0.18em; text-transform:uppercase; color:var(--green-bright); }
+.store-page .hero-cart-panel__actions { display:flex; gap:10px; flex-wrap:wrap; justify-content:flex-end; }
+.store-page .card__img--button { width:100%; border:0; padding:0; text-align:left; }
+.store-page .card__name-btn {
+  border:0;
+  padding:0;
+  background:none;
+  color:inherit;
+  text-align:left;
+  width:fit-content;
+}
+.store-page .card__name-btn:hover .card__name,
+.store-page .card__name-btn:hover .line__name { color:var(--gold-light); }
+.store-page .card__tagline { margin-top:8px; color:#efe1b5; font-size:12px; line-height:1.5; }
+.store-page .card__chips { display:flex; flex-wrap:wrap; gap:8px; margin-top:14px; }
+.store-page .card__chips span {
+  border:1px solid rgba(201,168,76,0.24);
+  border-radius:999px;
+  padding:6px 10px;
+  font-size:10px;
+  letter-spacing:0.08em;
+  text-transform:uppercase;
+  color:#dbc680;
+  background:rgba(201,168,76,0.05);
+}
+.store-page .card__price { font-family:var(--f-poster); font-size:24px; color:var(--gold-light); }
+.store-page .card__actions { display:flex; gap:10px; flex-wrap:wrap; margin-top:18px; }
+.store-page .card__cart-note { margin-top:10px; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:var(--green-bright); }
+.store-page .qty--inline { margin-bottom:0; }
+.store-page .qv__photo { width:100%; max-width:360px; object-fit:contain; display:block; filter:drop-shadow(0 28px 60px rgba(0,0,0,0.38)); }
+.store-page .qv__tagline { margin:0 0 16px; color:#efe1b5; font-size:13px; line-height:1.6; }
+.store-page .qv__price-row { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:18px; }
+.store-page .qv__meta-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; margin:22px 0; }
+.store-page .qv__list { margin:0; padding-left:18px; color:var(--muted); display:grid; gap:8px; font-size:13px; line-height:1.6; }
+.store-page .qv__notes {
+  display:grid;
+  gap:8px;
+  margin:4px 0 22px;
+  padding:16px;
+  border:1px solid rgba(201,168,76,0.12);
+  border-radius:14px;
+  background:rgba(201,168,76,0.05);
+}
+.store-page .qv__notes p { margin:0; color:var(--muted); font-size:13px; line-height:1.6; }
+.store-page .qv__notes strong { color:#fff; }
+.store-page .qv__actions { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
+.store-page .drawer__cta { margin-top:14px; }
+.store-page .line__img { border:0; padding:0; }
+.store-page .line__img:hover { outline:1px solid rgba(201,168,76,0.4); }
+.store-page .line__img img,
+.store-page .sum-line__img img { width:100%; height:100%; object-fit:cover; border-radius:0; transform:none; }
+.store-page .summary form { width:100%; }
+@media (max-width:1080px) {
+  .store-page .hero-cart-panel { align-items:flex-start; flex-direction:column; }
+}
+@media (max-width:760px) {
+  .store-page .hero-cart-panel { padding:16px; }
+  .store-page .hero-cart-panel__actions { width:100%; justify-content:flex-start; }
+  .store-page .card__actions > * { flex:1 1 100%; }
+  .store-page .qv__meta-grid { grid-template-columns:1fr; }
+  .store-page .qv__actions > * { flex:1 1 100%; }
+}
+@media (max-width:420px) {
+  .store-page .card__chips span { width:100%; text-align:center; }
+  .store-page .hero-cart-panel__actions .btn { width:100%; justify-content:center; }
+}

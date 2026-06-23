@@ -1387,7 +1387,12 @@ type InventoryDraft = {
   product_id: string
   name: string
   category: string
+  tagline: string
   description: string
+  details: string
+  feature_list: string
+  spec_list: string
+  shipping_note: string
   image: string
   price: string
   stock: string
@@ -1401,7 +1406,12 @@ const inventoryDraftFromRow = (row: InventoryRow): InventoryDraft => ({
   product_id: row.product_id,
   name: row.name || '',
   category: row.category || '',
+  tagline: row.tagline || '',
   description: row.description || '',
+  details: row.details || '',
+  feature_list: row.feature_list || '',
+  spec_list: row.spec_list || '',
+  shipping_note: row.shipping_note || '',
   image: row.image || '',
   price: String(row.price ?? 0),
   stock: String(row.stock ?? 0),
@@ -1415,7 +1425,12 @@ const emptyInventoryDraft = (sortOrder: number): InventoryDraft => ({
   product_id: '',
   name: '',
   category: '',
+  tagline: '',
   description: '',
+  details: '',
+  feature_list: '',
+  spec_list: '',
+  shipping_note: '',
   image: '',
   price: '0',
   stock: '0',
@@ -1521,7 +1536,12 @@ function InventoryAdmin() {
     const ok = await saveRow(productId, {
       name: editing.name.trim(),
       category: editing.category.trim() || null,
+      tagline: editing.tagline.trim() || null,
       description: editing.description.trim() || null,
+      details: editing.details.trim() || null,
+      feature_list: editing.feature_list.trim() || null,
+      spec_list: editing.spec_list.trim() || null,
+      shipping_note: editing.shipping_note.trim() || null,
       image: editing.image.trim() || null,
       price: Number(editing.price || 0),
       stock: Number(editing.stock || 0),
@@ -1542,7 +1562,12 @@ function InventoryAdmin() {
     await saveRow(row.product_id, {
       name: row.name,
       category: row.category,
+      tagline: row.tagline,
       description: row.description,
+      details: row.details,
+      feature_list: row.feature_list,
+      spec_list: row.spec_list,
+      shipping_note: row.shipping_note,
       image: row.image,
       price: row.price,
       stock: row.stock,
@@ -1668,13 +1693,40 @@ function InventoryAdmin() {
             </div>
 
             <div className="field">
-              <label>Description</label>
-              <textarea className="fld-area" style={{ minHeight: 120 }} value={editing.description} onChange={(e) => setEditing((prev) => (prev ? { ...prev, description: e.target.value } : prev))} />
+              <label>Tagline</label>
+              <input type="text" value={editing.tagline} onChange={(e) => setEditing((prev) => (prev ? { ...prev, tagline: e.target.value } : prev))} placeholder="Short product line shown near the title" />
             </div>
 
             <div className="field">
-              <label>Restock Note</label>
-              <input type="text" value={editing.restock_note} onChange={(e) => setEditing((prev) => (prev ? { ...prev, restock_note: e.target.value } : prev))} placeholder="Core collection stock" />
+              <label>Card Description</label>
+              <textarea className="fld-area" style={{ minHeight: 100 }} value={editing.description} onChange={(e) => setEditing((prev) => (prev ? { ...prev, description: e.target.value } : prev))} placeholder="Short description for store cards" />
+            </div>
+
+            <div className="field">
+              <label>Detailed Story</label>
+              <textarea className="fld-area" style={{ minHeight: 140 }} value={editing.details} onChange={(e) => setEditing((prev) => (prev ? { ...prev, details: e.target.value } : prev))} placeholder="Longer product detail content for the quick-view modal" />
+            </div>
+
+            <div className="fgrid">
+              <div className="field">
+                <label>Feature Highlights</label>
+                <textarea className="fld-area" style={{ minHeight: 140 }} value={editing.feature_list} onChange={(e) => setEditing((prev) => (prev ? { ...prev, feature_list: e.target.value } : prev))} placeholder={`One highlight per line` + "\n" + `Heavyweight fleece` + "\n" + `Embroidered emblem`} />
+              </div>
+              <div className="field">
+                <label>Product Specs</label>
+                <textarea className="fld-area" style={{ minHeight: 140 }} value={editing.spec_list} onChange={(e) => setEditing((prev) => (prev ? { ...prev, spec_list: e.target.value } : prev))} placeholder={`One spec per line` + "\n" + `Fit: Relaxed` + "\n" + `Collection: Core`} />
+              </div>
+            </div>
+
+            <div className="fgrid">
+              <div className="field">
+                <label>Shipping Note</label>
+                <input type="text" value={editing.shipping_note} onChange={(e) => setEditing((prev) => (prev ? { ...prev, shipping_note: e.target.value } : prev))} placeholder="Ships in 2-4 business days" />
+              </div>
+              <div className="field">
+                <label>Restock Note</label>
+                <input type="text" value={editing.restock_note} onChange={(e) => setEditing((prev) => (prev ? { ...prev, restock_note: e.target.value } : prev))} placeholder="Core collection stock" />
+              </div>
             </div>
 
             <div style={{ display: 'flex', gap: 10, justifyContent: 'space-between', flexWrap: 'wrap', marginTop: 6 }}>
@@ -1816,3 +1868,6 @@ const thS: React.CSSProperties = { textAlign: 'left', padding: '14px 16px', colo
 const tdS: React.CSSProperties = { padding: '13px 16px', verticalAlign: 'top', color: '#d8d3c6' }
 const rowS: React.CSSProperties = { borderBottom: '1px solid rgba(201,168,76,0.08)' }
 const selectS: React.CSSProperties = { background: '#15130c', color: '#e7d8a8', border: '1px solid var(--line)', borderRadius: 6, padding: '4px 8px' }
+
+
+

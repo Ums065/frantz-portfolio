@@ -315,7 +315,12 @@ export interface InventoryRow {
   product_id: string
   name: string
   category: string | null
+  tagline: string | null
   description: string | null
+  details: string | null
+  feature_list: string | null
+  spec_list: string | null
+  shipping_note: string | null
   image: string | null
   price: number
   stock: number

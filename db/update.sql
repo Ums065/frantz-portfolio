@@ -623,26 +623,31 @@ WHERE approval_status IS NULL OR approval_status <> 'approved';
 
 CALL add_column_if_missing('store_inventory', 'name', 'VARCHAR(160) DEFAULT NULL', 'product_id');
 CALL add_column_if_missing('store_inventory', 'category', 'VARCHAR(80) DEFAULT NULL', 'name');
-CALL add_column_if_missing('store_inventory', 'description', 'TEXT DEFAULT NULL', 'category');
-CALL add_column_if_missing('store_inventory', 'image', 'VARCHAR(255) DEFAULT NULL', 'description');
+CALL add_column_if_missing('store_inventory', 'tagline', 'VARCHAR(180) DEFAULT NULL', 'category');
+CALL add_column_if_missing('store_inventory', 'description', 'TEXT DEFAULT NULL', 'tagline');
+CALL add_column_if_missing('store_inventory', 'details', 'TEXT DEFAULT NULL', 'description');
+CALL add_column_if_missing('store_inventory', 'feature_list', 'TEXT DEFAULT NULL', 'details');
+CALL add_column_if_missing('store_inventory', 'spec_list', 'TEXT DEFAULT NULL', 'feature_list');
+CALL add_column_if_missing('store_inventory', 'shipping_note', 'VARCHAR(180) DEFAULT NULL', 'spec_list');
+CALL add_column_if_missing('store_inventory', 'image', 'VARCHAR(255) DEFAULT NULL', 'shipping_note');
 CALL add_column_if_missing('store_inventory', 'price', 'DECIMAL(10,2) DEFAULT NULL', 'image');
 CALL add_column_if_missing('store_inventory', 'visibility', 'ENUM(''live'',''upcoming'',''hidden'') NOT NULL DEFAULT ''live''', 'restock_note');
 CALL add_column_if_missing('store_inventory', 'sort_order', 'INT NOT NULL DEFAULT 0', 'visibility');
 
 INSERT IGNORE INTO store_inventory (
-  product_id, name, category, description, image, price, stock, low_stock_threshold, restock_note, visibility, sort_order
+  product_id, name, category, tagline, description, details, feature_list, spec_list, shipping_note, image, price, stock, low_stock_threshold, restock_note, visibility, sort_order
 ) VALUES
-  ('hoodie-legacy', 'Founder Hoodie - Legacy Black', 'Hoodies', 'Heavyweight fleece hoodie with the embroidered FC emblem.', '/assets/merch-hoodie.webp', 68.00, 24, 5, 'Core collection stock', 'live', 1),
-  ('tee-emblem', 'Premium Tee - FC Emblem', 'T-Shirts', 'Soft cotton tee with the FC emblem and an everyday fit.', '/assets/merch-tee.webp', 34.00, 48, 8, 'Core collection stock', 'live', 2),
-  ('cap-gold', 'Signature Cap - Gold FC', 'Caps', 'Structured cap with gold FC monogram and adjustable fit.', '/assets/merch-cap.webp', 28.00, 40, 6, 'Core collection stock', 'live', 3),
-  ('book-nts', 'From Nothing to Something - Hardcover', 'Books', 'Hardcover guide to the From Nothing to Something story.', '/assets/brand-signature-white.webp', 24.00, 64, 10, 'Core collection stock', 'live', 4),
-  ('pin-ltd', 'Limited Edition FC Lapel Pin', 'Collectibles', 'Gold enamel FC pin for collectors and launch supporters.', '/assets/merch-collectible.webp', 18.00, 70, 10, 'Core collection stock', 'live', 5),
-  ('hoodie-c2l', 'From Community to Legacy Hoodie', 'Hoodies', 'Premium brushed hoodie reserved for a future drop.', '/assets/merch-hoodie.webp', 72.00, 18, 4, 'Upcoming drop', 'upcoming', 6),
-  ('tee-tech', 'Technology For Good Tee', 'T-Shirts', 'A future tee drop centered on the tech-for-good mission.', '/assets/merch-tee.webp', 32.00, 44, 8, 'Upcoming drop', 'upcoming', 7),
-  ('tee-vision', 'Visionary Tee', 'T-Shirts', 'Statement tee reserved for a later release window.', '/assets/merch-tee.webp', 30.00, 36, 6, 'Upcoming drop', 'upcoming', 8),
-  ('cap-builder', 'Community Builder Cap', 'Caps', 'Structured cap saved for a future community release.', '/assets/merch-cap.webp', 26.00, 32, 5, 'Upcoming drop', 'upcoming', 9),
-  ('book-blueprint', 'The Legacy Blueprint - eBook', 'Books', 'Digital companion guide for a future resource release.', '/assets/brand-signature-white.webp', 14.00, 96, 12, 'Upcoming drop', 'upcoming', 10),
-  ('print-signed', 'Signed Founder''s Print', 'Art Prints', 'Signed founder print reserved for a premium future drop.', '/assets/brand-signature-white.webp', 48.00, 16, 4, 'Upcoming drop', 'upcoming', 11);
+  ('hoodie-legacy', 'Founder Hoodie - Legacy Black', 'Hoodies', NULL, 'Heavyweight fleece hoodie with the embroidered FC emblem.', NULL, NULL, NULL, NULL, '/assets/merch-hoodie.webp', 68.00, 24, 5, 'Core collection stock', 'live', 1),
+  ('tee-emblem', 'Premium Tee - FC Emblem', 'T-Shirts', NULL, 'Soft cotton tee with the FC emblem and an everyday fit.', NULL, NULL, NULL, NULL, '/assets/merch-tee.webp', 34.00, 48, 8, 'Core collection stock', 'live', 2),
+  ('cap-gold', 'Signature Cap - Gold FC', 'Caps', NULL, 'Structured cap with gold FC monogram and adjustable fit.', NULL, NULL, NULL, NULL, '/assets/merch-cap.webp', 28.00, 40, 6, 'Core collection stock', 'live', 3),
+  ('book-nts', 'From Nothing to Something - Hardcover', 'Books', NULL, 'Hardcover guide to the From Nothing to Something story.', NULL, NULL, NULL, NULL, '/assets/brand-signature-white.webp', 24.00, 64, 10, 'Core collection stock', 'live', 4),
+  ('pin-ltd', 'Limited Edition FC Lapel Pin', 'Collectibles', NULL, 'Gold enamel FC pin for collectors and launch supporters.', NULL, NULL, NULL, NULL, '/assets/merch-collectible.webp', 18.00, 70, 10, 'Core collection stock', 'live', 5),
+  ('hoodie-c2l', 'From Community to Legacy Hoodie', 'Hoodies', NULL, 'Premium brushed hoodie reserved for a future drop.', NULL, NULL, NULL, NULL, '/assets/merch-hoodie.webp', 72.00, 18, 4, 'Upcoming drop', 'upcoming', 6),
+  ('tee-tech', 'Technology For Good Tee', 'T-Shirts', NULL, 'A future tee drop centered on the tech-for-good mission.', NULL, NULL, NULL, NULL, '/assets/merch-tee.webp', 32.00, 44, 8, 'Upcoming drop', 'upcoming', 7),
+  ('tee-vision', 'Visionary Tee', 'T-Shirts', NULL, 'Statement tee reserved for a later release window.', NULL, NULL, NULL, NULL, '/assets/merch-tee.webp', 30.00, 36, 6, 'Upcoming drop', 'upcoming', 8),
+  ('cap-builder', 'Community Builder Cap', 'Caps', NULL, 'Structured cap saved for a future community release.', NULL, NULL, NULL, NULL, '/assets/merch-cap.webp', 26.00, 32, 5, 'Upcoming drop', 'upcoming', 9),
+  ('book-blueprint', 'The Legacy Blueprint - eBook', 'Books', NULL, 'Digital companion guide for a future resource release.', NULL, NULL, NULL, NULL, '/assets/brand-signature-white.webp', 14.00, 96, 12, 'Upcoming drop', 'upcoming', 10),
+  ('print-signed', 'Signed Founder''s Print', 'Art Prints', NULL, 'Signed founder print reserved for a premium future drop.', NULL, NULL, NULL, NULL, '/assets/brand-signature-white.webp', 48.00, 16, 4, 'Upcoming drop', 'upcoming', 11);
 
 CALL add_column_if_missing('new_school_schools', 'status', 'ENUM(''registered'',''approved'',''rejected'') DEFAULT NULL', 'administrator_phone');
 

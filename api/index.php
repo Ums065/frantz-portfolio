@@ -1409,8 +1409,8 @@ try {
 
             $b = body();
             $existingStmt = db()->prepare(
-                'SELECT product_id, name, category, description, image, price, stock, low_stock_threshold,
-                        restock_note, visibility, sort_order
+                'SELECT product_id, name, category, tagline, description, details, feature_list, spec_list, shipping_note,
+                        image, price, stock, low_stock_threshold, restock_note, visibility, sort_order
                  FROM store_inventory
                  WHERE product_id = ?
                  LIMIT 1'
@@ -1433,9 +1433,34 @@ try {
                 $category = trim((string) ($existing['category'] ?? $fallback['category'] ?? ''));
             }
 
+            $tagline = field($b, 'tagline');
+            if ($tagline === '') {
+                $tagline = trim((string) ($existing['tagline'] ?? $fallback['tagline'] ?? ''));
+            }
+
             $description = field($b, 'description');
             if ($description === '') {
                 $description = trim((string) ($existing['description'] ?? $fallback['description'] ?? ''));
+            }
+
+            $details = field($b, 'details');
+            if ($details === '') {
+                $details = trim((string) ($existing['details'] ?? $fallback['details'] ?? ''));
+            }
+
+            $featureList = field($b, 'feature_list');
+            if ($featureList === '') {
+                $featureList = trim((string) ($existing['feature_list'] ?? $fallback['feature_list'] ?? ''));
+            }
+
+            $specList = field($b, 'spec_list');
+            if ($specList === '') {
+                $specList = trim((string) ($existing['spec_list'] ?? $fallback['spec_list'] ?? ''));
+            }
+
+            $shippingNote = field($b, 'shipping_note');
+            if ($shippingNote === '') {
+                $shippingNote = trim((string) ($existing['shipping_note'] ?? $fallback['shipping_note'] ?? ''));
             }
 
             $image = field($b, 'image');
@@ -1485,12 +1510,17 @@ try {
 
             $stmt = db()->prepare(
                 'INSERT INTO store_inventory
-                    (product_id, name, category, description, image, price, stock, low_stock_threshold, restock_note, visibility, sort_order)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    (product_id, name, category, tagline, description, details, feature_list, spec_list, shipping_note, image, price, stock, low_stock_threshold, restock_note, visibility, sort_order)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                  ON DUPLICATE KEY UPDATE
                     name = VALUES(name),
                     category = VALUES(category),
+                    tagline = VALUES(tagline),
                     description = VALUES(description),
+                    details = VALUES(details),
+                    feature_list = VALUES(feature_list),
+                    spec_list = VALUES(spec_list),
+                    shipping_note = VALUES(shipping_note),
                     image = VALUES(image),
                     price = VALUES(price),
                     stock = VALUES(stock),
@@ -1503,7 +1533,12 @@ try {
                 $productId,
                 $name,
                 $category !== '' ? $category : null,
+                $tagline !== '' ? $tagline : null,
                 $description !== '' ? $description : null,
+                $details !== '' ? $details : null,
+                $featureList !== '' ? $featureList : null,
+                $specList !== '' ? $specList : null,
+                $shippingNote !== '' ? $shippingNote : null,
                 $image !== '' ? $image : null,
                 $price,
                 $stock,
