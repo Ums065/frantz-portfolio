@@ -151,20 +151,22 @@ function MerchCard({
   onIncrease: (row: InventoryRow) => void
   onOpenDetails: (row: InventoryRow) => void
 }) {
-  const locked = !canPurchase(row)
+  const isUpcoming = row.visibility === 'upcoming'
+  const isSoldOut = row.visibility === 'live' && row.stock_status === 'out'
+  const canBuy = canPurchase(row)
   const tone = inventoryTone(row)
   const status = inventoryStatus(row)
   const highlights = parseLines(row.feature_list).slice(0, 3)
 
   return (
-    <article className={`card${locked ? ' locked' : ''}`}>
+    <article className={`card${isUpcoming ? ' preview' : ''}${isSoldOut ? ' locked' : ''}`}>
       <span className="card__badge" style={badgeStyle(tone)}>{inventoryBadge(row)}</span>
       <button className="card__img card__img--button" type="button" onClick={() => onOpenDetails(row)} aria-label={`Open details for ${row.name}`}>
         <img src={row.image || FALLBACK_IMAGE} alt={row.name} loading="lazy" decoding="async" />
         <div className="card__quick"><span className="btn btn--sm">View Details</span></div>
-        {locked ? (
+        {isSoldOut ? (
           <div className="card__overlay" aria-hidden="true">
-            <span>{row.visibility === 'upcoming' ? 'Coming Soon' : 'Sold Out'}</span>
+            <span>Sold Out</span>
           </div>
         ) : null}
       </button>
@@ -185,23 +187,25 @@ function MerchCard({
           <span className="card__price">{formatMoney(row.price)}</span>
         </div>
         <div className="card__actions">
-          {locked ? (
-            <button className="btn btn--ghost btn--sm btn--full" type="button" onClick={() => onOpenDetails(row)}>
-              Preview Details
-            </button>
-          ) : qty > 0 ? (
-            <>
-              <CartQuantityControl qty={qty} onDecrease={() => onDecrease(row)} onIncrease={() => onIncrease(row)} />
-              <button className="btn btn--ghost btn--sm" type="button" onClick={() => onOpenDetails(row)}>Details</button>
-            </>
+          {canBuy ? (
+            qty > 0 ? (
+              <>
+                <CartQuantityControl qty={qty} onDecrease={() => onDecrease(row)} onIncrease={() => onIncrease(row)} />
+                <button className="btn btn--ghost btn--sm" type="button" onClick={() => onOpenDetails(row)}>Details</button>
+              </>
+            ) : (
+              <>
+                <button className="btn btn--solid btn--sm" type="button" onClick={() => onAddToCart(row)}>Add to Cart</button>
+                <button className="btn btn--ghost btn--sm" type="button" onClick={() => onOpenDetails(row)}>Details</button>
+              </>
+            )
           ) : (
-            <>
-              <button className="btn btn--solid btn--sm" type="button" onClick={() => onAddToCart(row)}>Add to Cart</button>
-              <button className="btn btn--ghost btn--sm" type="button" onClick={() => onOpenDetails(row)}>Details</button>
-            </>
+            <button className="btn btn--ghost btn--sm btn--full" type="button" onClick={() => onOpenDetails(row)}>
+              {isUpcoming ? 'Preview Details' : 'View Details'}
+            </button>
           )}
         </div>
-        {!locked && qty > 0 ? <div className="card__cart-note">{qty} item{qty > 1 ? 's' : ''} in cart</div> : null}
+        {canBuy && qty > 0 ? <div className="card__cart-note">{qty} item{qty > 1 ? 's' : ''} in cart</div> : null}
       </div>
     </article>
   )
