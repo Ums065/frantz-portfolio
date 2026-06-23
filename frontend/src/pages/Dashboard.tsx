@@ -13,6 +13,7 @@ import {
 } from '../lib/memberStorage'
 import { memberPerks } from '../lib/brandContent'
 import { useAuth } from '../context/AuthContext'
+import { useSeo } from '../hooks/useSeo'
 
 interface DashboardData {
   user: User
@@ -41,6 +42,7 @@ const dashboardTabs = [
 type DashboardTab = typeof dashboardTabs[number]['key']
 
 export default function Dashboard() {
+  useSeo({ title: 'Member Dashboard', noindex: true })
   const { user, loading, logout, refresh } = useAuth()
   const [data, setData] = useState<DashboardData | null>(null)
   const [tab, setTab] = useState<DashboardTab>('overview')

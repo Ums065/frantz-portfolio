@@ -726,6 +726,165 @@ function storefront_catalog(bool $includeHidden = true): array
     return $catalog;
 }
 
+function storefront_orders_has_column(string $column): bool
+{
+    static $cache = [];
+    if (array_key_exists($column, $cache)) {
+        return $cache[$column];
+    }
+
+    try {
+        $stmt = db()->prepare('SHOW COLUMNS FROM orders LIKE ?');
+        $stmt->execute([$column]);
+        $cache[$column] = (bool) $stmt->fetch();
+    } catch (Throwable $e) {
+        $cache[$column] = false;
+    }
+
+    return $cache[$column];
+}
+
+function storefront_ensure_orders_payment_schema(): void
+{
+    static $ready = false;
+    if ($ready) {
+        return;
+    }
+
+    $columns = [
+        'payment_provider' => "ALTER TABLE orders ADD COLUMN payment_provider VARCHAR(40) DEFAULT NULL AFTER payment_method",
+        'payment_status' => "ALTER TABLE orders ADD COLUMN payment_status ENUM('pending','paid','failed','refunded') NOT NULL DEFAULT 'pending' AFTER payment_provider",
+        'payment_session_id' => "ALTER TABLE orders ADD COLUMN payment_session_id VARCHAR(120) DEFAULT NULL AFTER payment_status",
+        'payment_intent_id' => "ALTER TABLE orders ADD COLUMN payment_intent_id VARCHAR(120) DEFAULT NULL AFTER payment_session_id",
+        'payment_confirmed_at' => "ALTER TABLE orders ADD COLUMN payment_confirmed_at TIMESTAMP NULL DEFAULT NULL AFTER payment_intent_id",
+        'payment_url' => "ALTER TABLE orders ADD COLUMN payment_url TEXT DEFAULT NULL AFTER payment_confirmed_at",
+        'payment_error' => "ALTER TABLE orders ADD COLUMN payment_error TEXT DEFAULT NULL AFTER payment_url",
+    ];
+
+    foreach ($columns as $column => $sql) {
+        if (!storefront_orders_has_column($column)) {
+            db()->exec($sql);
+        }
+    }
+
+    $ready = true;
+}
+
+function storefront_public_base_url(): string
+{
+    $configured = trim((string) (env('APP_URL', '') ?: (env('FRONTEND_URL', '') ?: '')));
+    if ($configured !== '') {
+        return rtrim($configured, '/');
+    }
+
+    $origin = trim((string) ($_SERVER['HTTP_ORIGIN'] ?? ''));
+    if ($origin !== '') {
+        return rtrim($origin, '/');
+    }
+
+    $host = trim((string) ($_SERVER['HTTP_HOST'] ?? 'localhost'));
+    $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+    return $scheme . '://' . $host;
+}
+
+function storefront_stripe_secret_key(): string
+{
+    return trim((string) env('STRIPE_SECRET_KEY', ''));
+}
+
+function storefront_stripe_enabled(): bool
+{
+    return storefront_stripe_secret_key() !== '';
+}
+
+function storefront_stripe_api_request(string $method, string $path, array $payload = []): array
+{
+    $secret = storefront_stripe_secret_key();
+    if ($secret === '') {
+        return [
+            'ok' => false,
+            'status' => 0,
+            'data' => null,
+            'error' => 'Stripe checkout is not configured.',
+        ];
+    }
+
+    $body = $payload !== [] ? http_build_query($payload, '', '&', PHP_QUERY_RFC3986) : null;
+    $headers = [
+        'Authorization: Bearer ' . $secret,
+        'Content-Type: application/x-www-form-urlencoded',
+        'Accept: application/json',
+    ];
+
+    $response = mail_http_request('https://api.stripe.com' . $path, $method, $body, $headers);
+    $decoded = json_decode($response['body'], true);
+
+    return [
+        'ok' => $response['ok'],
+        'status' => $response['status'],
+        'data' => is_array($decoded) ? $decoded : null,
+        'error' => $response['error'] !== '' ? $response['error'] : ($response['body'] !== '' ? $response['body'] : 'Stripe request failed.'),
+    ];
+}
+
+function storefront_stripe_checkout_session(array $items, array $order, array $catalog, array $customer): array
+{
+    $successUrl = storefront_public_base_url() . '/store?checkout=success&order=' . rawurlencode((string) $order['order_no']) . '&session_id={CHECKOUT_SESSION_ID}';
+    $cancelUrl = storefront_public_base_url() . '/store?checkout=cancelled&order=' . rawurlencode((string) $order['order_no']);
+
+    $payload = [
+        'mode' => 'payment',
+        'success_url' => $successUrl,
+        'cancel_url' => $cancelUrl,
+        'client_reference_id' => (string) $order['order_no'],
+        'customer_email' => (string) $customer['email'],
+        'billing_address_collection' => 'required',
+        'shipping_address_collection[allowed_countries][0]' => 'US',
+        'metadata[order_no]' => (string) $order['order_no'],
+        'metadata[customer_name]' => (string) $customer['name'],
+        'metadata[customer_email]' => (string) $customer['email'],
+        'metadata[source]' => 'merchandise_store',
+        'payment_method_types[0]' => 'card',
+    ];
+
+    foreach ($items as $index => $item) {
+        $productId = (string) $item['id'];
+        $qty = max(1, (int) ($item['qty'] ?? 1));
+        $catalogItem = $catalog[$productId] ?? [];
+        $itemName = trim((string) ($catalogItem['name'] ?? $productId));
+        $itemDesc = trim((string) ($catalogItem['description'] ?? ''));
+        $price = (float) ($catalogItem['price'] ?? 0);
+
+        $payload["line_items[$index][quantity]"] = $qty;
+        $payload["line_items[$index][price_data][currency]"] = 'usd';
+        $payload["line_items[$index][price_data][unit_amount]"] = (int) round($price * 100);
+        $payload["line_items[$index][price_data][product_data][name]"] = $itemName;
+        if ($itemDesc !== '') {
+            $payload["line_items[$index][price_data][product_data][description]"] = $itemDesc;
+        }
+        $payload["line_items[$index][price_data][product_data][metadata][product_id]"] = $productId;
+    }
+
+    $response = storefront_stripe_api_request('POST', '/v1/checkout/sessions', $payload);
+    if (!$response['ok'] || !is_array($response['data'])) {
+        $message = is_string($response['error']) && $response['error'] !== '' ? $response['error'] : 'Stripe checkout could not be created.';
+        if (is_array($response['data']) && isset($response['data']['error']['message'])) {
+            $message = (string) $response['data']['error']['message'];
+        }
+        return ['ok' => false, 'error' => $message];
+    }
+
+    return [
+        'ok' => true,
+        'session' => $response['data'],
+    ];
+}
+
+function storefront_stripe_checkout_session_detail(string $sessionId): array
+{
+    return storefront_stripe_api_request('GET', '/v1/checkout/sessions/' . rawurlencode($sessionId) . '?expand[]=payment_intent');
+}
+
 function inventory_status_label(int $stock, int $threshold): string
 {
     if ($stock <= 0) {
@@ -735,6 +894,523 @@ function inventory_status_label(int $stock, int $threshold): string
         return 'low';
     }
     return 'in';
+}
+
+function sponsor_organization_types(): array
+{
+    return [
+        'Corporation',
+        'Small Business',
+        'Nonprofit',
+        'Foundation',
+        'College / University',
+        'Healthcare Organization',
+        'Financial Institution',
+        'Government Agency',
+        'Community Organization',
+        'Other',
+    ];
+}
+
+function sponsor_interest_options(): array
+{
+    return [
+        'Attend Awards Ceremony',
+        'Speaking Opportunity',
+        'Student Mentorship Opportunities',
+        'Scholarship Naming Opportunity',
+        'School Grant Naming Opportunity',
+        'Future Internship Opportunities',
+        'Community Partnership Opportunities',
+    ];
+}
+
+function sponsor_payment_status_options(): array
+{
+    return ['pending_check', 'check_received', 'payment_confirmed'];
+}
+
+function sponsor_approval_status_options(): array
+{
+    return ['pending_review', 'approved', 'rejected', 'published'];
+}
+
+function sponsor_payment_instruction_lines(): array
+{
+    return [
+        'MAKE CHECK PAYABLE TO:',
+        'Trend Catch Network Inc.',
+        '',
+        'MAIL CHECK TO:',
+        'Attention: FrantzCoutard.com',
+        'Leave It Better Than You Found It',
+        'Suite 1400',
+        '118-35 Queens Blvd',
+        'Forest Hills, NY 11375',
+        '',
+        'IMPORTANT:',
+        'Please include your organization name, contact person, email address, and sponsorship level with your check.',
+    ];
+}
+
+function sponsor_payment_instruction_text(): string
+{
+    return implode("\n", sponsor_payment_instruction_lines());
+}
+
+function sponsor_ensure_schema(): void
+{
+    static $ready = false;
+    if ($ready) {
+        return;
+    }
+
+    db()->exec(
+        "CREATE TABLE IF NOT EXISTS sponsor_programs (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            slug VARCHAR(160) NOT NULL UNIQUE,
+            name VARCHAR(220) NOT NULL,
+            edition_name VARCHAR(220) DEFAULT NULL,
+            headline VARCHAR(220) NOT NULL,
+            subheadline TEXT NOT NULL,
+            registration_opens DATE DEFAULT NULL,
+            winners_announced DATE DEFAULT NULL,
+            school_impact_grant_amount DECIMAL(12,2) NOT NULL DEFAULT 25000.00,
+            student_scholarship_amount DECIMAL(12,2) NOT NULL DEFAULT 10000.00,
+            educator_award_label VARCHAR(220) NOT NULL,
+            age_range VARCHAR(40) NOT NULL DEFAULT '11-19',
+            grade_range VARCHAR(40) NOT NULL DEFAULT '6-12',
+            is_active TINYINT(1) NOT NULL DEFAULT 0,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_sponsor_programs_active (is_active, registration_opens, winners_announced)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+
+    db()->exec(
+        "CREATE TABLE IF NOT EXISTS sponsorship_levels (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            program_id INT NOT NULL,
+            slug VARCHAR(80) NOT NULL,
+            name VARCHAR(120) NOT NULL,
+            minimum_amount DECIMAL(12,2) NOT NULL DEFAULT 0,
+            sort_order INT NOT NULL DEFAULT 0,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uniq_sponsorship_level (program_id, slug),
+            CONSTRAINT fk_sponsorship_levels_program
+                FOREIGN KEY (program_id) REFERENCES sponsor_programs(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+
+    db()->exec(
+        "CREATE TABLE IF NOT EXISTS sponsor_applications (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            program_id INT NOT NULL,
+            organization_name VARCHAR(180) NOT NULL,
+            contact_person VARCHAR(160) NOT NULL,
+            title_position VARCHAR(160) DEFAULT NULL,
+            email_address VARCHAR(160) NOT NULL,
+            phone_number VARCHAR(60) NOT NULL,
+            website VARCHAR(255) DEFAULT NULL,
+            street_address VARCHAR(255) NOT NULL,
+            city VARCHAR(120) NOT NULL,
+            state VARCHAR(120) NOT NULL,
+            zip_code VARCHAR(30) NOT NULL,
+            organization_type VARCHAR(120) NOT NULL,
+            logo_url VARCHAR(255) DEFAULT NULL,
+            company_bio TEXT NOT NULL,
+            support_reason TEXT NOT NULL,
+            sponsorship_level_slug VARCHAR(80) NOT NULL,
+            sponsorship_level_name VARCHAR(120) NOT NULL,
+            sponsorship_amount DECIMAL(12,2) NOT NULL DEFAULT 0,
+            custom_amount TINYINT(1) NOT NULL DEFAULT 0,
+            interests_json LONGTEXT DEFAULT NULL,
+            public_description TEXT DEFAULT NULL,
+            admin_notes TEXT DEFAULT NULL,
+            payment_status ENUM('pending_check','check_received','payment_confirmed') NOT NULL DEFAULT 'pending_check',
+            approval_status ENUM('pending_review','approved','rejected','published') NOT NULL DEFAULT 'pending_review',
+            reviewed_by_user_id INT DEFAULT NULL,
+            reviewed_at TIMESTAMP NULL DEFAULT NULL,
+            approved_at TIMESTAMP NULL DEFAULT NULL,
+            rejected_at TIMESTAMP NULL DEFAULT NULL,
+            check_received_at TIMESTAMP NULL DEFAULT NULL,
+            payment_confirmed_at TIMESTAMP NULL DEFAULT NULL,
+            published_at TIMESTAMP NULL DEFAULT NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_sponsor_applications_program (program_id, created_at),
+            INDEX idx_sponsor_applications_status (approval_status, payment_status, created_at),
+            INDEX idx_sponsor_applications_level (sponsorship_level_slug, sponsorship_amount),
+            CONSTRAINT fk_sponsor_applications_program
+                FOREIGN KEY (program_id) REFERENCES sponsor_programs(id) ON DELETE CASCADE,
+            CONSTRAINT fk_sponsor_applications_reviewer
+                FOREIGN KEY (reviewed_by_user_id) REFERENCES users(id) ON DELETE SET NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+
+    sponsor_seed_defaults();
+    $ready = true;
+}
+
+function sponsor_seed_defaults(): void
+{
+    $pdo = db();
+    $stmt = $pdo->prepare(
+        'INSERT INTO sponsor_programs
+            (slug, name, edition_name, headline, subheadline, registration_opens, winners_announced, school_impact_grant_amount, student_scholarship_amount, educator_award_label, age_range, grade_range, is_active)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+         ON DUPLICATE KEY UPDATE
+            name = VALUES(name),
+            edition_name = VALUES(edition_name),
+            headline = VALUES(headline),
+            subheadline = VALUES(subheadline),
+            registration_opens = VALUES(registration_opens),
+            winners_announced = VALUES(winners_announced),
+            school_impact_grant_amount = VALUES(school_impact_grant_amount),
+            student_scholarship_amount = VALUES(student_scholarship_amount),
+            educator_award_label = VALUES(educator_award_label),
+            age_range = VALUES(age_range),
+            grade_range = VALUES(grade_range),
+            is_active = VALUES(is_active),
+            updated_at = NOW()'
+    );
+    $stmt->execute([
+        'leave-it-better-than-you-found-it-2026',
+        'Leave It Better Than You Found It',
+        '1st Annual Student Impact Challenge',
+        'Support New York’s Next Generation of Problem Solvers',
+        'Help students ages 11–19 develop leadership, entrepreneurship, communication, and problem-solving skills while creating positive change in their communities.',
+        '2026-06-25',
+        '2026-12-22',
+        25000,
+        10000,
+        'All-Inclusive Educator Recognition Award',
+        '11-19',
+        '6-12',
+    ]);
+
+    $programStmt = $pdo->prepare(
+        'SELECT id, slug, name, edition_name, headline, subheadline, registration_opens, winners_announced,
+                school_impact_grant_amount, student_scholarship_amount, educator_award_label, age_range, grade_range, is_active
+         FROM sponsor_programs
+         WHERE slug = ?
+         LIMIT 1'
+    );
+    $programStmt->execute(['leave-it-better-than-you-found-it-2026']);
+    $program = $programStmt->fetch();
+    if (!$program) {
+        return;
+    }
+    $levelStmt = $pdo->prepare(
+        'INSERT IGNORE INTO sponsorship_levels (program_id, slug, name, minimum_amount, sort_order)
+         VALUES (?, ?, ?, ?, ?)'
+    );
+    $levels = [
+        ['community_partner', 'Community Partner', 1000, 1],
+        ['silver_sponsor', 'Silver Sponsor', 5000, 2],
+        ['gold_sponsor', 'Gold Sponsor', 10000, 3],
+        ['presenting_sponsor', 'Presenting Sponsor', 25000, 4],
+        ['custom_sponsorship', 'Custom Sponsorship Amount', 0, 5],
+    ];
+    foreach ($levels as [$slug, $name, $minimum, $order]) {
+        $levelStmt->execute([(int) $program['id'], $slug, $name, $minimum, $order]);
+    }
+
+    $pdo->exec('UPDATE sponsor_programs SET is_active = CASE WHEN id = ' . (int) $program['id'] . ' THEN 1 ELSE 0 END');
+}
+
+function sponsor_current_program(): array
+{
+    sponsor_ensure_schema();
+    $stmt = db()->query(
+        'SELECT id, slug, name, edition_name, headline, subheadline, registration_opens, winners_announced,
+                school_impact_grant_amount, student_scholarship_amount, educator_award_label, age_range, grade_range, is_active
+         FROM sponsor_programs
+         WHERE is_active = 1
+         ORDER BY id DESC
+         LIMIT 1'
+    );
+    $program = $stmt->fetch();
+    if ($program) {
+        return $program;
+    }
+
+    return [
+        'id' => 0,
+        'slug' => 'leave-it-better-than-you-found-it-2026',
+        'name' => 'Leave It Better Than You Found It',
+        'edition_name' => '1st Annual Student Impact Challenge',
+        'headline' => 'Support New York’s Next Generation of Problem Solvers',
+        'subheadline' => 'Help students ages 11–19 develop leadership, entrepreneurship, communication, and problem-solving skills while creating positive change in their communities.',
+        'registration_opens' => '2026-06-25',
+        'winners_announced' => '2026-12-22',
+        'school_impact_grant_amount' => 25000,
+        'student_scholarship_amount' => 10000,
+        'educator_award_label' => 'All-Inclusive Educator Recognition Award',
+        'age_range' => '11-19',
+        'grade_range' => '6-12',
+        'is_active' => 1,
+    ];
+}
+
+function sponsor_program_levels(int $programId): array
+{
+    sponsor_ensure_schema();
+    $stmt = db()->prepare(
+        'SELECT id, slug, name, minimum_amount, sort_order
+         FROM sponsorship_levels
+         WHERE program_id = ?
+         ORDER BY sort_order ASC, id ASC'
+    );
+    $stmt->execute([$programId]);
+    return $stmt->fetchAll();
+}
+
+function sponsor_level_index(int $programId): array
+{
+    $index = [];
+    foreach (sponsor_program_levels($programId) as $level) {
+        $index[(string) $level['slug']] = $level;
+    }
+    return $index;
+}
+
+function sponsor_decode_json(?string $jsonText): array
+{
+    if (!$jsonText) {
+        return [];
+    }
+    $decoded = json_decode($jsonText, true);
+    return is_array($decoded) ? array_values($decoded) : [];
+}
+
+function sponsor_normalize_url(string $url): ?string
+{
+    $url = trim($url);
+    if ($url === '') {
+        return null;
+    }
+    if (!preg_match('#^https?://#i', $url)) {
+        $url = 'https://' . $url;
+    }
+    return filter_var($url, FILTER_VALIDATE_URL) ? $url : null;
+}
+
+function sponsor_public_description(string $bio, string $fallback = ''): string
+{
+    $source = trim($fallback) !== '' ? trim($fallback) : trim($bio);
+    if ($source === '') {
+        return '';
+    }
+    if (function_exists('mb_substr')) {
+        return mb_substr($source, 0, 220);
+    }
+    return substr($source, 0, 220);
+}
+
+function sponsor_current_program_payload(): array
+{
+    $program = sponsor_current_program();
+    $levels = sponsor_program_levels((int) $program['id']);
+
+    $countStmt = db()->prepare(
+        "SELECT COUNT(*) FROM sponsor_applications
+         WHERE program_id = ? AND approval_status = 'published'"
+    );
+    $countStmt->execute([(int) $program['id']]);
+
+    return [
+        'program' => [
+            'id' => (int) $program['id'],
+            'slug' => (string) $program['slug'],
+            'name' => (string) $program['name'],
+            'edition_name' => $program['edition_name'],
+            'headline' => (string) $program['headline'],
+            'subheadline' => (string) $program['subheadline'],
+            'registration_opens' => $program['registration_opens'],
+            'winners_announced' => $program['winners_announced'],
+            'school_impact_grant_amount' => (float) $program['school_impact_grant_amount'],
+            'student_scholarship_amount' => (float) $program['student_scholarship_amount'],
+            'educator_award_label' => (string) $program['educator_award_label'],
+            'age_range' => (string) $program['age_range'],
+            'grade_range' => (string) $program['grade_range'],
+            'is_active' => (int) $program['is_active'],
+            'levels' => $levels,
+            'published_sponsor_count' => (int) $countStmt->fetchColumn(),
+        ],
+        'organizationTypes' => sponsor_organization_types(),
+        'interestOptions' => sponsor_interest_options(),
+        'paymentInstructions' => sponsor_payment_instruction_lines(),
+    ];
+}
+
+function sponsor_application_admin_row(array $row): array
+{
+    if ($row === []) {
+        return [];
+    }
+
+    return [
+        'id' => (int) $row['id'],
+        'program_id' => (int) $row['program_id'],
+        'program_name' => $row['program_name'] ?? null,
+        'program_edition_name' => $row['program_edition_name'] ?? null,
+        'organization_name' => (string) $row['organization_name'],
+        'contact_person' => (string) $row['contact_person'],
+        'title_position' => $row['title_position'] ?? null,
+        'email_address' => (string) $row['email_address'],
+        'phone_number' => (string) $row['phone_number'],
+        'website' => $row['website'] ?: null,
+        'street_address' => (string) $row['street_address'],
+        'city' => (string) $row['city'],
+        'state' => (string) $row['state'],
+        'zip_code' => (string) $row['zip_code'],
+        'organization_type' => (string) $row['organization_type'],
+        'logo_url' => $row['logo_url'] ?: null,
+        'company_bio' => (string) $row['company_bio'],
+        'support_reason' => (string) $row['support_reason'],
+        'sponsorship_level_slug' => (string) $row['sponsorship_level_slug'],
+        'sponsorship_level_name' => (string) $row['sponsorship_level_name'],
+        'sponsorship_amount' => (float) $row['sponsorship_amount'],
+        'custom_amount' => (int) $row['custom_amount'],
+        'interests' => sponsor_decode_json($row['interests_json'] ?? null),
+        'public_description' => $row['public_description'] ?? null,
+        'admin_notes' => $row['admin_notes'] ?? null,
+        'payment_status' => (string) $row['payment_status'],
+        'approval_status' => (string) $row['approval_status'],
+        'reviewed_by_user_id' => isset($row['reviewed_by_user_id']) && $row['reviewed_by_user_id'] !== null ? (int) $row['reviewed_by_user_id'] : null,
+        'reviewed_by_name' => $row['reviewed_by_name'] ?? null,
+        'reviewed_at' => $row['reviewed_at'] ?? null,
+        'approved_at' => $row['approved_at'] ?? null,
+        'rejected_at' => $row['rejected_at'] ?? null,
+        'check_received_at' => $row['check_received_at'] ?? null,
+        'payment_confirmed_at' => $row['payment_confirmed_at'] ?? null,
+        'published_at' => $row['published_at'] ?? null,
+        'created_at' => $row['created_at'] ?? null,
+        'updated_at' => $row['updated_at'] ?? null,
+        'level_minimum_amount' => isset($row['level_minimum_amount']) ? (float) $row['level_minimum_amount'] : null,
+        'level_sort_order' => isset($row['level_sort_order']) && $row['level_sort_order'] !== null ? (int) $row['level_sort_order'] : null,
+    ];
+}
+
+function sponsor_public_sponsors_payload(): array
+{
+    $program = sponsor_current_program();
+    $levels = sponsor_program_levels((int) $program['id']);
+
+    $stmt = db()->prepare(
+        "SELECT sa.id, sa.organization_name, sa.website, sa.logo_url, sa.company_bio, sa.public_description,
+                sa.sponsorship_level_slug, sa.sponsorship_level_name, sa.sponsorship_amount, sa.created_at,
+                sl.sort_order
+         FROM sponsor_applications sa
+         LEFT JOIN sponsorship_levels sl
+           ON sl.program_id = sa.program_id AND sl.slug = sa.sponsorship_level_slug
+         WHERE sa.program_id = ? AND sa.approval_status = 'published'
+         ORDER BY COALESCE(sl.sort_order, 999) ASC, sa.sponsorship_amount DESC, sa.organization_name ASC"
+    );
+    $stmt->execute([(int) $program['id']]);
+    $rows = $stmt->fetchAll();
+
+    $grouped = [];
+    foreach ($levels as $level) {
+        $grouped[(string) $level['slug']] = [
+            'slug' => (string) $level['slug'],
+            'name' => (string) $level['name'],
+            'minimum_amount' => (float) $level['minimum_amount'],
+            'sort_order' => (int) $level['sort_order'],
+            'sponsors' => [],
+        ];
+    }
+
+    foreach ($rows as $row) {
+        $slug = (string) $row['sponsorship_level_slug'];
+        if (!isset($grouped[$slug])) {
+            $grouped[$slug] = [
+                'slug' => $slug,
+                'name' => (string) $row['sponsorship_level_name'],
+                'minimum_amount' => 0,
+                'sort_order' => (int) ($row['sort_order'] ?? 999),
+                'sponsors' => [],
+            ];
+        }
+        $grouped[$slug]['sponsors'][] = [
+            'id' => (int) $row['id'],
+            'organization_name' => (string) $row['organization_name'],
+            'website' => $row['website'] ?: null,
+            'logo_url' => $row['logo_url'] ?: null,
+            'sponsorship_level_slug' => $slug,
+            'sponsorship_level_name' => (string) $row['sponsorship_level_name'],
+            'sponsorship_amount' => (float) $row['sponsorship_amount'],
+            'short_description' => sponsor_public_description((string) ($row['company_bio'] ?? ''), (string) ($row['public_description'] ?? '')),
+            'badge' => 'Founding Sponsor',
+            'created_at' => $row['created_at'],
+        ];
+    }
+
+    uasort($grouped, static fn(array $a, array $b): int => (int) $a['sort_order'] <=> (int) $b['sort_order']);
+
+    return [
+        'program' => [
+            'id' => (int) $program['id'],
+            'slug' => (string) $program['slug'],
+            'name' => (string) $program['name'],
+            'edition_name' => $program['edition_name'],
+            'headline' => (string) $program['headline'],
+            'subheadline' => (string) $program['subheadline'],
+            'registration_opens' => $program['registration_opens'],
+            'winners_announced' => $program['winners_announced'],
+            'school_impact_grant_amount' => (float) $program['school_impact_grant_amount'],
+            'student_scholarship_amount' => (float) $program['student_scholarship_amount'],
+            'educator_award_label' => (string) $program['educator_award_label'],
+            'age_range' => (string) $program['age_range'],
+            'grade_range' => (string) $program['grade_range'],
+            'is_active' => (int) $program['is_active'],
+            'levels' => $levels,
+        ],
+        'tiers' => array_values($grouped),
+    ];
+}
+
+function sponsor_confirmation_email_body(array $application, array $program): string
+{
+    return implode("\n", [
+        'Thank you for your sponsorship interest.',
+        '',
+        'We received your application for the ' . ($program['edition_name'] ?: $program['name']) . '.',
+        '',
+        'Organization: ' . $application['organization_name'],
+        'Contact Person: ' . $application['contact_person'],
+        'Sponsorship Level: ' . $application['sponsorship_level_name'],
+        'Sponsorship Amount: $' . number_format((float) $application['sponsorship_amount'], 2),
+        '',
+        'Next Steps:',
+        '1. Mail your sponsorship check using the instructions below.',
+        '2. Our team will review your application and confirm when your payment is received.',
+        '3. Approved and published sponsors will be recognized publicly on the Founding Sponsors page.',
+        '',
+        sponsor_payment_instruction_text(),
+        '',
+        'Contact Information:',
+        trim((string) env('NOTIFY_EMAIL', '')) !== '' ? trim((string) env('NOTIFY_EMAIL', '')) : mail_from_address(),
+        '',
+        'Thank you,',
+        'FrantzCoutard.com',
+    ]);
+}
+
+function sponsor_send_confirmation_email(array $application, array $program): void
+{
+    $subject = 'Thank You For Your Sponsorship Interest';
+    $bodyText = sponsor_confirmation_email_body($application, $program);
+    if (mail_queue_enqueue('sponsor_interest', (string) $application['email_address'], $subject, $bodyText)) {
+        return;
+    }
+
+    try {
+        send_mail_message((string) $application['email_address'], $subject, $bodyText);
+    } catch (Throwable $e) {
+        // Sponsor applications should not fail when email delivery is unavailable.
+    }
 }
 
 function new_school_generate_participant_id(): string

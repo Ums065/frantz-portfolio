@@ -205,6 +205,84 @@ CREATE TABLE IF NOT EXISTS mail_outbox (
   INDEX idx_mail_outbox_recipient (recipient_email, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- ---------- Sponsor program management ----------
+CREATE TABLE IF NOT EXISTS sponsor_programs (
+  id                           INT AUTO_INCREMENT PRIMARY KEY,
+  slug                         VARCHAR(160) NOT NULL UNIQUE,
+  name                         VARCHAR(220) NOT NULL,
+  edition_name                 VARCHAR(220) DEFAULT NULL,
+  headline                     VARCHAR(220) NOT NULL,
+  subheadline                  TEXT NOT NULL,
+  registration_opens           DATE DEFAULT NULL,
+  winners_announced            DATE DEFAULT NULL,
+  school_impact_grant_amount   DECIMAL(12,2) NOT NULL DEFAULT 25000.00,
+  student_scholarship_amount   DECIMAL(12,2) NOT NULL DEFAULT 10000.00,
+  educator_award_label         VARCHAR(220) NOT NULL,
+  age_range                    VARCHAR(40) NOT NULL DEFAULT '11-19',
+  grade_range                  VARCHAR(40) NOT NULL DEFAULT '6-12',
+  is_active                    TINYINT(1) NOT NULL DEFAULT 0,
+  created_at                   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at                   TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_sponsor_programs_active (is_active, registration_opens, winners_announced)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS sponsorship_levels (
+  id               INT AUTO_INCREMENT PRIMARY KEY,
+  program_id       INT NOT NULL,
+  slug             VARCHAR(80) NOT NULL,
+  name             VARCHAR(120) NOT NULL,
+  minimum_amount   DECIMAL(12,2) NOT NULL DEFAULT 0,
+  sort_order       INT NOT NULL DEFAULT 0,
+  created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_sponsorship_level (program_id, slug),
+  CONSTRAINT fk_sponsorship_levels_program
+    FOREIGN KEY (program_id) REFERENCES sponsor_programs(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS sponsor_applications (
+  id                   INT AUTO_INCREMENT PRIMARY KEY,
+  program_id           INT NOT NULL,
+  organization_name    VARCHAR(180) NOT NULL,
+  contact_person       VARCHAR(160) NOT NULL,
+  title_position       VARCHAR(160) DEFAULT NULL,
+  email_address        VARCHAR(160) NOT NULL,
+  phone_number         VARCHAR(60) NOT NULL,
+  website              VARCHAR(255) DEFAULT NULL,
+  street_address       VARCHAR(255) NOT NULL,
+  city                 VARCHAR(120) NOT NULL,
+  state                VARCHAR(120) NOT NULL,
+  zip_code             VARCHAR(30) NOT NULL,
+  organization_type    VARCHAR(120) NOT NULL,
+  logo_url             VARCHAR(255) DEFAULT NULL,
+  company_bio          TEXT NOT NULL,
+  support_reason       TEXT NOT NULL,
+  sponsorship_level_slug  VARCHAR(80) NOT NULL,
+  sponsorship_level_name  VARCHAR(120) NOT NULL,
+  sponsorship_amount   DECIMAL(12,2) NOT NULL DEFAULT 0,
+  custom_amount        TINYINT(1) NOT NULL DEFAULT 0,
+  interests_json       LONGTEXT DEFAULT NULL,
+  public_description   TEXT DEFAULT NULL,
+  admin_notes          TEXT DEFAULT NULL,
+  payment_status       ENUM('pending_check','check_received','payment_confirmed') NOT NULL DEFAULT 'pending_check',
+  approval_status      ENUM('pending_review','approved','rejected','published') NOT NULL DEFAULT 'pending_review',
+  reviewed_by_user_id  INT DEFAULT NULL,
+  reviewed_at          TIMESTAMP NULL DEFAULT NULL,
+  approved_at          TIMESTAMP NULL DEFAULT NULL,
+  rejected_at          TIMESTAMP NULL DEFAULT NULL,
+  check_received_at    TIMESTAMP NULL DEFAULT NULL,
+  payment_confirmed_at TIMESTAMP NULL DEFAULT NULL,
+  published_at         TIMESTAMP NULL DEFAULT NULL,
+  created_at           TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at           TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_sponsor_applications_program (program_id, created_at),
+  INDEX idx_sponsor_applications_status (approval_status, payment_status, created_at),
+  INDEX idx_sponsor_applications_level (sponsorship_level_slug, sponsorship_amount),
+  CONSTRAINT fk_sponsor_applications_program
+    FOREIGN KEY (program_id) REFERENCES sponsor_programs(id) ON DELETE CASCADE,
+  CONSTRAINT fk_sponsor_applications_reviewer
+    FOREIGN KEY (reviewed_by_user_id) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
 -- ============================================================
 -- SEED DATA (matches the design content)
 -- ============================================================

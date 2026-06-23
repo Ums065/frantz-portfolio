@@ -1,0 +1,13 @@
+User-agent: *
+Allow: /
+
+# Private / authenticated areas — keep out of the index.
+Disallow: /admin
+Disallow: /dashboard
+Disallow: /profile
+Disallow: /demo-login
+Disallow: /new-school/dashboard
+Disallow: /new-school/parent/
+Disallow: /api/
+
+Sitemap: https://frantzcoutard.com/sitemap.xml

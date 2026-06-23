@@ -62,6 +62,7 @@ export default function DemoLogin() {
   useSeo({
     title: 'Demo Login',
     description: 'One-click demo login for the New School dashboards and admin workspace.',
+    noindex: true,
   })
 
   const { user, login, logout } = useAuth()

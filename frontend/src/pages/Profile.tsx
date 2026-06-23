@@ -1,8 +1,10 @@
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { resolveDashboardRoute } from '../lib/dashboardRoute'
+import { useSeo } from '../hooks/useSeo'
 
 export default function Profile() {
+  useSeo({ title: 'Your Profile', noindex: true })
   const { user, loading } = useAuth()
 
   if (loading) {

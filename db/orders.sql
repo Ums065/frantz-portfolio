@@ -15,6 +15,13 @@ CREATE TABLE IF NOT EXISTS orders (
   tax            DECIMAL(10,2) NOT NULL DEFAULT 0,
   total          DECIMAL(10,2) NOT NULL DEFAULT 0,
   payment_method VARCHAR(30) NOT NULL DEFAULT 'card',
+  payment_provider VARCHAR(40) DEFAULT NULL,
+  payment_status ENUM('pending','paid','failed','refunded') NOT NULL DEFAULT 'pending',
+  payment_session_id VARCHAR(120) DEFAULT NULL,
+  payment_intent_id VARCHAR(120) DEFAULT NULL,
+  payment_confirmed_at TIMESTAMP NULL DEFAULT NULL,
+  payment_url TEXT DEFAULT NULL,
+  payment_error TEXT DEFAULT NULL,
   status         ENUM('paid','pending','fulfilled','cancelled') NOT NULL DEFAULT 'paid',
   created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;

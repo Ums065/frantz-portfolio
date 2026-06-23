@@ -521,6 +521,7 @@ export default function NewSchool() {
     description: isDashboardRoute
       ? 'Private role dashboard for approved students, parents, schools, teachers, and admins.'
       : 'Join New York\'s Largest Student Problem-Solving Movement. Students interview 10 local businesses, build solutions, and compete for scholarships, school grants, and statewide recognition.',
+    noindex: isDashboardRoute,
   })
 
   const accountApprovalStatus = (user?.approval_status || 'approved').toString()
@@ -1564,7 +1565,7 @@ export default function NewSchool() {
               <button className="btn" type="button" onClick={() => openRegistrationTag('student')}>Student Registration</button>
               <button className="btn" type="button" onClick={() => openRegistrationTag('teacher')}>Teacher Registration</button>
               <button className="btn" type="button" onClick={() => openRegistrationTag('parent')}>Parent Consent Registration</button>
-              <button className="btn" type="button" data-request="Founding Sponsor Registration">Founding Sponsor Registration</button>
+              <Link className="btn" to="/new-school/become-a-founding-sponsor">Founding Sponsor Registration</Link>
             </div>
             {notice && <div className={`ns-alert ns-alert--${notice.tone}`}>{notice.text}</div>}
             {token && parentLink?.student && (
@@ -1748,7 +1749,7 @@ export default function NewSchool() {
           <div className="ns-section__head reveal in">
             <span className="eyebrow">Registration Hub</span>
             <h2>Student, parent, school, and teacher forms.</h2>
-            <p>Choose a user tag first. The matching registration fields appear so each account type only sees the inputs it needs. Sponsors use the founding sponsor request button above.</p>
+            <p>Choose a user tag first. The matching registration fields appear so each account type only sees the inputs it needs. Sponsors use the founding sponsor page linked above.</p>
           </div>
 
           <div className="ns-role-switch reveal in" role="tablist" aria-label="Registration user tags">
@@ -2063,10 +2064,13 @@ export default function NewSchool() {
           <div className="glass ns-sponsor-callout reveal in">
             <div>
               <span className="eyebrow">Founding Sponsor Registration</span>
-              <h3>Request the sponsorship conversation.</h3>
-              <p>Use the sponsor request flow to share your organization, goals, and interest in backing student problem-solving, school impact, and statewide recognition.</p>
+              <h3>Open the sponsor page and submit your organization details.</h3>
+              <p>Use the dedicated sponsor page to review the mission, sponsorship levels, payment instructions, and interest form before the How It Works section.</p>
             </div>
-            <button className="btn btn--solid" type="button" data-request="Founding Sponsor Registration">Founding Sponsor Registration</button>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              <Link className="btn btn--solid" to="/new-school/become-a-founding-sponsor">Founding Sponsor Registration</Link>
+              <Link className="btn" to="/new-school/founding-sponsors">View Founding Sponsors</Link>
+            </div>
           </div>
         </div>
       </section>

@@ -493,6 +493,14 @@ try {
             json(['testimonials' => $rows]);
         }
 
+        case $key === 'GET sponsorship/current': {
+            json(sponsor_current_program_payload());
+        }
+
+        case $key === 'GET sponsorship/current/sponsors': {
+            json(sponsor_public_sponsors_payload());
+        }
+
         case $method === 'GET' && preg_match('#^posts/(\d+)$#', $route, $m) === 1: {
             $stmt = db()->prepare(
                 'SELECT id, title, category, excerpt, body, cover_image, is_featured, published_at FROM posts WHERE id = ?'
@@ -510,6 +518,165 @@ try {
             $stmt = db()->prepare('INSERT IGNORE INTO subscribers (email) VALUES (?)');
             $stmt->execute([$email]);
             json(['message' => 'You\'re on the list — welcome to the legacy.'], 201);
+        }
+
+        case $key === 'POST sponsorship/upload-logo': {
+            sponsor_ensure_schema();
+            if (empty($_FILES['file']) || ($_FILES['file']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+                json(['error' => 'No file uploaded.'], 422);
+            }
+            $f = $_FILES['file'];
+            if (($f['size'] ?? 0) > 6 * 1024 * 1024) {
+                json(['error' => 'Logo must be 6MB or smaller.'], 422);
+            }
+
+            $allowed = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp'];
+            $mime = function_exists('mime_content_type') ? mime_content_type($f['tmp_name']) : ($f['type'] ?? '');
+            if (!isset($allowed[$mime])) {
+                json(['error' => 'Only JPG, PNG or WebP images are allowed.'], 422);
+            }
+
+            $dir = __DIR__ . '/uploads/sponsors';
+            if (!is_dir($dir) && !mkdir($dir, 0775, true) && !is_dir($dir)) {
+                json(['error' => 'Could not create sponsor upload directory.'], 500);
+            }
+
+            $name = 'sponsor-' . bin2hex(random_bytes(8)) . '.' . $allowed[$mime];
+            if (!move_uploaded_file($f['tmp_name'], $dir . '/' . $name)) {
+                json(['error' => 'Failed to save the uploaded logo.'], 500);
+            }
+
+            json(['url' => '/api/uploads/sponsors/' . $name, 'message' => 'Uploaded.'], 201);
+        }
+
+        case $key === 'POST sponsorship/application': {
+            sponsor_ensure_schema();
+            $program = sponsor_current_program();
+            $levels = sponsor_level_index((int) $program['id']);
+            $b = body();
+
+            $organizationName = field($b, 'organization_name');
+            $contactPerson = field($b, 'contact_person');
+            $titlePosition = field($b, 'title_position');
+            $emailAddress = require_email(field($b, 'email_address'));
+            $phoneNumber = field($b, 'phone_number');
+            $website = sponsor_normalize_url(field($b, 'website'));
+            $streetAddress = field($b, 'street_address');
+            $city = field($b, 'city');
+            $state = field($b, 'state');
+            $zipCode = field($b, 'zip_code');
+            $organizationType = field($b, 'organization_type');
+            $logoUrl = field($b, 'logo_url');
+            $companyBio = field($b, 'company_bio');
+            $supportReason = field($b, 'support_reason');
+            $levelSlug = field($b, 'sponsorship_level_slug');
+            $submittedAmount = (float) ($b['sponsorship_amount'] ?? 0);
+            $customAmount = !empty($b['custom_amount']);
+            $interests = is_array($b['interests'] ?? null) ? array_values(array_filter(array_map('strval', $b['interests']))) : [];
+
+            if ($organizationName === '') json(['error' => 'Organization name is required.'], 422);
+            if ($contactPerson === '') json(['error' => 'Contact person is required.'], 422);
+            if ($titlePosition === '') json(['error' => 'Title / position is required.'], 422);
+            if ($phoneNumber === '') json(['error' => 'Phone number is required.'], 422);
+            if ($streetAddress === '') json(['error' => 'Street address is required.'], 422);
+            if ($city === '') json(['error' => 'City is required.'], 422);
+            if ($state === '') json(['error' => 'State is required.'], 422);
+            if ($zipCode === '') json(['error' => 'Zip code is required.'], 422);
+            if ($organizationType === '' || !in_array($organizationType, sponsor_organization_types(), true)) {
+                json(['error' => 'A valid organization type is required.'], 422);
+            }
+            if ($companyBio === '') json(['error' => 'Company bio is required.'], 422);
+            if ($supportReason === '') json(['error' => 'Please share why you would like to support this initiative.'], 422);
+            if ($levelSlug === '' || !isset($levels[$levelSlug])) {
+                json(['error' => 'Please select a sponsorship level.'], 422);
+            }
+            if ($logoUrl !== '' && !preg_match('#^/api/uploads/sponsors/#', $logoUrl)) {
+                json(['error' => 'Logo upload is invalid.'], 422);
+            }
+
+            $allowedInterests = sponsor_interest_options();
+            $interests = array_values(array_filter($interests, static fn(string $interest): bool => in_array($interest, $allowedInterests, true)));
+
+            $selectedLevel = $levels[$levelSlug];
+            $minimumAmount = (float) $selectedLevel['minimum_amount'];
+            $amount = $levelSlug === 'custom_sponsorship'
+                ? $submittedAmount
+                : max($minimumAmount, $submittedAmount > 0 ? $submittedAmount : $minimumAmount);
+
+            if ($levelSlug === 'custom_sponsorship' && $amount <= 0) {
+                json(['error' => 'Please enter a custom sponsorship amount.'], 422);
+            }
+
+            $publicDescription = sponsor_public_description($companyBio);
+            $stmt = db()->prepare(
+                'INSERT INTO sponsor_applications (
+                    program_id, organization_name, contact_person, title_position, email_address, phone_number,
+                    website, street_address, city, state, zip_code, organization_type, logo_url, company_bio,
+                    support_reason, sponsorship_level_slug, sponsorship_level_name, sponsorship_amount, custom_amount,
+                    interests_json, public_description, payment_status, approval_status
+                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "pending_check", "pending_review")'
+            );
+            $stmt->execute([
+                (int) $program['id'],
+                $organizationName,
+                $contactPerson,
+                $titlePosition,
+                $emailAddress,
+                $phoneNumber,
+                $website,
+                $streetAddress,
+                $city,
+                $state,
+                $zipCode,
+                $organizationType,
+                $logoUrl !== '' ? $logoUrl : null,
+                $companyBio,
+                $supportReason,
+                $levelSlug,
+                $selectedLevel['name'],
+                $amount,
+                $levelSlug === 'custom_sponsorship' || $customAmount ? 1 : 0,
+                json_encode($interests, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                $publicDescription !== '' ? $publicDescription : null,
+            ]);
+
+            $applicationId = (int) db()->lastInsertId();
+            $application = [
+                'id' => $applicationId,
+                'organization_name' => $organizationName,
+                'contact_person' => $contactPerson,
+                'email_address' => $emailAddress,
+                'sponsorship_level_name' => (string) $selectedLevel['name'],
+                'sponsorship_amount' => $amount,
+            ];
+
+            sponsor_send_confirmation_email($application, $program);
+            notify(
+                'New sponsor application: ' . $organizationName,
+                implode("\n", [
+                    'Program: ' . ($program['edition_name'] ?: $program['name']),
+                    'Organization: ' . $organizationName,
+                    'Contact Person: ' . $contactPerson,
+                    'Title / Position: ' . $titlePosition,
+                    'Email: ' . $emailAddress,
+                    'Phone: ' . $phoneNumber,
+                    'Website: ' . ($website ?: '—'),
+                    'Organization Type: ' . $organizationType,
+                    'Sponsorship Level: ' . $selectedLevel['name'],
+                    'Sponsorship Amount: $' . number_format($amount, 2),
+                    '',
+                    'Why Support:',
+                    $supportReason,
+                    '',
+                    sponsor_payment_instruction_text(),
+                ])
+            );
+
+            json([
+                'message' => 'Sponsorship application received.',
+                'application' => $application,
+                'paymentInstructions' => sponsor_payment_instruction_lines(),
+            ], 201);
         }
 
         case $key === 'POST request': {
@@ -554,6 +721,221 @@ try {
         }
 
         /* ---------------- STORE / CHECKOUT ---------------- */
+        case $key === 'POST store/checkout': {
+            $b = body();
+            $name = field($b, 'customer_name') ?: field($b, 'name');
+            $email = require_email(field($b, 'email'));
+            $address = field($b, 'address');
+            $items = $b['items'] ?? [];
+
+            if ($name === '') json(['error' => 'Customer name is required.'], 422);
+            if ($address === '') json(['error' => 'Shipping address is required.'], 422);
+            if (!is_array($items) || count($items) === 0) json(['error' => 'Cart is empty.'], 422);
+            if (!storefront_stripe_enabled()) {
+                json(['error' => 'Secure checkout is not configured yet.'], 503);
+            }
+
+            $normalizedItems = normalized_order_items($items);
+            if (count($normalizedItems) === 0) {
+                json(['error' => 'Cart contains invalid items.'], 422);
+            }
+
+            $grouped = [];
+            foreach ($normalizedItems as $item) {
+                $grouped[$item['id']] = ($grouped[$item['id']] ?? 0) + (int) $item['qty'];
+            }
+
+            $pdo = db();
+            $catalog = storefront_catalog();
+            storefront_ensure_orders_payment_schema();
+
+            $pdo->beginTransaction();
+            try {
+                $lock = $pdo->prepare(
+                    'SELECT product_id, stock, low_stock_threshold
+                     FROM store_inventory WHERE product_id = ? FOR UPDATE'
+                );
+                foreach ($grouped as $productId => $qty) {
+                    $lock->execute([$productId]);
+                    $inv = $lock->fetch();
+                    if (!$inv) {
+                        $pdo->rollBack();
+                        json(['error' => 'Inventory record missing for ' . $productId . '.'], 500);
+                    }
+                    if ((int) $inv['stock'] < $qty) {
+                        $pdo->rollBack();
+                        $productName = $catalog[$productId]['name'] ?? $productId;
+                        json(['error' => "Not enough stock for {$productName}."], 409);
+                    }
+                }
+
+                $totals = calculate_order_totals($normalizedItems, field($b, 'promo_code'));
+                $orderNo = 'FC-' . str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+                $uid = $_SESSION['uid'] ?? null;
+
+                $stmt = $pdo->prepare(
+                    'INSERT INTO orders
+                       (order_no, user_id, customer_name, email, address, items,
+                        subtotal, discount, shipping, tax, total, payment_method,
+                        payment_provider, payment_status, status)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                );
+                $stmt->execute([
+                    $orderNo,
+                    $uid,
+                    $name,
+                    $email,
+                    $address,
+                    json_encode($normalizedItems, JSON_UNESCAPED_UNICODE),
+                    $totals['subtotal'],
+                    $totals['discount'],
+                    $totals['shipping'],
+                    $totals['tax'],
+                    $totals['total'],
+                    'stripe_checkout',
+                    'stripe',
+                    'pending',
+                    'pending',
+                ]);
+
+                $orderId = (int) $pdo->lastInsertId();
+
+                $decrement = $pdo->prepare('UPDATE store_inventory SET stock = stock - ? WHERE product_id = ?');
+                foreach ($grouped as $productId => $qty) {
+                    $decrement->execute([(int) $qty, $productId]);
+                }
+
+                $checkout = storefront_stripe_checkout_session(
+                    $normalizedItems,
+                    ['order_no' => $orderNo],
+                    $catalog,
+                    ['name' => $name, 'email' => $email]
+                );
+                if (!$checkout['ok']) {
+                    $pdo->rollBack();
+                    json(['error' => (string) ($checkout['error'] ?? 'Could not create checkout session.')], 502);
+                }
+
+                $session = $checkout['session'];
+                $sessionId = (string) ($session['id'] ?? '');
+                $sessionUrl = (string) ($session['url'] ?? '');
+                if ($sessionId === '' || $sessionUrl === '') {
+                    $pdo->rollBack();
+                    json(['error' => 'Stripe checkout session is missing a redirect URL.'], 502);
+                }
+
+                $update = $pdo->prepare(
+                    'UPDATE orders
+                     SET payment_session_id = ?, payment_url = ?, payment_status = ?, updated_at = NOW()
+                     WHERE id = ?'
+                );
+                $update->execute([$sessionId, $sessionUrl, 'pending', $orderId]);
+
+                $pdo->commit();
+                json([
+                    'order_no' => $orderNo,
+                    'checkout_url' => $sessionUrl,
+                    'payment_provider' => 'stripe',
+                    'message' => 'Redirecting to secure checkout.',
+                ], 201);
+            } catch (Throwable $e) {
+                if ($pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
+                throw $e;
+            }
+        }
+
+        case $key === 'POST store/checkout/confirm': {
+            $b = body();
+            $sessionId = field($b, 'session_id');
+            $orderNo = field($b, 'order_no');
+
+            if ($sessionId === '') {
+                json(['error' => 'Checkout session id is required.'], 422);
+            }
+            if (!storefront_stripe_enabled()) {
+                json(['error' => 'Secure checkout is not configured yet.'], 503);
+            }
+
+            storefront_ensure_orders_payment_schema();
+            $sessionResponse = storefront_stripe_checkout_session_detail($sessionId);
+            if (!$sessionResponse['ok'] || !is_array($sessionResponse['data'])) {
+                json(['error' => 'Unable to verify the payment session.'], 502);
+            }
+
+            $session = $sessionResponse['data'];
+            $paymentStatus = (string) ($session['payment_status'] ?? '');
+            if ($paymentStatus !== 'paid') {
+                json(['error' => 'Payment has not been completed yet.'], 409);
+            }
+
+            $reference = (string) ($session['client_reference_id'] ?? '');
+            if ($orderNo === '') {
+                $orderNo = $reference;
+            }
+            if ($orderNo === '') {
+                json(['error' => 'Order reference missing from payment session.'], 422);
+            }
+            if ($reference !== '' && $orderNo !== $reference) {
+                json(['error' => 'Payment session does not match the order reference.'], 422);
+            }
+
+            $pdo = db();
+            $pdo->beginTransaction();
+            try {
+                $lookup = $pdo->prepare('SELECT * FROM orders WHERE order_no = ? LIMIT 1 FOR UPDATE');
+                $lookup->execute([$orderNo]);
+                $order = $lookup->fetch();
+                if (!$order) {
+                    $pdo->rollBack();
+                    json(['error' => 'Order not found.'], 404);
+                }
+                if ((string) ($order['payment_status'] ?? '') === 'paid') {
+                    $pdo->commit();
+                    json([
+                        'message' => 'Payment already confirmed.',
+                        'order_no' => $orderNo,
+                    ]);
+                }
+
+                $update = $pdo->prepare(
+                    'UPDATE orders
+                     SET status = ?, payment_status = ?, payment_provider = ?, payment_method = ?, payment_intent_id = ?,
+                         payment_confirmed_at = NOW(), updated_at = NOW()
+                     WHERE order_no = ?'
+                );
+                $paymentIntentId = '';
+                if (isset($session['payment_intent'])) {
+                    if (is_string($session['payment_intent'])) {
+                        $paymentIntentId = $session['payment_intent'];
+                    } elseif (is_array($session['payment_intent']) && isset($session['payment_intent']['id'])) {
+                        $paymentIntentId = (string) $session['payment_intent']['id'];
+                    }
+                }
+                $update->execute([
+                    'paid',
+                    'paid',
+                    'stripe',
+                    'stripe_checkout',
+                    $paymentIntentId !== '' ? $paymentIntentId : null,
+                    $orderNo,
+                ]);
+
+                $pdo->commit();
+                json([
+                    'message' => 'Payment confirmed.',
+                    'order_no' => $orderNo,
+                    'payment_status' => 'paid',
+                ]);
+            } catch (Throwable $e) {
+                if ($pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
+                throw $e;
+            }
+        }
+
         case $key === 'POST order': {
             $b     = body();
             $name  = field($b, 'customer_name') ?: field($b, 'name');
@@ -645,6 +1027,49 @@ try {
                 'contacts'    => db()->query('SELECT * FROM contact_messages ORDER BY created_at DESC LIMIT 200')->fetchAll(),
                 'members'     => db()->query('SELECT id, full_name, email, role, approval_status, approval_note, approval_reviewed_at, created_at, updated_at FROM users ORDER BY CASE approval_status WHEN "pending" THEN 0 WHEN "rejected" THEN 1 ELSE 2 END, created_at DESC LIMIT 200')->fetchAll(),
                 'orders'      => db()->query('SELECT * FROM orders ORDER BY created_at DESC LIMIT 200')->fetchAll(),
+            ]);
+        }
+
+        case $key === 'GET admin/sponsorship/current/applications': {
+            require_admin();
+            sponsor_ensure_schema();
+            $program = sponsor_current_program();
+            $stmt = db()->prepare(
+                'SELECT sa.*, sp.name AS program_name, sp.edition_name AS program_edition_name,
+                        sl.minimum_amount AS level_minimum_amount, sl.sort_order AS level_sort_order,
+                        reviewer.full_name AS reviewed_by_name
+                 FROM sponsor_applications sa
+                 INNER JOIN sponsor_programs sp ON sp.id = sa.program_id
+                 LEFT JOIN sponsorship_levels sl
+                   ON sl.program_id = sa.program_id AND sl.slug = sa.sponsorship_level_slug
+                 LEFT JOIN users reviewer ON reviewer.id = sa.reviewed_by_user_id
+                 WHERE sa.program_id = ?
+                 ORDER BY sa.created_at DESC, sa.id DESC'
+            );
+            $stmt->execute([(int) $program['id']]);
+
+            json([
+                'program' => [
+                    'id' => (int) $program['id'],
+                    'slug' => (string) $program['slug'],
+                    'name' => (string) $program['name'],
+                    'edition_name' => $program['edition_name'],
+                    'headline' => (string) $program['headline'],
+                    'subheadline' => (string) $program['subheadline'],
+                    'registration_opens' => $program['registration_opens'],
+                    'winners_announced' => $program['winners_announced'],
+                    'school_impact_grant_amount' => (float) $program['school_impact_grant_amount'],
+                    'student_scholarship_amount' => (float) $program['student_scholarship_amount'],
+                    'educator_award_label' => (string) $program['educator_award_label'],
+                    'age_range' => (string) $program['age_range'],
+                    'grade_range' => (string) $program['grade_range'],
+                    'is_active' => (int) $program['is_active'],
+                    'levels' => sponsor_program_levels((int) $program['id']),
+                ],
+                'applications' => array_map('sponsor_application_admin_row', $stmt->fetchAll()),
+                'paymentInstructions' => sponsor_payment_instruction_lines(),
+                'paymentStatusOptions' => sponsor_payment_status_options(),
+                'approvalStatusOptions' => sponsor_approval_status_options(),
             ]);
         }
 
@@ -751,6 +1176,168 @@ try {
             $stmt = db()->prepare('UPDATE orders SET status = ? WHERE id = ?');
             $stmt->execute([$status, (int) $m[1]]);
             json(['message' => 'Order updated.']);
+        }
+
+        case $method === 'PUT' && preg_match('#^admin/sponsorship/application/(\d+)$#', $route, $m) === 1: {
+            $admin = require_admin();
+            sponsor_ensure_schema();
+            $id = (int) $m[1];
+            $b = body();
+
+            $existingStmt = db()->prepare('SELECT * FROM sponsor_applications WHERE id = ? LIMIT 1');
+            $existingStmt->execute([$id]);
+            $existing = $existingStmt->fetch();
+            if (!$existing) {
+                json(['error' => 'Sponsor application not found.'], 404);
+            }
+
+            $paymentStatus = field($b, 'payment_status') ?: (string) $existing['payment_status'];
+            $approvalStatus = field($b, 'approval_status') ?: (string) $existing['approval_status'];
+            $organizationType = field($b, 'organization_type') ?: (string) $existing['organization_type'];
+            $levelSlug = field($b, 'sponsorship_level_slug') ?: (string) $existing['sponsorship_level_slug'];
+            $levels = sponsor_level_index((int) $existing['program_id']);
+
+            if (!in_array($paymentStatus, sponsor_payment_status_options(), true)) {
+                json(['error' => 'Invalid payment status.'], 422);
+            }
+            if (!in_array($approvalStatus, sponsor_approval_status_options(), true)) {
+                json(['error' => 'Invalid approval status.'], 422);
+            }
+            if (!in_array($organizationType, sponsor_organization_types(), true)) {
+                json(['error' => 'Invalid organization type.'], 422);
+            }
+            if (!isset($levels[$levelSlug])) {
+                json(['error' => 'Invalid sponsorship level.'], 422);
+            }
+            if ($approvalStatus === 'published' && $paymentStatus !== 'payment_confirmed') {
+                json(['error' => 'Payment must be confirmed before publishing a sponsor.'], 422);
+            }
+
+            $level = $levels[$levelSlug];
+            $customAmount = !empty($b['custom_amount']) || $levelSlug === 'custom_sponsorship';
+            $submittedAmount = isset($b['sponsorship_amount']) ? (float) $b['sponsorship_amount'] : (float) $existing['sponsorship_amount'];
+            $minimumAmount = (float) $level['minimum_amount'];
+            $amount = $levelSlug === 'custom_sponsorship'
+                ? $submittedAmount
+                : max($minimumAmount, $submittedAmount > 0 ? $submittedAmount : $minimumAmount);
+            if ($levelSlug === 'custom_sponsorship' && $amount <= 0) {
+                json(['error' => 'Custom sponsorship amount must be greater than zero.'], 422);
+            }
+
+            $interests = is_array($b['interests'] ?? null)
+                ? array_values(array_filter(array_map('strval', $b['interests'])))
+                : sponsor_decode_json($existing['interests_json'] ?? null);
+            $allowedInterests = sponsor_interest_options();
+            $interests = array_values(array_filter($interests, static fn(string $interest): bool => in_array($interest, $allowedInterests, true)));
+
+            $organizationName = field($b, 'organization_name') ?: (string) $existing['organization_name'];
+            $contactPerson = field($b, 'contact_person') ?: (string) $existing['contact_person'];
+            $titlePosition = field($b, 'title_position') ?: (string) $existing['title_position'];
+            $emailAddress = field($b, 'email_address') !== '' ? require_email(field($b, 'email_address')) : (string) $existing['email_address'];
+            $phoneNumber = field($b, 'phone_number') ?: (string) $existing['phone_number'];
+            $websiteValue = array_key_exists('website', $b) ? sponsor_normalize_url(field($b, 'website')) : ($existing['website'] ?: null);
+            $streetAddress = field($b, 'street_address') ?: (string) $existing['street_address'];
+            $city = field($b, 'city') ?: (string) $existing['city'];
+            $state = field($b, 'state') ?: (string) $existing['state'];
+            $zipCode = field($b, 'zip_code') ?: (string) $existing['zip_code'];
+            $logoUrl = array_key_exists('logo_url', $b) ? field($b, 'logo_url') : (string) ($existing['logo_url'] ?? '');
+            $companyBio = field($b, 'company_bio') ?: (string) $existing['company_bio'];
+            $supportReason = field($b, 'support_reason') ?: (string) $existing['support_reason'];
+            $publicDescription = array_key_exists('public_description', $b)
+                ? field($b, 'public_description')
+                : (string) ($existing['public_description'] ?? '');
+            $adminNotes = array_key_exists('admin_notes', $b)
+                ? field($b, 'admin_notes')
+                : (string) ($existing['admin_notes'] ?? '');
+
+            if ($logoUrl !== '' && !preg_match('#^/api/uploads/sponsors/#', $logoUrl)) {
+                json(['error' => 'Logo upload is invalid.'], 422);
+            }
+
+            $reviewedAt = in_array($approvalStatus, ['approved', 'rejected', 'published'], true) ? date('Y-m-d H:i:s') : null;
+            $approvedAt = in_array($approvalStatus, ['approved', 'published'], true)
+                ? (($existing['approved_at'] ?? null) ?: date('Y-m-d H:i:s'))
+                : null;
+            $rejectedAt = $approvalStatus === 'rejected' ? (($existing['rejected_at'] ?? null) ?: date('Y-m-d H:i:s')) : null;
+            $publishedAt = $approvalStatus === 'published' ? (($existing['published_at'] ?? null) ?: date('Y-m-d H:i:s')) : null;
+            $checkReceivedAt = in_array($paymentStatus, ['check_received', 'payment_confirmed'], true)
+                ? (($existing['check_received_at'] ?? null) ?: date('Y-m-d H:i:s'))
+                : null;
+            $paymentConfirmedAt = $paymentStatus === 'payment_confirmed'
+                ? (($existing['payment_confirmed_at'] ?? null) ?: date('Y-m-d H:i:s'))
+                : null;
+            $reviewedBy = in_array($approvalStatus, ['approved', 'rejected', 'published'], true) ? (int) $admin['id'] : null;
+
+            $stmt = db()->prepare(
+                'UPDATE sponsor_applications
+                 SET organization_name = ?, contact_person = ?, title_position = ?, email_address = ?, phone_number = ?,
+                     website = ?, street_address = ?, city = ?, state = ?, zip_code = ?, organization_type = ?,
+                     logo_url = ?, company_bio = ?, support_reason = ?, sponsorship_level_slug = ?, sponsorship_level_name = ?,
+                     sponsorship_amount = ?, custom_amount = ?, interests_json = ?, public_description = ?, admin_notes = ?,
+                     payment_status = ?, approval_status = ?, reviewed_by_user_id = ?, reviewed_at = ?, approved_at = ?,
+                     rejected_at = ?, check_received_at = ?, payment_confirmed_at = ?, published_at = ?, updated_at = NOW()
+                 WHERE id = ?'
+            );
+            $stmt->execute([
+                $organizationName,
+                $contactPerson,
+                $titlePosition,
+                $emailAddress,
+                $phoneNumber,
+                $websiteValue,
+                $streetAddress,
+                $city,
+                $state,
+                $zipCode,
+                $organizationType,
+                $logoUrl !== '' ? $logoUrl : null,
+                $companyBio,
+                $supportReason,
+                $levelSlug,
+                $level['name'],
+                $amount,
+                $customAmount ? 1 : 0,
+                json_encode($interests, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                $publicDescription !== '' ? $publicDescription : null,
+                $adminNotes !== '' ? $adminNotes : null,
+                $paymentStatus,
+                $approvalStatus,
+                $reviewedBy,
+                $reviewedAt,
+                $approvedAt,
+                $rejectedAt,
+                $checkReceivedAt,
+                $paymentConfirmedAt,
+                $publishedAt,
+                $id,
+            ]);
+
+            $fresh = db()->prepare(
+                'SELECT sa.*, sp.name AS program_name, sp.edition_name AS program_edition_name,
+                        sl.minimum_amount AS level_minimum_amount, sl.sort_order AS level_sort_order,
+                        reviewer.full_name AS reviewed_by_name
+                 FROM sponsor_applications sa
+                 INNER JOIN sponsor_programs sp ON sp.id = sa.program_id
+                 LEFT JOIN sponsorship_levels sl
+                   ON sl.program_id = sa.program_id AND sl.slug = sa.sponsorship_level_slug
+                 LEFT JOIN users reviewer ON reviewer.id = sa.reviewed_by_user_id
+                 WHERE sa.id = ?
+                 LIMIT 1'
+            );
+            $fresh->execute([$id]);
+
+            json([
+                'message' => 'Sponsor application updated.',
+                'application' => sponsor_application_admin_row($fresh->fetch() ?: []),
+            ]);
+        }
+
+        case $method === 'DELETE' && preg_match('#^admin/sponsorship/application/(\d+)$#', $route, $m) === 1: {
+            require_admin();
+            sponsor_ensure_schema();
+            $stmt = db()->prepare('DELETE FROM sponsor_applications WHERE id = ?');
+            $stmt->execute([(int) $m[1]]);
+            json(['message' => 'Sponsor application removed.']);
         }
 
         case $method === 'GET' && preg_match('#^admin/user/(\d+)$#', $route, $m) === 1: {

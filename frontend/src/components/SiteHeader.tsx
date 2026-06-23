@@ -17,7 +17,9 @@ type NavItem =
 export default function SiteHeader({ home = false }: { home?: boolean }) {
   const { user, logout } = useAuth()
   const [menuOpen, setMenuOpen] = useState(false)
+  const [sponsorOpen, setSponsorOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement | null>(null)
+  const sponsorRef = useRef<HTMLDivElement | null>(null)
   const dashboardHref = resolveDashboardRoute(user?.role)
   const fullName = user?.full_name || ''
   const initial = fullName.trim().charAt(0).toUpperCase() || 'U'
@@ -39,26 +41,34 @@ export default function SiteHeader({ home = false }: { home?: boolean }) {
   ]
 
   useEffect(() => {
-    if (!menuOpen) return
+    if (!menuOpen && !sponsorOpen) return
 
     const onPointerDown = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         setMenuOpen(false)
       }
+      if (sponsorRef.current && !sponsorRef.current.contains(event.target as Node)) {
+        setSponsorOpen(false)
+      }
     }
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setMenuOpen(false)
+      if (event.key === 'Escape') setSponsorOpen(false)
     }
 
     document.addEventListener('mousedown', onPointerDown)
     document.addEventListener('keydown', onKeyDown)
     return () => {
-      document.removeEventListener('mousedown', onPointerDown)
-      document.removeEventListener('keydown', onKeyDown)
+    document.removeEventListener('mousedown', onPointerDown)
+    document.removeEventListener('keydown', onKeyDown)
     }
-  }, [menuOpen])
+  }, [menuOpen, sponsorOpen])
 
-  const closeMenu = () => setMenuOpen(false)
+  const closeMenu = () => {
+    setMenuOpen(false)
+    setSponsorOpen(false)
+  }
+  const closeSponsorMenu = () => setSponsorOpen(false)
 
   return (
     <>
@@ -82,6 +92,22 @@ export default function SiteHeader({ home = false }: { home?: boolean }) {
                 <a key={item.label} href={item.href} data-nav-section>{item.label}</a>
               ),
             )}
+            <div className={`nav-dropdown${sponsorOpen ? ' open' : ''}`} ref={sponsorRef}>
+              <button
+                type="button"
+                className="nav-dropdown__trigger"
+                aria-expanded={sponsorOpen}
+                aria-haspopup="true"
+                onClick={() => setSponsorOpen((open) => !open)}
+              >
+                Founding Sponsor
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
+              </button>
+              <div className="nav-dropdown__menu" role="menu" aria-label="Founding Sponsor menu">
+                <Link to="/become-a-founding-sponsor" onClick={closeSponsorMenu} role="menuitem">Become A Founding Sponsor</Link>
+                <Link to="/founding-sponsors" onClick={closeSponsorMenu} role="menuitem">Founding Sponsors</Link>
+              </div>
+            </div>
             <span className="nav__indicator" aria-hidden="true" />
           </nav>
           <div className="nav__cta">
@@ -106,6 +132,8 @@ export default function SiteHeader({ home = false }: { home?: boolean }) {
                   <Link to={dashboardHref} onClick={closeMenu}>Dashboard</Link>
                   <Link to="/demo-login" onClick={closeMenu}>Demo Login</Link>
                   <Link to="/profile" onClick={closeMenu}>Profile</Link>
+                  <Link to="/become-a-founding-sponsor" onClick={closeMenu}>Founding Sponsor</Link>
+                  <Link to="/founding-sponsors" onClick={closeMenu}>Founding Sponsors</Link>
                   <button
                     type="button"
                     onClick={async () => {
@@ -150,6 +178,21 @@ export default function SiteHeader({ home = false }: { home?: boolean }) {
               <a key={item.label} href={item.href} data-nav-section>{item.label}</a>
             ),
           )}
+          <div className="mobile-menu__group">
+            <button
+              className="mobile-menu__group-trigger"
+              type="button"
+              aria-expanded={sponsorOpen}
+              onClick={() => setSponsorOpen((open) => !open)}
+            >
+              Founding Sponsor
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
+            </button>
+            <div className={`mobile-menu__group-links${sponsorOpen ? ' open' : ''}`}>
+              <Link to="/become-a-founding-sponsor" onClick={() => { closeMenu(); closeSponsorMenu() }}>Become A Founding Sponsor</Link>
+              <Link to="/founding-sponsors" onClick={() => { closeMenu(); closeSponsorMenu() }}>Founding Sponsors</Link>
+            </div>
+          </div>
           <div className="mcta">
             {user ? (
               <>

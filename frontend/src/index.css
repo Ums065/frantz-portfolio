@@ -3,6 +3,7 @@
 @import './styles/design.css';
 @import './styles/pages.css';
 @import './styles/new-school.css';
+@import './styles/sponsors.css';
 
 @tailwind base;
 @tailwind components;

@@ -277,6 +277,13 @@ export interface UserOrderRow {
   items: string
   total: string
   payment_method: string
+  payment_provider?: string | null
+  payment_status?: 'pending' | 'paid' | 'failed' | 'refunded'
+  payment_session_id?: string | null
+  payment_intent_id?: string | null
+  payment_confirmed_at?: string | null
+  payment_url?: string | null
+  payment_error?: string | null
   status: string
   created_at: string
 }
@@ -319,6 +326,96 @@ export interface InventoryRow {
   restock_note: string | null
   sort_order: number
   updated_at: string | null
+}
+
+export interface SponsorLevelRow {
+  id: number
+  slug: string
+  name: string
+  minimum_amount: number
+  sort_order: number
+}
+
+export interface SponsorProgramRow {
+  id: number
+  slug: string
+  name: string
+  edition_name: string | null
+  headline: string
+  subheadline: string
+  registration_opens: string | null
+  winners_announced: string | null
+  school_impact_grant_amount: number
+  student_scholarship_amount: number
+  educator_award_label: string
+  age_range: string
+  grade_range: string
+  is_active: number
+  levels: SponsorLevelRow[]
+  published_sponsor_count?: number
+}
+
+export interface PublicSponsorRow {
+  id: number
+  organization_name: string
+  website: string | null
+  logo_url: string | null
+  sponsorship_level_slug: string
+  sponsorship_level_name: string
+  sponsorship_amount: number
+  short_description: string
+  badge: string
+  created_at: string | null
+}
+
+export interface PublicSponsorTier {
+  slug: string
+  name: string
+  minimum_amount: number
+  sort_order: number
+  sponsors: PublicSponsorRow[]
+}
+
+export interface SponsorApplicationRow {
+  id: number
+  program_id: number
+  program_name: string | null
+  program_edition_name: string | null
+  organization_name: string
+  contact_person: string
+  title_position: string | null
+  email_address: string
+  phone_number: string
+  website: string | null
+  street_address: string
+  city: string
+  state: string
+  zip_code: string
+  organization_type: string
+  logo_url: string | null
+  company_bio: string
+  support_reason: string
+  sponsorship_level_slug: string
+  sponsorship_level_name: string
+  sponsorship_amount: number
+  custom_amount: number
+  interests: string[]
+  public_description: string | null
+  admin_notes: string | null
+  payment_status: 'pending_check' | 'check_received' | 'payment_confirmed'
+  approval_status: 'pending_review' | 'approved' | 'rejected' | 'published'
+  reviewed_by_user_id: number | null
+  reviewed_by_name: string | null
+  reviewed_at: string | null
+  approved_at: string | null
+  rejected_at: string | null
+  check_received_at: string | null
+  payment_confirmed_at: string | null
+  published_at: string | null
+  created_at: string | null
+  updated_at: string | null
+  level_minimum_amount: number | null
+  level_sort_order: number | null
 }
 
 export interface AuthPayload {

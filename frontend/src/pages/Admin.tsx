@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { api, type AnalyticsPayload, type AwardRow, type CommunityCommentRow, type CommunityThreadRow, type EventItem, type EventRsvpRow, type InventoryRow, type MediaRow, type PostDetail, type ProductVisibility, type TestimonialRow, type User } from '../lib/api'
 import { useAuth } from '../context/AuthContext'
+import { useSeo } from '../hooks/useSeo'
+import SponsorsAdminPanel from '../components/admin/SponsorsAdminPanel'
 
 interface RequestRow {
   id: number; request_type: string; full_name: string; email: string
@@ -26,7 +28,7 @@ interface MemberRow {
 }
 interface OrderRow {
   id: number; order_no: string; customer_name: string; email: string; items: string
-  total: string; payment_method: string; status: string; created_at: string
+  total: string; payment_method: string; payment_provider?: string | null; payment_status?: string | null; status: string; created_at: string
 }
 interface Submissions {
   requests: RequestRow[]; subscribers: SubRow[]; contacts: ContactRow[]; members: MemberRow[]; orders: OrderRow[]
@@ -66,9 +68,10 @@ const displayValue = (value: unknown): string => {
 }
 
 export default function Admin() {
+  useSeo({ title: 'Admin Console', noindex: true })
   const { user, loading, logout, refresh: refreshAuth } = useAuth()
   const [data, setData] = useState<Submissions | null>(null)
-  const [tab, setTab] = useState<'analytics' | 'requests' | 'orders' | 'subscribers' | 'contacts' | 'members' | 'approvals' | 'awards' | 'events' | 'blog' | 'testimonials' | 'media' | 'community' | 'rsvps' | 'inventory'>('analytics')
+  const [tab, setTab] = useState<'analytics' | 'requests' | 'orders' | 'subscribers' | 'contacts' | 'members' | 'approvals' | 'sponsors' | 'awards' | 'events' | 'blog' | 'testimonials' | 'media' | 'community' | 'rsvps' | 'inventory'>('analytics')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -206,6 +209,7 @@ export default function Admin() {
     ['contacts', `Contacts (${data?.contacts.length ?? 0})`],
     ['members', `Accounts (${data?.members.length ?? 0})`],
     ['approvals', `Approvals (${approvalQueueCount})`],
+    ['sponsors', 'Sponsors'],
     ['awards', 'Awards'],
     ['events', 'Events'],
     ['blog', 'Blog'],
@@ -274,7 +278,7 @@ export default function Admin() {
         )}
 
         {tab === 'orders' && (
-          <Table head={['Order #', 'Customer', 'Email', 'Items', 'Total', 'Pay', 'Status', 'Date']}>
+          <Table head={['Order #', 'Customer', 'Email', 'Items', 'Total', 'Payment', 'Order Status', 'Date']}>
             {data?.orders?.map((o) => {
               let items = ''
               try { items = (JSON.parse(o.items) as Array<{ name: string; qty: number; size: string }>).map((it) => `${it.qty}× ${it.name} (${it.size})`).join(', ') } catch { items = '—' }
@@ -285,7 +289,7 @@ export default function Admin() {
                   <td style={tdS}>{o.email}</td>
                   <td style={{ ...tdS, maxWidth: 280 }}>{items}</td>
                   <td style={tdS}>${o.total}</td>
-                  <td style={tdS}>{o.payment_method}</td>
+                  <td style={tdS}>{[o.payment_provider, o.payment_status, o.payment_method].filter(Boolean).join(' · ')}</td>
                   <td style={tdS}>
                     <select value={o.status} onChange={(e) => setOrderStatus(o.id, e.target.value)} style={selectS}>
                       <option value="pending">pending</option>
@@ -386,6 +390,7 @@ export default function Admin() {
           </Table>
         )}
 
+        {tab === 'sponsors' && <SponsorsAdminPanel />}
         {tab === 'awards' && <AwardsAdmin />}
         {tab === 'events' && <EventsAdmin />}
         {tab === 'blog' && <PostsAdmin />}

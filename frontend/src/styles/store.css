@@ -211,6 +211,8 @@
 .store-page .pay-m svg { width:26px; height:26px; color:var(--gold); }
 .store-page .pay-m span { font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:#ddd; }
 .store-page .co-actions { display:flex; gap:14px; margin-top:10px; align-items:center; }
+.store-page .store-checkout__body { display:grid; grid-template-columns:1.15fr 0.95fr; gap:28px; align-items:start; margin-bottom:88px; }
+.store-page .store-checkout__body .summary { position:static; top:auto; }
 .store-page .summary { border:1px solid var(--line); border-radius:16px; padding:26px; background:linear-gradient(180deg,rgba(40,34,18,0.22),rgba(12,11,8,0.4)); position:sticky; top:100px; }
 .store-page .summary h4 { font-family:var(--f-serif); font-size:16px; letter-spacing:0.08em; text-transform:uppercase; margin-bottom:18px; }
 .store-page .summary__items { max-height:280px; overflow-y:auto; margin-bottom:8px; }
@@ -246,6 +248,7 @@
 @media (max-width:1080px) {
   .store-page .grid { grid-template-columns:repeat(3,1fr); }
   .store-page .checkout__body { grid-template-columns:1fr; }
+  .store-page .store-checkout__body { grid-template-columns:1fr; }
   .store-page .summary { position:static; order:-1; }
   .store-page .hero-stats { grid-template-columns:repeat(3, minmax(0, 1fr)); }
 }
