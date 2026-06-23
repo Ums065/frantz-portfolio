@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { TERMS_LAYOUT, checkboxesFor, type TermsKind } from '../lib/terms'
+import { TERMS_LAYOUT, checkboxesFor, type TermsKind, type TermsItem } from '../lib/terms'
 
 interface TermsAgreementProps {
   kind: TermsKind
@@ -53,25 +53,36 @@ export default function TermsAgreement({
     acceptedCbRef.current(accepted)
   }, [accepted])
 
+  // Long descriptive text scrolls inside the box; the actual checkboxes + signature
+  // ALWAYS render below it (never hidden behind the scroll) so the form can be completed.
+  const textItems = items.filter((it): it is Extract<TermsItem, { type: 'text' }> => it.type === 'text')
+  const checkItems = items.filter((it): it is Extract<TermsItem, { type: 'check' }> => it.type === 'check')
+
   return (
     <div className={`terms-agreement ${className || ''}`}>
-      <div className="terms-box" role="group" aria-label="Terms and conditions">
-        {items.map((item, i) => {
-          if (item.type === 'text') {
-            return (
-              <div className="terms-box__text" key={`text-${i}`}>
-                {item.heading && <p className="terms-box__heading">{item.heading}</p>}
-                {item.intro && <p className="terms-box__intro">{item.intro}</p>}
-                {item.bullets && (
-                  <ul className="terms-box__bullets">
-                    {item.bullets.map((b, j) => (
-                      <li key={j}>{b}</li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            )
-          }
+      {textItems.length > 0 && (
+        <div className="terms-box" role="group" aria-label="Terms and conditions">
+          {textItems.map((item, i) => (
+            <div className="terms-box__text" key={`text-${i}`}>
+              {item.heading && <p className="terms-box__heading">{item.heading}</p>}
+              {item.intro && <p className="terms-box__intro">{item.intro}</p>}
+              {item.bullets && (
+                <ul className="terms-box__bullets">
+                  {item.bullets.map((b, j) => (
+                    <li key={j}>{b}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ))}
+          <a className="terms-box__link" href="/terms" target="_blank" rel="noopener noreferrer">
+            View full Terms of Use &amp; Privacy Notice
+          </a>
+        </div>
+      )}
+
+      <div className="terms-checks">
+        {checkItems.map((item) => {
           const cid = `${idPrefix}-${item.id}`
           return (
             <div className="field field--check field--full terms-box__check" key={item.id}>
@@ -88,9 +99,6 @@ export default function TermsAgreement({
             </div>
           )
         })}
-        <a className="terms-box__link" href="/terms" target="_blank" rel="noopener noreferrer">
-          View full Terms of Use &amp; Privacy Notice
-        </a>
       </div>
 
       {!hideSignature && (

@@ -12,6 +12,18 @@ import { recordTermsAcceptance } from '../lib/recordTermsAcceptance'
 
 const isAdminRole = (role?: string) => ['admin', 'super_admin', 'editor'].includes(role || '')
 
+/** Whole-years age from a YYYY-MM-DD date of birth, or '' if blank/invalid. */
+const ageFromDob = (dob: string): string => {
+  if (!dob) return ''
+  const d = new Date(`${dob}T00:00:00`)
+  if (Number.isNaN(d.getTime())) return ''
+  const today = new Date()
+  let age = today.getFullYear() - d.getFullYear()
+  const m = today.getMonth() - d.getMonth()
+  if (m < 0 || (m === 0 && today.getDate() < d.getDate())) age -= 1
+  return age >= 0 && age < 150 ? String(age) : ''
+}
+
 const value = (fd: FormData, key: string) => String(fd.get(key) ?? '').trim()
 const checked = (fd: FormData, key: string) => fd.get(key) !== null
 const fileValue = (fd: FormData, key: string) => {
@@ -501,6 +513,7 @@ export default function NewSchool() {
   // Terms & Conditions agreement state (per registration form + content-upload forms).
   const [studentTermsOk, setStudentTermsOk] = useState(false)
   const [studentTermsSig, setStudentTermsSig] = useState('')
+  const [studentDob, setStudentDob] = useState('')
   const [parentTermsOk, setParentTermsOk] = useState(false)
   const [schoolTermsOk, setSchoolTermsOk] = useState(false)
   const [schoolTermsSig, setSchoolTermsSig] = useState('')
@@ -718,6 +731,7 @@ export default function NewSchool() {
       event.currentTarget.reset()
       setStudentSchoolSearch('')
       setStudentTeacherId('')
+      setStudentDob('')
       await refresh()
       await reloadOverview()
     } catch (err) {
@@ -1802,8 +1816,8 @@ export default function NewSchool() {
               <div className="ns-field-grid">
                 <label className="ns-field"><span>Full Name</span><input name="full_name" required /></label>
                 <label className="ns-field"><span>Student Username</span><input name="student_username" required /></label>
-                <label className="ns-field"><span>Age</span><input name="age" type="number" min="11" max="19" required /></label>
-                <label className="ns-field"><span>Date of Birth</span><input name="date_of_birth" type="date" required /></label>
+                <label className="ns-field"><span>Date of Birth</span><input name="date_of_birth" type="date" value={studentDob} onChange={(e) => setStudentDob(e.target.value)} required /></label>
+                <label className="ns-field"><span>Age</span><input name="age" type="number" min="11" max="19" value={ageFromDob(studentDob)} readOnly required title="Auto-calculated from date of birth" /></label>
                 <label className="ns-field"><span>Email</span><input name="email" type="email" required /></label>
                 <label className="ns-field"><span>Password</span><input name="password" type="password" minLength={6} required /></label>
                 <label className="ns-field"><span>Confirm Password</span><input name="confirm_password" type="password" minLength={6} required /></label>

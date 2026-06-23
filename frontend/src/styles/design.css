@@ -2471,6 +2471,7 @@ textarea.fld-area:focus { border-color: var(--gold); }
    Terms & Conditions agreement (forms) + footer legal links + legal pages
    ============================================================ */
 .terms-agreement { display: grid; gap: 14px; margin: 6px 0 4px; }
+.terms-checks { display: grid; gap: 12px; }
 .terms-box {
   max-height: 230px; overflow-y: auto; -webkit-overflow-scrolling: touch;
   border: 1px solid var(--line); border-radius: 12px;
