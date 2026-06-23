@@ -158,6 +158,53 @@ function require_admin(): array
     return $u;
 }
 
+/**
+ * Admin "view as user" impersonation. The active session is swapped to the
+ * target user while the original admin id is parked in the session so it can
+ * be restored. current_user() then resolves to the impersonated user, so every
+ * existing dashboard/endpoint renders exactly as that user would see it.
+ */
+function impersonation_active(): bool
+{
+    return !empty($_SESSION['impersonator_uid']);
+}
+
+/** The original admin behind an active impersonation, if any. */
+function impersonator_user(): ?array
+{
+    $id = (int) ($_SESSION['impersonator_uid'] ?? 0);
+    if ($id <= 0) {
+        return null;
+    }
+    try {
+        $stmt = db()->prepare('SELECT id, full_name, email, role FROM users WHERE id = ? LIMIT 1');
+        $stmt->execute([$id]);
+        return $stmt->fetch() ?: null;
+    } catch (Throwable $e) {
+        return null;
+    }
+}
+
+/** Begin (or re-target) impersonation. Preserves the original admin id. */
+function start_impersonation(int $adminId, int $targetId): void
+{
+    if (empty($_SESSION['impersonator_uid'])) {
+        $_SESSION['impersonator_uid'] = $adminId;
+    }
+    $_SESSION['uid'] = $targetId;
+}
+
+/** Restore the original admin session. Returns false when not impersonating. */
+function stop_impersonation(): bool
+{
+    if (empty($_SESSION['impersonator_uid'])) {
+        return false;
+    }
+    $_SESSION['uid'] = (int) $_SESSION['impersonator_uid'];
+    unset($_SESSION['impersonator_uid']);
+    return true;
+}
+
 function admin_user_detail_payload(int $userId): ?array
 {
     $stmt = db()->prepare(

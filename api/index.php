@@ -210,7 +210,12 @@ try {
         }
 
         case $key === 'GET auth/me': {
-            json(['user' => current_user(), 'csrfToken' => csrf_token()]);
+            json([
+                'user' => current_user(),
+                'csrfToken' => csrf_token(),
+                'impersonating' => impersonation_active(),
+                'impersonator' => impersonator_user(),
+            ]);
         }
 
         case str_starts_with($route, 'new-school/') || str_starts_with($route, 'admin/new-school/'): {
@@ -1385,6 +1390,44 @@ try {
                 json(['error' => 'User not found.'], 404);
             }
             json($detail);
+        }
+
+        case $key === 'POST admin/impersonate': {
+            $admin = require_admin();
+            $targetId = (int) (body()['user_id'] ?? 0);
+            if ($targetId <= 0) {
+                json(['error' => 'A user must be selected.'], 422);
+            }
+            if ($targetId === (int) $admin['id']) {
+                json(['error' => 'You are already signed in as this account.'], 422);
+            }
+            $stmt = db()->prepare('SELECT id, full_name, email, role FROM users WHERE id = ? LIMIT 1');
+            $stmt->execute([$targetId]);
+            $target = $stmt->fetch();
+            if (!$target) {
+                json(['error' => 'User not found.'], 404);
+            }
+            start_impersonation((int) $admin['id'], $targetId);
+            json([
+                'message' => 'Now viewing as ' . $target['full_name'] . '.',
+                'user' => current_user(),
+                'impersonating' => true,
+                'impersonator' => impersonator_user(),
+            ]);
+        }
+
+        case $key === 'POST admin/impersonate/stop': {
+            // No require_admin(): the live session is the impersonated user. The
+            // parked impersonator id is the only thing that authorizes the restore.
+            if (!stop_impersonation()) {
+                json(['error' => 'No active impersonation session.'], 400);
+            }
+            json([
+                'message' => 'Returned to your admin account.',
+                'user' => current_user(),
+                'impersonating' => false,
+                'impersonator' => null,
+            ]);
         }
 
         case $key === 'GET admin/event-rsvps': {

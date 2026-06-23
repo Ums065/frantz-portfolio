@@ -2,6 +2,7 @@ import { lazy, Suspense, type ReactNode, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom'
 import Home from './components/Home'
 import SiteLayout from './components/SiteLayout'
+import ImpersonationBanner from './components/ImpersonationBanner'
 import { AuthProvider } from './context/AuthContext'
 
 const About = lazy(() => import('./pages/About'))
@@ -68,6 +69,7 @@ export default function App() {
     <AuthProvider>
       <BrowserRouter>
         <ScrollToTop />
+        <ImpersonationBanner />
         <Routes>
           {/* Unique keys force SiteLayout to remount on navigation so the
               scroll-reveal observer & DOM wiring re-run for the new page. */}

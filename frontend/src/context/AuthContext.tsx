@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
-import { api, type AuthPayload, type User } from '../lib/api'
+import { api, type AuthPayload, type Impersonator, type User } from '../lib/api'
 
 export type RegistrationRole = 'community' | 'student' | 'parent' | 'school' | 'teacher'
 
@@ -37,10 +37,14 @@ export interface RegistrationInput {
 interface AuthState {
   user: User | null
   loading: boolean
+  impersonating: boolean
+  impersonator: Impersonator | null
   refresh: () => Promise<void>
   login: (email: string, password: string) => Promise<AuthActionResult>
   register: (input: RegistrationInput) => Promise<AuthActionResult>
   logout: () => Promise<void>
+  impersonate: (userId: number) => Promise<User | null>
+  stopImpersonating: () => Promise<User | null>
 }
 
 interface AuthActionResult {
@@ -103,10 +107,18 @@ async function readAuthResult(payload: AuthResponseLike, action: string): Promis
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
+  const [impersonating, setImpersonating] = useState(false)
+  const [impersonator, setImpersonator] = useState<Impersonator | null>(null)
+
+  const applyAuthPayload = (d: AuthPayload) => {
+    setImpersonating(!!d.impersonating)
+    setImpersonator(d.impersonator ?? null)
+  }
 
   const refresh = async () => {
     const d = await api.get<AuthPayload>('auth/me')
     setUser(isUser(d.user) ? d.user : null)
+    applyAuthPayload(d)
   }
 
   useEffect(() => {
@@ -209,8 +221,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  // Admin "view as user": swap the session to the target, then render their dashboard.
+  const impersonate = async (userId: number) => {
+    const d = await api.post<AuthPayload>('admin/impersonate', { user_id: userId })
+    const nextUser = isUser(d.user) ? d.user : null
+    setUser(nextUser)
+    applyAuthPayload(d)
+    return nextUser
+  }
+
+  // Restore the original admin session.
+  const stopImpersonating = async () => {
+    const d = await api.post<AuthPayload>('admin/impersonate/stop', {})
+    const nextUser = isUser(d.user) ? d.user : null
+    setUser(nextUser)
+    applyAuthPayload(d)
+    return nextUser
+  }
+
   return (
-    <AuthContext.Provider value={{ user, loading, refresh, login, register, logout }}>
+    <AuthContext.Provider value={{ user, loading, impersonating, impersonator, refresh, login, register, logout, impersonate, stopImpersonating }}>
       {children}
     </AuthContext.Provider>
   )

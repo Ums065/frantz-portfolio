@@ -423,6 +423,13 @@ export interface SponsorApplicationRow {
   level_sort_order: number | null
 }
 
+export interface Impersonator {
+  id: number
+  full_name: string
+  email: string
+  role: string
+}
+
 export interface AuthPayload {
   user: User | null
   csrfToken?: string
@@ -430,4 +437,6 @@ export interface AuthPayload {
   verification_required?: boolean
   verification_email?: string
   verification_email_sent?: boolean
+  impersonating?: boolean
+  impersonator?: Impersonator | null
 }

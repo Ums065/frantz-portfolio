@@ -1,8 +1,43 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { api, type AnalyticsPayload, type AwardRow, type CommunityCommentRow, type CommunityThreadRow, type EventItem, type EventRsvpRow, type InventoryRow, type MediaRow, type PostDetail, type ProductVisibility, type TestimonialRow, type User } from '../lib/api'
 import { useAuth } from '../context/AuthContext'
 import { useSeo } from '../hooks/useSeo'
+import { resolveDashboardRoute } from '../lib/dashboardRoute'
 import SponsorsAdminPanel from '../components/admin/SponsorsAdminPanel'
+
+type TabKey =
+  | 'overview' | 'analytics' | 'requests' | 'orders' | 'subscribers' | 'contacts'
+  | 'members' | 'approvals' | 'sponsors' | 'awards' | 'events' | 'blog'
+  | 'testimonials' | 'media' | 'community' | 'rsvps' | 'inventory'
+
+interface NavItem { key: TabKey; label: string }
+const NAV_GROUPS: Array<{ group: string; items: NavItem[] }> = [
+  { group: 'Overview', items: [{ key: 'overview', label: 'Overview' }, { key: 'analytics', label: 'Analytics' }] },
+  { group: 'People', items: [
+    { key: 'members', label: 'User Accounts' },
+    { key: 'approvals', label: 'Account Approvals' },
+    { key: 'contacts', label: 'Contact Messages' },
+    { key: 'subscribers', label: 'Newsletter' },
+  ] },
+  { group: 'Commerce', items: [
+    { key: 'orders', label: 'Store Orders' },
+    { key: 'inventory', label: 'Products & Inventory' },
+    { key: 'sponsors', label: 'Founding Sponsors' },
+  ] },
+  { group: 'Engagement', items: [
+    { key: 'requests', label: 'Service Requests' },
+    { key: 'rsvps', label: 'Event RSVPs' },
+    { key: 'community', label: 'Community' },
+  ] },
+  { group: 'Content', items: [
+    { key: 'awards', label: 'Awards' },
+    { key: 'events', label: 'Events' },
+    { key: 'blog', label: 'Blog Posts' },
+    { key: 'testimonials', label: 'Testimonials' },
+    { key: 'media', label: 'Media Library' },
+  ] },
+]
 
 interface RequestRow {
   id: number; request_type: string; full_name: string; email: string
@@ -69,9 +104,11 @@ const displayValue = (value: unknown): string => {
 
 export default function Admin() {
   useSeo({ title: 'Admin Console', noindex: true })
-  const { user, loading, logout, refresh: refreshAuth } = useAuth()
+  const { user, loading, logout, refresh: refreshAuth, impersonate } = useAuth()
+  const navigate = useNavigate()
   const [data, setData] = useState<Submissions | null>(null)
-  const [tab, setTab] = useState<'analytics' | 'requests' | 'orders' | 'subscribers' | 'contacts' | 'members' | 'approvals' | 'sponsors' | 'awards' | 'events' | 'blog' | 'testimonials' | 'media' | 'community' | 'rsvps' | 'inventory'>('analytics')
+  const [tab, setTab] = useState<TabKey>('overview')
+  const [viewBusyId, setViewBusyId] = useState<number | null>(null)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -162,6 +199,20 @@ export default function Admin() {
     }
   }
 
+  // Admin "view as user": swap the session to this user and open their real dashboard.
+  const viewAsUser = async (m: MemberRow) => {
+    if (viewBusyId) return
+    setViewBusyId(m.id)
+    try {
+      const target = await impersonate(m.id)
+      navigate(resolveDashboardRoute(target?.role ?? m.role))
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Could not open that user's dashboard.")
+    } finally {
+      setViewBusyId(null)
+    }
+  }
+
   const reviewableAccounts = data?.members.filter((m) => !isAdmin(m.role)) ?? []
   const pendingAccounts = reviewableAccounts.filter((m) => (m.approval_status || 'pending') === 'pending').length
   const rejectedAccounts = reviewableAccounts.filter((m) => (m.approval_status || 'pending') === 'rejected').length
@@ -201,69 +252,99 @@ export default function Admin() {
     )
   }
 
-  const tabs = [
-    ['analytics', 'Analytics'],
-    ['requests', `Requests (${data?.requests.length ?? 0})`],
-    ['orders', `Orders (${data?.orders?.length ?? 0})`],
-    ['subscribers', `Subscribers (${data?.subscribers.length ?? 0})`],
-    ['contacts', `Contacts (${data?.contacts.length ?? 0})`],
-    ['members', `Accounts (${data?.members.length ?? 0})`],
-    ['approvals', `Approvals (${approvalQueueCount})`],
-    ['sponsors', 'Sponsors'],
-    ['awards', 'Awards'],
-    ['events', 'Events'],
-    ['blog', 'Blog'],
-    ['testimonials', 'Testimonials'],
-    ['media', 'Media'],
-    ['community', 'Community'],
-    ['rsvps', 'RSVPs'],
-    ['inventory', 'Products & Inventory'],
-  ] as const
+  const counts: Partial<Record<TabKey, number>> = {
+    members: data?.members.length ?? 0,
+    approvals: approvalQueueCount,
+    contacts: data?.contacts.length ?? 0,
+    subscribers: data?.subscribers.length ?? 0,
+    orders: data?.orders?.length ?? 0,
+    requests: data?.requests.length ?? 0,
+  }
+  const activeLabel = NAV_GROUPS.flatMap((g) => g.items).find((i) => i.key === tab)?.label ?? 'Overview'
 
   return (
     <div className="admin-page" style={wrapS}>
-      <div className="admin-shell" style={{ maxWidth: 1240, margin: '0 auto' }}>
-        <header className="admin-header glass" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '28px 28px 24px', borderBottom: '1px solid var(--line)', marginBottom: 18 }}>
-          <div>
-            <span className="admin-kicker">Admin Dashboard</span>
-            <h1 className="gold-text" style={{ fontFamily: 'var(--f-serif)', fontSize: 30, marginTop: 6 }}>Command Center</h1>
-            <p style={{ color: 'var(--muted)', fontSize: 13, maxWidth: 640, lineHeight: 1.6 }}>
-              Signed in as {user?.full_name} | {user?.role}. Manage requests, approvals, orders, content, and inventory from one secure console.
-            </p>
+      <div className="admin-layout">
+        <aside className="admin-sidebar glass">
+          <div className="admin-sidebar__brand">
+            <span className="admin-kicker">Admin</span>
+            <strong className="gold-text">Command Center</strong>
           </div>
-          <div style={{ display: 'flex', gap: 10 }}>
+          <nav className="admin-nav">
+            {NAV_GROUPS.map((group) => (
+              <div key={group.group} className="admin-nav__group">
+                <span className="admin-nav__group-label">{group.group}</span>
+                {group.items.map((item) => (
+                  <button
+                    key={item.key}
+                    type="button"
+                    className={`admin-nav__item${tab === item.key ? ' is-active' : ''}`}
+                    onClick={() => setTab(item.key)}
+                  >
+                    <span>{item.label}</span>
+                    {counts[item.key] !== undefined && <span className="admin-nav__badge">{counts[item.key]}</span>}
+                  </button>
+                ))}
+              </div>
+            ))}
+          </nav>
+          <div className="admin-sidebar__foot">
             <a className="btn btn--sm" href="/">View Site</a>
             <button className="btn btn--sm" onClick={() => logout()}>Logout</button>
           </div>
-        </header>
+        </aside>
 
-        <div className="admin-stats">
-          <div className="admin-stat glass"><span>Requests</span><strong>{data?.requests.length ?? 0}</strong><p>Forms awaiting review</p></div>
-          <div className="admin-stat glass"><span>Orders</span><strong>{data?.orders?.length ?? 0}</strong><p>Commerce records</p></div>
-          <div className="admin-stat glass"><span>Pending</span><strong>{pendingAccounts}</strong><p>Accounts waiting on approval</p></div>
-          <div className="admin-stat glass"><span>Approved</span><strong>{approvedAccounts}</strong><p>Live accounts</p></div>
-          <div className="admin-stat glass"><span>Rejected</span><strong>{rejectedAccounts}</strong><p>Accounts declined by admin</p></div>
-          <div className="admin-stat glass"><span>Contacts</span><strong>{data?.contacts.length ?? 0}</strong><p>Inbound messages</p></div>
-        </div>
+        <main className="admin-main">
+          <header className="admin-main__header glass">
+            <div>
+              <span className="admin-kicker">Admin Dashboard</span>
+              <h1 className="gold-text" style={{ fontFamily: 'var(--f-serif)', fontSize: 26, marginTop: 4 }}>{activeLabel}</h1>
+              <p style={{ color: 'var(--muted)', fontSize: 13 }}>Signed in as {user?.full_name} · {user?.role}</p>
+            </div>
+          </header>
 
-        <div className="admin-tabs" style={{ display: 'flex', gap: 8, marginBottom: 22, flexWrap: 'wrap' }}>
-          {tabs.map(([key, label]) => (
-            <button key={key} className={tab === key ? 'btn btn--sm btn--solid' : 'btn btn--sm'} onClick={() => setTab(key)}>{label}</button>
-          ))}
-        </div>
+          {tab === 'overview' && (
+            <div className="admin-overview">
+              <div className="admin-stats">
+                <div className="admin-stat glass"><span>User Accounts</span><strong>{data?.members.length ?? 0}</strong><p>Registered users</p></div>
+                <div className="admin-stat glass"><span>Pending</span><strong>{pendingAccounts}</strong><p>Awaiting approval</p></div>
+                <div className="admin-stat glass"><span>Approved</span><strong>{approvedAccounts}</strong><p>Live accounts</p></div>
+                <div className="admin-stat glass"><span>Rejected</span><strong>{rejectedAccounts}</strong><p>Declined by admin</p></div>
+                <div className="admin-stat glass"><span>Orders</span><strong>{data?.orders?.length ?? 0}</strong><p>Commerce records</p></div>
+                <div className="admin-stat glass"><span>Requests</span><strong>{data?.requests.length ?? 0}</strong><p>Service forms</p></div>
+                <div className="admin-stat glass"><span>Contacts</span><strong>{data?.contacts.length ?? 0}</strong><p>Inbound messages</p></div>
+                <div className="admin-stat glass"><span>Subscribers</span><strong>{data?.subscribers.length ?? 0}</strong><p>Newsletter list</p></div>
+              </div>
+              {approvalQueueCount > 0 && (
+                <div className="admin-overview__cta glass">
+                  <div>
+                    <strong className="gold-text">{approvalQueueCount} account{approvalQueueCount === 1 ? '' : 's'} awaiting review</strong>
+                    <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: 4 }}>Approve or reject pending registrations from the People section.</p>
+                  </div>
+                  <button type="button" className="btn btn--sm btn--solid" onClick={() => setTab('approvals')}>Open approvals</button>
+                </div>
+              )}
+            </div>
+          )}
 
-        {tab === 'analytics' && <AnalyticsAdmin />}
+          {tab === 'analytics' && <AnalyticsAdmin />}
 
         {tab === 'requests' && (
-          <Table head={['Type', 'Name', 'Email', 'Org', 'Message', 'Status', 'Date']}>
-            {data?.requests.map((r) => (
-              <tr key={r.id} style={rowS}>
-                <td style={tdS}>{r.request_type}</td>
-                <td style={tdS}>{r.full_name}</td>
-                <td style={tdS}>{r.email}</td>
-                <td style={tdS}>{r.organization || '—'}</td>
-                <td style={{ ...tdS, maxWidth: 240 }}>{r.message || '—'}</td>
-                <td style={tdS}>
+          <DataTable
+            head={['Type', 'Name', 'Email', 'Org', 'Message', 'Status', 'Date']}
+            rows={data?.requests ?? []}
+            searchPlaceholder="Search requests…"
+            searchText={(r) => `${r.request_type} ${r.full_name} ${r.email} ${r.organization ?? ''} ${r.message ?? ''}`}
+            statusOf={(r) => r.status}
+            statusOptions={['new', 'reviewed', 'approved', 'closed']}
+            renderRow={(r) => (
+              <tr key={r.id}>
+                <td>{r.request_type}</td>
+                <td>{r.full_name}</td>
+                <td>{r.email}</td>
+                <td>{r.organization || '—'}</td>
+                <td style={{ maxWidth: 240 }}>{r.message || '—'}</td>
+                <td>
                   <select value={r.status} onChange={(e) => setStatus(r.id, e.target.value)} style={selectS}>
                     <option value="new">new</option>
                     <option value="reviewed">reviewed</option>
@@ -271,26 +352,32 @@ export default function Admin() {
                     <option value="closed">closed</option>
                   </select>
                 </td>
-                <td style={tdS}>{r.created_at}</td>
+                <td>{r.created_at}</td>
               </tr>
-            ))}
-          </Table>
+            )}
+          />
         )}
 
         {tab === 'orders' && (
-          <Table head={['Order #', 'Customer', 'Email', 'Items', 'Total', 'Payment', 'Order Status', 'Date']}>
-            {data?.orders?.map((o) => {
+          <DataTable
+            head={['Order #', 'Customer', 'Email', 'Items', 'Total', 'Payment', 'Order Status', 'Date']}
+            rows={data?.orders ?? []}
+            searchPlaceholder="Search orders…"
+            searchText={(o) => `${o.order_no} ${o.customer_name} ${o.email}`}
+            statusOf={(o) => o.status}
+            statusOptions={['pending', 'paid', 'fulfilled', 'cancelled']}
+            renderRow={(o) => {
               let items = ''
               try { items = (JSON.parse(o.items) as Array<{ name: string; qty: number; size: string }>).map((it) => `${it.qty}× ${it.name} (${it.size})`).join(', ') } catch { items = '—' }
               return (
-                <tr key={o.id} style={rowS}>
-                  <td style={tdS}>{o.order_no}</td>
-                  <td style={tdS}>{o.customer_name}</td>
-                  <td style={tdS}>{o.email}</td>
-                  <td style={{ ...tdS, maxWidth: 280 }}>{items}</td>
-                  <td style={tdS}>${o.total}</td>
-                  <td style={tdS}>{[o.payment_provider, o.payment_status, o.payment_method].filter(Boolean).join(' · ')}</td>
-                  <td style={tdS}>
+                <tr key={o.id}>
+                  <td>{o.order_no}</td>
+                  <td>{o.customer_name}</td>
+                  <td>{o.email}</td>
+                  <td style={{ maxWidth: 280 }}>{items}</td>
+                  <td>${o.total}</td>
+                  <td>{[o.payment_provider, o.payment_status, o.payment_method].filter(Boolean).join(' · ')}</td>
+                  <td>
                     <select value={o.status} onChange={(e) => setOrderStatus(o.id, e.target.value)} style={selectS}>
                       <option value="pending">pending</option>
                       <option value="paid">paid</option>
@@ -298,53 +385,63 @@ export default function Admin() {
                       <option value="cancelled">cancelled</option>
                     </select>
                   </td>
-                  <td style={tdS}>{o.created_at}</td>
+                  <td>{o.created_at}</td>
                 </tr>
               )
-            })}
-          </Table>
+            }}
+          />
         )}
 
         {tab === 'subscribers' && (
-          <Table head={['Email', 'Subscribed']}>
-            {data?.subscribers.map((s) => (
-              <tr key={s.id} style={rowS}><td style={tdS}>{s.email}</td><td style={tdS}>{s.created_at}</td></tr>
-            ))}
-          </Table>
+          <DataTable
+            head={['Email', 'Subscribed']}
+            rows={data?.subscribers ?? []}
+            searchPlaceholder="Search subscribers…"
+            searchText={(s) => s.email}
+            renderRow={(s) => (
+              <tr key={s.id}><td>{s.email}</td><td>{s.created_at}</td></tr>
+            )}
+          />
         )}
 
         {tab === 'contacts' && (
-          <Table head={['Name', 'Email', 'Message', 'Date']}>
-            {data?.contacts.map((c) => (
-              <tr key={c.id} style={rowS}><td style={tdS}>{c.full_name}</td><td style={tdS}>{c.email}</td><td style={tdS}>{c.message || '—'}</td><td style={tdS}>{c.created_at}</td></tr>
-            ))}
-          </Table>
+          <DataTable
+            head={['Name', 'Email', 'Message', 'Date']}
+            rows={data?.contacts ?? []}
+            searchPlaceholder="Search contacts…"
+            searchText={(c) => `${c.full_name} ${c.email} ${c.message ?? ''}`}
+            renderRow={(c) => (
+              <tr key={c.id}><td>{c.full_name}</td><td>{c.email}</td><td>{c.message || '—'}</td><td>{c.created_at}</td></tr>
+            )}
+          />
         )}
 
         {tab === 'members' && (
-          <Table head={['Name', 'Email', 'Role', 'Status', 'Joined', 'Actions']}>
-            {data?.members.map((m) => {
+          <DataTable
+            head={['Name', 'Email', 'Role', 'Status', 'Joined', 'Actions']}
+            rows={data?.members ?? []}
+            searchPlaceholder="Search accounts…"
+            searchText={(m) => `${m.full_name} ${m.email} ${m.role}`}
+            statusOf={(m) => (isAdmin(m.role) ? 'approved' : (m.approval_status || 'pending'))}
+            statusOptions={['approved', 'pending', 'rejected']}
+            renderRow={(m) => {
               const adminAccount = isAdmin(m.role)
               const status = adminAccount ? 'protected' : (m.approval_status || 'pending').toLowerCase()
-              const statusClass = adminAccount
-                ? 'status-pill--approved'
-                : status === 'approved'
-                  ? 'status-pill--approved'
-                  : status === 'rejected'
-                    ? 'status-pill--closed'
-                    : 'status-pill--new'
               return (
-                <tr key={m.id} style={rowS}>
-                  <td style={tdS}>{m.full_name}</td>
-                  <td style={tdS}>{m.email}</td>
-                  <td style={tdS}>{m.role}</td>
-                  <td style={tdS}><span className={`status-pill ${statusClass}`}>{status}</span></td>
-                  <td style={tdS}>{m.created_at}</td>
-                  <td style={tdS}>
+                <tr key={m.id}>
+                  <td>{m.full_name}</td>
+                  <td>{m.email}</td>
+                  <td>{m.role}</td>
+                  <td><StatusPill status={status} /></td>
+                  <td>{m.created_at}</td>
+                  <td>
                     {adminAccount ? (
                       <span style={{ color: 'var(--muted)', fontSize: 12 }}>Protected account</span>
                     ) : (
                       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        <button type="button" className="btn btn--sm btn--view" disabled={viewBusyId === m.id} onClick={() => void viewAsUser(m)}>
+                          {viewBusyId === m.id ? 'Opening…' : 'View dashboard'}
+                        </button>
                         <button type="button" className="btn btn--sm" onClick={() => void openUserDetails(m)}>Details</button>
                         <button type="button" className={approvalButtonClass(status, 'approved')} onClick={() => void setApproval(m.id, 'approved')}>Approve</button>
                         <button type="button" className={approvalButtonClass(status, 'pending')} onClick={() => void setApproval(m.id, 'pending')}>Pending</button>
@@ -354,40 +451,42 @@ export default function Admin() {
                   </td>
                 </tr>
               )
-            })}
-          </Table>
+            }}
+          />
         )}
 
         {tab === 'approvals' && (
-          <Table head={['Name', 'Email', 'Role', 'Status', 'Reviewed', 'Actions']}>
-            {data?.members
-              .filter((m) => !isAdmin(m.role) && (m.approval_status || 'pending') !== 'approved')
-              .map((m) => {
-                const status = (m.approval_status || 'pending').toLowerCase()
-                const statusClass = status === 'rejected'
-                  ? 'status-pill--closed'
-                  : status === 'approved'
-                    ? 'status-pill--approved'
-                    : 'status-pill--new'
-                return (
-                  <tr key={m.id} style={rowS}>
-                    <td style={tdS}>{m.full_name}</td>
-                    <td style={tdS}>{m.email}</td>
-                    <td style={tdS}>{m.role}</td>
-                    <td style={tdS}><span className={`status-pill ${statusClass}`}>{status}</span></td>
-                    <td style={tdS}>{m.approval_reviewed_at || 'â€”'}</td>
-                    <td style={tdS}>
-                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                        <button type="button" className="btn btn--sm" onClick={() => void openUserDetails(m)}>Details</button>
-                        <button type="button" className={approvalButtonClass(status, 'approved')} onClick={() => void setApproval(m.id, 'approved')}>Approve</button>
-                        <button type="button" className={approvalButtonClass(status, 'pending')} onClick={() => void setApproval(m.id, 'pending')}>Keep Pending</button>
-                        <button type="button" className={approvalButtonClass(status, 'rejected')} onClick={() => void setApproval(m.id, 'rejected')}>Reject</button>
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })}
-          </Table>
+          <DataTable
+            head={['Name', 'Email', 'Role', 'Status', 'Reviewed', 'Actions']}
+            rows={(data?.members ?? []).filter((m) => !isAdmin(m.role) && (m.approval_status || 'pending') !== 'approved')}
+            searchPlaceholder="Search pending accounts…"
+            searchText={(m) => `${m.full_name} ${m.email} ${m.role}`}
+            statusOf={(m) => (m.approval_status || 'pending')}
+            statusOptions={['pending', 'rejected']}
+            renderRow={(m) => {
+              const status = (m.approval_status || 'pending').toLowerCase()
+              return (
+                <tr key={m.id}>
+                  <td>{m.full_name}</td>
+                  <td>{m.email}</td>
+                  <td>{m.role}</td>
+                  <td><StatusPill status={status} /></td>
+                  <td>{m.approval_reviewed_at || '—'}</td>
+                  <td>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      <button type="button" className="btn btn--sm btn--view" disabled={viewBusyId === m.id} onClick={() => void viewAsUser(m)}>
+                        {viewBusyId === m.id ? 'Opening…' : 'View dashboard'}
+                      </button>
+                      <button type="button" className="btn btn--sm" onClick={() => void openUserDetails(m)}>Details</button>
+                      <button type="button" className={approvalButtonClass(status, 'approved')} onClick={() => void setApproval(m.id, 'approved')}>Approve</button>
+                      <button type="button" className={approvalButtonClass(status, 'pending')} onClick={() => void setApproval(m.id, 'pending')}>Keep Pending</button>
+                      <button type="button" className={approvalButtonClass(status, 'rejected')} onClick={() => void setApproval(m.id, 'rejected')}>Reject</button>
+                    </div>
+                  </td>
+                </tr>
+              )
+            }}
+          />
         )}
 
         {tab === 'sponsors' && <SponsorsAdminPanel />}
@@ -399,6 +498,7 @@ export default function Admin() {
         {tab === 'community' && <CommunityAdmin />}
         {tab === 'rsvps' && <RsvpsAdmin />}
         {tab === 'inventory' && <InventoryAdmin />}
+        </main>
       </div>
 
       <UserDetailModal
@@ -1846,6 +1946,99 @@ function InventoryAdminLegacy() {
           )
         })}
       </Table>
+    </div>
+  )
+}
+
+function StatusPill({ status }: { status: string }) {
+  const s = (status || '').toLowerCase()
+  const cls = ['approved', 'paid', 'fulfilled', 'going', 'protected', 'active'].includes(s)
+    ? 'status-pill--approved'
+    : ['rejected', 'closed', 'cancelled'].includes(s)
+      ? 'status-pill--closed'
+      : 'status-pill--new'
+  return <span className={`status-pill ${cls}`}>{status}</span>
+}
+
+interface DataTableProps<T> {
+  head: string[]
+  rows: T[]
+  renderRow: (row: T) => React.ReactNode
+  searchText?: (row: T) => string
+  statusOf?: (row: T) => string
+  statusOptions?: string[]
+  searchPlaceholder?: string
+  pageSize?: number
+}
+
+/** List table with a search box, optional status filter, a result counter, and pagination. */
+function DataTable<T>({ head, rows, renderRow, searchText, statusOf, statusOptions, searchPlaceholder, pageSize = 10 }: DataTableProps<T>) {
+  const [query, setQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [page, setPage] = useState(1)
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    return rows.filter((row) => {
+      if (q && searchText && !searchText(row).toLowerCase().includes(q)) return false
+      if (statusFilter !== 'all' && statusOf && (statusOf(row) || '').toLowerCase() !== statusFilter) return false
+      return true
+    })
+  }, [rows, query, statusFilter, searchText, statusOf])
+
+  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize))
+  const safePage = Math.min(page, pageCount)
+  useEffect(() => { if (page !== safePage) setPage(safePage) }, [page, safePage])
+  const start = (safePage - 1) * pageSize
+  const pageRows = filtered.slice(start, start + pageSize)
+
+  return (
+    <div className="admin-panel">
+      <div className="admin-toolbar">
+        {searchText && (
+          <input
+            className="admin-toolbar__search"
+            type="search"
+            value={query}
+            onChange={(e) => { setQuery(e.target.value); setPage(1) }}
+            placeholder={searchPlaceholder || 'Search…'}
+          />
+        )}
+        {statusOptions && statusOf && (
+          <select
+            className="admin-toolbar__filter"
+            value={statusFilter}
+            onChange={(e) => { setStatusFilter(e.target.value); setPage(1) }}
+          >
+            <option value="all">All statuses</option>
+            {statusOptions.map((s) => <option key={s} value={s.toLowerCase()}>{s}</option>)}
+          </select>
+        )}
+        <span className="admin-toolbar__count">
+          {filtered.length === rows.length ? `${rows.length}` : `${filtered.length} of ${rows.length}`} {rows.length === 1 ? 'record' : 'records'}
+        </span>
+      </div>
+
+      <div className="admin-table-wrap glass">
+        <table className="admin-table">
+          <thead>
+            <tr>{head.map((h) => <th key={h}>{h}</th>)}</tr>
+          </thead>
+          <tbody>
+            {pageRows.length
+              ? pageRows.map((row) => renderRow(row))
+              : <tr><td className="admin-table__empty" colSpan={head.length}>No matching records.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+
+      {pageCount > 1 && (
+        <div className="admin-pager">
+          <button type="button" className="btn btn--sm" disabled={safePage <= 1} onClick={() => setPage(safePage - 1)}>‹ Prev</button>
+          <span className="admin-pager__label">Page {safePage} of {pageCount}</span>
+          <button type="button" className="btn btn--sm" disabled={safePage >= pageCount} onClick={() => setPage(safePage + 1)}>Next ›</button>
+        </div>
+      )}
     </div>
   )
 }
