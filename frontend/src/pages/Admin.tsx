@@ -1691,6 +1691,8 @@ function InventoryAdmin() {
   const [editing, setEditing] = useState<InventoryDraft | null>(null)
   const [editingIsNew, setEditingIsNew] = useState(false)
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [bulkBusy, setBulkBusy] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set<string>())
   const [error, setError] = useState('')
 
   const load = () =>
@@ -1698,24 +1700,105 @@ function InventoryAdmin() {
       .then((d) => setRows(d.inventory))
       .catch(() => {})
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { void load() }, [])
 
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      if (!prev.size) return prev
+      const currentIds = new Set(rows.map((row) => row.product_id))
+      let changed = false
+      const next = new Set<string>()
+      prev.forEach((id) => {
+        if (currentIds.has(id)) next.add(id)
+        else changed = true
+      })
+      return changed ? next : prev
+    })
+  }, [rows])
+
+  const isBusy = busyId !== null || bulkBusy
+  const selectedRows = useMemo(
+    () => rows.filter((row) => selectedIds.has(row.product_id)),
+    [rows, selectedIds],
+  )
+  const selectedCount = selectedRows.length
+  const allSelected = rows.length > 0 && rows.every((row) => selectedIds.has(row.product_id))
   const nextSortOrder = rows.reduce((max, row) => Math.max(max, row.sort_order), 0) + 1
   const liveCount = rows.filter((row) => row.visibility === 'live').length
   const upcomingCount = rows.filter((row) => row.visibility === 'upcoming').length
   const hiddenCount = rows.filter((row) => row.visibility === 'hidden').length
   const soldOutCount = rows.filter((row) => row.visibility === 'live' && row.stock_status === 'out').length
 
+  const clearSelection = () => setSelectedIds(new Set<string>())
+
+  const inventoryRowPayload = (row: InventoryRow, visibility: ProductVisibility = row.visibility): Record<string, unknown> => ({
+    name: row.name,
+    category: row.category,
+    tagline: row.tagline,
+    description: row.description,
+    details: row.details,
+    feature_list: row.feature_list,
+    spec_list: row.spec_list,
+    shipping_note: row.shipping_note,
+    image: row.image,
+    price: row.price,
+    stock: row.stock,
+    low_stock_threshold: row.low_stock_threshold,
+    visibility,
+    restock_note: row.restock_note,
+    sort_order: row.sort_order,
+  })
+
+  const inventoryDraftPayload = (draft: InventoryDraft): Record<string, unknown> => ({
+    name: draft.name.trim(),
+    category: draft.category.trim() || null,
+    tagline: draft.tagline.trim() || null,
+    description: draft.description.trim() || null,
+    details: draft.details.trim() || null,
+    feature_list: draft.feature_list.trim() || null,
+    spec_list: draft.spec_list.trim() || null,
+    shipping_note: draft.shipping_note.trim() || null,
+    image: draft.image.trim() || null,
+    price: Number(draft.price || 0),
+    stock: Number(draft.stock || 0),
+    low_stock_threshold: Number(draft.low_stock_threshold || 0),
+    visibility: draft.visibility,
+    restock_note: draft.restock_note.trim() || null,
+    sort_order: Number(draft.sort_order || 0),
+  })
+
   const openNewProduct = () => {
+    if (isBusy) return
     setError('')
     setEditingIsNew(true)
     setEditing(emptyInventoryDraft(nextSortOrder))
   }
 
   const openEditProduct = (row: InventoryRow) => {
+    if (isBusy) return
     setError('')
     setEditingIsNew(false)
     setEditing(inventoryDraftFromRow(row))
+  }
+
+  const toggleSelected = (productId: string) => {
+    if (isBusy) return
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(productId)) next.delete(productId)
+      else next.add(productId)
+      return next
+    })
+  }
+
+  const toggleSelectAll = () => {
+    if (isBusy) return
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (allSelected) rows.forEach((row) => next.delete(row.product_id))
+      else rows.forEach((row) => next.add(row.product_id))
+      return next
+    })
   }
 
   const saveRow = async (productId: string, payload: Record<string, unknown>) => {
@@ -1724,10 +1807,26 @@ function InventoryAdmin() {
     try {
       await api.put(`admin/inventory/${encodeURIComponent(productId)}`, payload)
       await load()
+      clearSelection()
       return true
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not update merch product.')
       return false
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  const deleteRow = async (row: InventoryRow) => {
+    if (!window.confirm(`Delete ${row.name} (${row.product_id})? This cannot be undone.`)) return
+    setBusyId(row.product_id)
+    setError('')
+    try {
+      await api.del(`admin/inventory/${encodeURIComponent(row.product_id)}`)
+      await load()
+      clearSelection()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not delete merch product.')
     } finally {
       setBusyId(null)
     }
@@ -1747,23 +1846,7 @@ function InventoryAdmin() {
       return
     }
 
-    const ok = await saveRow(productId, {
-      name: editing.name.trim(),
-      category: editing.category.trim() || null,
-      tagline: editing.tagline.trim() || null,
-      description: editing.description.trim() || null,
-      details: editing.details.trim() || null,
-      feature_list: editing.feature_list.trim() || null,
-      spec_list: editing.spec_list.trim() || null,
-      shipping_note: editing.shipping_note.trim() || null,
-      image: editing.image.trim() || null,
-      price: Number(editing.price || 0),
-      stock: Number(editing.stock || 0),
-      low_stock_threshold: Number(editing.low_stock_threshold || 0),
-      visibility: editing.visibility,
-      restock_note: editing.restock_note.trim() || null,
-      sort_order: Number(editing.sort_order || 0),
-    })
+    const ok = await saveRow(productId, inventoryDraftPayload(editing))
 
     if (ok) {
       setEditing(null)
@@ -1771,26 +1854,56 @@ function InventoryAdmin() {
     }
   }
 
-  const toggleVisibility = async (row: InventoryRow) => {
-    const nextVisibility: ProductVisibility = row.visibility === 'hidden' ? 'live' : 'hidden'
-    await saveRow(row.product_id, {
-      name: row.name,
-      category: row.category,
-      tagline: row.tagline,
-      description: row.description,
-      details: row.details,
-      feature_list: row.feature_list,
-      spec_list: row.spec_list,
-      shipping_note: row.shipping_note,
-      image: row.image,
-      price: row.price,
-      stock: row.stock,
-      low_stock_threshold: row.low_stock_threshold,
-      visibility: nextVisibility,
-      restock_note: row.restock_note,
-      sort_order: row.sort_order,
-    })
+  const applyVisibility = async (row: InventoryRow, visibility: ProductVisibility) => {
+    await saveRow(row.product_id, inventoryRowPayload(row, visibility))
   }
+
+  const bulkUpdateVisibility = async (visibility: ProductVisibility) => {
+    if (!selectedRows.length) return
+    setBulkBusy(true)
+    setError('')
+    try {
+      const results = await Promise.allSettled(
+        selectedRows.map((row) => api.put(`admin/inventory/${encodeURIComponent(row.product_id)}`, inventoryRowPayload(row, visibility))),
+      )
+      await load()
+      const failed = results.find((result) => result.status === 'rejected')
+      if (failed && failed.status === 'rejected') {
+        const reason = failed.reason
+        setError(reason instanceof Error ? reason.message : 'Some products could not be updated.')
+      } else {
+        clearSelection()
+      }
+    } finally {
+      setBulkBusy(false)
+    }
+  }
+
+  const bulkDeleteSelected = async () => {
+    if (!selectedRows.length) return
+    const count = selectedRows.length
+    if (!window.confirm(`Delete ${count} selected product${count === 1 ? '' : 's'}? This cannot be undone.`)) return
+
+    setBulkBusy(true)
+    setError('')
+    try {
+      const results = await Promise.allSettled(
+        selectedRows.map((row) => api.del(`admin/inventory/${encodeURIComponent(row.product_id)}`)),
+      )
+      await load()
+      const failed = results.find((result) => result.status === 'rejected')
+      if (failed && failed.status === 'rejected') {
+        const reason = failed.reason
+        setError(reason instanceof Error ? reason.message : 'Some products could not be deleted.')
+      } else {
+        clearSelection()
+      }
+    } finally {
+      setBulkBusy(false)
+    }
+  }
+
+  const submitLabel = bulkBusy ? 'Working...' : busyId ? 'Saving...' : 'Save Product'
 
   return (
     <div style={{ display: 'grid', gap: 18 }}>
@@ -1798,54 +1911,112 @@ function InventoryAdmin() {
         <div>
           <h3 className="gold-text">Products & Inventory</h3>
           <p style={{ color: 'var(--muted)', fontSize: 13 }}>
-            {rows.length} products · {liveCount} live · {upcomingCount} upcoming · {hiddenCount} hidden · {soldOutCount} sold out
+            {rows.length} products - {liveCount} live - {upcomingCount} upcoming - {hiddenCount} hidden - {soldOutCount} sold out
           </p>
         </div>
-        <button className="btn btn--sm btn--solid" onClick={openNewProduct}>+ Add Product</button>
+        <button className="btn btn--sm btn--solid" onClick={openNewProduct} disabled={isBusy}>+ Add Product</button>
       </div>
 
       {error && <p style={{ color: '#e08a8a', fontSize: 13 }}>{error}</p>}
 
-      <Table head={['Product', 'Visibility', 'Stock', 'Threshold', 'Status', 'Price', 'Updated', 'Actions']}>
-        {rows.map((row) => {
-          const tone = inventoryTone(row)
-          return (
-            <tr key={row.product_id} style={rowS}>
-              <td style={tdS}>
-                <div style={{ fontWeight: 600, color: '#f0e3bf' }}>{row.name}</div>
-                <div style={{ color: 'var(--muted)', fontSize: 12, lineHeight: 1.5 }}>
-                  {row.product_id} · {row.category || 'Uncategorized'}
-                </div>
-              </td>
-              <td style={tdS}>
-                <span style={badgePill(row.visibility === 'hidden' ? 'muted' : row.visibility === 'upcoming' ? 'amber' : 'green')}>
-                  {row.visibility}
-                </span>
-              </td>
-              <td style={tdS}>{row.stock}</td>
-              <td style={tdS}>{row.low_stock_threshold}</td>
-              <td style={tdS}>
-                <span style={badgePill(tone.tone)}>{tone.label}</span>
-              </td>
-              <td style={tdS}>${Number(row.price || 0).toFixed(2)}</td>
-              <td style={tdS}>{row.updated_at || 'â€”'}</td>
-              <td style={tdS}>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  <button className="btn btn--sm" onClick={() => openEditProduct(row)}>Edit</button>
-                  <button className="btn btn--sm" onClick={() => void toggleVisibility(row)} disabled={busyId === row.product_id}>
-                    {busyId === row.product_id ? 'Working…' : row.visibility === 'hidden' ? 'Restore' : 'Hide'}
-                  </button>
-                </div>
-              </td>
+      {selectedCount > 0 && (
+        <div className="admin-bulkbar">
+          <span className="admin-bulkbar__count">{selectedCount} selected</span>
+          <button type="button" className="btn btn--sm" onClick={() => void bulkUpdateVisibility('live')} disabled={isBusy}>Set live</button>
+          <button type="button" className="btn btn--sm" onClick={() => void bulkUpdateVisibility('upcoming')} disabled={isBusy}>Set upcoming</button>
+          <button type="button" className="btn btn--sm" onClick={() => void bulkUpdateVisibility('hidden')} disabled={isBusy}>Hide selected</button>
+          <button type="button" className="btn btn--sm admin-bulkbar__danger" onClick={() => void bulkDeleteSelected()} disabled={isBusy}>Delete selected</button>
+          <button type="button" className="btn btn--sm" onClick={clearSelection} disabled={isBusy}>Clear</button>
+        </div>
+      )}
+
+      <div className="admin-table-wrap glass">
+        <table className="admin-table">
+          <thead>
+            <tr>
+              <th className="admin-table__check">
+                <input
+                  type="checkbox"
+                  aria-label="Select all products"
+                  checked={allSelected}
+                  onChange={toggleSelectAll}
+                  disabled={isBusy || rows.length === 0}
+                />
+              </th>
+              <th>Product</th>
+              <th>Visibility</th>
+              <th>Stock</th>
+              <th>Threshold</th>
+              <th>Status</th>
+              <th>Price</th>
+              <th>Updated</th>
+              <th>Actions</th>
             </tr>
-          )
-        })}
-      </Table>
+          </thead>
+          <tbody>
+            {rows.length
+              ? rows.map((row) => {
+                  const tone = inventoryTone(row)
+                  const visibilityLabel = row.visibility === 'hidden' ? 'Restore' : 'Hide'
+                  return (
+                    <tr key={row.product_id}>
+                      <td className="admin-table__check">
+                        <input
+                          type="checkbox"
+                          aria-label={`Select ${row.name}`}
+                          checked={selectedIds.has(row.product_id)}
+                          onChange={() => toggleSelected(row.product_id)}
+                          disabled={isBusy}
+                        />
+                      </td>
+                      <td>
+                        <div style={{ fontWeight: 600, color: '#f0e3bf' }}>{row.name}</div>
+                        <div style={{ color: 'var(--muted)', fontSize: 12, lineHeight: 1.5 }}>
+                          {row.product_id} - {row.category || 'Uncategorized'}
+                        </div>
+                      </td>
+                      <td>
+                        <span style={badgePill(row.visibility === 'hidden' ? 'muted' : row.visibility === 'upcoming' ? 'amber' : 'green')}>
+                          {row.visibility}
+                        </span>
+                      </td>
+                      <td>{row.stock}</td>
+                      <td>{row.low_stock_threshold}</td>
+                      <td>
+                        <span style={badgePill(tone.tone)}>{tone.label}</span>
+                      </td>
+                      <td>${Number(row.price || 0).toFixed(2)}</td>
+                      <td>{row.updated_at || '-'}</td>
+                      <td>
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                          <button className="btn btn--sm" onClick={() => openEditProduct(row)} disabled={isBusy}>Edit</button>
+                          <button className="btn btn--sm" onClick={() => void applyVisibility(row, row.visibility === 'hidden' ? 'live' : 'hidden')} disabled={isBusy}>
+                            {visibilityLabel}
+                          </button>
+                          <RowMenu
+                            disabled={isBusy}
+                            actions={[
+                              { label: 'Edit product', onClick: () => openEditProduct(row), disabled: isBusy },
+                              { label: 'Set live', onClick: () => void applyVisibility(row, 'live'), disabled: isBusy },
+                              { label: 'Set upcoming', onClick: () => void applyVisibility(row, 'upcoming'), disabled: isBusy },
+                              { label: row.visibility === 'hidden' ? 'Restore to live' : 'Hide product', onClick: () => void applyVisibility(row, row.visibility === 'hidden' ? 'live' : 'hidden'), disabled: isBusy },
+                              { label: 'Delete product', danger: true, onClick: () => void deleteRow(row), disabled: isBusy },
+                            ]}
+                          />
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })
+              : <tr><td className="admin-table__empty" colSpan={9}>No inventory items found.</td></tr>}
+          </tbody>
+        </table>
+      </div>
 
       {editing && (
-        <div className="modal-overlay open" onClick={(e) => e.target === e.currentTarget && !busyId && (setEditing(null), setEditingIsNew(false))}>
+        <div className="modal-overlay open" onClick={(e) => e.target === e.currentTarget && !isBusy && (setEditing(null), setEditingIsNew(false))}>
           <form className="modal" style={{ maxWidth: 760, maxHeight: '90vh', overflowY: 'auto' }} onSubmit={saveEditing}>
-            <button type="button" className="close" onClick={() => { setEditing(null); setEditingIsNew(false) }} aria-label="Close" disabled={!!busyId}>
+            <button type="button" className="close" onClick={() => { setEditing(null); setEditingIsNew(false) }} aria-label="Close" disabled={isBusy}>
               <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth={2}><path d="M6 6l12 12M18 6L6 18" /></svg>
             </button>
             <h3 className="gold-text">{editingIsNew ? 'New Product' : 'Edit Product'}</h3>
@@ -1924,11 +2095,11 @@ function InventoryAdmin() {
             <div className="fgrid">
               <div className="field">
                 <label>Feature Highlights</label>
-                <textarea className="fld-area" style={{ minHeight: 140 }} value={editing.feature_list} onChange={(e) => setEditing((prev) => (prev ? { ...prev, feature_list: e.target.value } : prev))} placeholder={`One highlight per line` + "\n" + `Heavyweight fleece` + "\n" + `Embroidered emblem`} />
+                <textarea className="fld-area" style={{ minHeight: 140 }} value={editing.feature_list} onChange={(e) => setEditing((prev) => (prev ? { ...prev, feature_list: e.target.value } : prev))} placeholder={"One highlight per line\nHeavyweight fleece\nEmbroidered emblem"} />
               </div>
               <div className="field">
                 <label>Product Specs</label>
-                <textarea className="fld-area" style={{ minHeight: 140 }} value={editing.spec_list} onChange={(e) => setEditing((prev) => (prev ? { ...prev, spec_list: e.target.value } : prev))} placeholder={`One spec per line` + "\n" + `Fit: Relaxed` + "\n" + `Collection: Core`} />
+                <textarea className="fld-area" style={{ minHeight: 140 }} value={editing.spec_list} onChange={(e) => setEditing((prev) => (prev ? { ...prev, spec_list: e.target.value } : prev))} placeholder={"One spec per line\nFit: Relaxed\nCollection: Core"} />
               </div>
             </div>
 
@@ -1947,8 +2118,8 @@ function InventoryAdmin() {
               <p style={{ color: 'var(--muted)', fontSize: 12, lineHeight: 1.6, maxWidth: 420 }}>
                 Set visibility to <strong>live</strong> when you want it on the store, <strong>upcoming</strong> when it should preview publicly, and <strong>hidden</strong> to remove it from the public site.
               </p>
-              <button type="submit" className="btn btn--solid" disabled={!!busyId}>
-                {busyId ? 'Saving…' : 'Save Product'}
+              <button type="submit" className="btn btn--solid" disabled={isBusy}>
+                {submitLabel}
               </button>
             </div>
           </form>
@@ -2097,7 +2268,7 @@ interface MenuAction { label: string; onClick: () => void; danger?: boolean; dis
  * containing block for a fixed element and clip it inside the overflow scroller.
  * Fixed-positioned at the trigger; closes on outside click, Escape, scroll, or resize.
  */
-function RowMenu({ actions }: { actions: MenuAction[] }) {
+function RowMenu({ actions, disabled = false }: { actions: MenuAction[]; disabled?: boolean }) {
   const [open, setOpen] = useState(false)
   const [pos, setPos] = useState<{ top: number; right: number }>({ top: 0, right: 0 })
   const triggerRef = useRef<HTMLButtonElement>(null)
@@ -2134,7 +2305,7 @@ function RowMenu({ actions }: { actions: MenuAction[] }) {
 
   return (
     <div className="row-menu">
-      <button ref={triggerRef} type="button" className="row-menu__trigger" aria-label="Row actions" aria-haspopup="menu" aria-expanded={open} onClick={toggle}>
+      <button ref={triggerRef} type="button" className="row-menu__trigger" aria-label="Row actions" aria-haspopup="menu" aria-expanded={open} disabled={disabled} onClick={toggle}>
         <span /><span /><span />
       </button>
       {open && createPortal(

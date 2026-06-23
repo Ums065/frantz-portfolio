@@ -805,6 +805,13 @@ function storefront_ensure_inventory_catalog_schema(): void
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
     );
 
+    db()->exec(
+        "CREATE TABLE IF NOT EXISTS store_inventory_state (
+            state_key VARCHAR(64) PRIMARY KEY,
+            state_value VARCHAR(255) DEFAULT NULL,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
     $columns = [
         'name' => "ALTER TABLE store_inventory ADD COLUMN name VARCHAR(160) DEFAULT NULL AFTER product_id",
         'category' => "ALTER TABLE store_inventory ADD COLUMN category VARCHAR(80) DEFAULT NULL AFTER name",
@@ -835,10 +842,41 @@ function storefront_inventory_has_catalog_columns(): bool
     return storefront_inventory_has_column('visibility');
 }
 
+function storefront_inventory_seed_marker_exists(?PDO $pdo = null): bool
+{
+    $pdo ??= db();
+    storefront_ensure_inventory_catalog_schema();
+    $stmt = $pdo->prepare('SELECT 1 FROM store_inventory_state WHERE state_key = ? LIMIT 1');
+    $stmt->execute(['defaults_seeded']);
+    return (bool) $stmt->fetchColumn();
+}
+
+function storefront_mark_inventory_seeded(?PDO $pdo = null): void
+{
+    $pdo ??= db();
+    storefront_ensure_inventory_catalog_schema();
+    $stmt = $pdo->prepare(
+        'INSERT INTO store_inventory_state (state_key, state_value)
+         VALUES (?, ?)
+         ON DUPLICATE KEY UPDATE state_value = VALUES(state_value)'
+    );
+    $stmt->execute(['defaults_seeded', '1']);
+}
+
 function storefront_seed_inventory_defaults(?PDO $pdo = null): void
 {
     $pdo ??= db();
     storefront_ensure_inventory_catalog_schema();
+    if (storefront_inventory_seed_marker_exists($pdo)) {
+        return;
+    }
+
+    $countStmt = $pdo->query('SELECT COUNT(*) FROM store_inventory');
+    if ($countStmt && (int) $countStmt->fetchColumn() > 0) {
+        storefront_mark_inventory_seeded($pdo);
+        return;
+    }
+
     $defaults = storefront_inventory_defaults();
 
     $seed = $pdo->prepare(
@@ -866,6 +904,8 @@ function storefront_seed_inventory_defaults(?PDO $pdo = null): void
             (int) ($cfg['sort_order'] ?? 0),
         ]);
     }
+
+    storefront_mark_inventory_seeded($pdo);
 }
 
 function storefront_inventory_rows(bool $includeHidden = false): array

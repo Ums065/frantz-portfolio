@@ -1663,6 +1663,17 @@ try {
             json(['message' => 'Inventory updated.']);
         }
 
+
+        case $method === 'DELETE' && preg_match('#^admin/inventory/([a-z0-9_-]+)$#', $route, $m) === 1: {
+            require_admin();
+            if (!storefront_inventory_has_catalog_columns()) {
+                json(['error' => 'Run db/update.sql to enable merch product management.'], 409);
+            }
+            $stmt = db()->prepare('DELETE FROM store_inventory WHERE product_id = ?');
+            $stmt->execute([$m[1]]);
+            json(['message' => 'Inventory item deleted.']);
+        }
+
         case $key === 'GET admin/community': {
             require_admin();
             $threads = db()->query(
