@@ -696,7 +696,8 @@ export default function NewSchool() {
     event.preventDefault()
     setBusy('student')
     try {
-      const fd = new FormData(event.currentTarget)
+      const form = event.currentTarget
+      const fd = new FormData(form)
       const password = value(fd, 'password')
       const confirmPassword = value(fd, 'confirm_password')
       const acknowledged = checked(fd, 'student_acknowledgement')
@@ -728,7 +729,7 @@ export default function NewSchool() {
       }
       const res = await api.post<any>('new-school/student/register', payload)
       showNotice('success', res.message || 'Student registered.')
-      event.currentTarget.reset()
+      form.reset()
       setStudentSchoolSearch('')
       setStudentTeacherId('')
       setStudentDob('')
@@ -745,7 +746,8 @@ export default function NewSchool() {
     event.preventDefault()
     setBusy('parent')
     try {
-      const fd = new FormData(event.currentTarget)
+      const form = event.currentTarget
+      const fd = new FormData(form)
       const governmentId = fileValue(fd, 'government_id_file')
       const governmentIdUrl = await uploadIfPresent(governmentId)
       const payload = {
@@ -766,7 +768,7 @@ export default function NewSchool() {
       }
       const res = await api.post<any>('new-school/parent/consent', payload)
       showNotice('success', res.message || 'Parent consent saved.')
-      event.currentTarget.reset()
+      form.reset()
       setParentParticipantId('')
       setParentSchoolSearch('')
       setParentTeacherId('')
@@ -786,7 +788,8 @@ export default function NewSchool() {
     event.preventDefault()
     setBusy('school')
     try {
-      const fd = new FormData(event.currentTarget)
+      const form = event.currentTarget
+      const fd = new FormData(form)
       const payload = {
         school_name: value(fd, 'school_name'),
         school_address: value(fd, 'school_address'),
@@ -804,7 +807,7 @@ export default function NewSchool() {
       }
       const res = await api.post<any>('new-school/school/register', payload)
       showNotice('success', res.message || 'School registered.')
-      event.currentTarget.reset()
+      form.reset()
       await refresh()
       await reloadOverview()
     } catch (err) {
@@ -818,7 +821,8 @@ export default function NewSchool() {
     event.preventDefault()
     setBusy('teacher')
     try {
-      const fd = new FormData(event.currentTarget)
+      const form = event.currentTarget
+      const fd = new FormData(form)
       const schoolId = Number(value(fd, 'school_id'))
       const payload = {
         teacher_full_name: value(fd, 'teacher_full_name'),
@@ -836,7 +840,7 @@ export default function NewSchool() {
       }
       const res = await api.post<any>('new-school/teacher/register', payload)
       showNotice('success', res.message || 'Teacher registered.')
-      event.currentTarget.reset()
+      form.reset()
       setTeacherSchoolSearch('')
       await refresh()
       await reloadOverview()
@@ -851,7 +855,8 @@ export default function NewSchool() {
     event.preventDefault()
     setBusy('business')
     try {
-      const fd = new FormData(event.currentTarget)
+      const form = event.currentTarget
+      const fd = new FormData(form)
       const payload = {
         student_id: Number(value(fd, 'student_id') || dashboard?.student?.id || parentLink?.student?.id || 0) || undefined,
         visit_number: Number(value(fd, 'visit_number') || 0) || undefined,
@@ -874,7 +879,7 @@ export default function NewSchool() {
       const res = await api.post<any>('new-school/business', payload)
       showNotice('success', res.message || 'Business interview saved.')
       recordTermsAcceptance({ kind: 'website', signature: user?.full_name || value(fd, 'business_name'), email: user?.email || '', documentLabel: 'Business Interview Upload' })
-      event.currentTarget.reset()
+      form.reset()
       await reloadDashboard()
       await reloadOverview()
     } catch (err) {
@@ -888,7 +893,8 @@ export default function NewSchool() {
     event.preventDefault()
     setBusy('submission')
     try {
-      const fd = new FormData(event.currentTarget)
+      const form = event.currentTarget
+      const fd = new FormData(form)
       const videoUrl = await uploadIfPresent(fileValue(fd, 'video_file'))
       const writtenUrl = await uploadIfPresent(fileValue(fd, 'written_file'))
       const payload = {
@@ -905,7 +911,7 @@ export default function NewSchool() {
       const res = await api.post<any>('new-school/submission', payload)
       showNotice('success', res.message || 'Submission saved.')
       recordTermsAcceptance({ kind: 'website', signature: user?.full_name || 'Student', email: user?.email || '', documentLabel: 'Final Project Upload' })
-      event.currentTarget.reset()
+      form.reset()
       await reloadDashboard()
       await reloadOverview()
     } catch (err) {
@@ -963,7 +969,8 @@ export default function NewSchool() {
     event.preventDefault()
     setBusy('submission-review')
     try {
-      const fd = new FormData(event.currentTarget)
+      const form = event.currentTarget
+      const fd = new FormData(form)
       const submissionId = Number(value(fd, 'submission_id') || 0)
       if (!submissionId) {
         throw new Error('Select a submission to review.')
@@ -977,7 +984,7 @@ export default function NewSchool() {
       }
       const res = await api.post<any>('new-school/submission/review', payload)
       showNotice('success', res.message || 'Submission review saved.')
-      event.currentTarget?.reset()
+      form.reset()
       await reloadDashboard()
       await reloadOverview()
     } catch (err) {
@@ -1006,7 +1013,8 @@ export default function NewSchool() {
     event.preventDefault()
     setBusy('admin-review')
     try {
-      const fd = new FormData(event.currentTarget)
+      const form = event.currentTarget
+      const fd = new FormData(form)
       const submissionId = Number(value(fd, 'submission_id') || 0)
       if (!submissionId) {
         throw new Error('Select a submission to review.')
@@ -1032,7 +1040,7 @@ export default function NewSchool() {
         })
       }
       showNotice('success', res.message || 'Submission updated.')
-      event.currentTarget.reset()
+      form.reset()
       await reloadDashboard()
       await reloadOverview()
     } catch (err) {
@@ -1046,7 +1054,8 @@ export default function NewSchool() {
     event.preventDefault()
     setBusy('interview-points')
     try {
-      const fd = new FormData(event.currentTarget)
+      const form = event.currentTarget
+      const fd = new FormData(form)
       const interviewId = Number(value(fd, 'interview_id') || 0)
       if (!interviewId) {
         throw new Error('Select an interview to award points.')
@@ -1059,7 +1068,7 @@ export default function NewSchool() {
         teacher_points: teacherRaw === '' ? 3 : Number(teacherRaw || 0),
       })
       showNotice('success', 'Interview points awarded.')
-      event.currentTarget.reset()
+      form.reset()
       await reloadDashboard()
       await reloadOverview()
     } catch (err) {
@@ -1092,7 +1101,8 @@ export default function NewSchool() {
     event.preventDefault()
     setBusy('publish')
     try {
-      const fd = new FormData(event.currentTarget)
+      const form = event.currentTarget
+      const fd = new FormData(form)
       const winners = [1, 2, 3]
         .map((slot) => ({
           submission_id: Number(value(fd, `winner_${slot}_submission_id`) || 0),
@@ -1104,7 +1114,7 @@ export default function NewSchool() {
 
       const res = await api.post<any>('admin/new-school/winners/publish', { winners })
       showNotice('success', res.message || 'Winners published.')
-      event.currentTarget.reset()
+      form.reset()
       await reloadDashboard()
       await reloadOverview()
     } catch (err) {
