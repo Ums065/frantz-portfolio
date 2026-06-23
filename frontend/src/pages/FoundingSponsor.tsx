@@ -2,6 +2,8 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { api, type PublicSponsorTier, type SponsorLevelRow, type SponsorProgramRow } from '../lib/api'
 import { useSeo } from '../hooks/useSeo'
+import TermsAgreement from '../components/TermsAgreement'
+import { recordTermsAcceptance } from '../lib/recordTermsAcceptance'
 
 const fallbackLevels: SponsorLevelRow[] = [
   { id: 1, slug: 'community_partner', name: 'Community Partner', minimum_amount: 1000, sort_order: 1 },
@@ -126,6 +128,7 @@ export default function FoundingSponsor() {
   const [submitError, setSubmitError] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [success, setSuccess] = useState<{ level: string; amount: number; organization: string } | null>(null)
+  const [termsAccepted, setTermsAccepted] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -253,6 +256,7 @@ export default function FoundingSponsor() {
         level: response.application.sponsorship_level_name,
         amount: response.application.sponsorship_amount,
       })
+      recordTermsAcceptance({ kind: 'website', signature: form.contact_person || form.organization_name, email: form.email_address, documentLabel: 'Sponsorship Application' })
       setForm({
         ...initialForm,
         organization_type: organizationTypes[0],
@@ -607,8 +611,9 @@ export default function FoundingSponsor() {
                   ))}
                 </div>
 
+                <TermsAgreement kind="website" idPrefix="sponsor" hideSignature signatureName="" onSignatureChange={() => {}} onAcceptedChange={setTermsAccepted} />
                 {submitError && <p className="sponsor-note sponsor-note--error">{submitError}</p>}
-                <button className="btn btn--solid" type="submit" disabled={submitting}>
+                <button className="btn btn--solid" type="submit" disabled={submitting || !termsAccepted}>
                   {submitting ? 'Submitting...' : 'Become A Founding Sponsor'}
                 </button>
               </form>

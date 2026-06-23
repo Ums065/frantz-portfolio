@@ -520,6 +520,29 @@ try {
             json(['message' => 'You\'re on the list — welcome to the legacy.'], 201);
         }
 
+        case $key === 'POST terms-acceptance': {
+            // Records a website "Terms of Use & Privacy Notice" acceptance for any action form.
+            // Auditing never blocks the primary action; user_id auto-links if a session exists.
+            $b = body();
+            $name = field($b, 'user_name') ?: field($b, 'signature_name') ?: field($b, 'full_name') ?: field($b, 'name');
+            $email = require_email(field($b, 'email'));
+            $signature = field($b, 'signature_name') ?: $name;
+            $version = field($b, 'terms_version') ?: TERMS_WEBSITE_VERSION;
+            $label = field($b, 'document_label') ?: TERMS_WEBSITE_LABEL;
+            if ($name === '') {
+                json(['error' => 'Your name is required to accept the terms.'], 422);
+            }
+            record_terms_acceptance([
+                'accept_type' => 'website',
+                'terms_version' => $version,
+                'user_name' => $name,
+                'email' => $email,
+                'signature_name' => $signature,
+                'document_label' => $label,
+            ]);
+            json(['ok' => true, 'message' => 'Acceptance recorded.'], 201);
+        }
+
         case $key === 'POST sponsorship/upload-logo': {
             sponsor_ensure_schema();
             if (empty($_FILES['file']) || ($_FILES['file']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {

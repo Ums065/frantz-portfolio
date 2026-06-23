@@ -6,6 +6,9 @@ import { buildLocalQrDataUri } from '../lib/localQr.js'
 import { useAuth } from '../context/AuthContext'
 import { useSeo } from '../hooks/useSeo'
 import { resolveDashboardRoute } from '../lib/dashboardRoute'
+import TermsAgreement from '../components/TermsAgreement'
+import { CHALLENGE_TERMS_VERSION } from '../lib/terms'
+import { recordTermsAcceptance } from '../lib/recordTermsAcceptance'
 
 const isAdminRole = (role?: string) => ['admin', 'super_admin', 'editor'].includes(role || '')
 
@@ -495,6 +498,16 @@ export default function NewSchool() {
   const [parentLink, setParentLink] = useState<any>(null)
   const [busy, setBusy] = useState('')
   const [registrationTag, setRegistrationTag] = useState<RegistrationTag>('student')
+  // Terms & Conditions agreement state (per registration form + content-upload forms).
+  const [studentTermsOk, setStudentTermsOk] = useState(false)
+  const [studentTermsSig, setStudentTermsSig] = useState('')
+  const [parentTermsOk, setParentTermsOk] = useState(false)
+  const [schoolTermsOk, setSchoolTermsOk] = useState(false)
+  const [schoolTermsSig, setSchoolTermsSig] = useState('')
+  const [teacherTermsOk, setTeacherTermsOk] = useState(false)
+  const [teacherTermsSig, setTeacherTermsSig] = useState('')
+  const [businessTermsOk, setBusinessTermsOk] = useState(false)
+  const [submissionTermsOk, setSubmissionTermsOk] = useState(false)
   const [notice, setNotice] = useState<{ tone: 'success' | 'error' | 'info'; text: string } | null>(null)
   const [studentSchoolSearch, setStudentSchoolSearch] = useState('')
   const [studentTeacherId, setStudentTeacherId] = useState('')
@@ -697,6 +710,8 @@ export default function NewSchool() {
         parent_phone: value(fd, 'parent_phone'),
         parent_email: value(fd, 'parent_email'),
         student_acknowledgement: acknowledged,
+        terms_signature: studentTermsSig,
+        terms_version: CHALLENGE_TERMS_VERSION,
       }
       const res = await api.post<any>('new-school/student/register', payload)
       showNotice('success', res.message || 'Student registered.')
@@ -770,6 +785,8 @@ export default function NewSchool() {
         administrator_phone: value(fd, 'administrator_phone'),
         school_website: value(fd, 'school_website'),
         password: value(fd, 'password'),
+        terms_signature: schoolTermsSig,
+        terms_version: CHALLENGE_TERMS_VERSION,
       }
       const res = await api.post<any>('new-school/school/register', payload)
       showNotice('success', res.message || 'School registered.')
@@ -800,6 +817,8 @@ export default function NewSchool() {
         teacher_tag: value(fd, 'teacher_tag'),
         employee_id: value(fd, 'employee_id'),
         password: value(fd, 'password'),
+        terms_signature: teacherTermsSig,
+        terms_version: CHALLENGE_TERMS_VERSION,
       }
       const res = await api.post<any>('new-school/teacher/register', payload)
       showNotice('success', res.message || 'Teacher registered.')
@@ -840,6 +859,7 @@ export default function NewSchool() {
       }
       const res = await api.post<any>('new-school/business', payload)
       showNotice('success', res.message || 'Business interview saved.')
+      recordTermsAcceptance({ kind: 'website', signature: user?.full_name || value(fd, 'business_name'), email: user?.email || '', documentLabel: 'Business Interview Upload' })
       event.currentTarget.reset()
       await reloadDashboard()
       await reloadOverview()
@@ -870,6 +890,7 @@ export default function NewSchool() {
       }
       const res = await api.post<any>('new-school/submission', payload)
       showNotice('success', res.message || 'Submission saved.')
+      recordTermsAcceptance({ kind: 'website', signature: user?.full_name || 'Student', email: user?.email || '', documentLabel: 'Final Project Upload' })
       event.currentTarget.reset()
       await reloadDashboard()
       await reloadOverview()
@@ -1835,10 +1856,11 @@ export default function NewSchool() {
                   <span>I confirm this student is between 11 and 19 and understands parent consent is required before submission.</span>
                 </label>
               </div>
+              <TermsAgreement kind="student" idPrefix="ns-student" signatureName={studentTermsSig} onSignatureChange={setStudentTermsSig} onAcceptedChange={setStudentTermsOk} />
               <button
                 className="btn btn--solid"
                 type="submit"
-                disabled={busy === 'student' || !matchedStudentSchool || studentSchoolTeachers.length === 0}
+                disabled={busy === 'student' || !matchedStudentSchool || studentSchoolTeachers.length === 0 || !studentTermsOk}
               >
                 {busy === 'student' ? 'Saving...' : 'Create Student Profile'}
               </button>
@@ -1928,7 +1950,8 @@ export default function NewSchool() {
                   <span>I confirm I am the parent or legal guardian and give permission for participation.</span>
                 </label>
               </div>
-              <button className="btn btn--solid" type="submit" disabled={busy === 'parent'}>{busy === 'parent' ? 'Saving...' : 'Approve Consent'}</button>
+              <TermsAgreement kind="parent" idPrefix="ns-parent" hideSignature signatureName="" onSignatureChange={() => {}} onAcceptedChange={setParentTermsOk} />
+              <button className="btn btn--solid" type="submit" disabled={busy === 'parent' || !parentTermsOk}>{busy === 'parent' ? 'Saving...' : 'Approve Consent'}</button>
             </form>
 
             <form className="glass ns-form reveal in" id="school-registration" onSubmit={submitSchool} hidden={registrationTag !== 'school'}>
@@ -1958,7 +1981,8 @@ export default function NewSchool() {
                 <label className="ns-field ns-field--full"><span>School Website</span><input name="school_website" placeholder="https://example.edu" /></label>
                 <label className="ns-field ns-field--full"><span>Password</span><input name="password" type="password" minLength={6} required /></label>
               </div>
-              <button className="btn btn--solid" type="submit" disabled={busy === 'school'}>{busy === 'school' ? 'Saving...' : 'Register School'}</button>
+              <TermsAgreement kind="school" idPrefix="ns-school" signatureName={schoolTermsSig} onSignatureChange={setSchoolTermsSig} onAcceptedChange={setSchoolTermsOk} />
+              <button className="btn btn--solid" type="submit" disabled={busy === 'school' || !schoolTermsOk}>{busy === 'school' ? 'Saving...' : 'Register School'}</button>
             </form>
 
             <form className="glass ns-form reveal in" id="teacher-registration" onSubmit={submitTeacher} hidden={registrationTag !== 'teacher'}>
@@ -1997,7 +2021,8 @@ export default function NewSchool() {
                 <label className="ns-field ns-field--full"><span>Employee ID</span><input name="employee_id" placeholder="Optional staff identifier" /></label>
                 <label className="ns-field ns-field--full"><span>Password</span><input name="password" type="password" minLength={6} required /></label>
               </div>
-              <button className="btn btn--solid" type="submit" disabled={busy === 'teacher' || !approvedSchool(teacherSchoolSearch)}>
+              <TermsAgreement kind="teacher" idPrefix="ns-teacher" signatureName={teacherTermsSig} onSignatureChange={setTeacherTermsSig} onAcceptedChange={setTeacherTermsOk} />
+              <button className="btn btn--solid" type="submit" disabled={busy === 'teacher' || !approvedSchool(teacherSchoolSearch) || !teacherTermsOk}>
                 {busy === 'teacher' ? 'Saving...' : 'Register Teacher'}
               </button>
             </form>
@@ -2500,7 +2525,8 @@ export default function NewSchool() {
                     </label>
                   ))}
                 </div>
-                <button className="btn btn--solid" type="submit" disabled={busy === 'business'}>{busy === 'business' ? 'Saving...' : 'Save Business Interview'}</button>
+                <TermsAgreement kind="website" idPrefix="ns-business" hideSignature signatureName="" onSignatureChange={() => {}} onAcceptedChange={setBusinessTermsOk} />
+                <button className="btn btn--solid" type="submit" disabled={busy === 'business' || !businessTermsOk}>{busy === 'business' ? 'Saving...' : 'Save Business Interview'}</button>
               </form>
 
               <form className="glass ns-form ns-form--compact reveal in" id="final-submission" onSubmit={submitSubmission} hidden={dashboardTab !== 'activity'}>
@@ -2528,7 +2554,8 @@ export default function NewSchool() {
                   <label className="ns-field ns-field--full"><span>Written Upload</span><input name="written_file" type="file" accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg,.webp" required /></label>
                 </div>
                 {!canStudentSubmit && <div className="ns-alert ns-alert--info">Final submission stays locked until parent consent, school approval, teacher approval, and 10 business interviews are complete.</div>}
-                <button className="btn btn--solid" type="submit" disabled={busy === 'submission' || !canStudentSubmit}>
+                <TermsAgreement kind="website" idPrefix="ns-submission" hideSignature signatureName="" onSignatureChange={() => {}} onAcceptedChange={setSubmissionTermsOk} />
+                <button className="btn btn--solid" type="submit" disabled={busy === 'submission' || !canStudentSubmit || !submissionTermsOk}>
                   {busy === 'submission' ? 'Saving...' : 'Submit Final Project'}
                 </button>
                 {studentDashboard.submission && (

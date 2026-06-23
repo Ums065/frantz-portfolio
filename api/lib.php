@@ -39,6 +39,32 @@ function require_email(string $email): string
     return strtolower($email);
 }
 
+/** Best-effort client IP — honors X-Forwarded-For (first hop) then REMOTE_ADDR. */
+function client_ip(): ?string
+{
+    $candidates = [];
+    $xff = (string) ($_SERVER['HTTP_X_FORWARDED_FOR'] ?? '');
+    if ($xff !== '') {
+        foreach (explode(',', $xff) as $part) {
+            $candidates[] = trim($part);
+        }
+    }
+    $candidates[] = (string) ($_SERVER['REMOTE_ADDR'] ?? '');
+    foreach ($candidates as $ip) {
+        if ($ip !== '' && filter_var($ip, FILTER_VALIDATE_IP) !== false) {
+            return substr($ip, 0, 45);
+        }
+    }
+    return null;
+}
+
+/** Raw User-Agent string (truncated), or null. */
+function client_user_agent(): ?string
+{
+    $ua = trim((string) ($_SERVER['HTTP_USER_AGENT'] ?? ''));
+    return $ua !== '' ? substr($ua, 0, 500) : null;
+}
+
 /** Currently logged-in user array, or null. */
 function current_user(): ?array
 {
@@ -1451,6 +1477,134 @@ const NS_POINTS_TEACHER_AUTO = 2;
 const NS_POINTS_STUDENT_BONUS_MAX = 15;
 const NS_POINTS_TEACHER_BONUS_MAX = 8;
 const NS_POINTS_TEACHER_BONUS_DEFAULT = 3;
+
+/* ============================================================
+   Terms & Conditions acceptance audit
+   ============================================================ */
+
+// Current version strings + document labels. Bump on text changes; historical rows
+// keep the version that was in force when accepted.
+const TERMS_CHALLENGE_VERSION        = 'Interim Terms v1 – June 2026';
+const TERMS_GENERAL_PLATFORM_VERSION = 'Interim Terms v1 – June 2026';
+const TERMS_WEBSITE_VERSION          = 'Interim Website Terms v1';
+const TERMS_WEBSITE_LABEL            = 'Terms of Use & Privacy Notice';
+const TERMS_GENERAL_PLATFORM_LABEL   = 'General Platform Terms';
+const TERMS_CHALLENGE_LABELS = [
+    'student' => 'Student Challenge Terms',
+    'parent'  => 'Parent / Guardian Challenge Terms',
+    'teacher' => 'Teacher Challenge Terms',
+    'school'  => 'School Challenge Terms',
+];
+
+function terms_acceptances_ensure_schema(): void
+{
+    static $ready = false;
+    if ($ready) {
+        return;
+    }
+    db()->exec(
+        "CREATE TABLE IF NOT EXISTS terms_acceptances (
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            user_id INT DEFAULT NULL,
+            user_name VARCHAR(180) NOT NULL,
+            email VARCHAR(160) NOT NULL,
+            role VARCHAR(40) DEFAULT NULL,
+            accept_type ENUM('challenge_role','general_platform','website') NOT NULL,
+            terms_version VARCHAR(120) NOT NULL,
+            signature_name VARCHAR(180) DEFAULT NULL,
+            document_label VARCHAR(200) DEFAULT NULL,
+            ip_address VARCHAR(45) DEFAULT NULL,
+            user_agent VARCHAR(500) DEFAULT NULL,
+            accepted_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_terms_user (user_id, accepted_at),
+            INDEX idx_terms_email (email, accepted_at),
+            INDEX idx_terms_type_version (accept_type, terms_version, accepted_at),
+            CONSTRAINT fk_terms_acceptances_user
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+    $ready = true;
+}
+
+/**
+ * Record one Terms acceptance audit row. Captures IP/UA server-side and resolves
+ * user_id from current_user() when not supplied. NEVER throws — auditing must never
+ * break the primary user action. Returns the inserted id, or 0 on no-op/failure.
+ */
+function record_terms_acceptance(array $args): int
+{
+    $acceptType   = (string) ($args['accept_type'] ?? '');
+    $termsVersion = trim((string) ($args['terms_version'] ?? ''));
+    if (!in_array($acceptType, ['challenge_role', 'general_platform', 'website'], true) || $termsVersion === '') {
+        return 0;
+    }
+
+    $user = null;
+    if (array_key_exists('user_id', $args) && $args['user_id'] !== null) {
+        $userId = (int) $args['user_id'];
+    } else {
+        $user = current_user();
+        $userId = $user ? (int) $user['id'] : null;
+    }
+
+    $userName = trim((string) ($args['user_name'] ?? ($user['full_name'] ?? '')));
+    $email    = strtolower(trim((string) ($args['email'] ?? ($user['email'] ?? ''))));
+    $role     = (isset($args['role']) && $args['role'] !== null && $args['role'] !== '') ? (string) $args['role'] : null;
+    $signature = (isset($args['signature_name']) && trim((string) $args['signature_name']) !== '')
+        ? trim((string) $args['signature_name'])
+        : ($userName !== '' ? $userName : null);
+    $documentLabel = (isset($args['document_label']) && trim((string) $args['document_label']) !== '')
+        ? trim((string) $args['document_label'])
+        : null;
+
+    if ($userName === '' || $email === '') {
+        return 0;
+    }
+
+    try {
+        terms_acceptances_ensure_schema();
+        $stmt = db()->prepare(
+            'INSERT INTO terms_acceptances
+                (user_id, user_name, email, role, accept_type, terms_version,
+                 signature_name, document_label, ip_address, user_agent)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        );
+        $stmt->execute([
+            $userId,
+            substr($userName, 0, 180),
+            substr($email, 0, 160),
+            $role !== null ? substr($role, 0, 40) : null,
+            $acceptType,
+            substr($termsVersion, 0, 120),
+            $signature !== null ? substr($signature, 0, 180) : null,
+            $documentLabel !== null ? substr($documentLabel, 0, 200) : null,
+            client_ip(),
+            client_user_agent(),
+        ]);
+        return (int) db()->lastInsertId();
+    } catch (Throwable $e) {
+        error_log('record_terms_acceptance() failed: ' . $e->getMessage());
+        return 0;
+    }
+}
+
+/** Record the three acceptance rows (challenge role + general platform + website) for a registration. */
+function record_registration_terms(int $userId, string $name, string $email, string $role, string $signature, array $body): void
+{
+    $challengeVersion = field($body, 'terms_version') ?: TERMS_CHALLENGE_VERSION;
+    $websiteVersion = field($body, 'website_terms_version') ?: TERMS_WEBSITE_VERSION;
+    $base = [
+        'user_id' => $userId,
+        'user_name' => $name,
+        'email' => $email,
+        'role' => $role,
+        'signature_name' => $signature !== '' ? $signature : $name,
+    ];
+    record_terms_acceptance($base + ['accept_type' => 'challenge_role', 'terms_version' => $challengeVersion, 'document_label' => TERMS_CHALLENGE_LABELS[$role] ?? 'Challenge Terms']);
+    record_terms_acceptance($base + ['accept_type' => 'general_platform', 'terms_version' => TERMS_GENERAL_PLATFORM_VERSION, 'document_label' => TERMS_GENERAL_PLATFORM_LABEL]);
+    record_terms_acceptance($base + ['accept_type' => 'website', 'terms_version' => $websiteVersion, 'document_label' => TERMS_WEBSITE_LABEL]);
+}
 
 function new_school_points_ensure_schema(): void
 {

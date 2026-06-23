@@ -62,6 +62,14 @@ export default function SiteFooter() {
           </div>
         </div>
 
+        <nav className="footer__legal" aria-label="Legal">
+          <Link to="/terms">Terms of Use</Link>
+          <span aria-hidden="true">|</span>
+          <Link to="/privacy">Privacy Notice</Link>
+          <span aria-hidden="true">|</span>
+          <Link to="/content-disclaimer">Content Disclaimer</Link>
+        </nav>
+
         <div className="footer__bar">
           <div className="cr">&copy; 2026 Frantz Coutard. All Rights Reserved.</div>
           <SocialLinks variant="bar" />

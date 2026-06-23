@@ -86,3 +86,29 @@ CREATE TABLE IF NOT EXISTS new_school_points (
   UNIQUE KEY uniq_points_source (recipient_role, recipient_id, source_type, source_id, kind),
   KEY idx_points_recipient (recipient_role, recipient_id)
 ) ENGINE=InnoDB;
+
+-- Terms & Conditions acceptance audit log.
+-- Mirrors terms_acceptances_ensure_schema() in api/lib.php (runtime lazy-create).
+--   challenge_role    = role-specific challenge terms (student/parent/teacher/school)
+--   general_platform  = shared "General Platform Terms" acknowledgment
+--   website           = "Terms of Use & Privacy Notice" (any action form)
+CREATE TABLE IF NOT EXISTS terms_acceptances (
+  id              BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  user_id         INT DEFAULT NULL,
+  user_name       VARCHAR(180) NOT NULL,
+  email           VARCHAR(160) NOT NULL,
+  role            VARCHAR(40) DEFAULT NULL,
+  accept_type     ENUM('challenge_role','general_platform','website') NOT NULL,
+  terms_version   VARCHAR(120) NOT NULL,
+  signature_name  VARCHAR(180) DEFAULT NULL,
+  document_label  VARCHAR(200) DEFAULT NULL,
+  ip_address      VARCHAR(45) DEFAULT NULL,
+  user_agent      VARCHAR(500) DEFAULT NULL,
+  accepted_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_terms_user (user_id, accepted_at),
+  KEY idx_terms_email (email, accepted_at),
+  KEY idx_terms_type_version (accept_type, terms_version, accepted_at),
+  CONSTRAINT fk_terms_acceptances_user
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB;

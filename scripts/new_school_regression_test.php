@@ -46,9 +46,10 @@ $findLeaderboardRow = static function (array $rows, string $label) use ($fail): 
     $fail('Missing leaderboard row: ' . $label);
 };
 
-// Create the points ledger BEFORE the test transaction: CREATE TABLE implicitly commits,
-// which would otherwise break this test's rollback isolation.
+// Create the points ledger + terms audit table BEFORE the test transaction: CREATE TABLE
+// implicitly commits, which would otherwise break this test's rollback isolation.
 new_school_points_ensure_schema();
+terms_acceptances_ensure_schema();
 
 $startedTransaction = false;
 if (!$pdo->inTransaction()) {
@@ -333,6 +334,38 @@ try {
     ]);
     $assert((int) $rankedSample[0]['id'] === $pSid, 'Student with points ranks above a zero-points student.');
     $assert((int) ($rankedSample[0]['student_points'] ?? 0) > 0, 'Ranked student carries student_points.');
+
+    // ---- Terms & Conditions acceptance audit ----
+    $termsId = record_terms_acceptance([
+        'accept_type' => 'website',
+        'terms_version' => 'Interim Website Terms v1',
+        'user_name' => 'Terms Tester',
+        'email' => 'terms.tester@frantzcoutard.test',
+        'signature_name' => 'Terms Tester',
+        'document_label' => 'Terms of Use & Privacy Notice',
+    ]);
+    $assert($termsId > 0, 'record_terms_acceptance inserts a website acceptance row.');
+    $termsRow = $fetchOne($pdo, 'SELECT * FROM terms_acceptances WHERE id = ?', [$termsId]);
+    $assert($termsRow['user_name'] === 'Terms Tester', 'Acceptance stores the user name.');
+    $assert($termsRow['email'] === 'terms.tester@frantzcoutard.test', 'Acceptance stores the email.');
+    $assert($termsRow['accept_type'] === 'website', 'Acceptance stores the accept type.');
+    $assert($termsRow['terms_version'] === 'Interim Website Terms v1', 'Acceptance stores the terms version.');
+    $assert($termsRow['signature_name'] === 'Terms Tester', 'Acceptance stores the e-signature name.');
+    $assert(array_key_exists('accepted_at', $termsRow), 'Acceptance stores a timestamp.');
+
+    // Missing identity / invalid type are safe no-ops (never throw, return 0).
+    $assert(record_terms_acceptance(['accept_type' => 'website', 'terms_version' => 'v', 'email' => '']) === 0, 'Acceptance with no name/email is a safe no-op.');
+    $assert(record_terms_acceptance(['accept_type' => 'bogus', 'terms_version' => 'v', 'user_name' => 'X', 'email' => 'x@y.z']) === 0, 'Invalid accept_type is a safe no-op.');
+
+    // A registration records three rows: challenge_role + general_platform + website.
+    $regUserId = (int) $studentUsers['student1']['id'];
+    $regEmail = 'reg.terms.' . $regUserId . '@frantzcoutard.test';
+    record_registration_terms($regUserId, 'Reg Tester', $regEmail, 'student', 'Reg Tester', []);
+    $regCount = $countRows($pdo, 'SELECT COUNT(*) FROM terms_acceptances WHERE email = ?', [$regEmail]);
+    $assert($regCount === 3, 'A registration records exactly three acceptance rows.');
+    $regTypesStmt = $pdo->prepare('SELECT accept_type FROM terms_acceptances WHERE email = ? ORDER BY accept_type');
+    $regTypesStmt->execute([$regEmail]);
+    $assert($regTypesStmt->fetchAll(PDO::FETCH_COLUMN) === ['challenge_role', 'general_platform', 'website'], 'Registration covers all three accept types.');
 
     echo json_encode([
         'status' => 'passed',

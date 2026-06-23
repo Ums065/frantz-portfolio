@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { useAuth, type RegistrationRole } from '../context/AuthContext'
 import { api } from '../lib/api'
 import { BRAND_LOGO } from '../lib/brandAssets'
+import TermsAgreement from './TermsAgreement'
+import { recordTermsAcceptance } from '../lib/recordTermsAcceptance'
 
 const CloseIcon = () => (
   <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth={2}>
@@ -144,12 +146,16 @@ export function AuthModal({
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [done, setDone] = useState<{ title: string; message: string } | null>(null)
+  const [termsAccepted, setTermsAccepted] = useState(false)
+  const [termsSig, setTermsSig] = useState('')
 
   useEffect(() => {
     if (open) {
       setError('')
       setDone(null)
       setForm(createRegisterForm())
+      setTermsAccepted(false)
+      setTermsSig('')
     }
     document.body.style.overflow = open ? 'hidden' : ''
   }, [open, mode])
@@ -290,7 +296,7 @@ export function AuthModal({
           qrToken: form.qrToken,
           relationshipToStudent: form.relationshipToStudent,
           governmentIdUrl: form.governmentIdUrl,
-          digitalSignature: form.digitalSignature || form.fullName,
+          digitalSignature: form.digitalSignature || termsSig || form.fullName,
           schoolAddress: form.schoolAddress,
           schoolDistrict: form.schoolDistrict,
           mainPhone: form.mainPhone,
@@ -298,7 +304,7 @@ export function AuthModal({
           administratorPhone: form.administratorPhone,
           roleDepartment: form.roleDepartment,
           gradeLevelSupported: form.gradeLevelSupported,
-          consentChecked: form.consentChecked,
+          consentChecked: termsAccepted || form.consentChecked,
         })
       await handleAuthResult(result)
     } catch (err) {
@@ -369,7 +375,6 @@ export function AuthModal({
                         {renderTextField('parentEmail', 'Parent Email Address', { type: 'email', placeholder: 'parent@example.com', autoComplete: 'email' })}
                         {renderTextField('password', 'Password', { type: 'password', placeholder: 'Create a password', autoComplete: 'new-password' })}
                         {renderTextField('confirmPassword', 'Confirm Password', { type: 'password', placeholder: 'Repeat the password', autoComplete: 'new-password' })}
-                        {renderCheckbox('I confirm I am a student ages 11-19.', 'This account will be linked to parent consent, school approval, and teacher approval.')}
                       </>
                     )}
 
@@ -383,7 +388,6 @@ export function AuthModal({
                         {renderTextField('homeAddress', 'Home Address', { as: 'textarea', full: true, placeholder: 'Street address, city, state, zip', rows: 3 })}
                         {renderTextField('governmentIdUrl', 'Government ID URL', { full: true, type: 'url', placeholder: 'Optional ID link', required: false })}
                         {renderTextField('digitalSignature', 'Digital Signature', { full: true, placeholder: 'Type your full name as signature' })}
-                        {renderCheckbox('I confirm I am the parent or legal guardian.', 'This consent grants permission for the student to participate in the challenge.')}
                         {renderTextField('password', 'Password', { type: 'password', placeholder: 'Create a password', autoComplete: 'new-password' })}
                         {renderTextField('confirmPassword', 'Confirm Password', { type: 'password', placeholder: 'Repeat the password', autoComplete: 'new-password' })}
                       </>
@@ -417,6 +421,14 @@ export function AuthModal({
                       </>
                     )}
                   </div>
+                  <TermsAgreement
+                    kind={form.role === 'community' ? 'website' : form.role}
+                    idPrefix="auth"
+                    hideSignature={form.role === 'parent'}
+                    signatureName={termsSig}
+                    onSignatureChange={setTermsSig}
+                    onAcceptedChange={setTermsAccepted}
+                  />
                 </>
               ) : (
                 <>
@@ -431,7 +443,7 @@ export function AuthModal({
                 </>
               )}
               {error && <p className="msub" style={{ color: '#e08a8a' }}>{error}</p>}
-              <button type="submit" className="btn btn--solid" disabled={busy}>
+              <button type="submit" className="btn btn--solid" disabled={busy || (mode === 'register' && !termsAccepted)}>
                 {busy ? (mode === 'login' ? 'Signing in...' : 'Submitting...') : submitLabel}
               </button>
             </form>
@@ -469,9 +481,10 @@ export function RequestModal({ label, onClose }: { label: string | null; onClose
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [done, setDone] = useState(false)
+  const [termsAccepted, setTermsAccepted] = useState(false)
 
   useEffect(() => {
-    if (open) { setError(''); setDone(false); setName(''); setEmail(''); setOrg(''); setMessage('') }
+    if (open) { setError(''); setDone(false); setName(''); setEmail(''); setOrg(''); setMessage(''); setTermsAccepted(false) }
     document.body.style.overflow = open ? 'hidden' : ''
   }, [open])
 
@@ -490,6 +503,7 @@ export function RequestModal({ label, onClose }: { label: string | null; onClose
     setError('')
     try {
       await api.post('request', { request_type: label, full_name: name, email, organization: org, message })
+      recordTermsAcceptance({ kind: 'website', signature: name, email, documentLabel: `Request: ${label || 'Booking / Media'}` })
       setDone(true)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong.')
@@ -531,8 +545,9 @@ export function RequestModal({ label, onClose }: { label: string | null; onClose
                 <label>Message</label>
                 <textarea className="fld-area" placeholder="Share the details..." value={message} onChange={(e) => setMessage(e.target.value)} />
               </div>
+              <TermsAgreement kind="website" idPrefix="request" hideSignature signatureName="" onSignatureChange={() => {}} onAcceptedChange={setTermsAccepted} />
               {error && <p className="msub" style={{ color: '#e08a8a' }}>{error}</p>}
-              <button type="submit" className="btn btn--solid" disabled={busy}>{busy ? 'Sending...' : t.btn}</button>
+              <button type="submit" className="btn btn--solid" disabled={busy || !termsAccepted}>{busy ? 'Sending...' : t.btn}</button>
             </form>
           </div>
         )}

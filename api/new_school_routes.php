@@ -907,6 +907,8 @@ function new_school_handle_route(string $method, string $route): bool
                 ['participant_id' => $participantId, 'school_name' => $studentSchool]
             );
 
+            record_registration_terms((int) $user['id'], $fullName, $email, 'student', field($body, 'terms_signature'), $body);
+
             json([
                 'message' => 'Student registration submitted for admin approval.',
                 'user' => login_user($user),
@@ -1092,6 +1094,8 @@ function new_school_handle_route(string $method, string $route): bool
                 ['participant_id' => (string) $student['participant_id']]
             );
 
+            record_registration_terms((int) $user['id'], $parentFullName, $email, 'parent', $signature, $body);
+
             json([
                 'message' => 'Parent consent saved and account submitted for admin review.',
                 'user' => login_user($user),
@@ -1183,6 +1187,8 @@ function new_school_handle_route(string $method, string $route): bool
                 $schoolName . ' completed the school registration flow.',
                 ['school_name' => $schoolName, 'administrator_email' => $administratorEmail]
             );
+
+            record_registration_terms((int) $user['id'], $administratorName, $administratorEmail, 'school', field($body, 'terms_signature'), $body);
 
             json([
                 'message' => 'School registration submitted for admin approval.',
@@ -1279,6 +1285,8 @@ function new_school_handle_route(string $method, string $route): bool
                 $teacherFullName . ' joined ' . $school['school_name'] . ' and is awaiting principal verification.',
                 ['teacher_name' => $teacherFullName, 'school_name' => (string) $school['school_name']]
             );
+
+            record_registration_terms((int) $user['id'], $teacherFullName, $schoolEmail, 'teacher', field($body, 'terms_signature'), $body);
 
             json([
                 'message' => 'Teacher registration submitted for admin approval.',

@@ -20,6 +20,7 @@ const Profile = lazy(() => import('./pages/Profile'))
 const Projects = lazy(() => import('./pages/Projects'))
 const Store = lazy(() => import('./pages/Store'))
 const Admin = lazy(() => import('./pages/Admin'))
+const Legal = lazy(() => import('./pages/Legal'))
 
 function RouteLoading() {
   return (
@@ -90,6 +91,9 @@ export default function App() {
           <Route path="/dashboard" element={<RoutedPage pageKey="dashboard"><Dashboard /></RoutedPage>} />
           <Route path="/profile" element={<RoutedPage pageKey="profile"><Profile /></RoutedPage>} />
           <Route path="/store" element={<Suspense fallback={<RouteLoading />}><Store /></Suspense>} />
+          <Route path="/terms" element={<RoutedPage pageKey="terms"><Legal slug="terms" /></RoutedPage>} />
+          <Route path="/privacy" element={<RoutedPage pageKey="privacy"><Legal slug="privacy" /></RoutedPage>} />
+          <Route path="/content-disclaimer" element={<RoutedPage pageKey="content-disclaimer"><Legal slug="content-disclaimer" /></RoutedPage>} />
           <Route path="/admin" element={<Suspense fallback={<RouteLoading />}><Admin /></Suspense>} />
         </Routes>
       </BrowserRouter>

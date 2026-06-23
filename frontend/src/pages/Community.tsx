@@ -6,6 +6,8 @@ import { DEFAULT_MEMBER_NOTIFICATIONS, loadMemberNotifications, MemberNotificati
 import { useAuth } from '../context/AuthContext'
 import { useSeo } from '../hooks/useSeo'
 import { resolveDashboardRoute } from '../lib/dashboardRoute'
+import TermsAgreement from '../components/TermsAgreement'
+import { recordTermsAcceptance } from '../lib/recordTermsAcceptance'
 
 export default function Community() {
   const { user } = useAuth()
@@ -21,6 +23,7 @@ export default function Community() {
   const [commentBody, setCommentBody] = useState('')
   const [commentBusy, setCommentBusy] = useState(false)
   const [commentError, setCommentError] = useState('')
+  const [threadTermsAccepted, setThreadTermsAccepted] = useState(false)
 
   useSeo({
     title: 'Community',
@@ -59,6 +62,7 @@ export default function Community() {
       setThreadAudience('member')
       const res = await api.get<{ threads: CommunityThreadRow[] }>('community/threads')
       setThreads(res.threads)
+      recordTermsAcceptance({ kind: 'website', signature: user.full_name, email: user.email, documentLabel: 'Community Post' })
       window.fcToast?.('Thread posted.')
     } catch (err) {
       setThreadError(err instanceof Error ? err.message : 'Post failed.')
@@ -178,8 +182,9 @@ export default function Community() {
                   <textarea className="fld-area" required value={threadBody} onChange={(e) => setThreadBody(e.target.value)} placeholder="Write your message to the community..." />
                 </div>
               </div>
+              <TermsAgreement kind="website" idPrefix="community-thread" hideSignature signatureName="" onSignatureChange={() => {}} onAcceptedChange={setThreadTermsAccepted} />
               {threadError && <p style={{ color: '#e08a8a', fontSize: 13, marginBottom: 10 }}>{threadError}</p>}
-              <button className="btn btn--solid" type="submit" disabled={threadBusy}>{threadBusy ? 'Posting...' : 'Post Thread'}</button>
+              <button className="btn btn--solid" type="submit" disabled={threadBusy || !threadTermsAccepted}>{threadBusy ? 'Posting...' : 'Post Thread'}</button>
             </form>
           ) : (
             <div className="glass dashboard-panel reveal d1" style={{ marginBottom: 24 }}>
