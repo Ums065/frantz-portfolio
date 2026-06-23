@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { api, type AnalyticsPayload, type AwardRow, type CommunityCommentRow, type CommunityThreadRow, type EventItem, type EventRsvpRow, type InventoryRow, type MediaRow, type PostDetail, type ProductVisibility, type TestimonialRow, type User } from '../lib/api'
 import { useAuth } from '../context/AuthContext'
@@ -224,6 +225,22 @@ export default function Admin() {
     }
   }
 
+  // ---- Bulk actions (operate on an array of selected row ids) ----
+  const bulkDelete = async (basePath: string, ids: number[], noun: string) => {
+    if (!ids.length || !confirm(`Delete ${ids.length} ${noun}${ids.length === 1 ? '' : 's'}? This cannot be undone.`)) return
+    const results = await Promise.allSettled(ids.map((id) => api.del(`${basePath}/${id}`)))
+    await refreshData()
+    const failed = results.filter((r) => r.status === 'rejected').length
+    if (failed) alert(`${failed} of ${ids.length} could not be deleted (they may have linked records).`)
+  }
+
+  const bulkSetApproval = async (ids: number[], approval_status: 'approved' | 'pending' | 'rejected') => {
+    if (!ids.length) return
+    if (approval_status === 'rejected' && !confirm(`Reject ${ids.length} account${ids.length === 1 ? '' : 's'}?`)) return
+    await Promise.allSettled(ids.map((id) => api.put(`admin/user/${id}/approval`, { approval_status })))
+    await refreshData()
+  }
+
   const reviewableAccounts = data?.members.filter((m) => !isAdmin(m.role)) ?? []
   const pendingAccounts = reviewableAccounts.filter((m) => (m.approval_status || 'pending') === 'pending').length
   const rejectedAccounts = reviewableAccounts.filter((m) => (m.approval_status || 'pending') === 'rejected').length
@@ -367,8 +384,10 @@ export default function Admin() {
               searchText={(r) => `${r.request_type} ${r.full_name} ${r.email} ${r.organization ?? ''} ${r.message ?? ''}`}
               statusOf={(r) => r.status}
               statusOptions={['new', 'reviewed', 'approved', 'closed']}
-              renderRow={(r) => (
-                <tr key={r.id}>
+              rowId={(r) => r.id}
+              bulkActions={[{ label: 'Delete selected', danger: true, onClick: (ids) => bulkDelete('admin/request', ids, 'request') }]}
+              renderRow={(r, checkbox) => (
+                <tr key={r.id}>{checkbox}
                   <td>{r.request_type}</td>
                   <td>{r.full_name}</td>
                   <td>{r.email}</td>
@@ -407,11 +426,13 @@ export default function Admin() {
               searchText={(o) => `${o.order_no} ${o.customer_name} ${o.email}`}
               statusOf={(o) => o.status}
               statusOptions={['pending', 'paid', 'fulfilled', 'cancelled']}
-              renderRow={(o) => {
+              rowId={(o) => o.id}
+              bulkActions={[{ label: 'Delete selected', danger: true, onClick: (ids) => bulkDelete('admin/order', ids, 'order') }]}
+              renderRow={(o, checkbox) => {
                 let items = ''
                 try { items = (JSON.parse(o.items) as Array<{ name: string; qty: number; size: string }>).map((it) => `${it.qty}× ${it.name} (${it.size})`).join(', ') } catch { items = '—' }
                 return (
-                  <tr key={o.id}>
+                  <tr key={o.id}>{checkbox}
                     <td>{o.order_no}</td>
                     <td>{o.customer_name}</td>
                     <td>{o.email}</td>
@@ -443,8 +464,10 @@ export default function Admin() {
               rows={data?.subscribers ?? []}
               searchPlaceholder="Search subscribers…"
               searchText={(s) => s.email}
-              renderRow={(s) => (
-                <tr key={s.id}>
+              rowId={(s) => s.id}
+              bulkActions={[{ label: 'Remove selected', danger: true, onClick: (ids) => bulkDelete('admin/subscriber', ids, 'subscriber') }]}
+              renderRow={(s, checkbox) => (
+                <tr key={s.id}>{checkbox}
                   <td>{s.email}</td>
                   <td>{s.created_at}</td>
                   <td><RowMenu actions={[{ label: 'Remove subscriber', danger: true, onClick: () => void deleteRow(`admin/subscriber/${s.id}`, `Remove ${s.email} from the newsletter list?`) }]} /></td>
@@ -462,8 +485,10 @@ export default function Admin() {
               rows={data?.contacts ?? []}
               searchPlaceholder="Search contacts…"
               searchText={(c) => `${c.full_name} ${c.email} ${c.message ?? ''}`}
-              renderRow={(c) => (
-                <tr key={c.id}>
+              rowId={(c) => c.id}
+              bulkActions={[{ label: 'Delete selected', danger: true, onClick: (ids) => bulkDelete('admin/contact', ids, 'message') }]}
+              renderRow={(c, checkbox) => (
+                <tr key={c.id}>{checkbox}
                   <td>{c.full_name}</td>
                   <td>{c.email}</td>
                   <td>{c.message || '—'}</td>
@@ -484,18 +509,27 @@ export default function Admin() {
               { label: 'Rejected', value: rejectedAccounts, tone: 'red' },
             ]} />
             <DataTable
-              head={['Name', 'Email', 'Role', 'Status', 'Joined', '']}
+              head={['#', 'Name', 'User ID', 'Email', 'Role', 'Status', 'Joined', '']}
               rows={data?.members ?? []}
               searchPlaceholder="Search accounts…"
-              searchText={(m) => `${m.full_name} ${m.email} ${m.role}`}
+              searchText={(m) => `${m.full_name} ${m.email} ${m.role} ${m.id}`}
               statusOf={(m) => (isAdmin(m.role) ? 'approved' : (m.approval_status || 'pending'))}
               statusOptions={['approved', 'pending', 'rejected']}
-              renderRow={(m) => {
+              rowId={(m) => m.id}
+              rowSelectable={(m) => !isAdmin(m.role)}
+              bulkActions={[
+                { label: 'Approve selected', onClick: (ids) => bulkSetApproval(ids, 'approved') },
+                { label: 'Reject selected', danger: true, onClick: (ids) => bulkSetApproval(ids, 'rejected') },
+                { label: 'Delete selected', danger: true, onClick: (ids) => bulkDelete('admin/user', ids, 'account') },
+              ]}
+              renderRow={(m, checkbox, index) => {
                 const adminAccount = isAdmin(m.role)
                 const status = adminAccount ? 'protected' : (m.approval_status || 'pending').toLowerCase()
                 return (
-                  <tr key={m.id}>
+                  <tr key={m.id}>{checkbox}
+                    <td className="admin-table__idx">{index}</td>
                     <td>{m.full_name}</td>
+                    <td className="admin-table__uid">#{m.id}</td>
                     <td>{m.email}</td>
                     <td>{m.role}</td>
                     <td><StatusPill status={status} /></td>
@@ -529,17 +563,25 @@ export default function Admin() {
               { label: 'Approved', value: approvedAccounts, tone: 'green' },
             ]} />
             <DataTable
-              head={['Name', 'Email', 'Role', 'Status', 'Reviewed', '']}
+              head={['#', 'Name', 'User ID', 'Email', 'Role', 'Status', 'Reviewed', '']}
               rows={(data?.members ?? []).filter((m) => !isAdmin(m.role) && (m.approval_status || 'pending') !== 'approved')}
               searchPlaceholder="Search pending accounts…"
-              searchText={(m) => `${m.full_name} ${m.email} ${m.role}`}
+              searchText={(m) => `${m.full_name} ${m.email} ${m.role} ${m.id}`}
               statusOf={(m) => (m.approval_status || 'pending')}
               statusOptions={['pending', 'rejected']}
-              renderRow={(m) => {
+              rowId={(m) => m.id}
+              bulkActions={[
+                { label: 'Approve selected', onClick: (ids) => bulkSetApproval(ids, 'approved') },
+                { label: 'Reject selected', danger: true, onClick: (ids) => bulkSetApproval(ids, 'rejected') },
+                { label: 'Delete selected', danger: true, onClick: (ids) => bulkDelete('admin/user', ids, 'account') },
+              ]}
+              renderRow={(m, checkbox, index) => {
                 const status = (m.approval_status || 'pending').toLowerCase()
                 return (
-                  <tr key={m.id}>
+                  <tr key={m.id}>{checkbox}
+                    <td className="admin-table__idx">{index}</td>
                     <td>{m.full_name}</td>
+                    <td className="admin-table__uid">#{m.id}</td>
                     <td>{m.email}</td>
                     <td>{m.role}</td>
                     <td><StatusPill status={status} /></td>
@@ -2049,15 +2091,17 @@ function StatChips({ items }: { items: StatChipItem[] }) {
 
 interface MenuAction { label: string; onClick: () => void; danger?: boolean; disabled?: boolean }
 /**
- * Compact 3-dot (kebab) actions menu for table rows. The dropdown is fixed-positioned
- * (anchored to the trigger) so it is never clipped by the table's overflow scroll
- * container. Closes on outside click, Escape, scroll, or resize.
+ * Compact 3-dot (kebab) actions menu for table rows. The dropdown is rendered in a
+ * portal on document.body (NOT inside the table) because the admin cards use
+ * `.glass { backdrop-filter / transform }`, which would otherwise become the
+ * containing block for a fixed element and clip it inside the overflow scroller.
+ * Fixed-positioned at the trigger; closes on outside click, Escape, scroll, or resize.
  */
 function RowMenu({ actions }: { actions: MenuAction[] }) {
   const [open, setOpen] = useState(false)
   const [pos, setPos] = useState<{ top: number; right: number }>({ top: 0, right: 0 })
-  const ref = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
 
   const toggle = () => {
     if (!open && triggerRef.current) {
@@ -2070,7 +2114,11 @@ function RowMenu({ actions }: { actions: MenuAction[] }) {
   useEffect(() => {
     if (!open) return
     const close = () => setOpen(false)
-    const onDoc = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
+    const onDoc = (e: MouseEvent) => {
+      const t = e.target as Node
+      if (triggerRef.current?.contains(t) || menuRef.current?.contains(t)) return
+      setOpen(false)
+    }
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
     document.addEventListener('mousedown', onDoc)
     document.addEventListener('keydown', onKey)
@@ -2085,12 +2133,12 @@ function RowMenu({ actions }: { actions: MenuAction[] }) {
   }, [open])
 
   return (
-    <div className="row-menu" ref={ref}>
+    <div className="row-menu">
       <button ref={triggerRef} type="button" className="row-menu__trigger" aria-label="Row actions" aria-haspopup="menu" aria-expanded={open} onClick={toggle}>
         <span /><span /><span />
       </button>
-      {open && (
-        <div className="row-menu__dropdown" role="menu" style={{ position: 'fixed', top: pos.top, right: pos.right }}>
+      {open && createPortal(
+        <div ref={menuRef} className="row-menu__dropdown" role="menu" style={{ position: 'fixed', top: pos.top, right: pos.right }}>
           {actions.map((a, i) => (
             <button
               key={i}
@@ -2103,28 +2151,36 @@ function RowMenu({ actions }: { actions: MenuAction[] }) {
               {a.label}
             </button>
           ))}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   )
 }
 
+interface BulkAction { label: string; danger?: boolean; onClick: (ids: number[]) => void | Promise<void> }
 interface DataTableProps<T> {
   head: string[]
   rows: T[]
-  renderRow: (row: T) => React.ReactNode
+  renderRow: (row: T, checkbox?: React.ReactNode, index?: number) => React.ReactNode
   searchText?: (row: T) => string
   statusOf?: (row: T) => string
   statusOptions?: string[]
   searchPlaceholder?: string
   pageSize?: number
+  rowId?: (row: T) => number
+  rowSelectable?: (row: T) => boolean
+  bulkActions?: BulkAction[]
 }
 
-/** List table with a search box, optional status filter, a result counter, and pagination. */
-function DataTable<T>({ head, rows, renderRow, searchText, statusOf, statusOptions, searchPlaceholder, pageSize = 10 }: DataTableProps<T>) {
+/** List table with search, status filter, result counter, pagination, and optional bulk selection/actions. */
+function DataTable<T>({ head, rows, renderRow, searchText, statusOf, statusOptions, searchPlaceholder, pageSize = 10, rowId, rowSelectable, bulkActions }: DataTableProps<T>) {
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [page, setPage] = useState(1)
+  const [selected, setSelected] = useState<Set<number>>(new Set())
+
+  const bulkEnabled = !!(rowId && bulkActions && bulkActions.length)
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -2140,6 +2196,29 @@ function DataTable<T>({ head, rows, renderRow, searchText, statusOf, statusOptio
   useEffect(() => { if (page !== safePage) setPage(safePage) }, [page, safePage])
   const start = (safePage - 1) * pageSize
   const pageRows = filtered.slice(start, start + pageSize)
+
+  const isSelectable = (row: T) => bulkEnabled && (!rowSelectable || rowSelectable(row))
+  const pageSelectableIds = bulkEnabled ? pageRows.filter(isSelectable).map((r) => rowId!(r)) : []
+  const allPageSelected = pageSelectableIds.length > 0 && pageSelectableIds.every((id) => selected.has(id))
+  const selectedIds = [...selected]
+
+  const toggleOne = (id: number) => setSelected((prev) => {
+    const next = new Set(prev)
+    if (next.has(id)) next.delete(id); else next.add(id)
+    return next
+  })
+  const togglePage = () => setSelected((prev) => {
+    const next = new Set(prev)
+    if (allPageSelected) pageSelectableIds.forEach((id) => next.delete(id))
+    else pageSelectableIds.forEach((id) => next.add(id))
+    return next
+  })
+  const clearSelection = () => setSelected(new Set())
+  const runBulk = async (action: BulkAction) => {
+    if (!selectedIds.length) return
+    await action.onClick(selectedIds)
+    clearSelection()
+  }
 
   return (
     <div className="admin-panel">
@@ -2168,15 +2247,47 @@ function DataTable<T>({ head, rows, renderRow, searchText, statusOf, statusOptio
         </span>
       </div>
 
+      {bulkEnabled && selectedIds.length > 0 && (
+        <div className="admin-bulkbar">
+          <span className="admin-bulkbar__count">{selectedIds.length} selected</span>
+          {bulkActions!.map((a, i) => (
+            <button
+              key={i}
+              type="button"
+              className={`btn btn--sm${a.danger ? ' admin-bulkbar__danger' : ''}`}
+              onClick={() => void runBulk(a)}
+            >
+              {a.label}
+            </button>
+          ))}
+          <button type="button" className="btn btn--sm" onClick={clearSelection}>Clear</button>
+        </div>
+      )}
+
       <div className="admin-table-wrap glass">
         <table className="admin-table">
           <thead>
-            <tr>{head.map((h) => <th key={h}>{h}</th>)}</tr>
+            <tr>
+              {bulkEnabled && (
+                <th className="admin-table__check">
+                  <input type="checkbox" aria-label="Select all on page" checked={allPageSelected} onChange={togglePage} />
+                </th>
+              )}
+              {head.map((h, i) => <th key={h || `col-${i}`}>{h}</th>)}
+            </tr>
           </thead>
           <tbody>
             {pageRows.length
-              ? pageRows.map((row) => renderRow(row))
-              : <tr><td className="admin-table__empty" colSpan={head.length}>No matching records.</td></tr>}
+              ? pageRows.map((row, i) => renderRow(
+                  row,
+                  bulkEnabled
+                    ? (isSelectable(row)
+                        ? <td className="admin-table__check"><input type="checkbox" aria-label="Select row" checked={selected.has(rowId!(row))} onChange={() => toggleOne(rowId!(row))} /></td>
+                        : <td className="admin-table__check" />)
+                    : undefined,
+                  start + i + 1,
+                ))
+              : <tr><td className="admin-table__empty" colSpan={head.length + (bulkEnabled ? 1 : 0)}>No matching records.</td></tr>}
           </tbody>
         </table>
       </div>

@@ -2862,6 +2862,66 @@ textarea.fld-area:focus { border-color: var(--gold); }
 .row-menu__item--danger { color: #e0907f; }
 .row-menu__item--danger:hover:not(:disabled) { background: rgba(179,38,30,0.18); color: #f0a99a; }
 
+/* --- Bulk actions bar + row checkboxes --- */
+.admin-bulkbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(201,168,76,0.32);
+  background: linear-gradient(180deg, rgba(40,33,18,0.92), rgba(20,17,10,0.96));
+}
+.admin-bulkbar__count {
+  font-weight: 700;
+  color: var(--gold-light);
+  font-size: 13px;
+  margin-right: 4px;
+}
+.admin-bulkbar .btn { margin: 0; }
+.admin-bulkbar__danger {
+  border-color: rgba(224,144,127,0.55) !important;
+  color: #e0907f !important;
+}
+.admin-bulkbar__danger:hover { background: rgba(179,38,30,0.18) !important; }
+.admin-table__check { width: 38px; text-align: center; padding-left: 14px !important; padding-right: 6px !important; }
+.admin-table__check input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--gold, #c9a84c);
+  cursor: pointer;
+  vertical-align: middle;
+}
+.admin-table__idx { width: 40px; color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; }
+.admin-table__uid { white-space: nowrap; color: var(--gold-light); font-variant-numeric: tabular-nums; font-size: 12px; }
+
+/* --- Status pills: proper highlighted badges inside the dark admin theme --- */
+.admin-page .status-pill {
+  font-weight: 700;
+  background: rgba(255,255,255,0.04);
+}
+.admin-page .status-pill--approved {
+  color: #9be6a8;
+  background: rgba(136,223,151,0.15);
+  border-color: rgba(136,223,151,0.5);
+}
+.admin-page .status-pill--new {
+  color: #f6d98a;
+  background: rgba(243,210,127,0.15);
+  border-color: rgba(243,210,127,0.5);
+}
+.admin-page .status-pill--reviewed {
+  color: #9fd3ff;
+  background: rgba(159,211,255,0.15);
+  border-color: rgba(159,211,255,0.45);
+}
+.admin-page .status-pill--closed {
+  color: #ecae9d;
+  background: rgba(224,160,138,0.15);
+  border-color: rgba(224,160,138,0.5);
+}
+
 /* --- Admin responsive: collapse sidebar to a top bar --- */
 @media (max-width: 900px) {
   .admin-layout { grid-template-columns: 1fr; gap: 16px; padding-top: 16px; }
