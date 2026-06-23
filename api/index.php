@@ -1173,6 +1173,21 @@ try {
             $fresh->execute([(int) $m[1]]);
             $updatedUser = $fresh->fetch();
 
+            // Keep the New School entity status in sync so an approved school account
+            // surfaces in the public "Select School" dropdown (which lists status =
+            // "approved" schools only). Without this the school stays "registered".
+            if ($updatedUser && (string) ($updatedUser['role'] ?? '') === 'school') {
+                $schoolStatus = $status === 'approved'
+                    ? 'approved'
+                    : ($status === 'rejected' ? 'rejected' : 'registered');
+                try {
+                    $schoolSync = db()->prepare('UPDATE new_school_schools SET status = ?, updated_at = NOW() WHERE user_id = ?');
+                    $schoolSync->execute([$schoolStatus, (int) $m[1]]);
+                } catch (\Throwable $e) {
+                    // Never let the school-status sync break the core account approval.
+                }
+            }
+
             json([
                 'message' => 'Approval updated.',
                 'user' => $updatedUser ?: null,
