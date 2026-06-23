@@ -131,6 +131,129 @@ const createRegisterForm = (): RegisterFormState => ({
 
 type RegisterTextFieldKey = Exclude<keyof RegisterFormState, 'role' | 'consentChecked'>
 
+const phoneFieldKeys: RegisterTextFieldKey[] = ['phoneNumber', 'parentPhone', 'mainPhone', 'administratorPhone']
+const phoneFieldKeySet = new Set<RegisterTextFieldKey>(phoneFieldKeys)
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const usernamePattern = /^[A-Za-z0-9._-]{3,30}$/
+
+const normalizeSpaces = (value: string) => value.replace(/\s+/g, ' ').trim()
+const digitsOnly = (value: string) => value.replace(/\D+/g, '').slice(0, 15)
+
+const requireText = (value: string, label: string, minLength = 1) => {
+  const cleaned = normalizeSpaces(value)
+  if (cleaned.length < minLength) {
+    throw new Error(minLength > 1 ? `${label} must be at least ${minLength} characters.` : `${label} is required.`)
+  }
+  return cleaned
+}
+
+const requireEmail = (value: string, label: string) => {
+  const cleaned = value.trim().toLowerCase()
+  if (!emailPattern.test(cleaned)) {
+    throw new Error(`${label} must be a valid email address.`)
+  }
+  return cleaned
+}
+
+const requirePhone = (value: string, label: string) => {
+  const cleaned = digitsOnly(value)
+  if (!/^\d{7,15}$/.test(cleaned)) {
+    throw new Error(`${label} must be 7 to 15 digits.`)
+  }
+  return cleaned
+}
+
+const requirePassword = (value: string) => {
+  if (value.length < 6) {
+    throw new Error('Password must be at least 6 characters.')
+  }
+  return value
+}
+
+const validateRegisterForm = (form: RegisterFormState, termsAccepted: boolean) => {
+  if (!termsAccepted) {
+    throw new Error('You must accept the terms to continue.')
+  }
+
+  requirePassword(form.password)
+  if (form.password !== form.confirmPassword) {
+    throw new Error('Passwords do not match.')
+  }
+
+  switch (form.role) {
+    case 'community':
+      requireText(form.fullName, 'Full name', 3)
+      requireEmail(form.email, 'Email address')
+      return
+    case 'student': {
+      requireText(form.fullName, 'Student full name', 3)
+      if (!usernamePattern.test(form.studentUsername.trim())) {
+        throw new Error('Student username must be 3 to 30 characters and use only letters, numbers, dots, dashes, or underscores.')
+      }
+      const age = Number(form.age)
+      if (!Number.isInteger(age) || age < 11 || age > 19) {
+        throw new Error('Age must be between 11 and 19.')
+      }
+      if (!form.dateOfBirth) {
+        throw new Error('Date of birth is required.')
+      }
+      const dob = new Date(`${form.dateOfBirth}T00:00:00`)
+      if (Number.isNaN(dob.getTime())) {
+        throw new Error('Date of birth is invalid.')
+      }
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      if (dob > today) {
+        throw new Error('Date of birth cannot be in the future.')
+      }
+      requireEmail(form.email, 'Student email')
+      requirePhone(form.phoneNumber, 'Phone number')
+      requireText(form.schoolName, 'School name', 2)
+      requireText(form.gradeLevel, 'Grade level', 1)
+      requireText(form.homeAddress, 'Home address', 8)
+      requireText(form.parentName, 'Parent / Guardian name', 3)
+      requirePhone(form.parentPhone, 'Parent phone number')
+      requireEmail(form.parentEmail, 'Parent email address')
+      return
+    }
+    case 'parent':
+      requireText(form.qrToken, 'Student QR token', 6)
+      requireText(form.fullName, 'Parent full name', 3)
+      requireText(form.relationshipToStudent, 'Relationship to student', 2)
+      requirePhone(form.phoneNumber, 'Phone number')
+      requireEmail(form.email, 'Email address')
+      requireText(form.homeAddress, 'Home address', 8)
+      if (form.governmentIdUrl.trim() !== '') {
+        try {
+          new URL(form.governmentIdUrl.trim())
+        } catch {
+          throw new Error('Government ID URL must be a valid link.')
+        }
+      }
+      requireText(form.digitalSignature || form.fullName, 'Digital signature', 3)
+      return
+    case 'school':
+      requireText(form.schoolName, 'School name', 2)
+      requireText(form.schoolAddress, 'School address', 8)
+      requireText(form.schoolDistrict, 'School district', 2)
+      requirePhone(form.mainPhone, 'Main phone number')
+      requireText(form.principalName, 'Principal name', 3)
+      requireText(form.fullName, 'Administrator name', 3)
+      requireEmail(form.email, 'Administrator email')
+      requirePhone(form.administratorPhone, 'Administrator phone')
+      return
+    case 'teacher':
+      requireText(form.fullName, 'Teacher full name', 3)
+      requireText(form.schoolName, 'School name', 2)
+      requireEmail(form.email, 'School email')
+      requirePhone(form.phoneNumber, 'Phone number')
+      requireText(form.roleDepartment, 'Role / Department', 2)
+      requireText(form.gradeLevelSupported, 'Grade level supported', 1)
+      return
+  }
+}
+
+
 /* ============================ AUTH MODAL ============================ */
 export function AuthModal({
   open, mode, onClose, onMode,
@@ -195,7 +318,11 @@ export function AuthModal({
   }
 
   const updateField = <K extends keyof RegisterFormState>(key: K, value: RegisterFormState[K]) => {
-    setForm((current) => ({ ...current, [key]: value }))
+    let nextValue = value
+    if (typeof nextValue === 'string' && phoneFieldKeySet.has(key as RegisterTextFieldKey)) {
+      nextValue = digitsOnly(nextValue) as RegisterFormState[K]
+    }
+    setForm((current) => ({ ...current, [key]: nextValue }))
   }
 
   const renderTextField = (
@@ -212,6 +339,10 @@ export function AuthModal({
       min?: number
       max?: number
       step?: number | string
+      minLength?: number
+      maxLength?: number
+      inputMode?: 'none' | 'text' | 'tel' | 'url' | 'email' | 'numeric' | 'decimal' | 'search'
+      pattern?: string
     } = {},
   ) => {
     const fieldClass = `field${options.full ? ' field--full' : ''}`
@@ -238,6 +369,10 @@ export function AuthModal({
             min={options.min}
             max={options.max}
             step={options.step}
+            minLength={options.minLength}
+            maxLength={options.maxLength}
+            inputMode={options.inputMode}
+            pattern={options.pattern}
             value={value}
             onChange={(e) => updateField(key, e.target.value as RegisterFormState[typeof key])}
           />
@@ -269,41 +404,52 @@ export function AuthModal({
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setBusy(true)
     setError('')
-    try {
-      if (mode === 'register' && form.password !== form.confirmPassword) {
-        throw new Error('Passwords do not match.')
-      }
 
+    try {
+      if (mode === 'login') {
+        requireEmail(form.email, 'Email address')
+        if (!form.password) {
+          throw new Error('Password is required.')
+        }
+      } else {
+        validateRegisterForm(form, termsAccepted)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Please review the form and try again.')
+      return
+    }
+
+    setBusy(true)
+    try {
       const result = mode === 'login'
         ? await login(form.email, form.password)
         : await register({
           role: form.role,
-          fullName: form.fullName,
-          email: form.email,
+          fullName: normalizeSpaces(form.fullName),
+          email: form.email.trim().toLowerCase(),
           password: form.password,
-          studentUsername: form.studentUsername,
-          age: form.age,
+          studentUsername: form.studentUsername.trim(),
+          age: form.age.trim(),
           dateOfBirth: form.dateOfBirth,
-          phoneNumber: form.phoneNumber,
-          homeAddress: form.homeAddress,
-          schoolName: form.schoolName,
-          gradeLevel: form.gradeLevel,
-          parentName: form.parentName,
-          parentPhone: form.parentPhone,
-          parentEmail: form.parentEmail,
-          qrToken: form.qrToken,
-          relationshipToStudent: form.relationshipToStudent,
-          governmentIdUrl: form.governmentIdUrl,
-          digitalSignature: form.digitalSignature || termsSig || form.fullName,
-          schoolAddress: form.schoolAddress,
-          schoolDistrict: form.schoolDistrict,
-          mainPhone: form.mainPhone,
-          principalName: form.principalName,
-          administratorPhone: form.administratorPhone,
-          roleDepartment: form.roleDepartment,
-          gradeLevelSupported: form.gradeLevelSupported,
+          phoneNumber: digitsOnly(form.phoneNumber),
+          homeAddress: normalizeSpaces(form.homeAddress),
+          schoolName: normalizeSpaces(form.schoolName),
+          gradeLevel: normalizeSpaces(form.gradeLevel),
+          parentName: normalizeSpaces(form.parentName),
+          parentPhone: digitsOnly(form.parentPhone),
+          parentEmail: form.parentEmail.trim().toLowerCase(),
+          qrToken: form.qrToken.trim(),
+          relationshipToStudent: normalizeSpaces(form.relationshipToStudent),
+          governmentIdUrl: form.governmentIdUrl.trim(),
+          digitalSignature: normalizeSpaces(form.digitalSignature || termsSig || form.fullName),
+          schoolAddress: normalizeSpaces(form.schoolAddress),
+          schoolDistrict: normalizeSpaces(form.schoolDistrict),
+          mainPhone: digitsOnly(form.mainPhone),
+          principalName: normalizeSpaces(form.principalName),
+          administratorPhone: digitsOnly(form.administratorPhone),
+          roleDepartment: normalizeSpaces(form.roleDepartment),
+          gradeLevelSupported: normalizeSpaces(form.gradeLevelSupported),
           consentChecked: termsAccepted || form.consentChecked,
         })
       await handleAuthResult(result)
@@ -352,26 +498,26 @@ export function AuthModal({
                   <div className="auth-grid">
                     {form.role === 'community' && (
                       <>
-                        {renderTextField('fullName', 'Full Name', { full: true, placeholder: 'Your name', autoComplete: 'name' })}
+                        {renderTextField('fullName', 'Full Name', { full: true, placeholder: 'Your name', autoComplete: 'name', minLength: 3 })}
                         {renderTextField('email', 'Email Address', { type: 'email', full: true, placeholder: 'you@example.com', autoComplete: 'email' })}
-                        {renderTextField('password', 'Password', { type: 'password', placeholder: 'Create a password', autoComplete: 'new-password' })}
-                        {renderTextField('confirmPassword', 'Confirm Password', { type: 'password', placeholder: 'Repeat the password', autoComplete: 'new-password' })}
+                        {renderTextField('password', 'Password', { type: 'password', placeholder: 'Create a password', autoComplete: 'new-password', minLength: 6 })}
+                        {renderTextField('confirmPassword', 'Confirm Password', { type: 'password', placeholder: 'Repeat the password', autoComplete: 'new-password', minLength: 6 })}
                       </>
                     )}
 
                     {form.role === 'student' && (
                       <>
-                        {renderTextField('fullName', 'Student Full Name', { full: true, placeholder: 'Student full name', autoComplete: 'name' })}
-                        {renderTextField('studentUsername', 'Student Username', { placeholder: 'Choose a username' })}
+                        {renderTextField('fullName', 'Student Full Name', { full: true, placeholder: 'Student full name', autoComplete: 'name', minLength: 3 })}
+                        {renderTextField('studentUsername', 'Student Username', { placeholder: 'Choose a username', minLength: 3, maxLength: 30, pattern: '[A-Za-z0-9._-]+' })}
                         {renderTextField('age', 'Age', { type: 'number', placeholder: '11-19', min: 11, max: 19 })}
                         {renderTextField('dateOfBirth', 'Date of Birth', { type: 'date' })}
                         {renderTextField('email', 'Student Email', { type: 'email', full: true, placeholder: 'student@example.com', autoComplete: 'email' })}
-                        {renderTextField('phoneNumber', 'Phone Number', { type: 'tel', placeholder: 'Student phone number', autoComplete: 'tel' })}
+                        {renderTextField('phoneNumber', 'Phone Number', { type: 'tel', placeholder: 'Student phone number', autoComplete: 'tel', inputMode: 'numeric', pattern: '[0-9]*', maxLength: 15 })}
                         {renderTextField('schoolName', 'School Name', { placeholder: 'Current school name' })}
                         {renderTextField('gradeLevel', 'Grade Level', { placeholder: 'Example: 9th Grade' })}
                         {renderTextField('homeAddress', 'Home Address', { as: 'textarea', full: true, placeholder: 'Street address, city, state, zip', rows: 3 })}
-                        {renderTextField('parentName', 'Parent / Guardian Name', { placeholder: 'Parent or guardian' })}
-                        {renderTextField('parentPhone', 'Parent Phone Number', { type: 'tel', placeholder: 'Parent contact number', autoComplete: 'tel' })}
+                        {renderTextField('parentName', 'Parent / Guardian Name', { placeholder: 'Parent or guardian', minLength: 3 })}
+                        {renderTextField('parentPhone', 'Parent Phone Number', { type: 'tel', placeholder: 'Parent contact number', autoComplete: 'tel', inputMode: 'numeric', pattern: '[0-9]*', maxLength: 15 })}
                         {renderTextField('parentEmail', 'Parent Email Address', { type: 'email', placeholder: 'parent@example.com', autoComplete: 'email' })}
                         {renderTextField('password', 'Password', { type: 'password', placeholder: 'Create a password', autoComplete: 'new-password' })}
                         {renderTextField('confirmPassword', 'Confirm Password', { type: 'password', placeholder: 'Repeat the password', autoComplete: 'new-password' })}
@@ -381,13 +527,13 @@ export function AuthModal({
                     {form.role === 'parent' && (
                       <>
                         {renderTextField('qrToken', 'Student QR Token', { full: true, placeholder: 'Scan or paste the QR token' })}
-                        {renderTextField('fullName', 'Parent Full Name', { full: true, placeholder: 'Parent or guardian name', autoComplete: 'name' })}
+                        {renderTextField('fullName', 'Parent Full Name', { full: true, placeholder: 'Parent or guardian name', autoComplete: 'name', minLength: 3 })}
                         {renderTextField('relationshipToStudent', 'Relationship To Student', { placeholder: 'Mother, father, guardian' })}
-                        {renderTextField('phoneNumber', 'Phone Number', { type: 'tel', placeholder: 'Parent phone number', autoComplete: 'tel' })}
+                        {renderTextField('phoneNumber', 'Phone Number', { type: 'tel', placeholder: 'Parent phone number', autoComplete: 'tel', inputMode: 'numeric', pattern: '[0-9]*', maxLength: 15 })}
                         {renderTextField('email', 'Email Address', { type: 'email', placeholder: 'parent@example.com', autoComplete: 'email' })}
                         {renderTextField('homeAddress', 'Home Address', { as: 'textarea', full: true, placeholder: 'Street address, city, state, zip', rows: 3 })}
                         {renderTextField('governmentIdUrl', 'Government ID URL', { full: true, type: 'url', placeholder: 'Optional ID link', required: false })}
-                        {renderTextField('digitalSignature', 'Digital Signature', { full: true, placeholder: 'Type your full name as signature' })}
+                        {renderTextField('digitalSignature', 'Digital Signature', { full: true, placeholder: 'Type your full name as signature', minLength: 3 })}
                         {renderTextField('password', 'Password', { type: 'password', placeholder: 'Create a password', autoComplete: 'new-password' })}
                         {renderTextField('confirmPassword', 'Confirm Password', { type: 'password', placeholder: 'Repeat the password', autoComplete: 'new-password' })}
                       </>
@@ -398,11 +544,11 @@ export function AuthModal({
                         {renderTextField('schoolName', 'School Name', { full: true, placeholder: 'Official school name', autoComplete: 'organization' })}
                         {renderTextField('schoolAddress', 'School Address', { as: 'textarea', full: true, placeholder: 'School street address', rows: 3 })}
                         {renderTextField('schoolDistrict', 'School District', { placeholder: 'District name' })}
-                        {renderTextField('mainPhone', 'Main Phone Number', { type: 'tel', placeholder: 'Main school phone', autoComplete: 'tel' })}
-                        {renderTextField('principalName', 'Principal Name', { placeholder: 'Principal full name' })}
-                        {renderTextField('fullName', 'Administrator Name', { placeholder: 'School administrator name', autoComplete: 'name' })}
+                        {renderTextField('mainPhone', 'Main Phone Number', { type: 'tel', placeholder: 'Main school phone', autoComplete: 'tel', inputMode: 'numeric', pattern: '[0-9]*', maxLength: 15 })}
+                        {renderTextField('principalName', 'Principal Name', { placeholder: 'Principal full name', minLength: 3 })}
+                        {renderTextField('fullName', 'Administrator Name', { placeholder: 'School administrator name', autoComplete: 'name', minLength: 3 })}
                         {renderTextField('email', 'Administrator Email', { type: 'email', placeholder: 'administrator@example.com', autoComplete: 'email' })}
-                        {renderTextField('administratorPhone', 'Administrator Phone', { type: 'tel', placeholder: 'Administrator phone number', autoComplete: 'tel' })}
+                        {renderTextField('administratorPhone', 'Administrator Phone', { type: 'tel', placeholder: 'Administrator phone number', autoComplete: 'tel', inputMode: 'numeric', pattern: '[0-9]*', maxLength: 15 })}
                         {renderTextField('password', 'Password', { type: 'password', placeholder: 'Create a password', autoComplete: 'new-password' })}
                         {renderTextField('confirmPassword', 'Confirm Password', { type: 'password', placeholder: 'Repeat the password', autoComplete: 'new-password' })}
                       </>
@@ -410,10 +556,10 @@ export function AuthModal({
 
                     {form.role === 'teacher' && (
                       <>
-                        {renderTextField('fullName', 'Teacher Full Name', { full: true, placeholder: 'Teacher full name', autoComplete: 'name' })}
+                        {renderTextField('fullName', 'Teacher Full Name', { full: true, placeholder: 'Teacher full name', autoComplete: 'name', minLength: 3 })}
                         {renderTextField('schoolName', 'School Name', { placeholder: 'School name' })}
                         {renderTextField('email', 'School Email', { type: 'email', placeholder: 'teacher@school.edu', autoComplete: 'email' })}
-                        {renderTextField('phoneNumber', 'Phone Number', { type: 'tel', placeholder: 'Teacher phone number', autoComplete: 'tel' })}
+                        {renderTextField('phoneNumber', 'Phone Number', { type: 'tel', placeholder: 'Teacher phone number', autoComplete: 'tel', inputMode: 'numeric', pattern: '[0-9]*', maxLength: 15 })}
                         {renderTextField('roleDepartment', 'Role / Department', { placeholder: 'Example: Social Studies' })}
                         {renderTextField('gradeLevelSupported', 'Grade Level Supported', { placeholder: 'Example: 9th Grade' })}
                         {renderTextField('password', 'Password', { type: 'password', placeholder: 'Create a password', autoComplete: 'new-password' })}

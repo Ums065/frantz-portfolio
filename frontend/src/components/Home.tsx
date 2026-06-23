@@ -56,80 +56,88 @@ interface VentureCard {
   mediaClass?: string
 }
 
-const ventureNetwork = '/assets/ventures/trendcatch-network.webp'
-const ventureGivingBack = '/assets/ventures/trendcatch-gives-back.webp'
-const venturePlayer = '/assets/ventures/trendcatch-player.webp'
-const ventureEdu = '/assets/ventures/trendcatch-edu.webp'
-const ventureShelfLink = '/assets/ventures/shelf-link.webp'
-const ventureReferral = '/assets/ventures/referral-partner-program.webp'
-const ventureLeaveBetter = '/assets/ventures/leave-it-better-than-you-found-it.webp'
-const ventureLegacy = '/assets/ventures/frantz-coutard-legacy.webp'
-const ventureFrantz = '/assets/ventures/frantz-coutard.webp'
+const buildingNowBase = "/assets/What I'm Building Now"
+
+type VisionNode = {
+  label: string
+  kind: 'schools' | 'stores' | 'restaurants' | 'businesses' | 'network' | 'opportunity'
+}
 
 const ventureCards: VentureCard[] = [
+  {
+    title: 'Frantz Coutard',
+    copy: 'Entrepreneur, innovator, and advocate building technology that strengthens communities.',
+    tag: 'My Journey Continues',
+    media: `${buildingNowBase}/1.png`,
+    highlights: ['Entrepreneur', 'Innovator', 'Advocate', 'Community'],
+    mediaClass: 'proj__media--portrait',
+  },
+  {
+    title: 'FrantzCoutard.com Legacy',
+    copy: 'A digital platform helping schools access grants, resources, and opportunity.',
+    tag: 'Empowering Communities',
+    media: `${buildingNowBase}/2.png`,
+    highlights: ['Grants', 'Schools', 'Teachers', 'Parents', 'Students'],
+  },
+  {
+    title: 'Leave It Better Than You Found It',
+    copy: 'A movement for future problem solvers building better communities.',
+    tag: 'Educational Movement',
+    media: `${buildingNowBase}/3.png`,
+    highlights: ['Problem Solvers', 'Innovation', 'Leadership', 'Future Ready'],
+    mediaClass: 'proj__media--glow',
+  },
+  {
+    title: 'Referral Partner Program',
+    copy: 'Empowering youth to build income through sales, partnerships, and referrals.',
+    tag: 'Launching October 17, 2026',
+    media: `${buildingNowBase}/4.png`,
+    highlights: ['Sales Training', 'Business Leads', 'Partnerships', 'Income'],
+  },
+  {
+    title: 'Shelf Link',
+    copy: 'Helping local and independent brands launch and grow in retail stores.',
+    tag: 'Launching October 3, 2026',
+    media: `${buildingNowBase}/5.png`,
+    highlights: ['Product Launch', 'Retail Partners', 'Growth', 'Distribution'],
+  },
   {
     title: 'TrendCatch Network',
     copy: 'The operating system for local commerce, local ads, and instant savings.',
     tag: 'Launching July 25, 2026',
-    media: ventureNetwork,
+    media: `${buildingNowBase}/6.png`,
     highlights: ['Local Ads', 'Coupons', 'Savings', 'Community'],
+    mediaClass: 'proj__media--network',
   },
   {
     title: 'TrendCatch Gives Back Inc.',
     copy: 'Technology for community awareness, clean water, public safety, and sustainability.',
     tag: 'Non-Profit Initiative',
-    media: ventureGivingBack,
+    media: `${buildingNowBase}/7.png`,
     highlights: ['Education', 'Surveys', 'Sustainability', 'Awareness'],
   },
   {
     title: 'TrendCatch Player',
     copy: 'Powering any screen with remote content updates and live engagement.',
     tag: 'Proprietary Technology',
-    media: venturePlayer,
+    media: `${buildingNowBase}/8.png`,
     highlights: ['Any Screen', 'Remote Control', 'Global', 'Real-Time'],
   },
-  {
-    title: 'TrendCatch Edu',
-    copy: 'In-school screen programs teaching advertising, AI, design, and entrepreneurship.',
-    tag: 'In Schools Across NYC',
-    media: ventureEdu,
-    highlights: ['Advertising', 'AI', 'Design', 'Leadership'],
-  },
-  {
-    title: 'Shelf Link',
-    copy: 'Helping local and independent brands launch and grow in retail stores.',
-    tag: 'Launching October 3, 2026',
-    media: ventureShelfLink,
-    highlights: ['Product Launch', 'Retail Partners', 'Growth', 'Distribution'],
-  },
-  {
-    title: 'Referral Partner Program',
-    copy: 'Empowering youth to build income through sales, partnerships, and referrals.',
-    tag: 'Launching October 17, 2026',
-    media: ventureReferral,
-    highlights: ['Sales Training', 'Business Leads', 'Partnerships', 'Income'],
-  },
-  {
-    title: 'Leave It Better Than You Found It™',
-    copy: 'A movement for future problem solvers building better communities.',
-    tag: 'Educational Movement',
-    media: ventureLeaveBetter,
-    highlights: ['Problem Solvers', 'Innovation', 'Leadership', 'Future Ready'],
-  },
-  {
-    title: 'Frantz Coutard.com Legacy',
-    copy: 'A digital platform helping schools access grants, resources, and opportunity.',
-    tag: 'Empowering Communities',
-    media: ventureLegacy,
-    highlights: ['Grants', 'Schools', 'Teachers', 'Parents'],
-  },
-  {
-    title: 'Frantz Coutard',
-    copy: 'Entrepreneur, innovator, and advocate building technology that strengthens communities.',
-    tag: 'My Journey Continues',
-    media: ventureFrantz,
-    highlights: ['Entrepreneur', 'Innovator', 'Advocate', 'Community'],
-  },
+]
+
+const ventureVision = {
+  title: 'The Vision',
+  copy: 'Building technology that strengthens communities through commerce, education, and opportunity.',
+  media: `${buildingNowBase}/9.png`,
+}
+
+const ventureVisionNodes: VisionNode[] = [
+  { label: 'Schools', kind: 'schools' },
+  { label: 'Grocery Stores', kind: 'stores' },
+  { label: 'Restaurants', kind: 'restaurants' },
+  { label: 'Small Businesses', kind: 'businesses' },
+  { label: 'Digital Network', kind: 'network' },
+  { label: 'Opportunity', kind: 'opportunity' },
 ]
 
 const awardHighlights = [
@@ -181,6 +189,23 @@ const partnerItems = [
   { name: 'Official Collection', image: merchCollectible },
   { name: 'Leadership Circle', image: awardSenate },
 ] as const
+
+function VisionNodeIcon({ kind }: { kind: VisionNode['kind'] }) {
+  switch (kind) {
+    case 'schools':
+      return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6}><path d="M3 10 12 5l9 5-9 5-9-5Z" /><path d="M7 12.5v3.5c0 1.4 2.2 3 5 3s5-1.6 5-3v-3.5" /><path d="M21 10v6" /></svg>
+    case 'stores':
+      return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6}><path d="M4 10h16l-1.4 9H5.4L4 10Z" /><path d="M9 10V8a3 3 0 1 1 6 0v2" /></svg>
+    case 'restaurants':
+      return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6}><path d="M7 4v7" /><path d="M10 4v7" /><path d="M7 7h3" /><path d="M8.5 11v9" /><path d="M16 4c1.7 1.7 1.7 5.3 0 7v9" /></svg>
+    case 'businesses':
+      return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6}><path d="M4 19V9l8-5 8 5v10" /><path d="M9 19v-4h6v4" /><path d="M9 10h.01M15 10h.01" /></svg>
+    case 'network':
+      return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6}><circle cx="12" cy="12" r="3.5" /><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9 17 7M7 17l-2.1 2.1" /></svg>
+    case 'opportunity':
+      return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6}><path d="M4 19h16" /><path d="M7 15V9" /><path d="M12 15V5" /><path d="M17 15v-3" /></svg>
+  }
+}
 
 export default function Home() {
   const [events, setEvents] = useState<EventItem[]>([])
@@ -283,24 +308,44 @@ export default function Home() {
             <div className="section-title"><span className="ln l" /><h2 className="gold-text">What I&apos;m Building Now</h2><span className="ln r" /></div>
             <p className="sub">Building technology, education, and opportunity that empowers communities and creates a better future.</p>
           </div>
-          <div className="venture-grid">
+          <div className="venture-grid venture-grid--editorial">
             {ventureCards.map((project, index) => (
-              <article className={`glass proj venture-card reveal d${(index % 3) + 1}`} key={project.title}>
+              <article className={`glass proj venture-card venture-card--editorial reveal d${(index % 4) + 1}`} key={project.title}>
                 <div className={`proj__media ${project.mediaClass ?? ''}`.trim()}>
                   <img src={project.media} alt={project.title} loading="lazy" decoding="async" />
                 </div>
-                <h3>{project.title}</h3>
-                <p>{project.copy}</p>
-                <div className="venture-card__chips" aria-label={`${project.title} highlights`}>
-                  {project.highlights.map((item) => (
-                    <span key={`${project.title}-${item}`}>{item}</span>
-                  ))}
+                <div className="venture-card__body">
+                  <h3>{project.title}</h3>
+                  <p>{project.copy}</p>
+                  <div className="venture-card__chips" aria-label={`${project.title} highlights`}>
+                    {project.highlights.map((item) => (
+                      <span key={`${project.title}-${item}`}>{item}</span>
+                    ))}
+                  </div>
+                  <span className="tag">{project.tag}</span>
                 </div>
-                <span className="tag">{project.tag}</span>
               </article>
             ))}
           </div>
-          <div className="venture-summary reveal">ONE VISION. MANY SOLUTIONS. STRONGER COMMUNITIES.</div>
+          <article className="venture-vision glass reveal">
+            <img className="venture-vision__image" src={ventureVision.media} alt={ventureVision.title} loading="lazy" decoding="async" />
+            <div className="venture-vision__veil" />
+            <div className="venture-vision__content">
+              <div className="venture-vision__crest">FC</div>
+              <div className="venture-vision__copy">
+                <h3>{ventureVision.title}</h3>
+                <p>{ventureVision.copy}</p>
+              </div>
+              <div className="venture-vision__nodes" aria-label="Vision sectors">
+                {ventureVisionNodes.map((node) => (
+                  <div className="venture-vision__node" key={node.label}>
+                    <span className="venture-vision__node-icon"><VisionNodeIcon kind={node.kind} /></span>
+                    <span>{node.label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </article>
         </div>
       </section>
 

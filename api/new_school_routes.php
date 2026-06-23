@@ -706,7 +706,7 @@ function new_school_handle_route(string $method, string $route): bool
         }
 
         case $key === 'POST new-school/student/register': {
-            $fullName = field($body, 'full_name');
+            $fullName = require_name_field(field($body, 'full_name'), 'Student full name', 3);
             $username = field($body, 'student_username');
             $email = require_email(field($body, 'email'));
             $password = field($body, 'password');
@@ -723,8 +723,8 @@ function new_school_handle_route(string $method, string $route): bool
             $schoolId = (int) ($body['school_id'] ?? 0);
             $teacherId = (int) ($body['teacher_id'] ?? 0);
 
-            if ($fullName === '') json(['error' => 'Student full name is required.'], 422);
             if ($username === '') json(['error' => 'Student username is required.'], 422);
+            if (!preg_match('/^[A-Za-z0-9._-]{3,30}$/', $username)) json(['error' => 'Student username must be 3 to 30 characters and use only letters, numbers, dots, dashes, or underscores.'], 422);
             if ($password === '' || strlen($password) < 6) json(['error' => 'Password must be at least 6 characters.'], 422);
             if ($age < 11 || $age > 19) json(['error' => 'Students must be ages 11 to 19.'], 422);
             if ($dob === '') json(['error' => 'Date of birth is required.'], 422);
@@ -734,6 +734,9 @@ function new_school_handle_route(string $method, string $route): bool
             if ($parentName === '' || $parentPhone === '' || $parentEmail === '') {
                 json(['error' => 'Parent contact details are required.'], 422);
             }
+            $phone = require_phone($phone, 'Student phone number');
+            $parentName = require_name_field($parentName, 'Parent / Guardian name', 3);
+            $parentPhone = require_phone($parentPhone, 'Parent phone number');
 
             $dateOfBirth = date_create($dob);
             if (!$dateOfBirth) {
@@ -925,7 +928,7 @@ function new_school_handle_route(string $method, string $route): bool
             $participantId = field($body, 'participant_id');
             $schoolId = (int) ($body['school_id'] ?? 0);
             $teacherId = (int) ($body['teacher_id'] ?? 0);
-            $parentFullName = field($body, 'parent_full_name');
+            $parentFullName = require_name_field(field($body, 'parent_full_name'), 'Parent full name', 3);
             $relationship = field($body, 'relationship_to_student');
             $phone = field($body, 'phone_number');
             $email = require_email(field($body, 'email'));
@@ -943,9 +946,11 @@ function new_school_handle_route(string $method, string $route): bool
                 json(['error' => 'Student unique platform ID or QR token is required.'], 422);
             }
             if (!$student) json(['error' => 'Student not found.'], 404);
-            if ($parentFullName === '' || $relationship === '' || $phone === '' || $homeAddress === '' || $signature === '') {
+            if ($relationship === '' || $phone === '' || $homeAddress === '' || $signature === '') {
                 json(['error' => 'Parent consent form is incomplete.'], 422);
             }
+            $phone = require_phone($phone, 'Phone number');
+            $signature = require_name_field($signature, 'Digital signature', 3);
             if (!$consentChecked) {
                 json(['error' => 'Consent must be confirmed.'], 422);
             }
@@ -1110,8 +1115,8 @@ function new_school_handle_route(string $method, string $route): bool
             $schoolAddress = field($body, 'school_address');
             $schoolDistrict = field($body, 'school_district');
             $mainPhone = field($body, 'main_phone');
-            $principalName = field($body, 'principal_name');
-            $administratorName = field($body, 'administrator_name');
+            $principalName = require_name_field(field($body, 'principal_name'), 'Principal name', 3);
+            $administratorName = require_name_field(field($body, 'administrator_name'), 'Administrator name', 3);
             $administratorEmail = require_email(field($body, 'administrator_email'));
             $administratorPhone = field($body, 'administrator_phone');
             $password = field($body, 'password');
@@ -1119,6 +1124,8 @@ function new_school_handle_route(string $method, string $route): bool
             if ($schoolName === '' || $schoolAddress === '' || $schoolDistrict === '' || $mainPhone === '' || $principalName === '' || $administratorName === '' || $administratorPhone === '') {
                 json(['error' => 'All school profile fields are required.'], 422);
             }
+            $mainPhone = require_phone($mainPhone, 'Main phone number');
+            $administratorPhone = require_phone($administratorPhone, 'Administrator phone');
             if ($password === '' || strlen($password) < 6) {
                 json(['error' => 'Password must be at least 6 characters.'], 422);
             }
@@ -1198,7 +1205,7 @@ function new_school_handle_route(string $method, string $route): bool
         }
 
         case $key === 'POST new-school/teacher/register': {
-            $teacherFullName = field($body, 'teacher_full_name');
+            $teacherFullName = require_name_field(field($body, 'teacher_full_name'), 'Teacher full name', 3);
             $schoolId = (int) ($body['school_id'] ?? 0);
             $schoolName = field($body, 'school_name');
             $schoolEmail = require_email(field($body, 'school_email'));
@@ -1210,6 +1217,7 @@ function new_school_handle_route(string $method, string $route): bool
             if ($teacherFullName === '' || $schoolEmail === '' || $phoneNumber === '' || $roleDepartment === '' || $gradeLevel === '') {
                 json(['error' => 'Teacher profile fields are required.'], 422);
             }
+            $phoneNumber = require_phone($phoneNumber, 'Phone number');
             if ($password === '' || strlen($password) < 6) {
                 json(['error' => 'Password must be at least 6 characters.'], 422);
             }

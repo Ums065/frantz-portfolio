@@ -39,7 +39,52 @@ function require_email(string $email): string
     return strtolower($email);
 }
 
-/** Best-effort client IP — honors X-Forwarded-For (first hop) then REMOTE_ADDR. */
+function text_length(string $value): int
+{
+    return function_exists('mb_strlen') ? mb_strlen($value) : strlen($value);
+}
+
+function normalize_text_field(string $value): string
+{
+    $trimmed = trim($value);
+    return preg_replace('/\s+/', ' ', $trimmed) ?? $trimmed;
+}
+
+function require_text_field(string $value, string $label, int $minLength = 1): string
+{
+    $cleaned = normalize_text_field($value);
+    if ($cleaned === '') {
+        json(['error' => $label . ' is required.'], 422);
+    }
+    if (text_length($cleaned) < $minLength) {
+        json(['error' => $label . ' must be at least ' . $minLength . ' characters.'], 422);
+    }
+    return $cleaned;
+}
+
+function require_name_field(string $value, string $label = 'Full name', int $minLength = 3): string
+{
+    return require_text_field($value, $label, $minLength);
+}
+
+function require_phone(string $phone, string $label = 'Phone number', int $minDigits = 7, int $maxDigits = 15): string
+{
+    $phone = trim($phone);
+    if ($phone === '') {
+        json(['error' => $label . ' is required.'], 422);
+    }
+    if (preg_match('/[A-Za-z]/', $phone)) {
+        json(['error' => $label . ' must contain digits only.'], 422);
+    }
+    $digits = preg_replace('/\D+/', '', $phone) ?? '';
+    $length = strlen($digits);
+    if ($length < $minDigits || $length > $maxDigits) {
+        json(['error' => $label . ' must be ' . $minDigits . ' to ' . $maxDigits . ' digits.'], 422);
+    }
+    return $digits;
+}
+
+/** Best-effort client IP ? honors X-Forwarded-For (first hop) then REMOTE_ADDR. */
 function client_ip(): ?string
 {
     $candidates = [];

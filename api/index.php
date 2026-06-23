@@ -33,7 +33,7 @@ try {
         // Temporary bypass: direct register/login is enabled and verification is disabled.
         case $key === 'POST auth/register': {
             $b    = body();
-            $name = field($b, 'full_name') ?: field($b, 'name');
+            $name = require_name_field(field($b, 'full_name') ?: field($b, 'name'), 'Full name', 3);
             $email = require_email(field($b, 'email'));
             $pass  = field($b, 'password');
 
