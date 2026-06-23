@@ -1221,6 +1221,61 @@ try {
             json(['message' => 'Order updated.']);
         }
 
+        /* ---------------- ADMIN: DATA-LIST DELETES (CRUD) ---------------- */
+        case $method === 'DELETE' && preg_match('#^admin/request/(\d+)$#', $route, $m) === 1: {
+            require_admin();
+            db()->prepare('DELETE FROM requests WHERE id = ?')->execute([(int) $m[1]]);
+            json(['message' => 'Request deleted.']);
+        }
+
+        case $method === 'DELETE' && preg_match('#^admin/order/(\d+)$#', $route, $m) === 1: {
+            require_admin();
+            db()->prepare('DELETE FROM orders WHERE id = ?')->execute([(int) $m[1]]);
+            json(['message' => 'Order deleted.']);
+        }
+
+        case $method === 'DELETE' && preg_match('#^admin/contact/(\d+)$#', $route, $m) === 1: {
+            require_admin();
+            db()->prepare('DELETE FROM contact_messages WHERE id = ?')->execute([(int) $m[1]]);
+            json(['message' => 'Contact message deleted.']);
+        }
+
+        case $method === 'DELETE' && preg_match('#^admin/subscriber/(\d+)$#', $route, $m) === 1: {
+            require_admin();
+            db()->prepare('DELETE FROM subscribers WHERE id = ?')->execute([(int) $m[1]]);
+            json(['message' => 'Subscriber removed.']);
+        }
+
+        case $method === 'DELETE' && preg_match('#^admin/user/(\d+)$#', $route, $m) === 1: {
+            $admin = require_admin();
+            $targetId = (int) $m[1];
+            if ($targetId === (int) $admin['id']) {
+                json(['error' => 'You cannot delete your own account.'], 422);
+            }
+            $lookup = db()->prepare('SELECT id, role FROM users WHERE id = ? LIMIT 1');
+            $lookup->execute([$targetId]);
+            $target = $lookup->fetch();
+            if (!$target) {
+                json(['error' => 'User not found.'], 404);
+            }
+            if (in_array((string) $target['role'], ['admin', 'super_admin', 'editor'], true)) {
+                json(['error' => 'Administrator accounts are protected and cannot be deleted here.'], 403);
+            }
+            try {
+                db()->prepare('DELETE FROM users WHERE id = ?')->execute([$targetId]);
+            } catch (\Throwable $e) {
+                // Linked New School records (student/teacher/school) may block a hard delete.
+                json(['error' => 'This account has linked records and cannot be deleted. Reject it instead.'], 409);
+            }
+            json(['message' => 'Account deleted.']);
+        }
+
+        case $method === 'DELETE' && preg_match('#^admin/event-rsvp/(\d+)$#', $route, $m) === 1: {
+            require_admin();
+            db()->prepare('DELETE FROM event_rsvps WHERE id = ?')->execute([(int) $m[1]]);
+            json(['message' => 'RSVP deleted.']);
+        }
+
         case $method === 'PUT' && preg_match('#^admin/sponsorship/application/(\d+)$#', $route, $m) === 1: {
             $admin = require_admin();
             sponsor_ensure_schema();

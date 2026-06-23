@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, type AnalyticsPayload, type AwardRow, type CommunityCommentRow, type CommunityThreadRow, type EventItem, type EventRsvpRow, type InventoryRow, type MediaRow, type PostDetail, type ProductVisibility, type TestimonialRow, type User } from '../lib/api'
 import { useAuth } from '../context/AuthContext'
@@ -213,11 +213,41 @@ export default function Admin() {
     }
   }
 
+  // Generic delete used across the data-list tabs (CRUD: the "D").
+  const deleteRow = async (path: string, confirmMsg: string) => {
+    if (!confirm(confirmMsg)) return
+    try {
+      await api.del(path)
+      await refreshData()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Delete failed.')
+    }
+  }
+
   const reviewableAccounts = data?.members.filter((m) => !isAdmin(m.role)) ?? []
   const pendingAccounts = reviewableAccounts.filter((m) => (m.approval_status || 'pending') === 'pending').length
   const rejectedAccounts = reviewableAccounts.filter((m) => (m.approval_status || 'pending') === 'rejected').length
   const approvalQueueCount = reviewableAccounts.filter((m) => (m.approval_status || 'pending') !== 'approved').length
   const approvedAccounts = reviewableAccounts.filter((m) => (m.approval_status || 'pending') === 'approved').length
+
+  // Per-status breakdowns for the in-tab "actual counter" strips.
+  const reqRows = data?.requests ?? []
+  const orderRows = data?.orders ?? []
+  const reqBy = (s: string) => reqRows.filter((r) => (r.status || '').toLowerCase() === s).length
+  const ordBy = (s: string) => orderRows.filter((o) => (o.status || '').toLowerCase() === s).length
+  const orderRevenue = orderRows
+    .filter((o) => ['paid', 'fulfilled'].includes((o.status || '').toLowerCase()))
+    .reduce((sum, o) => sum + (parseFloat(o.total) || 0), 0)
+
+  // Sidebar badges behave like NOTIFICATION counters: only "new/actionable" items,
+  // hidden when zero. Full totals live in the per-tab StatChips strips instead.
+  const notifications: Partial<Record<TabKey, number>> = {
+    approvals: pendingAccounts,
+    members: pendingAccounts,
+    requests: reqBy('new'),
+    orders: ordBy('pending'),
+    contacts: data?.contacts.length ?? 0,
+  }
 
   if (loading) {
     return (
@@ -252,14 +282,6 @@ export default function Admin() {
     )
   }
 
-  const counts: Partial<Record<TabKey, number>> = {
-    members: data?.members.length ?? 0,
-    approvals: approvalQueueCount,
-    contacts: data?.contacts.length ?? 0,
-    subscribers: data?.subscribers.length ?? 0,
-    orders: data?.orders?.length ?? 0,
-    requests: data?.requests.length ?? 0,
-  }
   const activeLabel = NAV_GROUPS.flatMap((g) => g.items).find((i) => i.key === tab)?.label ?? 'Overview'
 
   return (
@@ -282,7 +304,7 @@ export default function Admin() {
                     onClick={() => setTab(item.key)}
                   >
                     <span>{item.label}</span>
-                    {counts[item.key] !== undefined && <span className="admin-nav__badge">{counts[item.key]}</span>}
+                    {notifications[item.key] ? <span className="admin-nav__badge admin-nav__badge--notify" title={`${notifications[item.key]} need attention`}>{notifications[item.key]}</span> : null}
                   </button>
                 ))}
               </div>
@@ -330,163 +352,213 @@ export default function Admin() {
           {tab === 'analytics' && <AnalyticsAdmin />}
 
         {tab === 'requests' && (
-          <DataTable
-            head={['Type', 'Name', 'Email', 'Org', 'Message', 'Status', 'Date']}
-            rows={data?.requests ?? []}
-            searchPlaceholder="Search requests…"
-            searchText={(r) => `${r.request_type} ${r.full_name} ${r.email} ${r.organization ?? ''} ${r.message ?? ''}`}
-            statusOf={(r) => r.status}
-            statusOptions={['new', 'reviewed', 'approved', 'closed']}
-            renderRow={(r) => (
-              <tr key={r.id}>
-                <td>{r.request_type}</td>
-                <td>{r.full_name}</td>
-                <td>{r.email}</td>
-                <td>{r.organization || '—'}</td>
-                <td style={{ maxWidth: 240 }}>{r.message || '—'}</td>
-                <td>
-                  <select value={r.status} onChange={(e) => setStatus(r.id, e.target.value)} style={selectS}>
-                    <option value="new">new</option>
-                    <option value="reviewed">reviewed</option>
-                    <option value="approved">approved</option>
-                    <option value="closed">closed</option>
-                  </select>
-                </td>
-                <td>{r.created_at}</td>
-              </tr>
-            )}
-          />
+          <>
+            <StatChips items={[
+              { label: 'Total', value: reqRows.length },
+              { label: 'New', value: reqBy('new'), tone: 'gold' },
+              { label: 'Reviewed', value: reqBy('reviewed'), tone: 'blue' },
+              { label: 'Approved', value: reqBy('approved'), tone: 'green' },
+              { label: 'Closed', value: reqBy('closed'), tone: 'muted' },
+            ]} />
+            <DataTable
+              head={['Type', 'Name', 'Email', 'Org', 'Message', 'Status', 'Date', '']}
+              rows={data?.requests ?? []}
+              searchPlaceholder="Search requests…"
+              searchText={(r) => `${r.request_type} ${r.full_name} ${r.email} ${r.organization ?? ''} ${r.message ?? ''}`}
+              statusOf={(r) => r.status}
+              statusOptions={['new', 'reviewed', 'approved', 'closed']}
+              renderRow={(r) => (
+                <tr key={r.id}>
+                  <td>{r.request_type}</td>
+                  <td>{r.full_name}</td>
+                  <td>{r.email}</td>
+                  <td>{r.organization || '—'}</td>
+                  <td style={{ maxWidth: 240 }}>{r.message || '—'}</td>
+                  <td>
+                    <select value={r.status} onChange={(e) => setStatus(r.id, e.target.value)} style={selectS}>
+                      <option value="new">new</option>
+                      <option value="reviewed">reviewed</option>
+                      <option value="approved">approved</option>
+                      <option value="closed">closed</option>
+                    </select>
+                  </td>
+                  <td>{r.created_at}</td>
+                  <td><RowMenu actions={[{ label: 'Delete request', danger: true, onClick: () => void deleteRow(`admin/request/${r.id}`, 'Delete this request? This cannot be undone.') }]} /></td>
+                </tr>
+              )}
+            />
+          </>
         )}
 
         {tab === 'orders' && (
-          <DataTable
-            head={['Order #', 'Customer', 'Email', 'Items', 'Total', 'Payment', 'Order Status', 'Date']}
-            rows={data?.orders ?? []}
-            searchPlaceholder="Search orders…"
-            searchText={(o) => `${o.order_no} ${o.customer_name} ${o.email}`}
-            statusOf={(o) => o.status}
-            statusOptions={['pending', 'paid', 'fulfilled', 'cancelled']}
-            renderRow={(o) => {
-              let items = ''
-              try { items = (JSON.parse(o.items) as Array<{ name: string; qty: number; size: string }>).map((it) => `${it.qty}× ${it.name} (${it.size})`).join(', ') } catch { items = '—' }
-              return (
-                <tr key={o.id}>
-                  <td>{o.order_no}</td>
-                  <td>{o.customer_name}</td>
-                  <td>{o.email}</td>
-                  <td style={{ maxWidth: 280 }}>{items}</td>
-                  <td>${o.total}</td>
-                  <td>{[o.payment_provider, o.payment_status, o.payment_method].filter(Boolean).join(' · ')}</td>
-                  <td>
-                    <select value={o.status} onChange={(e) => setOrderStatus(o.id, e.target.value)} style={selectS}>
-                      <option value="pending">pending</option>
-                      <option value="paid">paid</option>
-                      <option value="fulfilled">fulfilled</option>
-                      <option value="cancelled">cancelled</option>
-                    </select>
-                  </td>
-                  <td>{o.created_at}</td>
-                </tr>
-              )
-            }}
-          />
+          <>
+            <StatChips items={[
+              { label: 'Total', value: orderRows.length },
+              { label: 'Pending', value: ordBy('pending'), tone: 'gold' },
+              { label: 'Paid', value: ordBy('paid'), tone: 'green' },
+              { label: 'Fulfilled', value: ordBy('fulfilled'), tone: 'green' },
+              { label: 'Cancelled', value: ordBy('cancelled'), tone: 'red' },
+              { label: 'Revenue', value: `$${orderRevenue.toFixed(2)}`, tone: 'gold' },
+            ]} />
+            <DataTable
+              head={['Order #', 'Customer', 'Email', 'Items', 'Total', 'Payment', 'Order Status', 'Date', '']}
+              rows={data?.orders ?? []}
+              searchPlaceholder="Search orders…"
+              searchText={(o) => `${o.order_no} ${o.customer_name} ${o.email}`}
+              statusOf={(o) => o.status}
+              statusOptions={['pending', 'paid', 'fulfilled', 'cancelled']}
+              renderRow={(o) => {
+                let items = ''
+                try { items = (JSON.parse(o.items) as Array<{ name: string; qty: number; size: string }>).map((it) => `${it.qty}× ${it.name} (${it.size})`).join(', ') } catch { items = '—' }
+                return (
+                  <tr key={o.id}>
+                    <td>{o.order_no}</td>
+                    <td>{o.customer_name}</td>
+                    <td>{o.email}</td>
+                    <td style={{ maxWidth: 280 }}>{items}</td>
+                    <td>${o.total}</td>
+                    <td>{[o.payment_provider, o.payment_status, o.payment_method].filter(Boolean).join(' · ')}</td>
+                    <td>
+                      <select value={o.status} onChange={(e) => setOrderStatus(o.id, e.target.value)} style={selectS}>
+                        <option value="pending">pending</option>
+                        <option value="paid">paid</option>
+                        <option value="fulfilled">fulfilled</option>
+                        <option value="cancelled">cancelled</option>
+                      </select>
+                    </td>
+                    <td>{o.created_at}</td>
+                    <td><RowMenu actions={[{ label: 'Delete order', danger: true, onClick: () => void deleteRow(`admin/order/${o.id}`, `Delete order ${o.order_no}? This permanently removes the record.`) }]} /></td>
+                  </tr>
+                )
+              }}
+            />
+          </>
         )}
 
         {tab === 'subscribers' && (
-          <DataTable
-            head={['Email', 'Subscribed']}
-            rows={data?.subscribers ?? []}
-            searchPlaceholder="Search subscribers…"
-            searchText={(s) => s.email}
-            renderRow={(s) => (
-              <tr key={s.id}><td>{s.email}</td><td>{s.created_at}</td></tr>
-            )}
-          />
+          <>
+            <StatChips items={[{ label: 'Subscribers', value: data?.subscribers.length ?? 0, tone: 'gold' }]} />
+            <DataTable
+              head={['Email', 'Subscribed', '']}
+              rows={data?.subscribers ?? []}
+              searchPlaceholder="Search subscribers…"
+              searchText={(s) => s.email}
+              renderRow={(s) => (
+                <tr key={s.id}>
+                  <td>{s.email}</td>
+                  <td>{s.created_at}</td>
+                  <td><RowMenu actions={[{ label: 'Remove subscriber', danger: true, onClick: () => void deleteRow(`admin/subscriber/${s.id}`, `Remove ${s.email} from the newsletter list?`) }]} /></td>
+                </tr>
+              )}
+            />
+          </>
         )}
 
         {tab === 'contacts' && (
-          <DataTable
-            head={['Name', 'Email', 'Message', 'Date']}
-            rows={data?.contacts ?? []}
-            searchPlaceholder="Search contacts…"
-            searchText={(c) => `${c.full_name} ${c.email} ${c.message ?? ''}`}
-            renderRow={(c) => (
-              <tr key={c.id}><td>{c.full_name}</td><td>{c.email}</td><td>{c.message || '—'}</td><td>{c.created_at}</td></tr>
-            )}
-          />
+          <>
+            <StatChips items={[{ label: 'Messages', value: data?.contacts.length ?? 0, tone: 'gold' }]} />
+            <DataTable
+              head={['Name', 'Email', 'Message', 'Date', '']}
+              rows={data?.contacts ?? []}
+              searchPlaceholder="Search contacts…"
+              searchText={(c) => `${c.full_name} ${c.email} ${c.message ?? ''}`}
+              renderRow={(c) => (
+                <tr key={c.id}>
+                  <td>{c.full_name}</td>
+                  <td>{c.email}</td>
+                  <td>{c.message || '—'}</td>
+                  <td>{c.created_at}</td>
+                  <td><RowMenu actions={[{ label: 'Delete message', danger: true, onClick: () => void deleteRow(`admin/contact/${c.id}`, 'Delete this contact message?') }]} /></td>
+                </tr>
+              )}
+            />
+          </>
         )}
 
         {tab === 'members' && (
-          <DataTable
-            head={['Name', 'Email', 'Role', 'Status', 'Joined', 'Actions']}
-            rows={data?.members ?? []}
-            searchPlaceholder="Search accounts…"
-            searchText={(m) => `${m.full_name} ${m.email} ${m.role}`}
-            statusOf={(m) => (isAdmin(m.role) ? 'approved' : (m.approval_status || 'pending'))}
-            statusOptions={['approved', 'pending', 'rejected']}
-            renderRow={(m) => {
-              const adminAccount = isAdmin(m.role)
-              const status = adminAccount ? 'protected' : (m.approval_status || 'pending').toLowerCase()
-              return (
-                <tr key={m.id}>
-                  <td>{m.full_name}</td>
-                  <td>{m.email}</td>
-                  <td>{m.role}</td>
-                  <td><StatusPill status={status} /></td>
-                  <td>{m.created_at}</td>
-                  <td>
-                    {adminAccount ? (
-                      <span style={{ color: 'var(--muted)', fontSize: 12 }}>Protected account</span>
-                    ) : (
-                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                        <button type="button" className="btn btn--sm btn--view" disabled={viewBusyId === m.id} onClick={() => void viewAsUser(m)}>
-                          {viewBusyId === m.id ? 'Opening…' : 'View dashboard'}
-                        </button>
-                        <button type="button" className="btn btn--sm" onClick={() => void openUserDetails(m)}>Details</button>
-                        <button type="button" className={approvalButtonClass(status, 'approved')} onClick={() => void setApproval(m.id, 'approved')}>Approve</button>
-                        <button type="button" className={approvalButtonClass(status, 'pending')} onClick={() => void setApproval(m.id, 'pending')}>Pending</button>
-                        <button type="button" className={approvalButtonClass(status, 'rejected')} onClick={() => void setApproval(m.id, 'rejected')}>Reject</button>
-                      </div>
-                    )}
-                  </td>
-                </tr>
-              )
-            }}
-          />
+          <>
+            <StatChips items={[
+              { label: 'Total', value: data?.members.length ?? 0 },
+              { label: 'Approved', value: approvedAccounts, tone: 'green' },
+              { label: 'Pending', value: pendingAccounts, tone: 'gold' },
+              { label: 'Rejected', value: rejectedAccounts, tone: 'red' },
+            ]} />
+            <DataTable
+              head={['Name', 'Email', 'Role', 'Status', 'Joined', '']}
+              rows={data?.members ?? []}
+              searchPlaceholder="Search accounts…"
+              searchText={(m) => `${m.full_name} ${m.email} ${m.role}`}
+              statusOf={(m) => (isAdmin(m.role) ? 'approved' : (m.approval_status || 'pending'))}
+              statusOptions={['approved', 'pending', 'rejected']}
+              renderRow={(m) => {
+                const adminAccount = isAdmin(m.role)
+                const status = adminAccount ? 'protected' : (m.approval_status || 'pending').toLowerCase()
+                return (
+                  <tr key={m.id}>
+                    <td>{m.full_name}</td>
+                    <td>{m.email}</td>
+                    <td>{m.role}</td>
+                    <td><StatusPill status={status} /></td>
+                    <td>{m.created_at}</td>
+                    <td>
+                      {adminAccount ? (
+                        <span style={{ color: 'var(--muted)', fontSize: 12 }}>Protected</span>
+                      ) : (
+                        <RowMenu actions={[
+                          { label: viewBusyId === m.id ? 'Opening…' : 'View dashboard', onClick: () => void viewAsUser(m), disabled: viewBusyId === m.id },
+                          { label: 'Details', onClick: () => void openUserDetails(m) },
+                          { label: 'Approve', onClick: () => void setApproval(m.id, 'approved'), disabled: status === 'approved' },
+                          { label: 'Keep pending', onClick: () => void setApproval(m.id, 'pending'), disabled: status === 'pending' },
+                          { label: 'Reject', onClick: () => void setApproval(m.id, 'rejected'), disabled: status === 'rejected' },
+                          { label: 'Delete account', danger: true, onClick: () => void deleteRow(`admin/user/${m.id}`, `Permanently delete ${m.full_name}'s account? This cannot be undone.`) },
+                        ]} />
+                      )}
+                    </td>
+                  </tr>
+                )
+              }}
+            />
+          </>
         )}
 
         {tab === 'approvals' && (
-          <DataTable
-            head={['Name', 'Email', 'Role', 'Status', 'Reviewed', 'Actions']}
-            rows={(data?.members ?? []).filter((m) => !isAdmin(m.role) && (m.approval_status || 'pending') !== 'approved')}
-            searchPlaceholder="Search pending accounts…"
-            searchText={(m) => `${m.full_name} ${m.email} ${m.role}`}
-            statusOf={(m) => (m.approval_status || 'pending')}
-            statusOptions={['pending', 'rejected']}
-            renderRow={(m) => {
-              const status = (m.approval_status || 'pending').toLowerCase()
-              return (
-                <tr key={m.id}>
-                  <td>{m.full_name}</td>
-                  <td>{m.email}</td>
-                  <td>{m.role}</td>
-                  <td><StatusPill status={status} /></td>
-                  <td>{m.approval_reviewed_at || '—'}</td>
-                  <td>
-                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                      <button type="button" className="btn btn--sm btn--view" disabled={viewBusyId === m.id} onClick={() => void viewAsUser(m)}>
-                        {viewBusyId === m.id ? 'Opening…' : 'View dashboard'}
-                      </button>
-                      <button type="button" className="btn btn--sm" onClick={() => void openUserDetails(m)}>Details</button>
-                      <button type="button" className={approvalButtonClass(status, 'approved')} onClick={() => void setApproval(m.id, 'approved')}>Approve</button>
-                      <button type="button" className={approvalButtonClass(status, 'pending')} onClick={() => void setApproval(m.id, 'pending')}>Keep Pending</button>
-                      <button type="button" className={approvalButtonClass(status, 'rejected')} onClick={() => void setApproval(m.id, 'rejected')}>Reject</button>
-                    </div>
-                  </td>
-                </tr>
-              )
-            }}
-          />
+          <>
+            <StatChips items={[
+              { label: 'Pending', value: pendingAccounts, tone: 'gold' },
+              { label: 'Rejected', value: rejectedAccounts, tone: 'red' },
+              { label: 'Approved', value: approvedAccounts, tone: 'green' },
+            ]} />
+            <DataTable
+              head={['Name', 'Email', 'Role', 'Status', 'Reviewed', '']}
+              rows={(data?.members ?? []).filter((m) => !isAdmin(m.role) && (m.approval_status || 'pending') !== 'approved')}
+              searchPlaceholder="Search pending accounts…"
+              searchText={(m) => `${m.full_name} ${m.email} ${m.role}`}
+              statusOf={(m) => (m.approval_status || 'pending')}
+              statusOptions={['pending', 'rejected']}
+              renderRow={(m) => {
+                const status = (m.approval_status || 'pending').toLowerCase()
+                return (
+                  <tr key={m.id}>
+                    <td>{m.full_name}</td>
+                    <td>{m.email}</td>
+                    <td>{m.role}</td>
+                    <td><StatusPill status={status} /></td>
+                    <td>{m.approval_reviewed_at || '—'}</td>
+                    <td>
+                      <RowMenu actions={[
+                        { label: viewBusyId === m.id ? 'Opening…' : 'View dashboard', onClick: () => void viewAsUser(m), disabled: viewBusyId === m.id },
+                        { label: 'Details', onClick: () => void openUserDetails(m) },
+                        { label: 'Approve', onClick: () => void setApproval(m.id, 'approved'), disabled: status === 'approved' },
+                        { label: 'Keep pending', onClick: () => void setApproval(m.id, 'pending'), disabled: status === 'pending' },
+                        { label: 'Reject', onClick: () => void setApproval(m.id, 'rejected'), disabled: status === 'rejected' },
+                        { label: 'Delete account', danger: true, onClick: () => void deleteRow(`admin/user/${m.id}`, `Permanently delete ${m.full_name}'s account? This cannot be undone.`) },
+                      ]} />
+                    </td>
+                  </tr>
+                )
+              }}
+            />
+          </>
         )}
 
         {tab === 'sponsors' && <SponsorsAdminPanel />}
@@ -1958,6 +2030,83 @@ function StatusPill({ status }: { status: string }) {
       ? 'status-pill--closed'
       : 'status-pill--new'
   return <span className={`status-pill ${cls}`}>{status}</span>
+}
+
+interface StatChipItem { label: string; value: number | string; tone?: 'gold' | 'green' | 'red' | 'blue' | 'muted' }
+/** In-tab "actual counter" strip — the full breakdown, distinct from the sidebar notification badges. */
+function StatChips({ items }: { items: StatChipItem[] }) {
+  return (
+    <div className="admin-statchips">
+      {items.map((it) => (
+        <div key={it.label} className={`admin-statchip${it.tone ? ` admin-statchip--${it.tone}` : ''}`}>
+          <strong>{it.value}</strong>
+          <span>{it.label}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+interface MenuAction { label: string; onClick: () => void; danger?: boolean; disabled?: boolean }
+/**
+ * Compact 3-dot (kebab) actions menu for table rows. The dropdown is fixed-positioned
+ * (anchored to the trigger) so it is never clipped by the table's overflow scroll
+ * container. Closes on outside click, Escape, scroll, or resize.
+ */
+function RowMenu({ actions }: { actions: MenuAction[] }) {
+  const [open, setOpen] = useState(false)
+  const [pos, setPos] = useState<{ top: number; right: number }>({ top: 0, right: 0 })
+  const ref = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+
+  const toggle = () => {
+    if (!open && triggerRef.current) {
+      const r = triggerRef.current.getBoundingClientRect()
+      setPos({ top: r.bottom + 6, right: Math.max(8, window.innerWidth - r.right) })
+    }
+    setOpen((v) => !v)
+  }
+
+  useEffect(() => {
+    if (!open) return
+    const close = () => setOpen(false)
+    const onDoc = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('mousedown', onDoc)
+    document.addEventListener('keydown', onKey)
+    window.addEventListener('scroll', close, true)
+    window.addEventListener('resize', close)
+    return () => {
+      document.removeEventListener('mousedown', onDoc)
+      document.removeEventListener('keydown', onKey)
+      window.removeEventListener('scroll', close, true)
+      window.removeEventListener('resize', close)
+    }
+  }, [open])
+
+  return (
+    <div className="row-menu" ref={ref}>
+      <button ref={triggerRef} type="button" className="row-menu__trigger" aria-label="Row actions" aria-haspopup="menu" aria-expanded={open} onClick={toggle}>
+        <span /><span /><span />
+      </button>
+      {open && (
+        <div className="row-menu__dropdown" role="menu" style={{ position: 'fixed', top: pos.top, right: pos.right }}>
+          {actions.map((a, i) => (
+            <button
+              key={i}
+              type="button"
+              role="menuitem"
+              className={`row-menu__item${a.danger ? ' row-menu__item--danger' : ''}`}
+              disabled={a.disabled}
+              onClick={() => { setOpen(false); a.onClick() }}
+            >
+              {a.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }
 
 interface DataTableProps<T> {

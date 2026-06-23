@@ -2757,6 +2757,111 @@ textarea.fld-area:focus { border-color: var(--gold); }
 .impersonation-banner__exit:hover:not(:disabled) { background: rgba(255,255,255,0.24); }
 .impersonation-banner__exit:disabled { opacity: 0.6; cursor: default; }
 
+/* --- Notification badge (sidebar): red, attention-grabbing, only shown when > 0 --- */
+.admin-nav__badge--notify {
+  background: #b3261e !important;
+  color: #fff !important;
+  box-shadow: 0 0 0 0 rgba(179,38,30,0.6);
+  animation: admin-notify-pulse 2s infinite;
+}
+.admin-nav__item.is-active .admin-nav__badge--notify {
+  background: #7a1610 !important;
+}
+@keyframes admin-notify-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(179,38,30,0.55); }
+  70% { box-shadow: 0 0 0 6px rgba(179,38,30,0); }
+  100% { box-shadow: 0 0 0 0 rgba(179,38,30,0); }
+}
+
+/* --- In-tab "actual counter" chips (full breakdown) --- */
+.admin-statchips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.admin-statchip {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 92px;
+  padding: 11px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(201,168,76,0.16);
+  background: linear-gradient(180deg, rgba(24,20,14,0.9), rgba(10,9,7,0.96));
+}
+.admin-statchip strong {
+  font-family: var(--f-serif);
+  font-size: 22px;
+  line-height: 1;
+  color: var(--gold-light);
+}
+.admin-statchip span {
+  color: var(--muted);
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.admin-statchip--green strong { color: var(--green-bright, #8fbf96); }
+.admin-statchip--red strong { color: #e0907f; }
+.admin-statchip--gold strong { color: var(--gold-light); }
+.admin-statchip--blue strong { color: #9fd3ff; }
+.admin-statchip--muted strong { color: #cfc8b8; }
+.admin-statchip--green { border-color: rgba(143,191,150,0.28); }
+.admin-statchip--red { border-color: rgba(224,144,127,0.28); }
+
+/* --- Row kebab (3-dot) menu --- */
+.row-menu { display: inline-flex; }
+.row-menu__trigger {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  border: 1px solid rgba(201,168,76,0.18);
+  background: rgba(255,255,255,0.02);
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease;
+}
+.row-menu__trigger:hover { background: rgba(201,168,76,0.1); border-color: rgba(201,168,76,0.32); }
+.row-menu__trigger span {
+  width: 4px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--gold-light);
+}
+.row-menu__dropdown {
+  z-index: 4000;
+  min-width: 184px;
+  padding: 6px;
+  border-radius: 12px;
+  border: 1px solid rgba(201,168,76,0.22);
+  background: linear-gradient(180deg, rgba(28,24,16,0.99), rgba(14,12,9,1));
+  box-shadow: 0 24px 60px -24px rgba(0,0,0,0.8);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.row-menu__item {
+  width: 100%;
+  text-align: left;
+  padding: 9px 12px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #e7e1d2;
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.row-menu__item:hover:not(:disabled) { background: rgba(201,168,76,0.12); color: var(--gold-light); }
+.row-menu__item:disabled { opacity: 0.4; cursor: default; }
+.row-menu__item--danger { color: #e0907f; }
+.row-menu__item--danger:hover:not(:disabled) { background: rgba(179,38,30,0.18); color: #f0a99a; }
+
 /* --- Admin responsive: collapse sidebar to a top bar --- */
 @media (max-width: 900px) {
   .admin-layout { grid-template-columns: 1fr; gap: 16px; padding-top: 16px; }
@@ -2764,4 +2869,5 @@ textarea.fld-area:focus { border-color: var(--gold); }
   .admin-nav { flex-direction: row; flex-wrap: wrap; gap: 10px; }
   .admin-nav__group { flex: 1 1 auto; }
   .admin-toolbar__count { margin-left: 0; }
+  .admin-statchip { flex: 1 1 calc(50% - 10px); min-width: 0; }
 }
