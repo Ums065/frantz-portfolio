@@ -758,4 +758,15 @@ CALL add_column_if_missing('new_school_submissions', 'reviewed_at', 'TIMESTAMP N
 CALL add_column_if_missing('new_school_submissions', 'score', 'DECIMAL(6,2) DEFAULT NULL', 'reviewed_at');
 CALL add_column_if_missing('new_school_submissions', 'rank_position', 'TINYINT UNSIGNED DEFAULT NULL', 'score');
 
+-- Scholarship intake questionnaire (one JSON row of {key,question,answer} per student).
+CREATE TABLE IF NOT EXISTS new_school_scholarship_answers (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  student_id INT NOT NULL,
+  answers LONGTEXT NOT NULL,
+  completed_at TIMESTAMP NULL DEFAULT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_ns_scholarship_student (student_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 DROP PROCEDURE IF EXISTS add_column_if_missing;

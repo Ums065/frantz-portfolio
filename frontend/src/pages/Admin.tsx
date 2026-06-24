@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext'
 import { useSeo } from '../hooks/useSeo'
 import { resolveDashboardRoute } from '../lib/dashboardRoute'
 import SponsorsAdminPanel from '../components/admin/SponsorsAdminPanel'
+import NsRecordDetail from '../components/NsRecordDetail'
 
 type TabKey =
   | 'overview' | 'analytics' | 'requests' | 'orders' | 'subscribers' | 'contacts'
@@ -124,6 +125,7 @@ export default function Admin() {
   const [selectedUserLoading, setSelectedUserLoading] = useState(false)
   const [selectedUserError, setSelectedUserError] = useState('')
   const [nsData, setNsData] = useState<any>(null)
+  const [nsDetail, setNsDetail] = useState<{ kind: 'interview' | 'project'; record: any } | null>(null)
   const [chatThreads, setChatThreads] = useState<any[]>([])
   const [chatActiveUser, setChatActiveUser] = useState<number | null>(null)
   const [chatMessages, setChatMessages] = useState<any[]>([])
@@ -316,6 +318,9 @@ export default function Admin() {
   // New School challenge activity (from admin/new-school/summary).
   const nsSubmissions: any[] = Array.isArray(nsData?.submissions) ? nsData.submissions : []
   const nsInterviews: any[] = Array.isArray(nsData?.businesses) ? nsData.businesses : []
+  // Scholarship answers map (student_id -> {answers}); JSON keys are strings.
+  const nsScholarship: Record<string, any> = nsData?.scholarship && typeof nsData.scholarship === 'object' ? nsData.scholarship : {}
+  const scholarshipFor = (studentId: any) => (nsScholarship[String(studentId)]?.answers || [])
   const nsSubBy = (s: string) => nsSubmissions.filter((x) => (x.status || '').toLowerCase() === s).length
   const nsPendingReview = nsSubBy('submitted')
 
@@ -694,12 +699,17 @@ export default function Admin() {
                   <tr key={s.id}>{checkbox}
                     <td className="admin-table__idx">{index}</td>
                     <td className="admin-table__uid">{s.participant_id || '—'}</td>
-                    <td>{s.student_name}</td>
-                    <td style={{ maxWidth: 300 }}>{s.problem_identified ? `${String(s.problem_identified).slice(0, 80)}${String(s.problem_identified).length > 80 ? '…' : ''}` : '—'}</td>
+                    <td><button type="button" className="admin-linkcell" onClick={() => setNsDetail({ kind: 'project', record: s })}>{s.student_name}</button></td>
+                    <td style={{ maxWidth: 300 }}>
+                      <button type="button" className="admin-linkcell" onClick={() => setNsDetail({ kind: 'project', record: s })}>
+                        {s.problem_identified ? `${String(s.problem_identified).slice(0, 80)}${String(s.problem_identified).length > 80 ? '…' : ''}` : 'View details'}
+                      </button>
+                    </td>
                     <td><StatusPill status={st} /></td>
                     <td>{s.score ?? '—'}</td>
                     <td>
                       <RowMenu actions={[
+                        { label: 'View full details', onClick: () => setNsDetail({ kind: 'project', record: s }) },
                         { label: 'Approve', onClick: () => void reviewSubmission(s.id, 'approved'), disabled: st === 'approved' || st === 'winner' },
                         { label: 'Reject', danger: true, onClick: () => void reviewSubmission(s.id, 'rejected'), disabled: st === 'rejected' },
                         { label: 'Open in New School dashboard', onClick: () => navigate('/new-school/dashboard') },
@@ -716,18 +726,19 @@ export default function Admin() {
           <>
             <StatChips items={[{ label: 'Business Interviews', value: nsInterviews.length, tone: 'gold' }]} />
             <DataTable
-              head={['#', 'Student', 'Participant', 'Business', 'Visit', 'Date']}
+              head={['#', 'Student', 'Participant', 'Business', 'Visit', 'Date', '']}
               rows={nsInterviews}
               searchPlaceholder="Search interviews…"
               searchText={(b) => `${b.student_name ?? ''} ${b.participant_id ?? ''} ${b.business_name ?? ''}`}
               renderRow={(b, _checkbox, index) => (
-                <tr key={b.id}>
+                <tr key={b.id} className="admin-row--clickable" onClick={() => setNsDetail({ kind: 'interview', record: b })}>
                   <td className="admin-table__idx">{index}</td>
                   <td>{b.student_name}</td>
                   <td className="admin-table__uid">{b.participant_id || '—'}</td>
                   <td>{b.business_name}</td>
                   <td>{b.visit_number ?? '—'}</td>
                   <td>{b.date_of_visit || b.created_at || '—'}</td>
+                  <td><span className="admin-linkcell">View →</span></td>
                 </tr>
               )}
             />
@@ -800,6 +811,15 @@ export default function Admin() {
         error={selectedUserError}
         onClose={closeUserDetails}
         onApproval={(status) => selectedUser && void setApproval(selectedUser.id, status)}
+      />
+
+      <NsRecordDetail
+        open={!!nsDetail}
+        onClose={() => setNsDetail(null)}
+        kind={nsDetail?.kind || 'project'}
+        record={nsDetail?.record || null}
+        scholarship={nsDetail ? scholarshipFor(nsDetail.record?.student_id) : []}
+        showStudent
       />
     </div>
   )

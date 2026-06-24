@@ -10,6 +10,8 @@ import { resolveDashboardRoute } from '../lib/dashboardRoute'
 import { awards } from '../lib/awards'
 import TermsAgreement from '../components/TermsAgreement'
 import DashboardGuide from '../components/DashboardGuide'
+import ScholarshipWizard, { type ScholarshipAnswer } from '../components/ScholarshipWizard'
+import NsRecordDetail from '../components/NsRecordDetail'
 import { DASHBOARD_FAQ } from '../lib/dashboardGuide'
 import { CHALLENGE_TERMS_VERSION } from '../lib/terms'
 import { recordTermsAcceptance } from '../lib/recordTermsAcceptance'
@@ -586,6 +588,8 @@ export default function NewSchool() {
   const [teacherTermsSig, setTeacherTermsSig] = useState('')
   const [businessTermsOk, setBusinessTermsOk] = useState(false)
   const [submissionTermsOk, setSubmissionTermsOk] = useState(false)
+  const [scholarshipBusy, setScholarshipBusy] = useState(false)
+  const [recordDetail, setRecordDetail] = useState<{ kind: 'interview' | 'project'; record: any } | null>(null)
   const [notice, setNotice] = useState<{ tone: 'success' | 'error' | 'info'; text: string } | null>(null)
   const [studentSchoolSearch, setStudentSchoolSearch] = useState('')
   const [studentTeacherId, setStudentTeacherId] = useState('')
@@ -971,6 +975,19 @@ export default function NewSchool() {
       handleError(err, 'Teacher registration failed.')
     } finally {
       setBusy('')
+    }
+  }
+
+  const saveScholarship = async (answers: ScholarshipAnswer[]) => {
+    setScholarshipBusy(true)
+    try {
+      const res = await api.post<any>('new-school/scholarship', { answers })
+      showNotice('success', res.message || 'Scholarship answers saved.')
+      await reloadDashboard()
+    } catch (err) {
+      handleError(err, 'Could not save your answers.')
+    } finally {
+      setScholarshipBusy(false)
     }
   }
 
@@ -2511,6 +2528,14 @@ export default function NewSchool() {
 
               {dashboardRole && <DashboardGuide role={dashboardRole} open={guideOpen} onClose={closeGuide} />}
 
+              <NsRecordDetail
+                open={!!recordDetail}
+                onClose={() => setRecordDetail(null)}
+                kind={recordDetail?.kind || 'interview'}
+                record={recordDetail?.record || null}
+                scholarship={studentDashboard?.scholarship?.answers || []}
+              />
+
               {dashboardTabs.length > 0 && (
                 <div className="ns-dashboard-tabs" role="tablist" aria-label="Dashboard sections" aria-orientation="vertical">
                   {dashboardTabs.map((tab) => (
@@ -2720,8 +2745,8 @@ export default function NewSchool() {
                   </div>
                 </div>
                 <div className="ns-actions">
-                  <button className="btn btn--sm" type="button" onClick={() => navigator.clipboard.writeText(studentDashboard.student.qr_url)}>Copy QR</button>
-                  <button className="btn btn--sm" type="button" onClick={() => openDashboardTab('activity')}>Open Activity</button>
+                  <button className="btn btn--sm" type="button" onClick={() => { void navigator.clipboard.writeText(String(studentDashboard.student.participant_id || '')); showNotice('success', 'ID Number copied') }}>Copy ID</button>
+                  <button className="btn btn--sm" type="button" onClick={() => openDashboardTab('activity')}>Open My Work</button>
                   <button className="btn btn--sm" type="button" onClick={() => openDashboardTab('profile')}>View Profile</button>
                   <button className="btn btn--sm btn--solid" type="button" onClick={() => openDashboardTab('rankings')}>View Rankings</button>
                 </div>
@@ -2737,10 +2762,6 @@ export default function NewSchool() {
                   <div className="ns-approval-row"><strong>School</strong><span>{studentDashboard.student.school_approval_status}</span></div>
                   <div className="ns-approval-row"><strong>Teacher</strong><span>{studentDashboard.student.teacher_approval_status}</span></div>
                   <div className="ns-approval-row"><strong>Submission</strong><span>{studentDashboard.student.submission_status}</span></div>
-                </div>
-                <div className="ns-actions">
-                  <button className="btn btn--sm" type="button" onClick={() => navigator.clipboard.writeText(studentDashboard.student.qr_url)}>Copy QR URL</button>
-                  <a className="btn btn--sm btn--solid" href="#business-interviews">Add Business</a>
                 </div>
               </article>
 
@@ -2885,24 +2906,48 @@ export default function NewSchool() {
                 </div>
               </article>
 
-              <article className="glass ns-dash-card ns-dash-card--wide reveal in" hidden={dashboardTab !== 'activity'}>
+              {dashboardTab === 'activity' && !studentDashboard.scholarship?.completed && (
+                <ScholarshipWizard
+                  initialAnswers={studentDashboard.scholarship?.answers || []}
+                  busy={scholarshipBusy}
+                  onComplete={saveScholarship}
+                />
+              )}
+
+              <article className="glass ns-dash-card ns-dash-card--wide reveal in" hidden={dashboardTab !== 'activity' || !studentDashboard.scholarship?.completed}>
                 <div className="ns-dash-card__head">
-                  <span className="eyebrow">Business Interviews</span>
-                  <span className="ns-board__badge">{studentDashboard.interview_count} / 10 complete</span>
+                  <span className="eyebrow">Your Previous Work</span>
+                  <span className="ns-board__badge">{studentDashboard.interview_count} / 10 interviews</span>
                 </div>
+                <p className="ns-muted" style={{ marginTop: 0 }}>Tap any card below to read your full submission.</p>
                 <div className="ns-interview-grid">
+                  {(studentDashboard.interviews || []).length === 0 && (
+                    <p className="ns-muted">No interviews yet. Use the form below to add your first business.</p>
+                  )}
                   {(studentDashboard.interviews || []).map((row: any) => (
-                    <div className="ns-interview" key={row.id}>
+                    <button type="button" className="ns-interview is-clickable" key={row.id} onClick={() => setRecordDetail({ kind: 'interview', record: row })}>
                       <strong>Visit {row.visit_number}</strong>
                       <span>{row.business_name}</span>
                       <p>{row.business_category}</p>
                       <small>{row.date_of_visit}</small>
-                    </div>
+                    </button>
                   ))}
                 </div>
+                {studentDashboard.submission && (
+                  <div className="ns-prevwork-project">
+                    <span className="ns-overview-label">Your Final Project</span>
+                    <button type="button" className="ns-prevwork-project__card is-clickable" onClick={() => setRecordDetail({ kind: 'project', record: studentDashboard.submission })}>
+                      <div>
+                        <strong>{studentDashboard.submission.problem_identified ? String(studentDashboard.submission.problem_identified).slice(0, 70) : 'Project submission'}</strong>
+                        <span>Status: {studentDashboard.submission.status} · tap to read</span>
+                      </div>
+                      <span aria-hidden="true">→</span>
+                    </button>
+                  </div>
+                )}
               </article>
 
-              <form className="glass ns-form ns-form--compact reveal in" id="business-interviews" onSubmit={submitBusiness} hidden={dashboardTab !== 'activity'}>
+              <form className="glass ns-form ns-form--compact reveal in" id="business-interviews" onSubmit={submitBusiness} hidden={dashboardTab !== 'activity' || !studentDashboard.scholarship?.completed}>
                 <div className="ns-form__head">
                   <span className="eyebrow">Business Entry</span>
                   <h3>Log a local business</h3>
@@ -2939,7 +2984,7 @@ export default function NewSchool() {
                 <button className="btn btn--solid" type="submit" disabled={busy === 'business' || !businessTermsOk}>{busy === 'business' ? 'Saving...' : 'Save Business Interview'}</button>
               </form>
 
-              <form className="glass ns-form ns-form--compact reveal in" id="final-submission" onSubmit={submitSubmission} hidden={dashboardTab !== 'activity'}>
+              <form className="glass ns-form ns-form--compact reveal in" id="final-submission" onSubmit={submitSubmission} hidden={dashboardTab !== 'activity' || !studentDashboard.scholarship?.completed}>
                 <div className="ns-form__head">
                   <span className="eyebrow">Problem &amp; Solution Submission</span>
                   <h3>Video and written upload</h3>

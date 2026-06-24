@@ -253,6 +253,7 @@ function new_school_build_student_context(array $student): array
     $interviewCount = count($interviews);
     $submission = new_school_fetch_submission_by_student_id($studentId);
     $winner = new_school_fetch_winner_by_student_id($studentId);
+    $scholarship = new_school_scholarship_fetch($studentId);
     $school = !empty($student['school_id'])
         ? new_school_fetch_school_by_id((int) $student['school_id'])
         : new_school_fetch_school_by_name((string) ($student['school_name'] ?? ''));
@@ -273,6 +274,11 @@ function new_school_build_student_context(array $student): array
         'approvals' => new_school_fetch_student_approvals($studentId),
         'submission' => $submission,
         'winner' => $winner,
+        'scholarship' => [
+            'completed' => $scholarship !== null && !empty($scholarship['completed']),
+            'answers' => $scholarship['answers'] ?? [],
+            'word_limit' => NS_SCHOLARSHIP_WORD_LIMIT,
+        ],
         'notifications' => new_school_fetch_notifications_for_scope([$studentId], ['student', 'parent'], 12),
         'status_tracker' => new_school_status_tracker($student, $interviewCount),
         'submission_locked' => new_school_submission_is_locked($student, $interviewCount),
@@ -1203,6 +1209,49 @@ function new_school_handle_route(string $method, string $route): bool
             json(['message' => 'Parent ' . $status . '.', 'link_status' => $status === 'approved' ? 'approved' : 'rejected']);
         }
 
+        /* ---------------- Scholarship intake questionnaire ---------------- */
+        case $key === 'GET new-school/scholarship': {
+            $user = require_login();
+            if ($user['role'] !== 'student') {
+                json(['error' => 'Only students answer the scholarship questions.'], 403);
+            }
+            $student = new_school_fetch_student_by_user_id((int) $user['id']);
+            if (!$student) {
+                json(['error' => 'Student profile not found.'], 404);
+            }
+            $record = new_school_scholarship_fetch((int) $student['id']);
+            json([
+                'completed' => $record !== null && !empty($record['completed']),
+                'answers' => $record['answers'] ?? [],
+                'word_limit' => NS_SCHOLARSHIP_WORD_LIMIT,
+            ]);
+        }
+
+        case $key === 'POST new-school/scholarship': {
+            $user = require_login();
+            if ($user['role'] !== 'student') {
+                json(['error' => 'Only students answer the scholarship questions.'], 403);
+            }
+            $student = new_school_fetch_student_by_user_id((int) $user['id']);
+            if (!$student) {
+                json(['error' => 'Student profile not found.'], 404);
+            }
+            $items = $body['answers'] ?? null;
+            if (!is_array($items)) {
+                json(['error' => 'Answers are required.'], 422);
+            }
+            try {
+                $record = new_school_scholarship_save((int) $student['id'], $items);
+            } catch (RuntimeException $e) {
+                json(['error' => $e->getMessage()], 422);
+            }
+            json([
+                'message' => 'Scholarship answers saved.',
+                'completed' => true,
+                'answers' => $record['answers'] ?? [],
+            ], 201);
+        }
+
         /* ---------------- Admin ⇄ user chat ---------------- */
         case $key === 'GET new-school/chat': {
             $user = require_login();
@@ -2066,6 +2115,12 @@ function new_school_handle_route(string $method, string $route): bool
                 json(['error' => 'Student profile not found.'], 404);
             }
 
+            // Gate: the student must finish the scholarship questionnaire before any
+            // interview/project work in "My Work" (admin acting on their behalf is exempt).
+            if (in_array($user['role'], ['student', 'parent'], true) && !new_school_scholarship_completed((int) $student['id'])) {
+                json(['error' => 'Please answer your scholarship questions in My Work before adding a business interview.'], 403);
+            }
+
             $businessName = field($body, 'business_name');
             $ownerName = field($body, 'owner_name');
             $businessPhone = field($body, 'business_phone');
@@ -2247,6 +2302,10 @@ function new_school_handle_route(string $method, string $route): bool
 
             if (!$student) {
                 json(['error' => 'Student profile not found.'], 404);
+            }
+
+            if (in_array($user['role'], ['student', 'parent'], true) && !new_school_scholarship_completed((int) $student['id'])) {
+                json(['error' => 'Please answer your scholarship questions in My Work before submitting your project.'], 403);
             }
 
             if (new_school_submission_is_locked($student, new_school_student_interview_count((int) $student['id']))) {
@@ -2514,6 +2573,7 @@ function new_school_handle_route(string $method, string $route): bool
                  LIMIT 50'
             )->fetchAll();
 
+            $allStudentIds = array_map(static fn(array $r): int => (int) $r['id'], $students);
             json([
                 'summary' => new_school_public_summary(),
                 'student_summary' => new_school_student_status_summary($students),
@@ -2526,6 +2586,7 @@ function new_school_handle_route(string $method, string $route): bool
                 'submissions' => $submissions,
                 'winners' => $winners,
                 'notifications' => $notifications,
+                'scholarship' => new_school_fetch_scholarship_by_student_ids($allStudentIds),
             ]);
         }
 

@@ -1914,6 +1914,136 @@ function new_school_chat_clear(int $threadUserId, string $side): void
         ->execute([$threadUserId, $side]);
 }
 
+/* ============================================================================
+ * Scholarship intake questionnaire.
+ * Each student answers a short set of essay questions ONCE before they can log
+ * interviews or submit their final project. Answers (a JSON array of
+ * {key, question, answer}) are stored per student and shown to the admin
+ * alongside every interview/project the student submits.
+ * ==========================================================================*/
+
+// Max words allowed per answer (owner-specified limit).
+const NS_SCHOLARSHIP_WORD_LIMIT = 500;
+
+function new_school_scholarship_ensure_schema(): void
+{
+    static $ready = false;
+    if ($ready) {
+        return;
+    }
+    db()->exec(
+        "CREATE TABLE IF NOT EXISTS new_school_scholarship_answers (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            student_id INT NOT NULL,
+            answers LONGTEXT NOT NULL,
+            completed_at TIMESTAMP NULL DEFAULT NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uniq_ns_scholarship_student (student_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+    $ready = true;
+}
+
+/** Count words in an answer (used to enforce the per-answer limit). */
+function new_school_word_count(string $text): int
+{
+    $trimmed = trim($text);
+    if ($trimmed === '') {
+        return 0;
+    }
+    return count(preg_split('/\s+/u', $trimmed) ?: []);
+}
+
+/** Decoded scholarship record for a student, or null if not answered yet. */
+function new_school_scholarship_fetch(int $studentId): ?array
+{
+    new_school_scholarship_ensure_schema();
+    $stmt = db()->prepare('SELECT answers, completed_at FROM new_school_scholarship_answers WHERE student_id = ? LIMIT 1');
+    $stmt->execute([$studentId]);
+    $row = $stmt->fetch();
+    if (!$row) {
+        return null;
+    }
+    $decoded = json_decode((string) $row['answers'], true);
+    return [
+        'answers' => is_array($decoded) ? $decoded : [],
+        'completed_at' => $row['completed_at'],
+        'completed' => !empty($row['completed_at']),
+    ];
+}
+
+/** True once the student has finished the questionnaire. */
+function new_school_scholarship_completed(int $studentId): bool
+{
+    $record = new_school_scholarship_fetch($studentId);
+    return $record !== null && !empty($record['completed']);
+}
+
+/**
+ * Validate + persist a student's answers. $items is a list of
+ * {key, question, answer}. Throws RuntimeException (422-friendly) on bad input.
+ */
+function new_school_scholarship_save(int $studentId, array $items): array
+{
+    new_school_scholarship_ensure_schema();
+    $clean = [];
+    foreach ($items as $item) {
+        if (!is_array($item)) {
+            continue;
+        }
+        $key = trim((string) ($item['key'] ?? ''));
+        $question = trim((string) ($item['question'] ?? ''));
+        $answer = trim((string) ($item['answer'] ?? ''));
+        if ($key === '' || $question === '') {
+            continue;
+        }
+        if ($answer === '') {
+            throw new RuntimeException('Please answer every question before you finish.');
+        }
+        if (new_school_word_count($answer) > NS_SCHOLARSHIP_WORD_LIMIT) {
+            throw new RuntimeException('Each answer must be ' . NS_SCHOLARSHIP_WORD_LIMIT . ' words or fewer.');
+        }
+        $clean[] = ['key' => $key, 'question' => $question, 'answer' => $answer];
+    }
+    if ($clean === []) {
+        throw new RuntimeException('Please answer the scholarship questions before you finish.');
+    }
+    $json = json_encode($clean, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    db()->prepare(
+        'INSERT INTO new_school_scholarship_answers (student_id, answers, completed_at)
+         VALUES (?, ?, NOW())
+         ON DUPLICATE KEY UPDATE answers = VALUES(answers), completed_at = NOW(), updated_at = NOW()'
+    )->execute([$studentId, $json]);
+
+    return new_school_scholarship_fetch($studentId) ?? ['answers' => $clean, 'completed' => true, 'completed_at' => null];
+}
+
+/** Map of student_id => decoded scholarship record, for the admin summary. */
+function new_school_fetch_scholarship_by_student_ids(array $studentIds): array
+{
+    new_school_scholarship_ensure_schema();
+    $studentIds = array_values(array_filter(array_map('intval', $studentIds), static fn(int $id): bool => $id > 0));
+    if ($studentIds === []) {
+        return [];
+    }
+    $stmt = db()->prepare(
+        'SELECT student_id, answers, completed_at FROM new_school_scholarship_answers
+         WHERE student_id IN (' . new_school_placeholder_list(count($studentIds)) . ')'
+    );
+    $stmt->execute($studentIds);
+    $out = [];
+    foreach ($stmt->fetchAll() as $row) {
+        $decoded = json_decode((string) $row['answers'], true);
+        $out[(int) $row['student_id']] = [
+            'answers' => is_array($decoded) ? $decoded : [],
+            'completed_at' => $row['completed_at'],
+            'completed' => !empty($row['completed_at']),
+        ];
+    }
+    return $out;
+}
+
 function new_school_points_ensure_schema(): void
 {
     static $ready = false;

@@ -215,9 +215,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = async () => {
     try {
       await api.post('auth/logout', {})
-      setUser(null)
+    } catch {
+      // ignore — we clear + redirect regardless
     } finally {
-      await refresh().catch(() => setUser(null))
+      setUser(null)
+      // Send the user back to the public home page after signing out of any
+      // dashboard (student / parent / teacher / school / admin). A full-page
+      // load also clears in-memory state and the CSRF token cleanly.
+      if (typeof window !== 'undefined') {
+        window.location.assign(import.meta.env.BASE_URL || '/')
+      }
     }
   }
 
