@@ -203,10 +203,6 @@ const homeFaqItems = [
     question: "How can I book Frantz?",
     answer: "Use the speaking, interview, mentorship, or event request buttons to start the conversation.",
   },
-  {
-    question: "Where do I go for the student challenge?",
-    answer: "Open the New School challenge page to register for the Student Impact Challenge and see the full workflow.",
-  },
 ] as const
 
 function VisionNodeIcon({ kind }: { kind: VisionNode['kind'] }) {
@@ -295,6 +291,95 @@ export default function Home() {
         <div className="scroll-cue"><div className="mouse" /><span>Scroll</span></div>
       </section>
 
+      <section className="block block--alt" id="challenge" data-screen-label="Challenge">
+        <div className="wrap">
+          <div className="block__head reveal">
+            <div className="section-title">
+              <span className="ln l" />
+              <h2 className="gold-text">Student Impact Challenge</h2>
+              <span className="ln r" />
+            </div>
+            <p className="sub">Scholarships, school grants, educator awards, and the workflow that ties it all together.</p>
+          </div>
+
+          <div className="action-grid">
+            <article className="glass action-card reveal d1">
+              <div className="action__ico">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6}>
+                  <path d="M4 7h16" />
+                  <path d="M7 7v12" />
+                  <path d="M17 7v12" />
+                  <path d="M4 12h16" />
+                </svg>
+              </div>
+              <h3>What the challenge does</h3>
+              <p>Students identify a real community problem, work with local businesses, and build a solution that can be measured and shared.</p>
+              <ul className="topic-list">
+                <li><Check />Interview 10 local businesses</li>
+                <li><Check />Solve one real problem</li>
+                <li><Check />Present a final project</li>
+              </ul>
+            </article>
+
+            <article className="glass action-card reveal d2">
+              <div className="action__ico">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6}>
+                  <path d="M12 3v18" />
+                  <path d="M5 8h14" />
+                  <path d="M7 8v6a5 5 0 0 0 10 0V8" />
+                </svg>
+              </div>
+              <h3>Main workflow</h3>
+              <p>The process stays organized from registration through approval, submission, and review, so students, parents, teachers, and schools all know the next step.</p>
+              <ul className="topic-list">
+                <li><Check />Register by role</li>
+                <li><Check />Parent consent and school approval</li>
+                <li><Check />Live submission tracking</li>
+              </ul>
+            </article>
+
+            <article className="glass action-card reveal d3">
+              <div className="action__ico">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6}>
+                  <path d="M4 19h16" />
+                  <path d="M7 16V9" />
+                  <path d="M12 16V5" />
+                  <path d="M17 16v-3" />
+                </svg>
+              </div>
+              <h3>What participants win</h3>
+              <p>The program is built to reward leadership, effort, and impact with scholarships, grants, and public recognition.</p>
+              <ul className="topic-list">
+                <li><Check />Student scholarships</li>
+                <li><Check />School impact grants</li>
+                <li><Check />Educator awards</li>
+              </ul>
+            </article>
+
+            <article className="glass action-card reveal d1">
+              <div className="action__ico">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6}>
+                  <circle cx="12" cy="12" r="4" />
+                  <path d="M12 2v4M12 18v4M2 12h4M18 12h4" />
+                </svg>
+              </div>
+              <h3>What stays visible</h3>
+              <p>Students can see their progress, schools can follow participation, and the full challenge stays easy to track from one place.</p>
+              <ul className="topic-list">
+                <li><Check />Dashboards and rankings</li>
+                <li><Check />Review status</li>
+                <li><Check />Clear next steps</li>
+              </ul>
+            </article>
+          </div>
+
+          <div className="reveal d2" style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 24 }}>
+            <Link className="btn btn--solid" to="/new-school">Open New School</Link>
+            <Link className="btn" to="/new-school#workflow">See Workflow</Link>
+            <Link className="btn" to="/new-school#awards">View Awards</Link>
+          </div>
+        </div>
+      </section>
       <section className="recog" aria-label="Recognized by">
         <div className="wrap">
           <div className="recog__inner reveal">
