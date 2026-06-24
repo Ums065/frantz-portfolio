@@ -7,6 +7,7 @@ import { useSeo } from '../hooks/useSeo'
 import { resolveDashboardRoute } from '../lib/dashboardRoute'
 import SponsorsAdminPanel from '../components/admin/SponsorsAdminPanel'
 import NsRecordDetail from '../components/NsRecordDetail'
+import AdminNavIcon from '../components/admin/AdminNavIcon'
 
 type TabKey =
   | 'overview' | 'analytics' | 'requests' | 'orders' | 'subscribers' | 'contacts'
@@ -16,7 +17,10 @@ type TabKey =
 
 interface NavItem { key: TabKey; label: string }
 const NAV_GROUPS: Array<{ group: string; items: NavItem[] }> = [
-  { group: 'Overview', items: [{ key: 'overview', label: 'Overview' }, { key: 'analytics', label: 'Analytics' }] },
+  { group: 'Overview', items: [
+    { key: 'overview', label: 'Overview' },
+    { key: 'analytics', label: 'Analytics' },
+  ] },
   { group: 'People', items: [
     { key: 'members', label: 'User Accounts' },
     { key: 'approvals', label: 'Account Approvals' },
@@ -75,6 +79,7 @@ interface OrderRow {
 }
 interface Submissions {
   requests: RequestRow[]; subscribers: SubRow[]; contacts: ContactRow[]; members: MemberRow[]; orders: OrderRow[]
+  counts?: Partial<Record<'awards' | 'events' | 'blog' | 'testimonials' | 'media' | 'inventory' | 'community' | 'rsvps' | 'sponsors', number>>
 }
 
 interface DetailField {
@@ -116,6 +121,7 @@ export default function Admin() {
   const navigate = useNavigate()
   const [data, setData] = useState<Submissions | null>(null)
   const [tab, setTab] = useState<TabKey>('overview')
+  const [ovGroup, setOvGroup] = useState('People')
   const [viewBusyId, setViewBusyId] = useState<number | null>(null)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -335,6 +341,50 @@ export default function Admin() {
     'ns-submissions': nsPendingReview,
   }
 
+  // Overview = a complete, clickable map of every section. Each card jumps to the
+  // tab (filter) that shows that data; New School roster cards open the New School
+  // dashboard where that data lives. `value` undefined renders an "Open" chip.
+  const cnt = data?.counts ?? {}
+  const nsSum: Record<string, number> = nsData?.summary ?? {}
+  type OvCard = { label: string; value?: number; hint: string; icon: string; tab?: TabKey; to?: string }
+  const overviewGroups: Array<{ title: string; cards: OvCard[] }> = [
+    { title: 'People', cards: [
+      { label: 'User Accounts', value: data?.members.length ?? 0, hint: 'All registered users', icon: 'members', tab: 'members' },
+      { label: 'Pending Approval', value: pendingAccounts, hint: 'Awaiting your review', icon: 'approvals', tab: 'approvals' },
+      { label: 'Approved', value: approvedAccounts, hint: 'Live accounts', icon: 'approvals', tab: 'members' },
+      { label: 'Rejected', value: rejectedAccounts, hint: 'Declined accounts', icon: 'approvals', tab: 'members' },
+      { label: 'Contact Messages', value: data?.contacts.length ?? 0, hint: 'Inbound messages', icon: 'contacts', tab: 'contacts' },
+      { label: 'Newsletter', value: data?.subscribers.length ?? 0, hint: 'Subscribers', icon: 'subscribers', tab: 'subscribers' },
+    ] },
+    { title: 'New School', cards: [
+      { label: 'Schools', value: nsSum.schools ?? 0, hint: 'Registered schools', icon: 'school', to: '/new-school/dashboard' },
+      { label: 'Students', value: nsSum.students ?? 0, hint: 'Registered students', icon: 'students', to: '/new-school/dashboard' },
+      { label: 'Teachers', value: nsSum.teachers ?? 0, hint: 'Registered teachers', icon: 'teachers', to: '/new-school/dashboard' },
+      { label: 'Parents', value: nsSum.parents ?? 0, hint: 'Linked parents', icon: 'parents', to: '/new-school/dashboard' },
+      { label: 'Student Submissions', value: nsSubmissions.length, hint: 'Projects to review', icon: 'ns-submissions', tab: 'ns-submissions' },
+      { label: 'Business Interviews', value: nsInterviews.length, hint: 'Logged interviews', icon: 'ns-interviews', tab: 'ns-interviews' },
+      { label: 'Messages', hint: 'Chat with users', icon: 'ns-chat', tab: 'ns-chat' },
+    ] },
+    { title: 'Commerce', cards: [
+      { label: 'Store Orders', value: orderRows.length, hint: 'Commerce records', icon: 'orders', tab: 'orders' },
+      { label: 'Products & Inventory', value: cnt.inventory ?? 0, hint: 'Catalog items', icon: 'inventory', tab: 'inventory' },
+      { label: 'Founding Sponsors', value: cnt.sponsors ?? 0, hint: 'Applications', icon: 'sponsors', tab: 'sponsors' },
+    ] },
+    { title: 'Engagement', cards: [
+      { label: 'Service Requests', value: reqRows.length, hint: 'Inbound forms', icon: 'requests', tab: 'requests' },
+      { label: 'Event RSVPs', value: cnt.rsvps ?? 0, hint: 'Guest responses', icon: 'rsvps', tab: 'rsvps' },
+      { label: 'Community', value: cnt.community ?? 0, hint: 'Discussion threads', icon: 'community', tab: 'community' },
+    ] },
+    { title: 'Content', cards: [
+      { label: 'Awards', value: cnt.awards ?? 0, hint: 'Award entries', icon: 'awards', tab: 'awards' },
+      { label: 'Events', value: cnt.events ?? 0, hint: 'Scheduled events', icon: 'events', tab: 'events' },
+      { label: 'Blog Posts', value: cnt.blog ?? 0, hint: 'Articles', icon: 'blog', tab: 'blog' },
+      { label: 'Testimonials', value: cnt.testimonials ?? 0, hint: 'Published quotes', icon: 'testimonials', tab: 'testimonials' },
+      { label: 'Media Library', value: cnt.media ?? 0, hint: 'Images & files', icon: 'media', tab: 'media' },
+    ] },
+  ]
+  const openOvCard = (card: OvCard) => { if (card.tab) setTab(card.tab); else if (card.to) navigate(card.to) }
+
   if (loading) {
     return (
       <div className="admin-page" style={wrapS}>
@@ -382,17 +432,20 @@ export default function Admin() {
             {NAV_GROUPS.map((group) => (
               <div key={group.group} className="admin-nav__group">
                 <span className="admin-nav__group-label">{group.group}</span>
-                {group.items.map((item) => (
-                  <button
-                    key={item.key}
-                    type="button"
-                    className={`admin-nav__item${tab === item.key ? ' is-active' : ''}`}
-                    onClick={() => setTab(item.key)}
-                  >
-                    <span>{item.label}</span>
-                    {notifications[item.key] ? <span className="admin-nav__badge admin-nav__badge--notify" title={`${notifications[item.key]} need attention`}>{notifications[item.key]}</span> : null}
-                  </button>
-                ))}
+                <div className="admin-nav__items">
+                  {group.items.map((item) => (
+                    <button
+                      key={item.key}
+                      type="button"
+                      className={`admin-nav__item${tab === item.key ? ' is-active' : ''}`}
+                      onClick={() => setTab(item.key)}
+                    >
+                      <span className="admin-nav__icon" aria-hidden="true"><AdminNavIcon name={item.key} /></span>
+                      <span className="admin-nav__label">{item.label}</span>
+                      {notifications[item.key] ? <span className="admin-nav__badge admin-nav__badge--notify" title={`${notifications[item.key]} need attention`}>{notifications[item.key]}</span> : null}
+                    </button>
+                  ))}
+                </div>
               </div>
             ))}
           </nav>
@@ -413,16 +466,6 @@ export default function Admin() {
 
           {tab === 'overview' && (
             <div className="admin-overview">
-              <div className="admin-stats">
-                <div className="admin-stat glass"><span>User Accounts</span><strong>{data?.members.length ?? 0}</strong><p>Registered users</p></div>
-                <div className="admin-stat glass"><span>Pending</span><strong>{pendingAccounts}</strong><p>Awaiting approval</p></div>
-                <div className="admin-stat glass"><span>Approved</span><strong>{approvedAccounts}</strong><p>Live accounts</p></div>
-                <div className="admin-stat glass"><span>Rejected</span><strong>{rejectedAccounts}</strong><p>Declined by admin</p></div>
-                <div className="admin-stat glass"><span>Orders</span><strong>{data?.orders?.length ?? 0}</strong><p>Commerce records</p></div>
-                <div className="admin-stat glass"><span>Requests</span><strong>{data?.requests.length ?? 0}</strong><p>Service forms</p></div>
-                <div className="admin-stat glass"><span>Contacts</span><strong>{data?.contacts.length ?? 0}</strong><p>Inbound messages</p></div>
-                <div className="admin-stat glass"><span>Subscribers</span><strong>{data?.subscribers.length ?? 0}</strong><p>Newsletter list</p></div>
-              </div>
               {approvalQueueCount > 0 && (
                 <div className="admin-overview__cta glass">
                   <div>
@@ -430,6 +473,39 @@ export default function Admin() {
                     <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: 4 }}>Approve or reject pending registrations from the People section.</p>
                   </div>
                   <button type="button" className="btn btn--sm btn--solid" onClick={() => setTab('approvals')}>Open approvals</button>
+                </div>
+              )}
+              <div className="admin-ov-tabs" role="tablist" aria-label="Overview sections">
+                {overviewGroups.map((group) => (
+                  <button
+                    key={group.title}
+                    type="button"
+                    role="tab"
+                    aria-selected={ovGroup === group.title}
+                    className={`admin-ov-tab${ovGroup === group.title ? ' is-active' : ''}`}
+                    onClick={() => setOvGroup(group.title)}
+                  >
+                    {group.title}
+                  </button>
+                ))}
+              </div>
+              {(overviewGroups.find((g) => g.title === ovGroup) ?? overviewGroups[0]) && (
+                <div className="admin-stats">
+                  {(overviewGroups.find((g) => g.title === ovGroup) ?? overviewGroups[0]).cards.map((card) => (
+                    <button
+                      key={card.label}
+                      type="button"
+                      className="admin-stat admin-stat--btn glass"
+                      onClick={() => openOvCard(card)}
+                      title={`Open ${card.label}`}
+                    >
+                      <span className="admin-stat__icon" aria-hidden="true"><AdminNavIcon name={card.icon} /></span>
+                      <span className="admin-stat__label">{card.label}</span>
+                      <strong>{card.value === undefined ? 'Open' : card.value}</strong>
+                      <p>{card.hint}</p>
+                      <span className="admin-stat__go" aria-hidden="true">→</span>
+                    </button>
+                  ))}
                 </div>
               )}
             </div>

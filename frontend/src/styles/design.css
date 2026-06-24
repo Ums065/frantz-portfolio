@@ -1222,6 +1222,75 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
   font-size: 12px;
   line-height: 1.6;
 }
+
+/* Overview: section pills (sub-tabs) + clickable filter cards */
+.admin-ov-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-bottom: 4px;
+}
+.admin-ov-tab {
+  padding: 9px 18px;
+  border-radius: 999px;
+  cursor: pointer;
+  border: 1px solid rgba(201,168,76,0.2);
+  background: rgba(255,255,255,0.02);
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  transition: background 0.16s ease, color 0.16s ease, border-color 0.16s ease;
+}
+.admin-ov-tab:hover { color: var(--gold-light); border-color: rgba(201,168,76,0.45); }
+.admin-ov-tab.is-active { background: var(--gold-grad); color: #1a1308; border-color: transparent; }
+.admin-ov-tab:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.admin-stat--btn {
+  position: relative;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  border: 1px solid rgba(255,255,255,0.06);
+  transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease;
+}
+.admin-stat--btn:hover {
+  transform: translateY(-2px);
+  border-color: rgba(201,168,76,0.42);
+  background: rgba(201,168,76,0.06);
+}
+.admin-stat--btn:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.admin-stat--btn .admin-stat__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  margin-bottom: 12px;
+  background: rgba(201,168,76,0.12);
+  color: var(--gold-light);
+}
+.admin-stat--btn .admin-stat__label {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+.admin-stat--btn .admin-stat__go {
+  position: absolute;
+  right: 14px;
+  top: 16px;
+  color: var(--gold);
+  font-size: 16px;
+  opacity: 0;
+  transition: opacity 0.16s ease;
+}
+.admin-stat--btn:hover .admin-stat__go { opacity: 1; }
 .admin-tabs {
   padding: 14px;
   border-radius: 18px;
@@ -2810,33 +2879,38 @@ section#challenge .challenge-features .ns-gain p {
   font-family: var(--f-serif);
   font-size: 19px;
 }
-.admin-nav { display: flex; flex-direction: column; gap: 14px; }
-.admin-nav__group { display: flex; flex-direction: column; gap: 4px; }
+.admin-nav { display: flex; flex-direction: column; gap: 18px; }
+.admin-nav__group { display: flex; flex-direction: column; gap: 8px; }
+.admin-nav__items { display: flex; flex-direction: column; gap: 6px; }
 .admin-nav__group-label {
-  color: var(--muted);
-  font-size: 9.5px;
+  color: var(--gold-light);
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  padding: 0 8px 2px;
+  padding: 0 6px 6px;
+  border-bottom: 1px solid rgba(201,168,76,0.14);
 }
 .admin-nav__item {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  gap: 10px;
   width: 100%;
   text-align: left;
-  padding: 9px 11px;
+  padding: 11px 12px;
   border: 1px solid transparent;
   border-radius: 10px;
   background: transparent;
   color: #d8d3c6;
   font-family: inherit;
-  font-size: 13px;
+  font-size: 13.5px;
   cursor: pointer;
   transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
 }
+.admin-nav__icon { width: 20px; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; opacity: 0.82; }
+.admin-nav__item:hover .admin-nav__icon,
+.admin-nav__item.is-active .admin-nav__icon { opacity: 1; }
+.admin-nav__label { flex: 1; min-width: 0; }
 .admin-nav__item:hover {
   background: rgba(201,168,76,0.08);
   border-color: rgba(201,168,76,0.16);
@@ -3196,14 +3270,18 @@ section#challenge .challenge-features .ns-gain p {
   border-color: rgba(224,160,138,0.5);
 }
 
-/* --- Admin responsive: collapse sidebar to a top bar --- */
+/* --- Admin responsive: sidebar becomes a full-width block above the content,
+   but groups stay stacked (label on top) with their tabs laid out 2-up so the
+   grouping never breaks down into a confusing wrapping row. --- */
 @media (max-width: 900px) {
   .admin-layout { grid-template-columns: 1fr; gap: 16px; padding-top: 16px; }
   .admin-sidebar { position: static; max-height: none; }
-  .admin-nav { flex-direction: row; flex-wrap: wrap; gap: 10px; }
-  .admin-nav__group { flex: 1 1 auto; }
+  .admin-nav__items { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
   .admin-toolbar__count { margin-left: 0; }
   .admin-statchip { flex: 1 1 calc(50% - 10px); min-width: 0; }
+}
+@media (max-width: 560px) {
+  .admin-nav__items { grid-template-columns: 1fr; }
 }
 
 /* === Footer: clean responsive column progression (single source of truth) === */

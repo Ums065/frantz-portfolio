@@ -1049,12 +1049,31 @@ try {
         /* ---------------- ADMIN ---------------- */
         case $key === 'GET admin/submissions': {
             require_admin();
+            // Total counts for the content/commerce/engagement sections that are
+            // otherwise loaded lazily by their own panels — lets the Overview show a
+            // complete, clickable summary of every section. Defensive against a
+            // missing table (returns 0) so a not-yet-created table never 500s.
+            $countOf = static function (string $table): int {
+                try { return (int) db()->query("SELECT COUNT(*) FROM `$table`")->fetchColumn(); }
+                catch (Throwable $e) { return 0; }
+            };
             json([
                 'requests'    => db()->query('SELECT * FROM requests ORDER BY created_at DESC LIMIT 200')->fetchAll(),
                 'subscribers' => db()->query('SELECT * FROM subscribers ORDER BY created_at DESC LIMIT 200')->fetchAll(),
                 'contacts'    => db()->query('SELECT * FROM contact_messages ORDER BY created_at DESC LIMIT 200')->fetchAll(),
                 'members'     => db()->query('SELECT id, full_name, email, role, approval_status, approval_note, approval_reviewed_at, created_at, updated_at FROM users ORDER BY CASE approval_status WHEN "pending" THEN 0 WHEN "rejected" THEN 1 ELSE 2 END, created_at DESC LIMIT 200')->fetchAll(),
                 'orders'      => db()->query('SELECT * FROM orders ORDER BY created_at DESC LIMIT 200')->fetchAll(),
+                'counts'      => [
+                    'awards'       => $countOf('awards'),
+                    'events'       => $countOf('events'),
+                    'blog'         => $countOf('posts'),
+                    'testimonials' => $countOf('testimonials'),
+                    'media'        => $countOf('media_items'),
+                    'inventory'    => $countOf('store_inventory'),
+                    'community'    => $countOf('community_threads'),
+                    'rsvps'        => $countOf('event_rsvps'),
+                    'sponsors'     => $countOf('sponsor_applications'),
+                ],
             ]);
         }
 
