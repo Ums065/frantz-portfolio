@@ -37,7 +37,6 @@ export default function SiteFooter() {
               <li><a href="/#speaking">Speaking</a></li>
               <li><Link to="/events">Events</Link></li>
               <li><Link to="/media">Media</Link></li>
-              <li><Link to="/#community">Community</Link></li>
               <li><Link to="/new-school">Challenge</Link></li>
               <li><Link to="/store">Merchandise</Link></li>
               <li><Link to="/blog">Blog &amp; News</Link></li>

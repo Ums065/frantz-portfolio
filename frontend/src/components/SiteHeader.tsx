@@ -33,7 +33,6 @@ export default function SiteHeader({ home = false }: { home?: boolean }) {
     { label: 'Awards', href: '/awards', kind: 'route' },
     { label: 'Events', href: '/events', kind: 'route' },
     { label: 'Media', href: '/media', kind: 'route' },
-    { label: 'Community', href: '/#community', kind: 'route' },
     { label: 'Challenge', href: '/new-school', kind: 'route' },
     ...(user ? [{ label: 'Dashboard', href: dashboardHref, kind: 'route' as const }] : []),
     { label: 'Merch', href: '/store', kind: 'route' },
