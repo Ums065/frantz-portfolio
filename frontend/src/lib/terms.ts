@@ -1,7 +1,6 @@
 // Terms & Conditions content + versions. Single source of truth for the agreement
-// checkboxes (registration role terms + general platform + website Terms/Privacy) and
-// the public legal pages. Checkbox `id`s are persisted with each acceptance — do not
-// rename casually.
+// (the descriptive terms text + ONE combined accept checkbox per registration form)
+// and the public legal pages. Only the signature + version are persisted per acceptance.
 
 export const CHALLENGE_TERMS_VERSION = 'Interim Terms v1 – June 2026'
 export const WEBSITE_TERMS_VERSION = 'Interim Website Terms v1'
@@ -19,21 +18,18 @@ export interface TermsCheckbox { id: string; label: string }
 
 // ---- Shared blocks reused by every challenge-registration role ----
 
-const GENERAL_PLATFORM_ITEMS: TermsItem[] = [
-  {
-    type: 'text',
-    heading: 'General Platform Terms (All Users)',
-    intro: 'By creating an account, I understand that:',
-    bullets: [
-      'Access to the website/dashboard is provided for challenge participation.',
-      'Users are responsible for information and content they submit.',
-      'False, inappropriate, harmful, or unauthorized content may result in removal or account restrictions.',
-      'The platform may update participation rules, policies, and terms.',
-      'Final Terms of Service and Privacy Policy may replace or update these interim terms.',
-    ],
-  },
-  { type: 'check', id: 'general_platform', label: 'I acknowledge and agree.' },
-]
+const GENERAL_PLATFORM_TEXT: TermsItem = {
+  type: 'text',
+  heading: 'General Platform Terms (All Users)',
+  intro: 'By creating an account, I also understand that:',
+  bullets: [
+    'Access to the website/dashboard is provided for challenge participation.',
+    'Users are responsible for information and content they submit.',
+    'False, inappropriate, harmful, or unauthorized content may result in removal or account restrictions.',
+    'The platform may update participation rules, policies, and terms.',
+    'Final Terms of Service and Privacy Policy may replace or update these interim terms.',
+  ],
+}
 
 const WEBSITE_ITEM: TermsItem = {
   type: 'check',
@@ -45,103 +41,73 @@ const WEBSITE_ITEM: TermsItem = {
 
 export const TERMS_LAYOUT: Record<TermsKind, TermsItem[]> = {
   student: [
-    { type: 'text', heading: 'Student Registration Agreement' },
-    {
-      type: 'check',
-      id: 'student_voluntary',
-      label: 'I agree to participate in the “Leave It Better Than You Found It” Challenge voluntarily.',
-    },
     {
       type: 'text',
-      intro: 'I understand:',
+      heading: 'Student Registration Agreement',
+      intro: 'By registering, I confirm and agree that:',
       bullets: [
+        'I am participating in the “Leave It Better Than You Found It” Challenge voluntarily.',
         'This challenge is an educational program designed to encourage creativity, leadership, entrepreneurship, and problem-solving.',
-        `I am participating voluntarily and I am not an employee, contractor, salesperson, agent, or representative of ${ORG}.`,
+        `I am not an employee, contractor, salesperson, agent, or representative of ${ORG}.`,
         'I do not have authority to make promises, agreements, or commitments on behalf of the organization.',
         'Any business interviews I complete are for educational research and challenge participation only.',
-        'I agree to be respectful, professional, and safe while participating.',
-        'I understand that submissions may be reviewed for challenge participation, awards, recognition, and program purposes.',
-        'If I am under 18 years old, I understand my parent/legal guardian must approve my participation.',
+        'I will be respectful, professional, and safe while participating.',
+        'Submissions may be reviewed for challenge participation, awards, recognition, and program purposes.',
+        'If I am under 18 years old, my parent/legal guardian must approve my participation.',
+        'I will follow the challenge rules and participation guidelines.',
       ],
     },
-    {
-      type: 'check',
-      id: 'student_rules',
-      label: 'I agree to follow the challenge rules and participation guidelines.',
-    },
-    ...GENERAL_PLATFORM_ITEMS,
-    WEBSITE_ITEM,
+    GENERAL_PLATFORM_TEXT,
+    { type: 'check', id: 'agree_all', label: 'I have read and agree to the terms above and the Terms of Use & Privacy Notice.' },
   ],
 
   parent: [
-    { type: 'text', heading: 'Parent / Guardian Consent' },
-    {
-      type: 'check',
-      id: 'parent_authorize',
-      label: 'I confirm that I am the parent or legal guardian of the student participant and authorize my child to participate in the “Leave It Better Than You Found It” Challenge.',
-    },
     {
       type: 'text',
-      intro: 'I understand and agree:',
+      heading: 'Parent / Guardian Consent',
+      intro: 'I confirm that I am the parent or legal guardian of the student participant, and I understand and agree that:',
       bullets: [
+        'I authorize my child to participate in the “Leave It Better Than You Found It” Challenge.',
         'Participation is voluntary.',
         `My child is not employed by or working for ${ORG}.`,
-        'My child may participate in activities including educational research, business interviews, project creation, and challenge submissions.',
-        'I understand students are responsible for conducting themselves safely and appropriately.',
+        'My child may participate in educational research, business interviews, project creation, and challenge submissions.',
+        'Students are responsible for conducting themselves safely and appropriately.',
         'I give permission for my child to create an account and participate through the online platform.',
-        'I understand submissions may include written projects, photos, videos, ideas, and presentations.',
+        'Submissions may include written projects, photos, videos, ideas, and presentations.',
         'I grant permission for approved submissions, achievements, and recognition moments to be displayed or shared for educational, promotional, and program-related purposes.',
-        'I acknowledge participant information may be collected and used to operate the challenge, improve the program, communicate updates, measure impact, and administer awards.',
+        'Participant information may be collected and used to operate the challenge, improve the program, communicate updates, measure impact, and administer awards.',
       ],
     },
-    {
-      type: 'check',
-      id: 'parent_approve',
-      label: 'I approve my child’s participation and agree to the program guidelines.',
-    },
-    ...GENERAL_PLATFORM_ITEMS,
-    WEBSITE_ITEM,
+    GENERAL_PLATFORM_TEXT,
+    { type: 'check', id: 'agree_all', label: 'As the parent/guardian, I approve my child’s participation and agree to the terms above and the Terms of Use & Privacy Notice.' },
   ],
 
   teacher: [
-    { type: 'text', heading: 'Teacher Registration Agreement' },
-    {
-      type: 'check',
-      id: 'teacher_acknowledge',
-      label: 'I acknowledge my participation as an educator supporting the “Leave It Better Than You Found It” Challenge.',
-    },
     {
       type: 'text',
-      intro: 'I understand:',
+      heading: 'Teacher Registration Agreement',
+      intro: 'By registering as an educator, I acknowledge and agree that:',
       bullets: [
+        'I support the “Leave It Better Than You Found It” Challenge as an educator.',
         'The program is designed to support student innovation, leadership, entrepreneurship, and community problem-solving.',
         'My participation is voluntary.',
-        'I agree to follow program guidelines.',
-        'I understand students participate voluntarily with appropriate permissions.',
+        'I will follow program guidelines.',
+        'Students participate voluntarily with appropriate permissions.',
         'I may assist students with guidance, encouragement, and educational support.',
-        'I understand the platform may collect participation information to operate and improve the program.',
+        'The platform may collect participation information to operate and improve the program.',
       ],
     },
-    {
-      type: 'check',
-      id: 'teacher_guidelines',
-      label: 'I agree to the educator participation guidelines.',
-    },
-    ...GENERAL_PLATFORM_ITEMS,
-    WEBSITE_ITEM,
+    GENERAL_PLATFORM_TEXT,
+    { type: 'check', id: 'agree_all', label: 'I have read and agree to the educator terms above and the Terms of Use & Privacy Notice.' },
   ],
 
   school: [
-    { type: 'text', heading: 'School / Principal Registration Agreement' },
-    {
-      type: 'check',
-      id: 'school_interest',
-      label: 'On behalf of my school, I acknowledge interest in participating in the “Leave It Better Than You Found It” Challenge.',
-    },
     {
       type: 'text',
-      intro: 'The school understands:',
+      heading: 'School / Principal Registration Agreement',
+      intro: 'On behalf of my school, I acknowledge and agree that:',
       bullets: [
+        'My school is interested in participating in the “Leave It Better Than You Found It” Challenge.',
         'This is an educational innovation and community impact initiative.',
         'Student participation requires appropriate permissions.',
         'The program encourages students to develop leadership, technology, communication, entrepreneurship, and problem-solving skills.',
@@ -149,13 +115,8 @@ export const TERMS_LAYOUT: Record<TermsKind, TermsItem[]> = {
         'The organization reserves the right to review submissions, manage participation, and maintain program integrity.',
       ],
     },
-    {
-      type: 'check',
-      id: 'school_guidelines',
-      label: 'I acknowledge the school participation guidelines.',
-    },
-    ...GENERAL_PLATFORM_ITEMS,
-    WEBSITE_ITEM,
+    GENERAL_PLATFORM_TEXT,
+    { type: 'check', id: 'agree_all', label: 'On behalf of my school, I have read and agree to the terms above and the Terms of Use & Privacy Notice.' },
   ],
 
   website: [WEBSITE_ITEM],

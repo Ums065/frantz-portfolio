@@ -1830,6 +1830,90 @@ function record_registration_terms(int $userId, string $name, string $email, str
     record_terms_acceptance($base + ['accept_type' => 'website', 'terms_version' => $websiteVersion, 'document_label' => TERMS_WEBSITE_LABEL]);
 }
 
+/**
+ * Parent approval chain columns on new_school_parents (lazy migration).
+ * link_status: pending_student → student confirms → pending_teacher → teacher approves → approved.
+ * CREATE/ALTER causes an implicit COMMIT, so never call inside a transaction.
+ */
+function new_school_parents_ensure_link_columns(): void
+{
+    static $ready = false;
+    if ($ready) {
+        return;
+    }
+    try {
+        $has = db()->query("SHOW COLUMNS FROM new_school_parents LIKE 'link_status'")->fetchColumn();
+        if (!$has) {
+            db()->exec(
+                "ALTER TABLE new_school_parents
+                 ADD COLUMN link_status ENUM('pending_student','pending_teacher','approved','rejected') NOT NULL DEFAULT 'pending_student' AFTER consent_checked,
+                 ADD COLUMN student_confirmed_at TIMESTAMP NULL DEFAULT NULL AFTER link_status"
+            );
+            // Existing (previously auto-approved) parents keep access.
+            db()->exec("UPDATE new_school_parents SET link_status = 'approved' WHERE approved_at IS NOT NULL");
+        }
+    } catch (\Throwable $e) {
+        // best-effort; column may already exist
+    }
+    $ready = true;
+}
+
+/**
+ * Admin ⇄ user chat. One thread per non-admin user (thread_user_id = users.id);
+ * any admin replies. "Clear chat" is one-sided: each side stores a cleared_at and
+ * only sees messages newer than its own marker (the other side keeps the history).
+ */
+function new_school_chat_ensure_schema(): void
+{
+    static $ready = false;
+    if ($ready) {
+        return;
+    }
+    db()->exec(
+        "CREATE TABLE IF NOT EXISTS new_school_chat_messages (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            thread_user_id INT NOT NULL,
+            sender ENUM('user','admin') NOT NULL,
+            sender_user_id INT NULL,
+            body TEXT NOT NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_ns_chat_thread (thread_user_id, created_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+    db()->exec(
+        "CREATE TABLE IF NOT EXISTS new_school_chat_clears (
+            thread_user_id INT NOT NULL,
+            side ENUM('user','admin') NOT NULL,
+            cleared_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (thread_user_id, side)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+    $ready = true;
+}
+
+/** Messages in a thread visible to one side (respecting that side's clear marker). */
+function new_school_chat_fetch(int $threadUserId, string $side): array
+{
+    $stmt = db()->prepare('SELECT cleared_at FROM new_school_chat_clears WHERE thread_user_id = ? AND side = ? LIMIT 1');
+    $stmt->execute([$threadUserId, $side]);
+    $clearedAt = $stmt->fetchColumn();
+    if ($clearedAt !== false) {
+        $q = db()->prepare('SELECT id, sender, body, created_at FROM new_school_chat_messages WHERE thread_user_id = ? AND created_at > ? ORDER BY created_at ASC, id ASC');
+        $q->execute([$threadUserId, (string) $clearedAt]);
+    } else {
+        $q = db()->prepare('SELECT id, sender, body, created_at FROM new_school_chat_messages WHERE thread_user_id = ? ORDER BY created_at ASC, id ASC');
+        $q->execute([$threadUserId]);
+    }
+    return $q->fetchAll();
+}
+
+/** Record a one-sided clear marker (hides earlier messages for that side only). */
+function new_school_chat_clear(int $threadUserId, string $side): void
+{
+    db()->prepare('INSERT INTO new_school_chat_clears (thread_user_id, side, cleared_at) VALUES (?, ?, NOW()) ON DUPLICATE KEY UPDATE cleared_at = NOW()')
+        ->execute([$threadUserId, $side]);
+}
+
 function new_school_points_ensure_schema(): void
 {
     static $ready = false;
@@ -2124,10 +2208,9 @@ function new_school_find_student_rank_position(array $students, int $studentId):
 
 function new_school_submission_is_locked(array $student, int $interviewCount): bool
 {
+    // Teacher approval is the only gate for a student (parent + school gates removed).
     return !(
-        ($student['parent_consent_status'] ?? '') === 'approved'
-        && ($student['school_approval_status'] ?? '') === 'approved'
-        && ($student['teacher_approval_status'] ?? '') === 'approved'
+        ($student['teacher_approval_status'] ?? '') === 'approved'
         && $interviewCount >= 10
     );
 }
@@ -2140,12 +2223,7 @@ function new_school_overall_status(array $student, int $interviewCount): string
     if (($student['submission_status'] ?? '') === 'submitted') {
         return 'submission_submitted';
     }
-    if (($student['parent_consent_status'] ?? '') !== 'approved') {
-        return 'parent_consent_pending';
-    }
-    if (($student['school_approval_status'] ?? '') !== 'approved') {
-        return 'school_approval_pending';
-    }
+    // Teacher approval is the only participation gate for a student.
     if (($student['teacher_approval_status'] ?? '') !== 'approved') {
         return 'teacher_approval_pending';
     }
@@ -2159,13 +2237,9 @@ function new_school_status_tracker(array $student, int $interviewCount): array
 {
     return [
         ['label' => 'Student Registered', 'complete' => true],
-        ['label' => 'Parent Consent', 'complete' => ($student['parent_consent_status'] ?? '') === 'approved'],
-        ['label' => 'School Approval', 'complete' => ($student['school_approval_status'] ?? '') === 'approved'],
         ['label' => 'Teacher Approval', 'complete' => ($student['teacher_approval_status'] ?? '') === 'approved'],
         ['label' => '10 Business Interviews', 'complete' => $interviewCount >= 10],
         ['label' => 'Eligible To Submit', 'complete' => $interviewCount >= 10
-            && ($student['parent_consent_status'] ?? '') === 'approved'
-            && ($student['school_approval_status'] ?? '') === 'approved'
             && ($student['teacher_approval_status'] ?? '') === 'approved'],
         ['label' => 'Final Submission', 'complete' => in_array((string) ($student['submission_status'] ?? ''), ['submitted', 'complete', 'winner'], true)],
     ];
@@ -2490,6 +2564,15 @@ const NS_APPROVAL_SAFE_KEYS = [
     'student_name', 'participant_id', 'grade_level', 'school_name',
 ];
 
+// Parent-link fields visible to the teacher who runs the Parent Approvals tab. The
+// parent's contact details, home address and digital signature are NEVER exposed —
+// the teacher only needs the name, relationship and link status to approve.
+const NS_PARENT_SAFE_KEYS = [
+    'id', 'student_id', 'link_status', 'student_confirmed_at', 'approved_at',
+    'created_at', 'updated_at', 'parent_full_name', 'relationship',
+    'student_name', 'participant_id', 'grade_level', 'school_name', 'parent_consent_status',
+];
+
 function new_school_pick(array $row, array $allow): array
 {
     return array_intersect_key($row, array_flip($allow));
@@ -2520,6 +2603,11 @@ function new_school_redact_dashboard(array $payload, array $scope): array
     }
     if (isset($payload['submissions'])) {
         $payload['submissions'] = new_school_redact_rows($payload['submissions'], NS_SUBMISSION_SAFE_KEYS);
+    }
+    // Parent rows (teacher Parent Approvals tab) carry contact details + a digital
+    // signature — strip everything except the link-approval essentials.
+    if (isset($payload['parents'])) {
+        $payload['parents'] = new_school_redact_rows($payload['parents'], NS_PARENT_SAFE_KEYS);
     }
 
     if ($kind !== 'school') {
@@ -2869,7 +2957,8 @@ function new_school_fetch_students_for_teacher(array $teacher): array
          INNER JOIN users u ON u.id = s.user_id
          LEFT JOIN new_school_teachers t ON t.id = s.teacher_id
          LEFT JOIN new_school_schools sc ON sc.id = s.school_id
-         WHERE s.teacher_id = ? OR s.school_id = ? OR s.school_name = ?
+         WHERE s.teacher_id = ?
+            OR ((s.teacher_id IS NULL OR s.teacher_id = 0) AND (s.school_id = ? OR s.school_name = ?))
          ORDER BY s.created_at DESC'
     );
     $stmt->execute([(int) $teacher['id'], (int) $teacher['school_id'], (string) ($teacher['linked_school_name'] ?? '')]);
@@ -2948,9 +3037,7 @@ function new_school_refresh_student_status(int $studentId): ?array
     if ($submission) {
         $submissionStatus = in_array((string) $submission['status'], ['approved', 'winner'], true) ? 'complete' : 'submitted';
     } elseif (
-        ($student['parent_consent_status'] ?? '') === 'approved'
-        && ($student['school_approval_status'] ?? '') === 'approved'
-        && ($student['teacher_approval_status'] ?? '') === 'approved'
+        ($student['teacher_approval_status'] ?? '') === 'approved'
         && $interviewCount >= 10
     ) {
         $submissionStatus = 'eligible';

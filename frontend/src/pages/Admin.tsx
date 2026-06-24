@@ -11,7 +11,7 @@ type TabKey =
   | 'overview' | 'analytics' | 'requests' | 'orders' | 'subscribers' | 'contacts'
   | 'members' | 'approvals' | 'sponsors' | 'awards' | 'events' | 'blog'
   | 'testimonials' | 'media' | 'community' | 'rsvps' | 'inventory'
-  | 'ns-submissions' | 'ns-interviews'
+  | 'ns-submissions' | 'ns-interviews' | 'ns-chat'
 
 interface NavItem { key: TabKey; label: string }
 const NAV_GROUPS: Array<{ group: string; items: NavItem[] }> = [
@@ -25,6 +25,7 @@ const NAV_GROUPS: Array<{ group: string; items: NavItem[] }> = [
   { group: 'New School', items: [
     { key: 'ns-submissions', label: 'Student Submissions' },
     { key: 'ns-interviews', label: 'Business Interviews' },
+    { key: 'ns-chat', label: 'Messages' },
   ] },
   { group: 'Commerce', items: [
     { key: 'orders', label: 'Store Orders' },
@@ -123,6 +124,37 @@ export default function Admin() {
   const [selectedUserLoading, setSelectedUserLoading] = useState(false)
   const [selectedUserError, setSelectedUserError] = useState('')
   const [nsData, setNsData] = useState<any>(null)
+  const [chatThreads, setChatThreads] = useState<any[]>([])
+  const [chatActiveUser, setChatActiveUser] = useState<number | null>(null)
+  const [chatMessages, setChatMessages] = useState<any[]>([])
+  const [chatInput, setChatInput] = useState('')
+  const [chatBusy, setChatBusy] = useState(false)
+
+  const loadChatThreads = async () => {
+    try { const d = await api.get<{ threads: any[] }>('admin/new-school/chats'); setChatThreads(Array.isArray(d?.threads) ? d.threads : []) } catch { setChatThreads([]) }
+  }
+  const openChatThread = async (userId: number) => {
+    setChatActiveUser(userId)
+    try { const d = await api.get<{ messages: any[] }>(`admin/new-school/chat?user_id=${userId}`); setChatMessages(Array.isArray(d?.messages) ? d.messages : []) } catch { setChatMessages([]) }
+  }
+  const sendAdminChat = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const text = chatInput.trim()
+    if (!text || !chatActiveUser) return
+    setChatBusy(true)
+    try {
+      const d = await api.post<{ messages: any[] }>('admin/new-school/chat', { user_id: chatActiveUser, body: text })
+      setChatMessages(Array.isArray(d?.messages) ? d.messages : [])
+      setChatInput('')
+      void loadChatThreads()
+    } catch (err) { alert(err instanceof Error ? err.message : 'Send failed.') }
+    finally { setChatBusy(false) }
+  }
+  const clearAdminChat = async () => {
+    if (!chatActiveUser || !confirm('Clear this conversation from your view? The user keeps their own copy.')) return
+    try { await api.post('admin/new-school/chat/clear', { user_id: chatActiveUser }); setChatMessages([]) } catch (err) { alert(err instanceof Error ? err.message : 'Clear failed.') }
+  }
+  useEffect(() => { if (tab === 'ns-chat') void loadChatThreads() }, [tab])
 
   const refreshData = async () => {
     // Load the main submissions AND the New School summary (student interviews +
@@ -700,6 +732,52 @@ export default function Admin() {
               )}
             />
           </>
+        )}
+
+        {tab === 'ns-chat' && (
+          <div className="admin-chat">
+            <div className="admin-chat__list">
+              <div className="admin-chat__list-head">Conversations <span>{chatThreads.length}</span></div>
+              {chatThreads.length === 0 && <p className="admin-chat__empty">No messages yet.</p>}
+              {chatThreads.map((t: any) => (
+                <button
+                  key={t.thread_user_id}
+                  type="button"
+                  className={`admin-chat__thread${chatActiveUser === Number(t.thread_user_id) ? ' is-active' : ''}`}
+                  onClick={() => void openChatThread(Number(t.thread_user_id))}
+                >
+                  <strong>{t.full_name || `User #${t.thread_user_id}`}</strong>
+                  <span>{t.role} · {t.total} msg{Number(t.total) === 1 ? '' : 's'}</span>
+                </button>
+              ))}
+            </div>
+            <div className="admin-chat__pane">
+              {!chatActiveUser ? (
+                <p className="admin-chat__empty">Select a conversation to read and reply.</p>
+              ) : (
+                <>
+                  <div className="admin-chat__pane-head">
+                    <strong>{chatThreads.find((t: any) => Number(t.thread_user_id) === chatActiveUser)?.full_name || `User #${chatActiveUser}`}</strong>
+                    <button type="button" className="btn btn--sm" onClick={() => void clearAdminChat()}>Clear chat</button>
+                  </div>
+                  <div className="admin-chat__log">
+                    {chatMessages.length === 0 && <p className="admin-chat__empty">No messages in your view.</p>}
+                    {chatMessages.map((m: any) => (
+                      <div key={m.id} className={`admin-chat__msg admin-chat__msg--${m.sender === 'admin' ? 'me' : 'user'}`}>
+                        <span className="admin-chat__who">{m.sender === 'admin' ? 'You (Admin)' : 'User'}</span>
+                        <p>{m.body}</p>
+                        <span className="admin-chat__time">{m.created_at}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <form className="admin-chat__form" onSubmit={sendAdminChat}>
+                    <input type="text" value={chatInput} onChange={(e) => setChatInput(e.target.value)} placeholder="Type a reply…" maxLength={2000} />
+                    <button className="btn btn--solid btn--sm" type="submit" disabled={chatBusy || !chatInput.trim()}>{chatBusy ? 'Sending…' : 'Send'}</button>
+                  </form>
+                </>
+              )}
+            </div>
+          </div>
         )}
 
         {tab === 'sponsors' && <SponsorsAdminPanel />}

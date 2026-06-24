@@ -505,6 +505,7 @@ function new_school_handle_route(string $method, string $route): bool
 
         case $key === 'GET new-school/dashboard': {
             $user = require_login();
+            new_school_parents_ensure_link_columns();
 
             if ($user['role'] === 'student') {
                 $student = new_school_fetch_student_by_user_id((int) $user['id']);
@@ -581,6 +582,7 @@ function new_school_handle_route(string $method, string $route): bool
                     'students' => $students,
                     'businesses' => new_school_fetch_businesses_by_student_ids($studentIds),
                     'approvals' => new_school_fetch_approvals_by_student_ids($studentIds),
+                    'parents' => new_school_fetch_parents_by_student_ids($studentIds),
                     'submissions' => new_school_fetch_submissions_by_student_ids($studentIds),
                     'winners' => new_school_fetch_winners_by_student_ids($studentIds),
                     'notifications' => new_school_fetch_notifications_for_scope($studentIds, ['teacher'], 12),
@@ -604,7 +606,7 @@ function new_school_handle_route(string $method, string $route): bool
             json(['error' => 'Unsupported account role for this dashboard.'], 403);
         }
 
-        case preg_match('#^GET new-school/parent/([a-f0-9]+)$#i', $route, $m) === 1: {
+        case preg_match('#^GET new-school/parent/([a-f0-9]+)$#i', $key, $m) === 1: {
             $student = new_school_fetch_student_by_token($m[1]);
             if (!$student) {
                 json(['error' => 'Invalid parent consent link.'], 404);
@@ -615,9 +617,23 @@ function new_school_handle_route(string $method, string $route): bool
             $teacher = !empty($student['teacher_id'])
                 ? new_school_fetch_teacher_by_id((int) $student['teacher_id'])
                 : null;
+            // This endpoint is reached unauthenticated (the parent opens it from a QR
+            // link before logging in), so expose only the fields the consent form needs
+            // — never the student's DOB / home address / phone or any digital signature.
+            $existingParent = new_school_fetch_parent_by_student_id((int) $student['id']);
             json([
                 'token' => $m[1],
-                'student' => $student,
+                'student' => [
+                    'id' => (int) $student['id'],
+                    'full_name' => (string) $student['full_name'],
+                    'participant_id' => (string) $student['participant_id'],
+                    'qr_url' => (string) ($student['qr_url'] ?? ''),
+                    'school_id' => (int) ($student['school_id'] ?? 0),
+                    'teacher_id' => (int) ($student['teacher_id'] ?? 0),
+                    'school_name' => (string) $student['school_name'],
+                    'grade_level' => (string) $student['grade_level'],
+                    'parent_consent_status' => (string) $student['parent_consent_status'],
+                ],
                 'school' => $school ? [
                     'id' => (int) $school['id'],
                     'school_name' => (string) $school['school_name'],
@@ -627,16 +643,20 @@ function new_school_handle_route(string $method, string $route): bool
                 'teacher' => $teacher ? [
                     'id' => (int) $teacher['id'],
                     'teacher_full_name' => (string) $teacher['teacher_full_name'],
-                    'school_email' => (string) $teacher['school_email'],
                     'school_id' => (int) ($teacher['school_id'] ?? 0),
                     'status' => (string) $teacher['status'],
                 ] : null,
-                'parent' => new_school_fetch_parent_by_student_id((int) $student['id']),
+                'parent' => $existingParent ? [
+                    'id' => (int) $existingParent['id'],
+                    'parent_full_name' => (string) ($existingParent['parent_full_name'] ?? ''),
+                    'relationship' => (string) ($existingParent['relationship'] ?? ''),
+                    'link_status' => (string) ($existingParent['link_status'] ?? ''),
+                ] : null,
                 'status_tracker' => new_school_status_tracker($student, new_school_student_interview_count((int) $student['id'])),
             ]);
         }
 
-        case preg_match('#^GET new-school/student/([0-9]{8})$#', $route, $m) === 1: {
+        case preg_match('#^GET new-school/student/([0-9]{8})$#', $key, $m) === 1: {
             $student = new_school_fetch_student_by_participant_id($m[1]);
             if (!$student) {
                 json(['error' => 'Student not found.'], 404);
@@ -671,7 +691,6 @@ function new_school_handle_route(string $method, string $route): bool
                 'teacher' => $teacher ? [
                     'id' => (int) $teacher['id'],
                     'teacher_full_name' => (string) $teacher['teacher_full_name'],
-                    'school_email' => (string) $teacher['school_email'],
                     'status' => (string) $teacher['status'],
                     'school_id' => (int) ($teacher['school_id'] ?? 0),
                 ] : null,
@@ -992,6 +1011,7 @@ function new_school_handle_route(string $method, string $route): bool
 
             $user = new_school_upsert_user_account($parentFullName, $email, $password, 'parent');
             $pdo = db();
+            new_school_parents_ensure_link_columns();
             $studentId = (int) $student['id'];
             $existing = $pdo->prepare('SELECT * FROM new_school_parents WHERE student_id = ? LIMIT 1');
             $existing->execute([$studentId]);
@@ -1009,7 +1029,9 @@ function new_school_handle_route(string $method, string $route): bool
                          government_id_url = ?,
                          consent_checked = 1,
                          digital_signature = ?,
-                         approved_at = NOW(),
+                         link_status = "pending_student",
+                         student_confirmed_at = NULL,
+                         approved_at = NULL,
                          consented_at = NOW(),
                          updated_at = NOW()
                      WHERE id = ?'
@@ -1030,8 +1052,8 @@ function new_school_handle_route(string $method, string $route): bool
                     'INSERT INTO new_school_parents (
                         user_id, student_id, parent_full_name, relationship_to_student,
                         phone_number, email, home_address, government_id_url, consent_checked,
-                        digital_signature, approved_at, consented_at
-                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, NOW(), NOW())'
+                        digital_signature, link_status, consented_at
+                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, "pending_student", NOW())'
                 );
                 $insert->execute([
                     (int) $user['id'],
@@ -1048,66 +1070,216 @@ function new_school_handle_route(string $method, string $route): bool
 
             $studentUpdate = $pdo->prepare(
                 'UPDATE new_school_students
-                 SET parent_name = ?, parent_phone = ?, parent_email = ?, parent_consent_status = "approved"
+                 SET parent_name = ?, parent_phone = ?, parent_email = ?, parent_consent_status = "pending"
                  WHERE id = ?'
             );
             $studentUpdate->execute([$parentFullName, $phone, $email, $studentId]);
 
             $student = new_school_refresh_student_status($studentId);
             if (!$student) {
-                json(['error' => 'Unable to update parent consent.'], 500);
+                json(['error' => 'Unable to register parent.'], 500);
             }
 
+            // New parent chain: student must confirm, then the teacher approves.
             new_school_add_notification(
                 $studentId,
                 'student',
-                'parent_consent',
-                'Parent consent approved',
-                'Your parent or guardian approved your participation.',
-                ['participant_id' => (string) $student['participant_id']]
-            );
-            new_school_add_notification(
-                $studentId,
-                'parent',
-                'parent_consent',
-                'Consent saved',
-                'Your consent record was saved for ' . $student['full_name'] . '.',
-                ['participant_id' => (string) $student['participant_id']]
-            );
-            new_school_add_notification(
-                $studentId,
-                'school',
-                'parent_consent',
-                'Parent consent approved',
-                $student['full_name'] . ' has approved parent consent.',
-                ['participant_id' => (string) $student['participant_id']]
-            );
-            new_school_add_notification(
-                $studentId,
-                'teacher',
-                'parent_consent',
-                'Parent consent approved',
-                $student['full_name'] . ' is ready for school verification.',
-                ['participant_id' => (string) $student['participant_id']]
+                'parent_confirm',
+                'Confirm your parent',
+                $parentFullName . ' registered as your parent/guardian. Open your dashboard to confirm or reject this link.',
+                ['participant_id' => (string) $student['participant_id'], 'parent_name' => $parentFullName]
             );
             new_school_add_notification(
                 $studentId,
                 'admin',
                 'parent_consent',
-                'Parent consent approved',
-                $student['full_name'] . ' completed the parent consent step.',
+                'Parent registered',
+                $parentFullName . ' registered as parent for ' . $student['full_name'] . ' (awaiting student confirmation).',
                 ['participant_id' => (string) $student['participant_id']]
             );
 
             record_registration_terms((int) $user['id'], $parentFullName, $email, 'parent', $signature, $body);
 
             json([
-                'message' => 'Parent consent saved and account submitted for admin review.',
+                'message' => 'Parent registration submitted. Your child must confirm the link, then their teacher approves it before your dashboard unlocks.',
                 'user' => login_user($user),
                 'parent' => new_school_fetch_parent_by_student_id($studentId),
                 'student' => $student,
                 'status_tracker' => new_school_status_tracker($student, new_school_student_interview_count($studentId)),
             ], 201);
+        }
+
+        case $key === 'POST new-school/parent/confirm': {
+            $user = require_login();
+            if ($user['role'] !== 'student') {
+                json(['error' => 'Only the student can confirm their parent.'], 403);
+            }
+            $student = new_school_fetch_student_by_user_id((int) $user['id']);
+            if (!$student) {
+                json(['error' => 'Student profile not found.'], 404);
+            }
+            new_school_parents_ensure_link_columns();
+            $pdo = db();
+            $row = $pdo->prepare('SELECT * FROM new_school_parents WHERE student_id = ? LIMIT 1');
+            $row->execute([(int) $student['id']]);
+            $parent = $row->fetch();
+            if (!$parent) {
+                json(['error' => 'No parent registration is waiting for your confirmation.'], 404);
+            }
+            $decision = field($body, 'decision') ?: 'confirm';
+            if ($decision === 'reject') {
+                $pdo->prepare("UPDATE new_school_parents SET link_status = 'rejected', updated_at = NOW() WHERE id = ?")->execute([(int) $parent['id']]);
+                json(['message' => 'Parent link rejected.', 'link_status' => 'rejected']);
+            }
+            $pdo->prepare("UPDATE new_school_parents SET link_status = 'pending_teacher', student_confirmed_at = NOW(), updated_at = NOW() WHERE id = ?")->execute([(int) $parent['id']]);
+            new_school_add_notification(
+                (int) $student['id'], 'teacher', 'parent_approval', 'Parent awaiting approval',
+                $student['full_name'] . ' confirmed a parent/guardian — review it in the Parent Approvals tab.',
+                ['participant_id' => (string) $student['participant_id']]
+            );
+            new_school_add_notification(
+                (int) $student['id'], 'parent', 'parent_approval', 'Confirmed by student',
+                'Your child confirmed the link. A teacher will review and approve your access.',
+                ['participant_id' => (string) $student['participant_id']]
+            );
+            json(['message' => 'Parent confirmed and sent to your teacher for approval.', 'link_status' => 'pending_teacher']);
+        }
+
+        case $key === 'POST new-school/parent/approve': {
+            $user = require_login();
+            if (!in_array($user['role'], ['teacher', 'admin', 'super_admin', 'editor'], true)) {
+                json(['error' => 'Parent approval requires a teacher account.'], 403);
+            }
+            $studentId = (int) ($body['student_id'] ?? 0);
+            $student = $studentId > 0 ? new_school_fetch_student_by_id($studentId) : null;
+            if (!$student) {
+                json(['error' => 'Student not found.'], 404);
+            }
+            $teacher = $user['role'] === 'teacher' ? new_school_fetch_teacher_by_user_id((int) $user['id']) : null;
+            if ($teacher) {
+                // A teacher may only approve parents for their OWN students (or students
+                // not yet assigned to any teacher in their school).
+                $ownsStudent = (int) $student['teacher_id'] === (int) $teacher['id'];
+                $unassignedInSchool = ((int) ($student['teacher_id'] ?? 0) === 0) && (int) $student['school_id'] === (int) $teacher['school_id'];
+                if (!$ownsStudent && !$unassignedInSchool) {
+                    json(['error' => 'This student is not assigned to your teacher account.'], 403);
+                }
+            }
+            new_school_parents_ensure_link_columns();
+            $pdo = db();
+            $row = $pdo->prepare('SELECT * FROM new_school_parents WHERE student_id = ? LIMIT 1');
+            $row->execute([(int) $student['id']]);
+            $parent = $row->fetch();
+            if (!$parent) {
+                json(['error' => 'No parent to approve for this student.'], 404);
+            }
+            $status = field($body, 'approval_status') ?: 'approved';
+            if (!in_array($status, ['approved', 'rejected'], true)) {
+                json(['error' => 'Invalid approval status.'], 422);
+            }
+            if ($status === 'approved') {
+                $pdo->prepare("UPDATE new_school_parents SET link_status = 'approved', approved_at = NOW(), updated_at = NOW() WHERE id = ?")->execute([(int) $parent['id']]);
+                // Unlock the parent's login + record consent on the student.
+                $pdo->prepare("UPDATE users SET approval_status = 'approved', approval_reviewed_by_user_id = ?, approval_reviewed_at = NOW(), updated_at = NOW() WHERE id = ?")->execute([(int) $user['id'], (int) $parent['user_id']]);
+                $pdo->prepare("UPDATE new_school_students SET parent_consent_status = 'approved' WHERE id = ?")->execute([(int) $student['id']]);
+                new_school_add_notification(
+                    (int) $student['id'], 'parent', 'parent_approval', 'Parent access approved',
+                    'A teacher approved your link. Your parent dashboard is now active.',
+                    ['participant_id' => (string) $student['participant_id']]
+                );
+                new_school_add_notification(
+                    (int) $student['id'], 'student', 'parent_approval', 'Parent approved',
+                    'Your parent/guardian was approved by your teacher.',
+                    ['participant_id' => (string) $student['participant_id']]
+                );
+            } else {
+                $pdo->prepare("UPDATE new_school_parents SET link_status = 'rejected', updated_at = NOW() WHERE id = ?")->execute([(int) $parent['id']]);
+                new_school_add_notification(
+                    (int) $student['id'], 'parent', 'parent_approval', 'Parent link rejected',
+                    'A teacher could not approve your link. Please contact the school.',
+                    ['participant_id' => (string) $student['participant_id']]
+                );
+            }
+            json(['message' => 'Parent ' . $status . '.', 'link_status' => $status === 'approved' ? 'approved' : 'rejected']);
+        }
+
+        /* ---------------- Admin ⇄ user chat ---------------- */
+        case $key === 'GET new-school/chat': {
+            $user = require_login();
+            new_school_chat_ensure_schema();
+            json(['messages' => new_school_chat_fetch((int) $user['id'], 'user')]);
+        }
+
+        case $key === 'POST new-school/chat': {
+            $user = require_login();
+            $text = trim((string) field($body, 'body'));
+            if ($text === '') {
+                json(['error' => 'Message cannot be empty.'], 422);
+            }
+            $text = mb_substr($text, 0, 2000);
+            new_school_chat_ensure_schema();
+            db()->prepare('INSERT INTO new_school_chat_messages (thread_user_id, sender, sender_user_id, body) VALUES (?, "user", ?, ?)')
+                ->execute([(int) $user['id'], (int) $user['id'], $text]);
+            new_school_add_notification(null, 'admin', 'chat', 'New message', (($user['full_name'] ?? 'A user') . ' sent a message in chat.'), ['user_id' => (string) $user['id']]);
+            json(['messages' => new_school_chat_fetch((int) $user['id'], 'user')], 201);
+        }
+
+        case $key === 'POST new-school/chat/clear': {
+            $user = require_login();
+            new_school_chat_ensure_schema();
+            new_school_chat_clear((int) $user['id'], 'user');
+            json(['messages' => []]);
+        }
+
+        case $key === 'GET admin/new-school/chats': {
+            require_admin();
+            new_school_chat_ensure_schema();
+            $rows = db()->query(
+                'SELECT m.thread_user_id, u.full_name, u.email, u.role,
+                        COUNT(*) AS total, MAX(m.created_at) AS last_at,
+                        SUM(CASE WHEN m.sender = "user" THEN 1 ELSE 0 END) AS user_msgs
+                 FROM new_school_chat_messages m
+                 INNER JOIN users u ON u.id = m.thread_user_id
+                 GROUP BY m.thread_user_id, u.full_name, u.email, u.role
+                 ORDER BY last_at DESC'
+            )->fetchAll();
+            json(['threads' => $rows]);
+        }
+
+        case $key === 'GET admin/new-school/chat': {
+            require_admin();
+            new_school_chat_ensure_schema();
+            $threadUserId = (int) ($_GET['user_id'] ?? 0);
+            if ($threadUserId <= 0) {
+                json(['error' => 'A user_id is required.'], 422);
+            }
+            json(['messages' => new_school_chat_fetch($threadUserId, 'admin')]);
+        }
+
+        case $key === 'POST admin/new-school/chat': {
+            $admin = require_admin();
+            new_school_chat_ensure_schema();
+            $threadUserId = (int) ($body['user_id'] ?? 0);
+            $text = trim((string) field($body, 'body'));
+            if ($threadUserId <= 0 || $text === '') {
+                json(['error' => 'A user_id and message body are required.'], 422);
+            }
+            $text = mb_substr($text, 0, 2000);
+            db()->prepare('INSERT INTO new_school_chat_messages (thread_user_id, sender, sender_user_id, body) VALUES (?, "admin", ?, ?)')
+                ->execute([$threadUserId, (int) $admin['id'], $text]);
+            new_school_add_notification(null, 'all', 'chat', 'Admin replied', 'You have a new message from the admin team.', ['user_id' => (string) $threadUserId]);
+            json(['messages' => new_school_chat_fetch($threadUserId, 'admin')], 201);
+        }
+
+        case $key === 'POST admin/new-school/chat/clear': {
+            require_admin();
+            new_school_chat_ensure_schema();
+            $threadUserId = (int) ($body['user_id'] ?? 0);
+            if ($threadUserId <= 0) {
+                json(['error' => 'A user_id is required.'], 422);
+            }
+            new_school_chat_clear($threadUserId, 'admin');
+            json(['messages' => []]);
         }
 
         case $key === 'POST new-school/school/register': {
@@ -1668,12 +1840,7 @@ function new_school_handle_route(string $method, string $route): bool
             if (!in_array($approvalStatus, ['approved', 'rejected', 'pending'], true)) {
                 json(['error' => 'Invalid approval status.'], 422);
             }
-            if (($student['parent_consent_status'] ?? '') !== 'approved') {
-                json(['error' => 'Parent consent must be approved before teacher approval.'], 422);
-            }
-            if (($student['school_approval_status'] ?? '') !== 'approved') {
-                json(['error' => 'School approval must be approved before teacher approval.'], 422);
-            }
+            // Teacher approval is the only gate — no parent/school prerequisites.
 
             $teacher = $user['role'] === 'teacher' ? new_school_fetch_teacher_by_user_id((int) $user['id']) : null;
             if ($teacher && (int) $student['teacher_id'] > 0 && (int) $student['teacher_id'] !== (int) $teacher['id']) {
@@ -1727,6 +1894,12 @@ function new_school_handle_route(string $method, string $route): bool
                  WHERE id = ?'
             );
             $studentUpdate->execute([$approvalStatus, (int) $student['id']]);
+
+            // Teacher approval is the student's only gate — activate (or reject) their account login too.
+            $userStatus = $approvalStatus === 'approved' ? 'approved' : ($approvalStatus === 'rejected' ? 'rejected' : 'pending');
+            $pdo->prepare(
+                'UPDATE users SET approval_status = ?, approval_reviewed_by_user_id = ?, approval_reviewed_at = NOW(), updated_at = NOW() WHERE id = ?'
+            )->execute([$userStatus, (int) $user['id'], (int) $student['user_id']]);
 
             $student = new_school_refresh_student_status((int) $student['id']);
             new_school_add_notification(
@@ -1800,7 +1973,11 @@ function new_school_handle_route(string $method, string $route): bool
                     if (!$student) {
                         json(['error' => 'Student not found.'], 404);
                     }
-                    if ((int) $student['teacher_id'] !== (int) $teacher['id'] && (int) $student['school_id'] !== (int) $teacher['school_id']) {
+                    // Teacher may view their OWN students, plus students not yet
+                    // assigned to any teacher in their school (so they can claim/approve).
+                    $ownsStudent = (int) $student['teacher_id'] === (int) $teacher['id'];
+                    $unassignedInSchool = ((int) ($student['teacher_id'] ?? 0) === 0) && (int) $student['school_id'] === (int) $teacher['school_id'];
+                    if (!$ownsStudent && !$unassignedInSchool) {
                         json(['error' => 'This student is not assigned to your teacher account.'], 403);
                     }
                     json(new_school_redact_student_context(array_merge([
@@ -3114,20 +3291,7 @@ function new_school_handle_route(string $method, string $route): bool
             if (!in_array($status, ['pending', 'approved', 'rejected'], true)) {
                 json(['error' => 'Invalid status.'], 422);
             }
-            // Enforce approval ordering: parent consent first, then school, then teacher.
-            if ($status === 'approved') {
-                if ($type === 'school' && (string) ($student['parent_consent_status'] ?? '') !== 'approved') {
-                    json(['error' => 'Parent consent must be approved before school approval.'], 422);
-                }
-                if ($type === 'teacher') {
-                    if ((string) ($student['parent_consent_status'] ?? '') !== 'approved') {
-                        json(['error' => 'Parent consent must be approved before teacher approval.'], 422);
-                    }
-                    if ((string) ($student['school_approval_status'] ?? '') !== 'approved') {
-                        json(['error' => 'School approval must be completed before teacher approval.'], 422);
-                    }
-                }
-            }
+            // Teacher approval is the student's only gate — no parent/school ordering.
             $pdo = db();
             $approvedAt = in_array($status, ['approved', 'rejected'], true) ? date('Y-m-d H:i:s') : null;
             $stmt = $pdo->prepare(
@@ -3142,6 +3306,12 @@ function new_school_handle_route(string $method, string $route): bool
             ]);
             $col = $type === 'school' ? 'school_approval_status' : 'teacher_approval_status';
             $pdo->prepare("UPDATE new_school_students SET $col = ?, updated_at = NOW() WHERE id = ?")->execute([$status, $studentId]);
+            // Teacher approval activates (or rejects) the student's account login.
+            if ($type === 'teacher') {
+                $userStatus = $status === 'approved' ? 'approved' : ($status === 'rejected' ? 'rejected' : 'pending');
+                $pdo->prepare('UPDATE users SET approval_status = ?, approval_reviewed_by_user_id = ?, approval_reviewed_at = NOW(), updated_at = NOW() WHERE id = ?')
+                    ->execute([$userStatus, (int) $user['id'], (int) $student['user_id']]);
+            }
             new_school_refresh_student_status($studentId);
             json(['message' => 'Approval saved.'], 201);
         }

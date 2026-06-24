@@ -249,7 +249,7 @@ const validateRegisterForm = (form: RegisterFormState, termsAccepted: boolean) =
           throw new Error('Government ID URL must be a valid link.')
         }
       }
-      requireText(form.digitalSignature || form.fullName, 'Digital signature', 3)
+      requireText(form.digitalSignature || form.fullName, 'Full name', 3)
       return
     case 'school':
       requireText(form.schoolName, 'School name', 2)
@@ -598,7 +598,7 @@ export function AuthModal({
                         {renderTextField('email', 'Email Address', { type: 'email', placeholder: 'parent@example.com', autoComplete: 'email' })}
                         {renderTextField('homeAddress', 'Home Address', { as: 'textarea', full: true, placeholder: 'Street address, city, state, zip', rows: 3 })}
                         {renderTextField('governmentIdUrl', 'Government ID URL', { full: true, type: 'url', placeholder: 'Optional ID link', required: false })}
-                        {renderTextField('digitalSignature', 'Digital Signature', { full: true, placeholder: 'Type your full name as signature', minLength: 3 })}
+                        {renderTextField('digitalSignature', 'Type your full name', { full: true, placeholder: 'Your full name', minLength: 3 })}
                         {renderTextField('password', 'Password', { type: 'password', placeholder: 'Create a password', autoComplete: 'new-password' })}
                         {renderTextField('confirmPassword', 'Confirm Password', { type: 'password', placeholder: 'Repeat the password', autoComplete: 'new-password' })}
                       </>

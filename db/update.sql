@@ -550,6 +550,24 @@ CREATE TABLE IF NOT EXISTS new_school_points (
   KEY idx_points_recipient (recipient_role, recipient_id)
 ) ENGINE=InnoDB;
 
+-- Admin <-> user chat (one thread per non-admin user; one-sided "clear chat").
+CREATE TABLE IF NOT EXISTS new_school_chat_messages (
+  id              INT AUTO_INCREMENT PRIMARY KEY,
+  thread_user_id  INT NOT NULL,
+  sender          ENUM('user','admin') NOT NULL,
+  sender_user_id  INT NULL,
+  body            TEXT NOT NULL,
+  created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_ns_chat_thread (thread_user_id, created_at)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS new_school_chat_clears (
+  thread_user_id  INT NOT NULL,
+  side            ENUM('user','admin') NOT NULL,
+  cleared_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (thread_user_id, side)
+) ENGINE=InnoDB;
+
 -- Terms & Conditions acceptance audit log (registration role terms + general platform + website).
 CREATE TABLE IF NOT EXISTS terms_acceptances (
   id              BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -721,6 +739,10 @@ CALL add_column_if_missing('new_school_parents', 'consent_checked', 'TINYINT(1) 
 CALL add_column_if_missing('new_school_parents', 'digital_signature', 'VARCHAR(255) DEFAULT NULL', 'consent_checked');
 CALL add_column_if_missing('new_school_parents', 'approved_at', 'TIMESTAMP NULL DEFAULT NULL', 'digital_signature');
 CALL add_column_if_missing('new_school_parents', 'consented_at', 'TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP', 'approved_at');
+-- Parent approval chain: parent registers -> student confirms -> teacher approves.
+CALL add_column_if_missing('new_school_parents', 'link_status', "ENUM('pending_student','pending_teacher','approved','rejected') NOT NULL DEFAULT 'pending_student'", 'consent_checked');
+CALL add_column_if_missing('new_school_parents', 'student_confirmed_at', 'TIMESTAMP NULL DEFAULT NULL', 'link_status');
+UPDATE new_school_parents SET link_status = 'approved' WHERE approved_at IS NOT NULL AND link_status = 'pending_student';
 
 CALL add_column_if_missing('new_school_approvals', 'reviewer_role', 'VARCHAR(120) DEFAULT NULL', 'reviewer_email');
 CALL add_column_if_missing('new_school_approvals', 'notes', 'TEXT DEFAULT NULL', 'status');

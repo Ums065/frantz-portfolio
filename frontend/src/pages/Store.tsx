@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react'
-import { Link, NavLink, useLocation } from 'react-router-dom'
+﻿import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react'
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { api, type InventoryRow } from '../lib/api'
 import { useSeo } from '../hooks/useSeo'
 import { BRAND_LOGO } from '../lib/brandAssets'
@@ -143,6 +143,8 @@ function MerchCard({
   onDecrease,
   onIncrease,
   onOpenDetails,
+  isPortrait = false,
+  onImageLoad,
 }: {
   row: InventoryRow
   qty: number
@@ -150,6 +152,8 @@ function MerchCard({
   onDecrease: (row: InventoryRow) => void
   onIncrease: (row: InventoryRow) => void
   onOpenDetails: (row: InventoryRow) => void
+  isPortrait?: boolean
+  onImageLoad?: (productId: string, isPortrait: boolean) => void
 }) {
   const isUpcoming = row.visibility === 'upcoming'
   const isSoldOut = row.visibility === 'live' && row.stock_status === 'out'
@@ -159,10 +163,27 @@ function MerchCard({
   const highlights = parseLines(row.feature_list).slice(0, 3)
 
   return (
-    <article className={`card${isUpcoming ? ' preview' : ''}${isSoldOut ? ' locked' : ''}`}>
+    <article
+      className={`card${isUpcoming ? ' preview' : ''}${isSoldOut ? ' locked' : ''}`}
+      onClick={(event) => {
+        const target = event.target as HTMLElement | null
+        if (target?.closest('button,a,input,select,textarea')) return
+        onOpenDetails(row)
+      }}
+    >
       <span className="card__badge" style={badgeStyle(tone)}>{inventoryBadge(row)}</span>
-      <button className="card__img card__img--button" type="button" onClick={() => onOpenDetails(row)} aria-label={`Open details for ${row.name}`}>
-        <img src={row.image || FALLBACK_IMAGE} alt={row.name} loading="lazy" decoding="async" />
+      <button className={`card__img card__img--button${isPortrait ? ' card__img--portrait' : ''}`} type="button" onClick={() => onOpenDetails(row)} aria-label={`Open details for ${row.name}`}>
+        <img
+          src={row.image || FALLBACK_IMAGE}
+          alt={row.name}
+          loading="lazy"
+          decoding="async"
+          onLoad={(event) => {
+            const img = event.currentTarget
+            const portrait = img.naturalHeight > img.naturalWidth * 1.05
+            onImageLoad?.(row.product_id, portrait)
+          }}
+        />
         <div className="card__quick"><span className="btn btn--sm">View Details</span></div>
         {isSoldOut ? (
           <div className="card__overlay" aria-hidden="true">
@@ -246,7 +267,7 @@ function ProductQuickView({
           <img src={row.image || FALLBACK_IMAGE} alt={row.name} className="qv__photo" />
         </div>
         <div className="qv__body">
-          <div className="qv__cat">{row.category || 'Merch'} · {inventoryBadge(row)}</div>
+          <div className="qv__cat">{row.category || 'Merch'} Ã‚Â· {inventoryBadge(row)}</div>
           <h2 className="qv__name">{row.name}</h2>
           {row.tagline ? <p className="qv__tagline">{row.tagline}</p> : null}
           <div className="qv__price-row">
@@ -305,6 +326,7 @@ export default function Store() {
   })
 
   const location = useLocation()
+  const navigate = useNavigate()
   const [rows, setRows] = useState<InventoryRow[]>([])
   const [cart, setCart] = useState<CartLine[]>([])
   const [loading, setLoading] = useState(true)
@@ -318,6 +340,7 @@ export default function Store() {
   const [checkoutStep, setCheckoutStep] = useState<CheckoutStep>('details')
   const [cartOpen, setCartOpen] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState<InventoryRow | null>(null)
+  const [portraitByProduct, setPortraitByProduct] = useState<Record<string, boolean>>({})
   const checkoutFormRef = useRef<HTMLFormElement | null>(null)
 
   useEffect(() => {
@@ -448,9 +471,23 @@ export default function Store() {
   const shipping = subtotal >= 75 || subtotal === 0 ? 0 : 8
   const tax = subtotal * 0.0875
   const total = subtotal + shipping + tax
+  const cartItemCount = cartCount(cart)
 
   const openProduct = (row: InventoryRow) => {
     setSelectedProduct(row)
+  }
+
+
+  const handlePortraitDetect = (productId: string, isPortrait: boolean) => {
+    setPortraitByProduct((prev) => (prev[productId] === isPortrait ? prev : { ...prev, [productId]: isPortrait }))
+  }
+
+  const handleContinueShopping = () => {
+    setCartOpen(false)
+    setCheckoutOpen(false)
+    setCheckoutStep('details')
+    setSelectedProduct(null)
+    navigate('/store', { replace: true })
   }
 
   const openCart = () => {
@@ -581,7 +618,7 @@ export default function Store() {
 
           <div className="sh-actions">
             <NavLink className={({ isActive }) => `sh-link${isActive ? ' active' : ''}`} to="/" end>
-              Site
+              Home
             </NavLink>
             <NavLink className={({ isActive }) => `sh-link${isActive ? ' active' : ''}`} to="/#community">
               Community
@@ -595,7 +632,7 @@ export default function Store() {
                 <circle cx="20" cy="21" r="1" />
                 <path d="M1 1h4l2.7 13.4a2 2 0 002 1.6h9.7a2 2 0 002-1.6L23 6H6" />
               </svg>
-              <span className={`cart-count${cartCount(cart) > 0 ? ' show' : ''}`}>{cartCount(cart)}</span>
+              <span className={`cart-count${cartItemCount > 0 ? ' show' : ''}`}>{cartItemCount}</span>
             </button>
           </div>
         </div>
@@ -603,7 +640,7 @@ export default function Store() {
 
       <section className="shop-hero">
         <div className="wrap">
-          <div className="eyebrow">Premium Merchandise · Purpose Driven</div>
+          <div className="eyebrow">Premium Merchandise Ã‚Â· Purpose Driven</div>
           <h1>The Collection</h1>
           <p>Wear the movement. Every purchase fuels community impact.</p>
           <div className="hero-stats">
@@ -623,7 +660,7 @@ export default function Store() {
           <div className="hero-cart-panel">
             <div>
               <span className="hero-cart-panel__eyebrow">Cart Snapshot</span>
-              <strong>{cartCount(cart)} item{cartCount(cart) === 1 ? '' : 's'} in cart</strong>
+              <strong>{cartItemCount} item{cartItemCount === 1 ? '' : 's'} in cart</strong>
               <p>{cartRows.length > 0 ? `${formatMoney(total)} estimated total including shipping and tax.` : 'Add products to see a live cart summary here.'}</p>
             </div>
             <div className="hero-cart-panel__actions">
@@ -692,6 +729,7 @@ export default function Store() {
                     onDecrease={(item) => updateQuantity(item, (cartQtyMap.get(item.product_id) || 0) - 1)}
                     onIncrease={(item) => updateQuantity(item, (cartQtyMap.get(item.product_id) || 0) + 1)}
                     onOpenDetails={openProduct}
+                    onImageLoad={handlePortraitDetect}
                   />
                 )) : (
                   <div className="empty">
@@ -720,6 +758,7 @@ export default function Store() {
                       onDecrease={(item) => updateQuantity(item, (cartQtyMap.get(item.product_id) || 0) - 1)}
                       onIncrease={(item) => updateQuantity(item, (cartQtyMap.get(item.product_id) || 0) + 1)}
                       onOpenDetails={openProduct}
+                      onImageLoad={handlePortraitDetect}
                     />
                   ))}
                 </div>
@@ -745,6 +784,7 @@ export default function Store() {
                       onDecrease={(item) => updateQuantity(item, (cartQtyMap.get(item.product_id) || 0) - 1)}
                       onIncrease={(item) => updateQuantity(item, (cartQtyMap.get(item.product_id) || 0) + 1)}
                       onOpenDetails={openProduct}
+                      onImageLoad={handlePortraitDetect}
                     />
                   ))}
                 </div>
@@ -783,7 +823,7 @@ export default function Store() {
         <div className="drawer__head">
           <div>
             <h3>Your Cart</h3>
-            <p style={{ color: 'var(--muted)', fontSize: 12.5, marginTop: 4 }}>{cartCount(cart)} item{cartCount(cart) === 1 ? '' : 's'} selected</p>
+            <p style={{ color: 'var(--muted)', fontSize: 12.5, marginTop: 4 }}>{cartItemCount} item{cartItemCount === 1 ? '' : 's'} selected</p>
           </div>
           <button className="close-x" type="button" onClick={() => setCartOpen(false)} aria-label="Close cart drawer">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 6l12 12M18 6 6 18" /></svg>
@@ -799,7 +839,7 @@ export default function Store() {
                 <button className="card__name-btn" type="button" onClick={() => openProduct(row)}>
                   <span className="line__name">{row.name}</span>
                 </button>
-                <div className="line__meta">{row.category || 'Merch'} · {formatMoney(row.price)} each</div>
+                <div className="line__meta">{row.category || 'Merch'} Ã‚Â· {formatMoney(row.price)} each</div>
                 <CartQuantityControl compact qty={qty} onDecrease={() => setQty(row.product_id, qty - 1)} onIncrease={() => setQty(row.product_id, qty + 1)} />
               </div>
               <div className="line__right">
@@ -819,10 +859,22 @@ export default function Store() {
           <div className="row"><span>Estimated Tax</span><span>{formatMoney(tax)}</span></div>
           <div className="row total"><span>Total</span><b>{formatMoney(total)}</b></div>
           <div className="drawer__cta">
-            <button className="btn btn--solid btn--full" type="button" onClick={scrollToCheckout} disabled={cartRows.length === 0}>Continue to Checkout</button>
+            <button className="btn btn--ghost" type="button" onClick={handleContinueShopping}>Continue Shopping</button>
+            <button className="btn btn--solid" type="button" onClick={scrollToCheckout} disabled={cartRows.length === 0}>Continue to Checkout</button>
           </div>
         </div>
       </aside>
+
+      <button
+        className="cart-fab"
+        type="button"
+        onClick={openCart}
+        aria-label="Open cart drawer"
+        hidden={cartOpen || checkoutOpen || !!selectedProduct}
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="9" cy="21" r="1" /><circle cx="20" cy="21" r="1" /><path d="M1 1h4l2.7 13.4a2 2 0 002 1.6h9.7a2 2 0 002-1.6L23 6H6" /></svg>
+        <span className="cart-fab__count" hidden={cartItemCount === 0}>{cartItemCount}</span>
+      </button>
 
       <div className={`checkout${checkoutOpen ? ' open' : ''}`} role="dialog" aria-modal="true" aria-hidden={!checkoutOpen} onClick={(e) => e.target === e.currentTarget && closeCheckout()}>
         <div className="checkout__head">

@@ -9,6 +9,8 @@ import { useSeo } from '../hooks/useSeo'
 import { resolveDashboardRoute } from '../lib/dashboardRoute'
 import { awards } from '../lib/awards'
 import TermsAgreement from '../components/TermsAgreement'
+import DashboardGuide from '../components/DashboardGuide'
+import { DASHBOARD_FAQ } from '../lib/dashboardGuide'
 import { CHALLENGE_TERMS_VERSION } from '../lib/terms'
 import { recordTermsAcceptance } from '../lib/recordTermsAcceptance'
 
@@ -227,7 +229,7 @@ function SchoolRankBoard({ schools, mySchoolId, hidden }: { schools: any[]; mySc
 }
 
 type RegistrationTag = 'student' | 'parent' | 'school' | 'teacher'
-type DashboardTabKey = 'overview' | 'profile' | 'activity' | 'rankings' | 'records' | 'approvals' | 'reviews' | 'notifications' | 'data'
+type DashboardTabKey = 'overview' | 'profile' | 'activity' | 'rankings' | 'records' | 'approvals' | 'reviews' | 'notifications' | 'data' | 'chat' | 'faq'
 type SchoolRecordsTabKey = 'students' | 'teachers' | 'interviews' | 'approvals' | 'projects'
 type DashboardTabConfig = { key: DashboardTabKey; label: string; hint: string; badge?: string }
 
@@ -462,41 +464,49 @@ const challengeFaqItems = [
 ] as const
 const dashboardTabsByRole: Record<string, DashboardTabConfig[]> = {
   student: [
-    { key: 'overview', label: 'Overview', hint: 'Status and progress' },
-    { key: 'profile', label: 'Profile', hint: 'Approvals and identity' },
-    { key: 'activity', label: 'Activity', hint: 'Business and submission work' },
-    { key: 'rankings', label: 'Rankings', hint: 'Competition board' },
-    { key: 'notifications', label: 'Alerts', hint: 'Unread updates' },
+    { key: 'overview', label: 'Overview', hint: 'Your progress at a glance' },
+    { key: 'profile', label: 'My Profile', hint: 'Your details and approvals' },
+    { key: 'activity', label: 'My Work', hint: 'Do your tasks and submit' },
+    { key: 'rankings', label: 'Rankings', hint: 'See who is leading' },
+    { key: 'chat', label: 'Chat', hint: 'Talk to the team' },
+    { key: 'faq', label: 'Help', hint: 'Questions and answers' },
+    { key: 'notifications', label: 'Alerts', hint: 'Your new updates' },
   ],
   parent: [
-    { key: 'overview', label: 'Overview', hint: 'Consent and student snapshot' },
-    { key: 'profile', label: 'Profile', hint: 'Linked student details' },
-    { key: 'rankings', label: 'Rankings', hint: 'Competition board' },
-    { key: 'notifications', label: 'Alerts', hint: 'Unread updates' },
+    { key: 'overview', label: 'Overview', hint: 'Your child at a glance' },
+    { key: 'profile', label: 'My Profile', hint: 'Details for your child' },
+    { key: 'rankings', label: 'Rankings', hint: 'See who is leading' },
+    { key: 'chat', label: 'Chat', hint: 'Talk to the team' },
+    { key: 'faq', label: 'Help', hint: 'Questions and answers' },
+    { key: 'notifications', label: 'Alerts', hint: 'Your new updates' },
   ],
   school: [
-    { key: 'overview', label: 'Overview', hint: 'School summary' },
-    { key: 'profile', label: 'Profile', hint: 'School identity' },
-    { key: 'approvals', label: 'Approvals', hint: 'Teacher & student review' },
-    { key: 'rankings', label: 'Rankings', hint: 'Competition board' },
-    { key: 'records', label: 'Records', hint: 'Students & submissions' },
-    { key: 'notifications', label: 'Alerts', hint: 'Notifications' },
+    { key: 'overview', label: 'Overview', hint: 'Your school at a glance' },
+    { key: 'profile', label: 'My Profile', hint: 'Your school details' },
+    { key: 'approvals', label: 'Approvals', hint: 'Approve teachers and students' },
+    { key: 'rankings', label: 'Rankings', hint: 'See who is leading' },
+    { key: 'records', label: 'Records', hint: 'Students and their work' },
+    { key: 'chat', label: 'Chat', hint: 'Talk to the team' },
+    { key: 'faq', label: 'Help', hint: 'Questions and answers' },
+    { key: 'notifications', label: 'Alerts', hint: 'Your new updates' },
   ],
   teacher: [
-    { key: 'overview', label: 'Overview', hint: 'Teacher summary' },
-    { key: 'profile', label: 'Profile', hint: 'Teacher identity' },
-    { key: 'approvals', label: 'Approvals', hint: 'Student review tools' },
-    { key: 'rankings', label: 'Rankings', hint: 'Teacher competition board' },
-    { key: 'records', label: 'Records', hint: 'Students and submissions' },
-    { key: 'notifications', label: 'Alerts', hint: 'Unread updates' },
+    { key: 'overview', label: 'Overview', hint: 'Your class at a glance' },
+    { key: 'profile', label: 'My Profile', hint: 'Your details' },
+    { key: 'approvals', label: 'Approvals', hint: 'Approve your students' },
+    { key: 'rankings', label: 'Rankings', hint: 'See who is leading' },
+    { key: 'records', label: 'Records', hint: 'Students and their work' },
+    { key: 'chat', label: 'Chat', hint: 'Talk to the team' },
+    { key: 'faq', label: 'Help', hint: 'Questions and answers' },
+    { key: 'notifications', label: 'Alerts', hint: 'Your new updates' },
   ],
   admin: [
-    { key: 'overview', label: 'Overview', hint: 'Platform summary' },
-    { key: 'profile', label: 'Profile', hint: 'Platform identity' },
-    { key: 'data', label: 'Data', hint: 'Schools, parents, approvals' },
-    { key: 'reviews', label: 'Reviews', hint: 'Submission decisions' },
-    { key: 'rankings', label: 'Rankings', hint: 'Global leaderboard' },
-    { key: 'notifications', label: 'Alerts', hint: 'Unread updates' },
+    { key: 'overview', label: 'Overview', hint: 'Everything at a glance' },
+    { key: 'profile', label: 'My Profile', hint: 'Your details' },
+    { key: 'data', label: 'People', hint: 'All people and records' },
+    { key: 'reviews', label: 'Reviews', hint: 'Approve or decline work' },
+    { key: 'rankings', label: 'Rankings', hint: 'See who is leading' },
+    { key: 'notifications', label: 'Alerts', hint: 'Your new updates' },
   ],
 }
 
@@ -558,6 +568,10 @@ export default function NewSchool() {
   const [adminSummary, setAdminSummary] = useState<any>(null)
   const [dashboardLoading, setDashboardLoading] = useState(false)
   const [dashboardTab, setDashboardTab] = useState<DashboardTabKey>('overview')
+  const [guideOpen, setGuideOpen] = useState(false)
+  const [chatMessages, setChatMessages] = useState<any[]>([])
+  const [chatInput, setChatInput] = useState('')
+  const [chatBusy, setChatBusy] = useState(false)
   const [parentLink, setParentLink] = useState<any>(null)
   const [busy, setBusy] = useState('')
   const [registrationTag, setRegistrationTag] = useState<RegistrationTag>('student')
@@ -579,7 +593,7 @@ export default function NewSchool() {
   const [parentSchoolSearch, setParentSchoolSearch] = useState('')
   const [parentTeacherId, setParentTeacherId] = useState('')
   const [parentParticipantId, setParentParticipantId] = useState('')
-  const [schoolApprovalsTab, setSchoolApprovalsTab] = useState<'students' | 'teachers'>('students')
+  const [schoolApprovalsTab, setSchoolApprovalsTab] = useState<'students' | 'teachers' | 'parents'>('students')
   const [schoolApprovalSearch, setSchoolApprovalSearch] = useState('')
   const [schoolApprovalStatus, setSchoolApprovalStatus] = useState('all')
   const [approvalDetail, setApprovalDetail] = useState<{ type: 'student' | 'teacher'; id: number } | null>(null)
@@ -644,6 +658,64 @@ export default function NewSchool() {
       setDashboardLoading(false)
     }
   }
+
+  // First-visit dashboard guide: auto-open once per account+role (per browser).
+  const guideRoleNow = () => (adminSummary ? 'admin' : (dashboard?.role || ''))
+  useEffect(() => {
+    if (!isDashboardRoute || !user) return
+    const role = guideRoleNow()
+    if (!role) return
+    try {
+      if (!localStorage.getItem(`ns-guide-seen-${user.id}-${role}`)) setGuideOpen(true)
+    } catch { /* localStorage unavailable */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isDashboardRoute, user, dashboard, adminSummary])
+
+  const closeGuide = () => {
+    setGuideOpen(false)
+    const role = guideRoleNow()
+    try {
+      if (user && role) localStorage.setItem(`ns-guide-seen-${user.id}-${role}`, '1')
+    } catch { /* ignore */ }
+  }
+
+  // ---- Admin ⇄ user chat (user side) ----
+  const loadChat = async () => {
+    try {
+      const d = await api.get<any>('new-school/chat')
+      setChatMessages(Array.isArray(d?.messages) ? d.messages : [])
+    } catch {
+      setChatMessages([])
+    }
+  }
+  const sendChat = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const text = chatInput.trim()
+    if (!text || chatBusy) return
+    setChatBusy(true)
+    try {
+      const d = await api.post<any>('new-school/chat', { body: text })
+      setChatMessages(Array.isArray(d?.messages) ? d.messages : [])
+      setChatInput('')
+    } catch (err) {
+      handleError(err, 'Could not send your message.')
+    } finally {
+      setChatBusy(false)
+    }
+  }
+  const clearChatForMe = async () => {
+    if (!confirm('Clear this chat from your view? The admin team keeps the full history.')) return
+    try {
+      await api.post('new-school/chat/clear', {})
+      setChatMessages([])
+    } catch (err) {
+      handleError(err, 'Could not clear the chat.')
+    }
+  }
+  useEffect(() => {
+    if (isDashboardRoute && user && dashboardTab === 'chat') void loadChat()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dashboardTab, isDashboardRoute, user])
 
   const reloadParentLink = async (qrToken: string) => {
     const data = await api.get<any>(`new-school/parent/${qrToken}`)
@@ -1011,6 +1083,37 @@ export default function NewSchool() {
       await reloadOverview()
     } catch (err) {
       handleError(err, 'Teacher verification failed.')
+    } finally {
+      setBusy('')
+    }
+  }
+
+  // Teacher approves/rejects a parent who has been confirmed by the student.
+  const approveParentInline = async (parentRow: any, status: 'approved' | 'rejected') => {
+    setBusy(`parent-${parentRow.student_id}-${status}`)
+    try {
+      const res = await api.post<any>('new-school/parent/approve', {
+        student_id: Number(parentRow.student_id),
+        approval_status: status,
+      })
+      showNotice('success', res.message || `Parent ${status}.`)
+      await reloadDashboard()
+    } catch (err) {
+      handleError(err, 'Parent approval failed.')
+    } finally {
+      setBusy('')
+    }
+  }
+
+  // Student confirms (or rejects) the parent who registered with their code.
+  const confirmParent = async (decision: 'confirm' | 'reject') => {
+    setBusy(`parent-confirm-${decision}`)
+    try {
+      const res = await api.post<any>('new-school/parent/confirm', { decision })
+      showNotice('success', res.message || 'Saved.')
+      await reloadDashboard()
+    } catch (err) {
+      handleError(err, 'Could not update the parent link.')
     } finally {
       setBusy('')
     }
@@ -1423,6 +1526,17 @@ export default function NewSchool() {
       || String(row.status || '').toLowerCase() === schoolApprovalStatus
     return matchesSearch && matchesStatus
   })
+  // Parents the teacher can approve (student already confirmed the link).
+  const activeParents = asArray<any>(teacherDashboard?.parents)
+  const filteredApprovalParents = activeParents.filter((row: any) => {
+    const matchesSearch = !approvalSearchTerm
+      || `${row.parent_full_name || ''} ${row.student_name || ''} ${row.participant_id || ''}`.toLowerCase().includes(approvalSearchTerm)
+    const link = String(row.link_status || '').toLowerCase()
+    const matchesStatus = schoolApprovalStatus === 'all'
+      || link === schoolApprovalStatus
+      || (schoolApprovalStatus === 'pending' && link.startsWith('pending'))
+    return matchesSearch && matchesStatus
+  })
   const approvalDetailRecord = approvalDetail
     ? (approvalDetail.type === 'student'
         ? activeStudents.find((row: any) => Number(row.id) === approvalDetail.id)
@@ -1543,14 +1657,14 @@ export default function NewSchool() {
   const dashboardHero = (() => {
     if (studentDashboard) {
       return {
-        eyebrow: 'Student Control Center',
+        eyebrow: 'Your Dashboard',
         title: studentDashboard.student.full_name,
-        lead: 'Track your progress, keep the competition moving, and jump directly to the next step.',
+        lead: 'See how you are doing and jump straight to your next step.',
         stats: [
-          { label: 'Points', value: studentDashboard.student_points || 0 },
-          { label: 'Interviews', value: studentDashboard.interview_count || 0 },
-          { label: 'School Rank', value: `#${studentDashboard.rankings?.school?.position || '-'}` },
-          { label: 'Teacher Rank', value: `#${studentDashboard.rankings?.teacher?.position || '-'}` },
+          { label: 'Points', value: studentDashboard.student_points || 0, tab: 'rankings' as DashboardTabKey },
+          { label: 'Interviews', value: studentDashboard.interview_count || 0, tab: 'activity' as DashboardTabKey },
+          { label: 'School Rank', value: `#${studentDashboard.rankings?.school?.position || '-'}`, tab: 'rankings' as DashboardTabKey },
+          { label: 'Teacher Rank', value: `#${studentDashboard.rankings?.teacher?.position || '-'}`, tab: 'rankings' as DashboardTabKey },
         ],
         primary: { label: 'Continue Activity', tab: 'activity' as DashboardTabKey },
         secondary: { label: 'View Rankings', tab: 'rankings' as DashboardTabKey },
@@ -1558,14 +1672,14 @@ export default function NewSchool() {
     }
     if (parentDashboard) {
       return {
-        eyebrow: 'Parent Monitor',
+        eyebrow: 'Parent Dashboard',
         title: parentDashboard.parent.parent_full_name,
-        lead: 'See consent, progress, and ranking movement without any extra noise.',
+        lead: 'See your child’s approval, progress, and rank in one simple view.',
         stats: [
-          { label: 'Student', value: parentDashboard.parent.student_full_name || '-' },
-          { label: 'Consent', value: parentDashboard.student_context?.student?.parent_consent_status || 'pending' },
-          { label: 'Rank', value: `#${parentDashboard.student_context?.rankings?.school?.position || '-'}` },
-          { label: 'Unread', value: parentUnreadNotifications.length || 0 },
+          { label: 'Student', value: parentDashboard.parent.student_full_name || '-', tab: 'profile' as DashboardTabKey },
+          { label: 'Consent', value: parentDashboard.student_context?.student?.parent_consent_status || 'pending', tab: 'overview' as DashboardTabKey },
+          { label: 'Rank', value: `#${parentDashboard.student_context?.rankings?.school?.position || '-'}`, tab: 'rankings' as DashboardTabKey },
+          { label: 'Unread', value: parentUnreadNotifications.length || 0, tab: 'notifications' as DashboardTabKey },
         ],
         primary: { label: 'Open Overview', tab: 'overview' as DashboardTabKey },
         secondary: { label: 'View Rankings', tab: 'rankings' as DashboardTabKey },
@@ -1573,14 +1687,14 @@ export default function NewSchool() {
     }
     if (schoolDashboard) {
       return {
-        eyebrow: 'Principal Workspace',
+        eyebrow: 'School Dashboard',
         title: schoolDashboard.school.school_name,
-        lead: 'Approve teachers, keep school readiness high, and monitor performance from one view.',
+        lead: 'Approve teachers and keep an eye on how your school is doing.',
         stats: [
-          { label: 'Students', value: schoolDashboard.summary.students_total || 0 },
-          { label: 'Teachers', value: schoolDashboard.summary.teacher_approved || 0 },
-          { label: 'Eligible', value: schoolDashboard.summary.eligible_to_submit || 0 },
-          { label: 'Submissions', value: schoolDashboard.summary.submitted || 0 },
+          { label: 'Students', value: schoolDashboard.summary.students_total || 0, tab: 'records' as DashboardTabKey },
+          { label: 'Teachers', value: schoolDashboard.summary.teacher_approved || 0, tab: 'approvals' as DashboardTabKey, approvalsTab: 'teachers' as const },
+          { label: 'Eligible', value: schoolDashboard.summary.eligible_to_submit || 0, tab: 'records' as DashboardTabKey },
+          { label: 'Submissions', value: schoolDashboard.summary.submitted || 0, tab: 'records' as DashboardTabKey },
         ],
         primary: { label: 'Manage Approvals', tab: 'approvals' as DashboardTabKey },
         secondary: { label: 'Open Rankings', tab: 'rankings' as DashboardTabKey },
@@ -1588,14 +1702,14 @@ export default function NewSchool() {
     }
     if (teacherDashboard) {
       return {
-        eyebrow: 'Teacher Command Panel',
+        eyebrow: 'Teacher Dashboard',
         title: teacherDashboard.teacher.teacher_full_name,
-        lead: 'Review student approvals, verify submissions, and keep your class leaderboard competitive.',
+        lead: 'Approve your students, check their work, and watch your class climb the board.',
         stats: [
-          { label: 'Students', value: teacherDashboard.summary.students_total || 0 },
-          { label: 'Submitted', value: teacherDashboard.summary.submitted || 0 },
-          { label: 'Approved', value: teacherDashboard.summary.teacher_approved || 0 },
-          { label: 'Points', value: teacherDashboard.teacher_points || 0 },
+          { label: 'Students', value: teacherDashboard.summary.students_total || 0, tab: 'records' as DashboardTabKey },
+          { label: 'Submitted', value: teacherDashboard.summary.submitted || 0, tab: 'records' as DashboardTabKey },
+          { label: 'Approved', value: teacherDashboard.summary.teacher_approved || 0, tab: 'approvals' as DashboardTabKey, approvalsTab: 'students' as const, filter: 'approved' },
+          { label: 'Points', value: teacherDashboard.teacher_points || 0, tab: 'rankings' as DashboardTabKey },
         ],
         primary: { label: 'Review Approvals', tab: 'approvals' as DashboardTabKey },
         secondary: { label: 'Open Rankings', tab: 'rankings' as DashboardTabKey },
@@ -1603,14 +1717,14 @@ export default function NewSchool() {
     }
     if (adminDashboard) {
       return {
-        eyebrow: 'Admin Console',
-        title: 'Platform Control Center',
-        lead: 'Monitor schools, approvals, submissions, and rankings from a single clean view.',
+        eyebrow: 'Admin Dashboard',
+        title: 'Program Control Center',
+        lead: 'See schools, approvals, submissions, and rankings all in one place.',
         stats: [
-          { label: 'Schools', value: adminDashboard.summary.schools || 0 },
-          { label: 'Students', value: adminDashboard.summary.students || 0 },
-          { label: 'Teachers', value: adminDashboard.summary.teachers || 0 },
-          { label: 'Winners', value: adminDashboard.summary.winners || 0 },
+          { label: 'Schools', value: adminDashboard.summary.schools || 0, tab: 'data' as DashboardTabKey },
+          { label: 'Students', value: adminDashboard.summary.students || 0, tab: 'data' as DashboardTabKey },
+          { label: 'Teachers', value: adminDashboard.summary.teachers || 0, tab: 'data' as DashboardTabKey },
+          { label: 'Winners', value: adminDashboard.summary.winners || 0, tab: 'reviews' as DashboardTabKey },
         ],
         primary: { label: 'Open Data', tab: 'data' as DashboardTabKey },
         secondary: { label: 'Review Results', tab: 'reviews' as DashboardTabKey },
@@ -1624,15 +1738,15 @@ export default function NewSchool() {
   const isReferenceLayout = dashboardRole !== ''
   const dashboardRoleLabel = ({ student: 'Student', parent: 'Parent', school: 'Principal', teacher: 'Teacher', admin: 'Admin' } as Record<string, string>)[dashboardRole] || 'Member'
   const dashboardReadiness = studentDashboard
-    ? { value: studentStatusProgress, label: 'Challenge progress' }
+    ? { value: studentStatusProgress, label: 'Your progress' }
     : parentDashboard
-      ? { value: parentReadinessProgress, label: 'Student readiness' }
+      ? { value: parentReadinessProgress, label: 'Student progress' }
       : schoolDashboard
-        ? { value: schoolReadinessProgress, label: 'School readiness' }
+        ? { value: schoolReadinessProgress, label: 'School progress' }
         : teacherDashboard
-          ? { value: teacherReadinessProgress, label: 'Class readiness' }
+          ? { value: teacherReadinessProgress, label: 'Class progress' }
           : adminDashboard
-            ? { value: adminReadinessProgress, label: 'Platform readiness' }
+            ? { value: adminReadinessProgress, label: 'Program progress' }
             : null
   const dashboardAvatarChar = String(user?.full_name || dashboardHero?.title || dashboardRoleLabel || '?').trim().charAt(0).toUpperCase()
   const dashboardStageId = 'dashboard-stage'
@@ -1644,6 +1758,15 @@ export default function NewSchool() {
       stage?.scrollIntoView({ behavior: 'smooth', block: 'start' })
       stage instanceof HTMLElement ? stage.focus({ preventScroll: true }) : undefined
     })
+  }
+
+  // Clicking a summary stat card jumps to the tab that shows that data (and, for
+  // approval-linked stats, pre-selects the right sub-tab + status filter).
+  const onStatClick = (stat: { tab?: DashboardTabKey; approvalsTab?: 'students' | 'teachers' | 'parents'; filter?: string }) => {
+    if (!stat || !stat.tab) return
+    if (stat.approvalsTab) setSchoolApprovalsTab(stat.approvalsTab)
+    if (stat.filter) setSchoolApprovalStatus(stat.filter)
+    openDashboardTab(stat.tab)
   }
 
   return (
@@ -2122,8 +2245,8 @@ export default function NewSchool() {
                   <input name="government_id_file" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" />
                 </label>
                 <label className="ns-field ns-field--full">
-                  <span>Digital Signature</span>
-                  <input name="digital_signature" placeholder="Type full legal name" required />
+                  <span>Type your full name</span>
+                  <input name="digital_signature" placeholder="Your full name" required />
                 </label>
                 <label className="ns-check ns-field--full">
                   <input name="consent_checked" type="checkbox" required />
@@ -2341,10 +2464,16 @@ export default function NewSchool() {
                     <h3 className="ns-principal-workspace__title">{dashboardHero.title}</h3>
                     <div className="ns-principal-workspace__stats">
                       {dashboardHero.stats.map((stat, index) => (
-                        <div className="ns-principal-workspace__stat" key={stat.label}>
+                        <button
+                          className="ns-principal-workspace__stat is-clickable"
+                          type="button"
+                          key={stat.label}
+                          onClick={() => onStatClick(stat)}
+                          title={`Open ${stat.label}`}
+                        >
                           <span>{stat.label}</span>
                           <strong className={index === 3 ? 'is-gold' : ''}>{String(stat.value)}</strong>
-                        </div>
+                        </button>
                       ))}
                     </div>
                   </section>
@@ -2364,6 +2493,9 @@ export default function NewSchool() {
                       <button className="btn" type="button" onClick={() => openDashboardTab(dashboardHero.secondary.tab)}>
                         {dashboardHero.secondary.label}
                       </button>
+                      <button className="btn ns-guide-btn" type="button" onClick={() => setGuideOpen(true)} title="Open the guide & rule book">
+                        Guide &amp; Rules
+                      </button>
                     </div>
                   </div>
                   <div className="ns-dashboard-hero__stats" aria-label="Quick stats">
@@ -2376,6 +2508,8 @@ export default function NewSchool() {
                   </div>
                 </section>
               )}
+
+              {dashboardRole && <DashboardGuide role={dashboardRole} open={guideOpen} onClose={closeGuide} />}
 
               {dashboardTabs.length > 0 && (
                 <div className="ns-dashboard-tabs" role="tablist" aria-label="Dashboard sections" aria-orientation="vertical">
@@ -2428,6 +2562,7 @@ export default function NewSchool() {
                     <p>{dashboardActiveTab.hint}</p>
                   </div>
                   <div className="ns-principal-topbar__meta">
+                    <button className="btn btn--sm ns-guide-btn" type="button" onClick={() => setGuideOpen(true)} title="Open the guide and rule book">📘 Guide &amp; Rules</button>
                     <span className="ns-principal-topbar__live"><i aria-hidden="true" />Live</span>
                     <span className="ns-principal-topbar__role">{dashboardRoleLabel}</span>
                     <span className="ns-principal-topbar__avatar" aria-hidden="true">{dashboardAvatarChar}</span>
@@ -2472,8 +2607,12 @@ export default function NewSchool() {
                   <h3>Your account is waiting for approval</h3>
                   <p>
                     {accountApprovalStatus === 'rejected'
-                      ? 'This account was rejected by admin. Contact support before trying again.'
-                      : 'Private dashboard access unlocks after admin approval.'}
+                      ? 'This account was rejected. Contact support before trying again.'
+                      : user?.role === 'parent'
+                        ? 'Your parent dashboard unlocks once your child confirms the link and their teacher approves it.'
+                        : user?.role === 'student'
+                          ? 'Your dashboard unlocks once your teacher approves your participation.'
+                          : 'Private dashboard access unlocks after admin approval.'}
                   </p>
                 </div>
               )}
@@ -2485,8 +2624,69 @@ export default function NewSchool() {
                 </div>
               )}
 
+              {dashboardTab === 'chat' && dashboardRole && dashboardRole !== 'admin' && (
+                <div className="ns-dash-grid">
+                  <article className="glass ns-dash-card ns-dash-card--wide reveal in ns-chat">
+                    <div className="ns-dash-card__head">
+                      <span className="eyebrow">Chat with Admin</span>
+                      <button type="button" className="btn btn--sm" onClick={() => void clearChatForMe()}>Clear chat</button>
+                    </div>
+                    <div className="ns-chat__log">
+                      {chatMessages.length === 0 && <p className="ns-muted">No messages yet. Send a message to the admin team below.</p>}
+                      {chatMessages.map((m: any) => (
+                        <div key={m.id} className={`ns-chat__msg ns-chat__msg--${m.sender === 'admin' ? 'admin' : 'me'}`}>
+                          <span className="ns-chat__who">{m.sender === 'admin' ? 'Admin' : 'You'}</span>
+                          <p>{m.body}</p>
+                          <span className="ns-chat__time">{m.created_at}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <form className="ns-chat__form" onSubmit={sendChat}>
+                      <input type="text" value={chatInput} onChange={(e) => setChatInput(e.target.value)} placeholder="Type a message to the admin…" maxLength={2000} />
+                      <button className="btn btn--solid" type="submit" disabled={chatBusy || !chatInput.trim()}>{chatBusy ? 'Sending…' : 'Send'}</button>
+                    </form>
+                    <p className="ns-muted ns-chat__note">“Clear chat” only clears your own view — the admin team keeps the full history.</p>
+                  </article>
+                </div>
+              )}
+
+              {dashboardTab === 'faq' && dashboardRole && dashboardRole !== 'admin' && (
+                <div className="ns-dash-grid">
+                  <article className="glass ns-dash-card ns-dash-card--wide reveal in">
+                    <div className="ns-dash-card__head">
+                      <span className="eyebrow">Frequently Asked Questions</span>
+                    </div>
+                    <div className="ns-faq">
+                      {(DASHBOARD_FAQ[dashboardRole] || []).map((item, i) => (
+                        <details className="ns-faq__item" key={i}>
+                          <summary>{item.q}</summary>
+                          <p>{item.a}</p>
+                        </details>
+                      ))}
+                    </div>
+                  </article>
+                </div>
+              )}
+
               {studentDashboard && (
             <div className="ns-dash-grid">
+              {String(studentDashboard.parent?.link_status || '').toLowerCase() === 'pending_student' && (
+                <article className="glass ns-dash-card ns-dash-card--wide reveal in">
+                  <div className="ns-dash-card__head">
+                    <span className="eyebrow">Parent Confirmation Needed</span>
+                  </div>
+                  <h3>Is {studentDashboard.parent?.parent_full_name || 'this person'} your parent / guardian?</h3>
+                  <p>Someone registered as your parent using your student code. Confirm so your teacher can approve their access — or reject it if you don&apos;t recognise them.</p>
+                  <div className="ns-actions">
+                    <button className="btn btn--solid" type="button" disabled={busy.startsWith('parent-confirm-')} onClick={() => confirmParent('confirm')}>
+                      {busy === 'parent-confirm-confirm' ? 'Saving…' : 'Yes, confirm'}
+                    </button>
+                    <button className="btn" type="button" disabled={busy.startsWith('parent-confirm-')} onClick={() => confirmParent('reject')}>
+                      {busy === 'parent-confirm-reject' ? 'Saving…' : 'No, reject'}
+                    </button>
+                  </div>
+                </article>
+              )}
               <article className="glass ns-dash-card reveal in" hidden={dashboardTab !== 'overview'}>
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">Student Status</span>
@@ -2509,8 +2709,8 @@ export default function NewSchool() {
                   ))}
                 </div>
                 <div className="ns-quick-stats">
-                  <div><span>Participant ID</span><strong>{studentDashboard.student.participant_id}</strong></div>
-                  <div><span>Can Submit</span><strong>{studentDashboard.can_submit ? 'Yes' : 'Locked'}</strong></div>
+                  <div><span>Your ID Number</span><strong>{studentDashboard.student.participant_id}</strong></div>
+                  <button type="button" className="is-clickable" onClick={() => onStatClick({ tab: 'activity' })}><span>Can Submit</span><strong>{studentDashboard.can_submit ? 'Yes' : 'Locked'}</strong></button>
                 </div>
                 <div className="ns-qr-card">
                   <img src={qrImageSrc(studentDashboard.student.qr_url)} alt="Student QR code" />
@@ -2821,7 +3021,7 @@ export default function NewSchool() {
               </article>
               <article className="glass ns-dash-card reveal in" hidden={dashboardTab !== 'rankings'}>
                 <div className="ns-dash-card__head">
-                  <span className="eyebrow">Ranking Snapshot</span>
+                  <span className="eyebrow">Your Ranking</span>
                   <span className="ns-board__badge">{parentDashboard.student_context?.performance_score || 0} pts</span>
                 </div>
                 <div className="ns-approval-stack">
@@ -2864,22 +3064,22 @@ export default function NewSchool() {
                 </div>
                 <div className="ns-dashboard-callout">
                   <div className="ns-dashboard-callout__head">
-                    <strong>{schoolDashboard ? 'Principal Control Room' : 'Classroom Command'}</strong>
+                    <strong>{schoolDashboard ? 'School Tools' : 'Class Tools'}</strong>
                     <span>{activeSummary.submitted || 0} submissions</span>
                   </div>
                   <p>{schoolDashboard
-                    ? 'Approve teachers, keep school readiness high, and monitor performance from one view.'
-                    : 'Approve your students, clear submissions, and keep your class leaderboard moving.'}</p>
+                    ? 'Approve teachers and see how your school is doing.'
+                    : 'Approve your students and check their work.'}</p>
                 </div>
-                <span className="ns-overview-label">Approval pipeline</span>
+                <span className="ns-overview-label">Approval pipeline · tap a card to open it</span>
                 <div className="ns-quick-stats">
-                  <div><span>Parent Pending</span><strong>{activeSummary.parent_pending || 0}</strong></div>
-                  <div><span>Parent Approved</span><strong>{activeSummary.parent_approved || 0}</strong></div>
-                  <div><span>School Pending</span><strong>{activeSummary.school_pending || 0}</strong></div>
-                  <div><span>School Approved</span><strong>{activeSummary.school_approved || 0}</strong></div>
-                  <div><span>Teacher Pending</span><strong>{activeSummary.teacher_pending || 0}</strong></div>
-                  <div><span>Teacher Approved</span><strong>{activeSummary.teacher_approved || 0}</strong></div>
-                  <div><span>Interviews Logged</span><strong>{activeSummary.interviews_total || 0}</strong></div>
+                  <button type="button" className="is-clickable" onClick={() => onStatClick({ tab: 'approvals', approvalsTab: 'parents', filter: 'pending' })}><span>Parents Waiting</span><strong>{activeSummary.parent_pending || 0}</strong></button>
+                  <button type="button" className="is-clickable" onClick={() => onStatClick({ tab: 'approvals', approvalsTab: 'parents', filter: 'approved' })}><span>Parents Approved</span><strong>{activeSummary.parent_approved || 0}</strong></button>
+                  <button type="button" className="is-clickable" onClick={() => onStatClick({ tab: 'approvals', approvalsTab: 'students', filter: 'pending' })}><span>Students Waiting</span><strong>{activeSummary.school_pending || 0}</strong></button>
+                  <button type="button" className="is-clickable" onClick={() => onStatClick({ tab: 'approvals', approvalsTab: 'students', filter: 'approved' })}><span>Students Approved</span><strong>{activeSummary.school_approved || 0}</strong></button>
+                  <button type="button" className="is-clickable" onClick={() => onStatClick({ tab: 'approvals', approvalsTab: 'teachers', filter: 'pending' })}><span>Teachers Waiting</span><strong>{activeSummary.teacher_pending || 0}</strong></button>
+                  <button type="button" className="is-clickable" onClick={() => onStatClick({ tab: 'approvals', approvalsTab: 'teachers', filter: 'approved' })}><span>Teachers Approved</span><strong>{activeSummary.teacher_approved || 0}</strong></button>
+                  <button type="button" className="is-clickable" onClick={() => onStatClick({ tab: 'records' })}><span>Interviews Logged</span><strong>{activeSummary.interviews_total || 0}</strong></button>
                 </div>
                 <div className="ns-actions">
                   <button className="btn btn--sm" type="button" onClick={() => openDashboardTab('profile')}>View Profile</button>
@@ -2947,6 +3147,19 @@ export default function NewSchool() {
                       <em>{activeTeachers.length}</em>
                     </button>
                   )}
+                  {teacherDashboard && (
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={schoolApprovalsTab === 'parents'}
+                      className={`ns-record-tabs__btn ${schoolApprovalsTab === 'parents' ? 'is-active' : ''}`}
+                      onClick={() => setSchoolApprovalsTab('parents')}
+                    >
+                      <strong>Parent Approvals</strong>
+                      <span>Verify &amp; approve</span>
+                      <em>{activeParents.filter((p: any) => String(p.link_status || '').toLowerCase() === 'pending_teacher').length}</em>
+                    </button>
+                  )}
                 </div>
 
                 <div className="ns-approvals-toolbar">
@@ -2990,14 +3203,9 @@ export default function NewSchool() {
                       </thead>
                       <tbody>
                         {filteredApprovalStudents.length > 0 ? rows.map((row: any) => {
-                          const parentReady = String(row.parent_consent_status || '').toLowerCase() === 'approved'
-                          const schoolReady = String(row.school_approval_status || '').toLowerCase() === 'approved'
-                          // Principal records a school approval (needs parent consent); a teacher
-                          // records a teacher approval (needs parent consent + school approval first).
-                          const canApprove = schoolDashboard ? parentReady : (parentReady && schoolReady)
-                          const blockedReason = schoolDashboard
-                            ? 'Parent consent must be approved first'
-                            : 'Parent consent and school approval are required first'
+                          // Teacher approval is the student's only gate — approve directly.
+                          const canApprove = true
+                          const blockedReason = ''
                           const rowBusy = busy.startsWith(`student-${row.id}-`)
                           return (
                             <tr
@@ -3105,8 +3313,56 @@ export default function NewSchool() {
                   )}</PagedRows>
                 )}
 
+                {schoolApprovalsTab === 'parents' && (
+                  <PagedRows items={filteredApprovalParents}>{(rows) => (
+                  <div className="ns-table-wrap">
+                    <table className="ns-table ns-table--approvals">
+                      <thead>
+                        <tr>
+                          <th>Participant</th>
+                          <th>Student</th>
+                          <th>Parent</th>
+                          <th>Relationship</th>
+                          <th>Status</th>
+                          <th className="ns-col-actions">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredApprovalParents.length > 0 ? rows.map((row: any) => {
+                          const link = String(row.link_status || '').toLowerCase()
+                          const canAct = link === 'pending_teacher'
+                          const rowBusy = busy.startsWith(`parent-${row.student_id}-`)
+                          const statusLabel = link === 'pending_student' ? 'Awaiting student' : link === 'pending_teacher' ? 'Awaiting you' : (row.link_status || '—')
+                          return (
+                            <tr key={row.id}>
+                              <td>{row.participant_id}</td>
+                              <td>{row.student_name}</td>
+                              <td>{row.parent_full_name}</td>
+                              <td>{row.relationship_to_student || '—'}</td>
+                              <td><span className="ns-status-pill" data-status={link.startsWith('pending') ? 'pending' : link}>{statusLabel}</span></td>
+                              <td className="ns-col-actions">
+                                <div className="ns-row-actions">
+                                  <button type="button" className="ns-row-btn ns-row-btn--approve" disabled={rowBusy || !canAct} title={canAct ? 'Approve parent' : 'Waiting for the student to confirm first'} onClick={() => approveParentInline(row, 'approved')}>
+                                    {busy === `parent-${row.student_id}-approved` ? '…' : 'Approve'}
+                                  </button>
+                                  <button type="button" className="ns-row-btn ns-row-btn--reject" disabled={rowBusy || !canAct} onClick={() => approveParentInline(row, 'rejected')}>
+                                    {busy === `parent-${row.student_id}-rejected` ? '…' : 'Reject'}
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          )
+                        }) : (
+                          <tr><td colSpan={6}>No parents are waiting for approval.</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                  )}</PagedRows>
+                )}
+
                 <p className="ns-approvals-note">
-                  Actions are signed as <strong>{user?.full_name || 'Reviewer'}</strong>. A student needs approved parent consent before school approval.
+                  Actions are signed as <strong>{user?.full_name || 'Reviewer'}</strong>. {teacherDashboard ? 'You approve students directly; parents appear here once the student confirms them.' : 'The teacher approves student participation.'}
                 </p>
               </article>
               <article className="glass ns-dash-card ns-dash-card--wide reveal in" hidden={dashboardTab !== 'records'}>
@@ -3739,23 +3995,23 @@ export default function NewSchool() {
               <article className="glass ns-dash-card ns-dash-card--wide reveal in">
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">Admin Dashboard</span>
-                  <span className="ns-board__badge">Management console</span>
+                  <span className="ns-board__badge">Admin tools</span>
                 </div>
                 <div className="ns-dashboard-callout">
                   <div className="ns-dashboard-callout__head">
-                    <strong>Platform oversight</strong>
+                    <strong>Program Overview</strong>
                     <span>{adminDashboard.summary.winners || 0} winners published</span>
                   </div>
-                  <p>Track the entire program, review results, and export data without leaving the console.</p>
+                  <p>Track the whole program, review results, and download data right here.</p>
                 </div>
-                <span className="ns-overview-label">Program totals</span>
+                <span className="ns-overview-label">Program totals · tap a card to open it</span>
                 <div className="ns-quick-stats">
-                  {[
-                    ['Parents', adminDashboard.summary.parents],
-                    ['Businesses', adminDashboard.summary.businesses],
-                    ['Submissions', adminDashboard.summary.submissions],
-                  ].map(([label, val]) => (
-                    <div key={label as string}><span>{label}</span><strong>{String(val ?? 0)}</strong></div>
+                  {([
+                    ['Parents', adminDashboard.summary.parents, 'data'],
+                    ['Businesses', adminDashboard.summary.businesses, 'data'],
+                    ['Submissions', adminDashboard.summary.submissions, 'reviews'],
+                  ] as [string, number, DashboardTabKey][]).map(([label, val, tab]) => (
+                    <button type="button" className="is-clickable" key={label} onClick={() => onStatClick({ tab })}><span>{label}</span><strong>{String(val ?? 0)}</strong></button>
                   ))}
                 </div>
                 <div className="ns-actions">
@@ -3772,19 +4028,19 @@ export default function NewSchool() {
 
               <article className="glass ns-dash-card reveal in">
                 <div className="ns-dash-card__head">
-                  <span className="eyebrow">Operational Progress</span>
-                  <span className="ns-board__badge">Student status summary</span>
+                  <span className="eyebrow">Student Progress</span>
+                  <span className="ns-board__badge">How students are doing</span>
                 </div>
                 <div className="ns-quick-stats">
-                  <div><span>Parent Pending</span><strong>{adminStudentSummary.parent_pending || 0}</strong></div>
-                  <div><span>Parent Approved</span><strong>{adminStudentSummary.parent_approved || 0}</strong></div>
-                  <div><span>School Pending</span><strong>{adminStudentSummary.school_pending || 0}</strong></div>
-                  <div><span>School Approved</span><strong>{adminStudentSummary.school_approved || 0}</strong></div>
-                  <div><span>Teacher Pending</span><strong>{adminStudentSummary.teacher_pending || 0}</strong></div>
-                  <div><span>Teacher Approved</span><strong>{adminStudentSummary.teacher_approved || 0}</strong></div>
-                  <div><span>Eligible</span><strong>{adminStudentSummary.eligible_to_submit || 0}</strong></div>
-                  <div><span>Submitted</span><strong>{adminStudentSummary.submitted || 0}</strong></div>
-                  <div><span>Interviews</span><strong>{adminStudentSummary.interviews_total || 0}</strong></div>
+                  <button type="button" className="is-clickable" onClick={() => onStatClick({ tab: 'data' })}><span>Parents Waiting</span><strong>{adminStudentSummary.parent_pending || 0}</strong></button>
+                  <button type="button" className="is-clickable" onClick={() => onStatClick({ tab: 'data' })}><span>Parents Approved</span><strong>{adminStudentSummary.parent_approved || 0}</strong></button>
+                  <button type="button" className="is-clickable" onClick={() => onStatClick({ tab: 'data' })}><span>Students Waiting</span><strong>{adminStudentSummary.school_pending || 0}</strong></button>
+                  <button type="button" className="is-clickable" onClick={() => onStatClick({ tab: 'data' })}><span>Students Approved</span><strong>{adminStudentSummary.school_approved || 0}</strong></button>
+                  <button type="button" className="is-clickable" onClick={() => onStatClick({ tab: 'data' })}><span>Teachers Waiting</span><strong>{adminStudentSummary.teacher_pending || 0}</strong></button>
+                  <button type="button" className="is-clickable" onClick={() => onStatClick({ tab: 'data' })}><span>Teachers Approved</span><strong>{adminStudentSummary.teacher_approved || 0}</strong></button>
+                  <button type="button" className="is-clickable" onClick={() => onStatClick({ tab: 'data' })}><span>Ready to Submit</span><strong>{adminStudentSummary.eligible_to_submit || 0}</strong></button>
+                  <button type="button" className="is-clickable" onClick={() => onStatClick({ tab: 'reviews' })}><span>Submitted</span><strong>{adminStudentSummary.submitted || 0}</strong></button>
+                  <button type="button" className="is-clickable" onClick={() => onStatClick({ tab: 'data' })}><span>Interviews</span><strong>{adminStudentSummary.interviews_total || 0}</strong></button>
                 </div>
               </article>
 

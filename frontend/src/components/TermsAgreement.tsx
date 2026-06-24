@@ -29,7 +29,7 @@ export default function TermsAgreement({
   idPrefix = 'terms',
   requireSignature = true,
   hideSignature = false,
-  signatureLabel = 'Type your full legal name (electronic signature)',
+  signatureLabel = 'Type your full name',
   className,
 }: TermsAgreementProps) {
   const items = TERMS_LAYOUT[kind]
