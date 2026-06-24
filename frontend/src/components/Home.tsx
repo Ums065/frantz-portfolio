@@ -46,6 +46,7 @@ const Check = () => (
 const monthAbbr = (d: string) => new Date(d + 'T00:00:00').toLocaleString('en-US', { month: 'short' })
 const dayNum = (d: string) => new Date(d + 'T00:00:00').getDate()
 const fmtMonthYear = (d: string) => new Date(d + 'T00:00:00').toLocaleString('en-US', { month: 'short', year: 'numeric' })
+const formatCount = (value: unknown) => new Intl.NumberFormat('en-US').format(Number(value || 0))
 
 interface VentureCard {
   title: string
@@ -205,6 +206,123 @@ const homeFaqItems = [
   },
 ] as const
 
+
+type HomeChallengeTabKey = 'overview' | 'rewards' | 'workflow' | 'community'
+
+type HomeChallengeTab = {
+  key: HomeChallengeTabKey
+  title: string
+  hint: string
+  badge: string
+  eyebrow: string
+  heading: string
+  detail: string
+  points: string[]
+  stats: Array<{ label: string; value: string }>
+  cards: Array<{ title: string; detail: string }>
+  ctaLabel: string
+  ctaTo: string
+}
+
+const homeChallengeTabs: HomeChallengeTab[] = [
+  {
+    key: 'overview',
+    title: 'Overview',
+    hint: 'Real problems, real work',
+    badge: '01',
+    eyebrow: 'What It Is',
+    heading: 'Students build solutions that matter.',
+    detail: 'Students ages 11-19 interview 10 local businesses, identify a community problem, and create a final project with measurable impact.',
+    points: ['10 local business interviews', 'Parent consent and school approval', 'Final project submission', 'Live rankings and progress tracking'],
+    stats: [
+      { label: 'Ages', value: '11-19' },
+      { label: 'Grades', value: '6-12' },
+      { label: 'Interviews', value: '10 businesses' },
+      { label: 'Submission', value: 'Final project' },
+    ],
+    cards: [
+      { title: 'Interview', detail: 'Gather real feedback from local business owners.' },
+      { title: 'Problem', detail: 'Turn interviews into one clear challenge worth solving.' },
+      { title: 'Solution', detail: 'Build a practical plan students can actually ship.' },
+      { title: 'Impact', detail: 'Show results with scores, rankings, and reviews.' },
+    ],
+    ctaLabel: 'Open New School',
+    ctaTo: '/new-school',
+  },
+  {
+    key: 'rewards',
+    title: 'Rewards',
+    hint: 'Scholarships + grants',
+    badge: '02',
+    eyebrow: 'What Students Win',
+    heading: 'Scholarships, school grants, and educator recognition.',
+    detail: 'The challenge rewards effort, leadership, and real-world impact with scholarships, school grants, and public recognition.',
+    points: ['Student scholarships up to $10,000', 'School impact grant up to $25,000', 'Educator award and public recognition', 'Winner announcements and leaderboard visibility'],
+    stats: [
+      { label: 'Scholarship Pool', value: '$35K+' },
+      { label: 'Student Max', value: '$10K' },
+      { label: 'School Grant', value: '$25K' },
+      { label: 'Results', value: 'Live ranking' },
+    ],
+    cards: [
+      { title: 'Student scholarships', detail: 'Reward the next generation of leaders and problem-solvers.' },
+      { title: 'School impact grant', detail: 'Fund participation and strengthen access for more students.' },
+      { title: 'Educator award', detail: 'Recognize the adults who make the work possible.' },
+      { title: 'Public recognition', detail: 'Celebrate the movement on the page and beyond.' },
+    ],
+    ctaLabel: 'See Awards',
+    ctaTo: '/new-school#awards',
+  },
+  {
+    key: 'workflow',
+    title: 'Workflow',
+    hint: 'Register -> approve -> submit',
+    badge: '03',
+    eyebrow: 'How It Works',
+    heading: 'Every role has a clear path.',
+    detail: 'Students, parents, schools, and teachers each have a dedicated step so the challenge stays organized from registration to final submission.',
+    points: ['Role-based registration', 'QR consent for parents', 'School and teacher dashboards', 'Final submission and review'],
+    stats: [
+      { label: 'Roles', value: '4' },
+      { label: 'Dashboards', value: 'Live' },
+      { label: 'Approvals', value: 'Tracked' },
+      { label: 'Rankings', value: 'Built in' },
+    ],
+    cards: [
+      { title: 'Student', detail: 'Creates the participant profile and starts the challenge.' },
+      { title: 'Parent', detail: 'Approves participation through the consent flow.' },
+      { title: 'School', detail: 'Tracks readiness, rankings, and school participation.' },
+      { title: 'Teacher', detail: 'Reviews student progress and classroom participation.' },
+    ],
+    ctaLabel: 'See Workflow',
+    ctaTo: '/new-school#workflow',
+  },
+  {
+    key: 'community',
+    title: 'Community',
+    hint: 'Schools + partners',
+    badge: '04',
+    eyebrow: 'Who Is Involved',
+    heading: 'The challenge works because the whole community shows up.',
+    detail: 'Schools, educators, parents, sponsors, and local business partners all help students turn insight into action.',
+    points: ['Schools bring the challenge into the building', 'Educators guide and mentor teams', 'Parents approve and support participation', 'Sponsors fuel scholarships and grants'],
+    stats: [
+      { label: 'Groups', value: '6' },
+      { label: 'Partners', value: 'Local' },
+      { label: 'Support', value: 'Shared' },
+      { label: 'Mission', value: 'Impact' },
+    ],
+    cards: [
+      { title: 'Schools', detail: 'Host the program and keep participation moving.' },
+      { title: 'Educators', detail: 'Coach student teams and track classroom progress.' },
+      { title: 'Parents', detail: 'Support students through consent and encouragement.' },
+      { title: 'Sponsors', detail: 'Make scholarships, grants, and recognition possible.' },
+    ],
+    ctaLabel: 'Meet the Challenge',
+    ctaTo: '/new-school',
+  },
+] as const
+
 function VisionNodeIcon({ kind }: { kind: VisionNode['kind'] }) {
   switch (kind) {
     case 'schools':
@@ -225,6 +343,8 @@ function VisionNodeIcon({ kind }: { kind: VisionNode['kind'] }) {
 export default function Home() {
   const [events, setEvents] = useState<EventItem[]>([])
   const [posts, setPosts] = useState<Post[]>([])
+  const [challengeOverview, setChallengeOverview] = useState<any>(null)
+  const [challengeTab, setChallengeTab] = useState<HomeChallengeTabKey>('overview')
 
   useSeo({ title: '', description: 'Founder & CEO of TrendCatch Network and President of TrendCatch Gives Back Inc. Building technology that connects businesses, communities, and opportunity.' })
 
@@ -235,12 +355,23 @@ export default function Home() {
     api.get<{ posts: Post[] }>('posts')
       .then((d) => setPosts(Array.isArray(d.posts) ? d.posts : []))
       .catch(() => setPosts([]))
+    api.get<any>('new-school/overview')
+      .then((data) => setChallengeOverview(data))
+      .catch(() => setChallengeOverview(null))
   }, [])
 
   const safeEvents = Array.isArray(events) ? events : []
   const safePosts = Array.isArray(posts) ? posts : []
   const featured = safePosts.find((p) => p.is_featured) || safePosts[0]
   const rest = safePosts.filter((p) => p !== featured).slice(0, 2)
+  const activeChallenge = homeChallengeTabs.find((tab) => tab.key === challengeTab) || homeChallengeTabs[0]
+  const challengeSummary = challengeOverview?.summary || {}
+  const challengeCounterItems = [
+    { label: 'Schools joined', value: formatCount(challengeSummary.schools ?? challengeOverview?.schools?.length ?? 0) },
+    { label: 'Teachers joined', value: formatCount(challengeSummary.teachers ?? challengeOverview?.teachers?.length ?? 0) },
+    { label: 'Students joined', value: formatCount(challengeSummary.students ?? 0) },
+    { label: 'Parents joined', value: formatCount(challengeSummary.parents ?? 0) },
+  ]
 
   return (
     <>
@@ -302,81 +433,81 @@ export default function Home() {
             <p className="sub">Scholarships, school grants, educator awards, and the workflow that ties it all together.</p>
           </div>
 
-          <div className="action-grid">
-            <article className="glass action-card reveal d1">
-              <div className="action__ico">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6}>
-                  <path d="M4 7h16" />
-                  <path d="M7 7v12" />
-                  <path d="M17 7v12" />
-                  <path d="M4 12h16" />
-                </svg>
+          <div className="challenge-overview reveal in">
+            <div className="challenge-counter">
+              <div className="challenge-counter__head">
+                <span className="eyebrow">Global Counter</span>
+                <p>Live participation across schools, teachers, students, and parents.</p>
               </div>
-              <h3>What the challenge does</h3>
-              <p>Students identify a real community problem, work with local businesses, and build a solution that can be measured and shared.</p>
-              <ul className="topic-list">
-                <li><Check />Interview 10 local businesses</li>
-                <li><Check />Solve one real problem</li>
-                <li><Check />Present a final project</li>
-              </ul>
-            </article>
-
-            <article className="glass action-card reveal d2">
-              <div className="action__ico">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6}>
-                  <path d="M12 3v18" />
-                  <path d="M5 8h14" />
-                  <path d="M7 8v6a5 5 0 0 0 10 0V8" />
-                </svg>
+              <div className="ns-stat-tiles challenge-stats">
+                {challengeCounterItems.map((item) => (
+                  <div className="glass ns-stat-tile" key={item.label}>
+                    <strong>{item.value}</strong>
+                    <span>{item.label}</span>
+                  </div>
+                ))}
               </div>
-              <h3>Main workflow</h3>
-              <p>The process stays organized from registration through approval, submission, and review, so students, parents, teachers, and schools all know the next step.</p>
-              <ul className="topic-list">
-                <li><Check />Register by role</li>
-                <li><Check />Parent consent and school approval</li>
-                <li><Check />Live submission tracking</li>
-              </ul>
-            </article>
+            </div>
 
-            <article className="glass action-card reveal d3">
-              <div className="action__ico">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6}>
-                  <path d="M4 19h16" />
-                  <path d="M7 16V9" />
-                  <path d="M12 16V5" />
-                  <path d="M17 16v-3" />
-                </svg>
+            <div className="challenge-tabs-shell">
+              <div className="challenge-tabs-shell__head">
+                <span className="eyebrow">Tap a tab to explore</span>
+                <p>Overview, rewards, workflow, and community roles.</p>
               </div>
-              <h3>What participants win</h3>
-              <p>The program is built to reward leadership, effort, and impact with scholarships, grants, and public recognition.</p>
-              <ul className="topic-list">
-                <li><Check />Student scholarships</li>
-                <li><Check />School impact grants</li>
-                <li><Check />Educator awards</li>
-              </ul>
-            </article>
-
-            <article className="glass action-card reveal d1">
-              <div className="action__ico">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6}>
-                  <circle cx="12" cy="12" r="4" />
-                  <path d="M12 2v4M12 18v4M2 12h4M18 12h4" />
-                </svg>
+              <div className="ns-record-tabs" role="tablist" aria-label="Student Impact Challenge tabs">
+                {homeChallengeTabs.map((tab) => (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    className={`ns-record-tabs__btn challenge-tabs__btn ${challengeTab === tab.key ? 'is-active' : ''}`}
+                    role="tab"
+                    aria-selected={challengeTab === tab.key}
+                    onClick={() => setChallengeTab(tab.key)}
+                  >
+                    <strong>{tab.title}</strong>
+                    <span>{tab.hint}</span>
+                    <em>{tab.badge}</em>
+                  </button>
+                ))}
               </div>
-              <h3>What stays visible</h3>
-              <p>Students can see their progress, schools can follow participation, and the full challenge stays easy to track from one place.</p>
-              <ul className="topic-list">
-                <li><Check />Dashboards and rankings</li>
-                <li><Check />Review status</li>
-                <li><Check />Clear next steps</li>
-              </ul>
-            </article>
-          </div>
+            </div>
 
-          <div className="reveal d2" style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 24 }}>
-            <Link className="btn btn--solid" to="/new-school">Open New School</Link>
-            <Link className="btn" to="/new-school#workflow">See Workflow</Link>
-            <Link className="btn" to="/new-school#awards">View Awards</Link>
+            <article className="glass ns-record-panel challenge-panel reveal in">
+              <div className="challenge-panel__copy">
+                <span className="eyebrow">{activeChallenge.eyebrow}</span>
+                <h3>{activeChallenge.heading}</h3>
+                <p>{activeChallenge.detail}</p>
+                <ul className="topic-list">
+                  {activeChallenge.points.map((point) => (
+                    <li key={point}><Check />{point}</li>
+                  ))}
+                </ul>
+                <div className="challenge-actions">
+                  <Link className="btn btn--sm btn--solid" to={activeChallenge.ctaTo}>{activeChallenge.ctaLabel}</Link>
+                  <Link className="btn btn--sm" to="/new-school">Open New School</Link>
+                </div>
+              </div>
+
+              <div className="challenge-panel__side">
+                <div className="ns-stat-tiles challenge-mini-stats">
+                  {activeChallenge.stats.map((stat) => (
+                    <div className="glass ns-stat-tile" key={stat.label}>
+                      <strong>{stat.value}</strong>
+                      <span>{stat.label}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="ns-gains challenge-features">
+                  {activeChallenge.cards.map((card) => (
+                    <article className="glass ns-gain" key={card.title}>
+                      <span className="ns-gain__marker" aria-hidden="true" />
+                      <strong>{card.title}</strong>
+                      <p>{card.detail}</p>
+                    </article>
+                  ))}
+                </div>
+              </div>
+            </article>
           </div>
         </div>
       </section>
