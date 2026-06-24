@@ -220,8 +220,6 @@ type HomeChallengeTab = {
   points: string[]
   stats: Array<{ label: string; value: string }>
   cards: Array<{ title: string; detail: string }>
-  ctaLabel: string
-  ctaTo: string
 }
 
 const homeChallengeTabs: HomeChallengeTab[] = [
@@ -246,8 +244,6 @@ const homeChallengeTabs: HomeChallengeTab[] = [
       { title: 'Solution', detail: 'Build a practical plan students can actually ship.' },
       { title: 'Impact', detail: 'Show results with scores, rankings, and reviews.' },
     ],
-    ctaLabel: 'Open New School',
-    ctaTo: '/new-school',
   },
   {
     key: 'rewards',
@@ -270,8 +266,6 @@ const homeChallengeTabs: HomeChallengeTab[] = [
       { title: 'Educator award', detail: 'Recognize the adults who make the work possible.' },
       { title: 'Public recognition', detail: 'Celebrate the movement on the page and beyond.' },
     ],
-    ctaLabel: 'See Awards',
-    ctaTo: '/new-school#awards',
   },
   {
     key: 'workflow',
@@ -294,8 +288,6 @@ const homeChallengeTabs: HomeChallengeTab[] = [
       { title: 'School', detail: 'Tracks readiness, rankings, and school participation.' },
       { title: 'Teacher', detail: 'Reviews student progress and classroom participation.' },
     ],
-    ctaLabel: 'See Workflow',
-    ctaTo: '/new-school#workflow',
   },
   {
     key: 'community',
@@ -318,9 +310,16 @@ const homeChallengeTabs: HomeChallengeTab[] = [
       { title: 'Parents', detail: 'Support students through consent and encouragement.' },
       { title: 'Sponsors', detail: 'Make scholarships, grants, and recognition possible.' },
     ],
-    ctaLabel: 'Meet the Challenge',
-    ctaTo: '/new-school',
   },
+] as const
+
+// Role-based registration CTAs for the challenge section. Each deep-links to the
+// matching registration form on /new-school, where the role tab is preselected.
+const challengeRegisterRoles = [
+  { role: 'student', label: 'Register as Student' },
+  { role: 'parent', label: 'Register as Parent' },
+  { role: 'school', label: 'Register as School' },
+  { role: 'teacher', label: 'Register as Teacher' },
 ] as const
 
 function VisionNodeIcon({ kind }: { kind: VisionNode['kind'] }) {
@@ -422,6 +421,32 @@ export default function Home() {
         <div className="scroll-cue"><div className="mouse" /><span>Scroll</span></div>
       </section>
 
+      <section className="recog" aria-label="Recognized by">
+        <div className="wrap">
+          <div className="recog__inner reveal">
+            <span className="recog__label">Recognized By</span>
+            <div className="recog__items">
+              <div className="recog__item">
+                <span className="recog__seal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.3}><circle cx="12" cy="11" r="5" /><path d="M12 8.5l.9 1.8 2 .3-1.45 1.4.35 2-1.8-.95-1.8.95.35-2L9.1 10.6l2-.3z" fill="currentColor" stroke="none" /><path d="M8 18c-2 .4-3 2-3 3M16 18c2 .4 3 2 3 3" /></svg></span>
+                <span className="recog__txt">Presidential Lifetime<br /><b>Achievement Award</b></span>
+              </div>
+              <div className="recog__item">
+                <span className="recog__seal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.3}><path d="M12 3l9 4v5c0 5-4 8-9 9-5-1-9-4-9-9V7z" /><path d="M9 12l2 2 4-4" /></svg></span>
+                <span className="recog__txt">United States<br /><b>Senate Recognition</b></span>
+              </div>
+              <div className="recog__item">
+                <span className="recog__seal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.3}><path d="M4 9l8-5 8 5M5 9v9M19 9v9M9 9v9M15 9v9M3 21h18" /></svg></span>
+                <span className="recog__txt">NY State Assembly<br /><b>Resolution No. 998</b></span>
+              </div>
+              <div className="recog__item">
+                <span className="recog__seal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.3}><path d="M12 3l2.5 6.2 6.7.5-5.1 4.3 1.6 6.5L12 17.6 6.3 20.5l1.6-6.5-5.1-4.3 6.7-.5z" /></svg></span>
+                <span className="recog__txt">Dr. MLK Jr.<br /><b>Visionary Award</b></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section className="block block--alt" id="challenge" data-screen-label="Challenge">
         <div className="wrap">
           <div className="block__head reveal">
@@ -483,8 +508,15 @@ export default function Home() {
                   ))}
                 </ul>
                 <div className="challenge-actions">
-                  <Link className="btn btn--sm btn--solid" to={activeChallenge.ctaTo}>{activeChallenge.ctaLabel}</Link>
-                  <Link className="btn btn--sm" to="/new-school">Open New School</Link>
+                  {challengeRegisterRoles.map((role, i) => (
+                    <Link
+                      key={role.role}
+                      className={`btn btn--sm ${i === 0 ? 'btn--solid' : ''}`}
+                      to={`/new-school?register=${role.role}#registration`}
+                    >
+                      {role.label}
+                    </Link>
+                  ))}
                 </div>
               </div>
 
@@ -511,32 +543,6 @@ export default function Home() {
           </div>
         </div>
       </section>
-      <section className="recog" aria-label="Recognized by">
-        <div className="wrap">
-          <div className="recog__inner reveal">
-            <span className="recog__label">Recognized By</span>
-            <div className="recog__items">
-              <div className="recog__item">
-                <span className="recog__seal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.3}><circle cx="12" cy="11" r="5" /><path d="M12 8.5l.9 1.8 2 .3-1.45 1.4.35 2-1.8-.95-1.8.95.35-2L9.1 10.6l2-.3z" fill="currentColor" stroke="none" /><path d="M8 18c-2 .4-3 2-3 3M16 18c2 .4 3 2 3 3" /></svg></span>
-                <span className="recog__txt">Presidential Lifetime<br /><b>Achievement Award</b></span>
-              </div>
-              <div className="recog__item">
-                <span className="recog__seal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.3}><path d="M12 3l9 4v5c0 5-4 8-9 9-5-1-9-4-9-9V7z" /><path d="M9 12l2 2 4-4" /></svg></span>
-                <span className="recog__txt">United States<br /><b>Senate Recognition</b></span>
-              </div>
-              <div className="recog__item">
-                <span className="recog__seal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.3}><path d="M4 9l8-5 8 5M5 9v9M19 9v9M9 9v9M15 9v9M3 21h18" /></svg></span>
-                <span className="recog__txt">NY State Assembly<br /><b>Resolution No. 998</b></span>
-              </div>
-              <div className="recog__item">
-                <span className="recog__seal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.3}><path d="M12 3l2.5 6.2 6.7.5-5.1 4.3 1.6 6.5L12 17.6 6.3 20.5l1.6-6.5-5.1-4.3 6.7-.5z" /></svg></span>
-                <span className="recog__txt">Dr. MLK Jr.<br /><b>Visionary Award</b></span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
       <section className="block" id="ventures">
         <div className="wrap">
           <div className="block__head reveal">

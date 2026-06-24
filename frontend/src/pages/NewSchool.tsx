@@ -813,6 +813,20 @@ export default function NewSchool() {
     }
   }, [token, parentLink])
 
+  // Deep-link from the marketing pages: /new-school?register=school preselects that
+  // role's tab and scrolls to the registration section (the forms are hidden otherwise).
+  useEffect(() => {
+    if (isDashboardRoute) return
+    const requested = new URLSearchParams(location.search).get('register')
+    const valid: RegistrationTag[] = ['student', 'parent', 'school', 'teacher']
+    if (requested && (valid as string[]).includes(requested)) {
+      setRegistrationTag(requested as RegistrationTag)
+      window.requestAnimationFrame(() => {
+        document.getElementById('registration')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      })
+    }
+  }, [location.search, isDashboardRoute])
+
   useEffect(() => {
     if (!isDashboardRoute) return
     const frame = window.requestAnimationFrame(() => {
