@@ -1743,6 +1743,7 @@ section.block {
 .legacy p { color: #cfc9bd; margin: 22px 0; font-size: 15.5px; line-height: 1.75; max-width: 540px; }
 .legacy .sig-line { font-family: var(--f-script); font-size: 46px; margin: 8px 0 24px;
   background: var(--gold-grad); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+.legacy .sig-line.signature-mark { width: min(100%, 280px); }
 
 .awards-card { padding: 30px 30px 24px; }
 .awards-card .ttl { display: flex; align-items: center; justify-content: space-between; margin-bottom: 22px; }
@@ -1840,6 +1841,7 @@ section.block {
 
 .footer__sign { text-align: right; }
 .footer__sign .sg { font-family: var(--f-script); font-size: 44px; background: var(--gold-grad); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; line-height: 1; }
+.footer__sign .sg.signature-mark { width: min(100%, 240px); margin-left: auto; }
 .footer__sign .sgt { font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); margin-top: 8px; }
 
 .footer__bar { border-top: 1px solid var(--line); padding: 22px 0; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
@@ -2235,6 +2237,18 @@ section.block {
 /* fix clipped C on Great Vibes signatures */
 .footer__sign .sg, .sig-line, .hero__sig { padding: 0.12em 0.18em 0.22em; overflow: visible; }
 .footer__sign .sg { display: inline-block; }
+.signature-mark {
+  display: block !important;
+  height: auto;
+  max-width: 100%;
+  object-fit: contain;
+  padding: 0 !important;
+  background: none !important;
+  -webkit-background-clip: border-box !important;
+  background-clip: border-box !important;
+  -webkit-text-fill-color: initial !important;
+  color: inherit;
+}
 
 /* ---- Generic section intro ---- */
 .block--alt { background: linear-gradient(180deg, #0c0b08, #080808); }

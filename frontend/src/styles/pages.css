@@ -1,6 +1,6 @@
 /* ============================================================
    ABOUT & AWARDS PAGES
-   Shares tokens / helpers from design.css (--gold, .glass, .btn…)
+   Shares tokens / helpers from design.css (--gold, .glass, .btnâ€¦)
    ============================================================ */
 
 .page { padding-top: 84px; }
@@ -62,7 +62,6 @@
 }
 .platform h3 { font-family: var(--f-serif); font-size: 19px; letter-spacing: 0.06em; text-transform: uppercase; color: #fff; line-height: 1.25; }
 .platform p { font-size: 13.5px; color: var(--muted); margin-top: 12px; line-height: 1.7; }
-
 .about-timeline {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -130,7 +129,7 @@
 .proj__link:hover, .platform__link:hover { gap: 10px; }
 
 /* ============================================================
-   HOME — "WHAT HE'S BUILDING" highlight band
+   HOME â€” "WHAT HE'S BUILDING" highlight band
    Visually distinct from every other section: gold/green glow,
    gold hairline top & bottom rules, and an animated CEO badge.
    ============================================================ */

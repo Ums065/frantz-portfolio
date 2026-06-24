@@ -7,7 +7,7 @@ import { socials } from '../lib/social'
 import { useSeo } from '../hooks/useSeo'
 import { platforms } from '../lib/platforms'
 import { merchPreviewItems } from '../lib/merch'
-import { BRAND_LOGO } from '../lib/brandAssets'
+import { BRAND_LOGO, FRANTZ_SIGNATURE } from '../lib/brandAssets'
 import PlatformCard from './PlatformCard'
 
 const logo = BRAND_LOGO
@@ -73,7 +73,7 @@ const ventureCards: VentureCard[] = [
     mediaClass: 'proj__media--portrait',
   },
   {
-    title: 'FrantzCoutard.com Legacy',
+    title: 'TrendCatch EDU',
     copy: 'A digital platform helping schools access grants, resources, and opportunity.',
     tag: 'Empowering Communities',
     media: `${buildingNowBase}/2.png`,
@@ -373,7 +373,7 @@ export default function Home() {
         <div className="wrap">
           <div className="block__head reveal">
             <div className="ceo-badge gold-shimmer">CEO &amp; Founder</div>
-            <div className="section-title"><span className="ln l" /><h2 className="gold-text">THE VENTURES</h2><span className="ln r" /></div>
+            <div className="section-title"><span className="ln l" /><h2 className="gold-text">The Vision</h2><span className="ln r" /></div>
             <p className="sub">Building technology, education, and community-driven platforms designed to create opportunity and lasting impact.</p>
           </div>
           <div className="platform-grid">
@@ -395,7 +395,7 @@ export default function Home() {
               <p className="reveal d1">An immigrant with a dream. A leader with a purpose. A visionary building technology that creates opportunity and transforms lives.</p>
               <p className="reveal d1">From humble beginnings to building companies, nonprofit initiatives, and technology platforms that serve communities and empower the future.</p>
               <p className="reveal d2" style={{ color: '#ece6d8', fontFamily: 'var(--f-serif)', fontSize: 18 }}>This is more than business. This is my purpose. This is my legacy.</p>
-              <div className="sig-line reveal d2">Frantz Coutard</div>
+              <img className="sig-line signature-mark reveal d2" src={FRANTZ_SIGNATURE} alt="Frantz Coutard signature" loading="lazy" decoding="async" />
               <div className="reveal d3"><Link className="btn btn--solid" to="/about">Read My Story</Link></div>
             </div>
           </div>

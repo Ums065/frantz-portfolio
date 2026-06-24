@@ -4,6 +4,7 @@ import { Link, useLocation, useParams } from 'react-router-dom'
 import { api } from '../lib/api'
 import { buildLocalQrDataUri } from '../lib/localQr.js'
 import { useAuth } from '../context/AuthContext'
+import { FRANTZ_SIGNATURE } from '../lib/brandAssets'
 import { useSeo } from '../hooks/useSeo'
 import { resolveDashboardRoute } from '../lib/dashboardRoute'
 import { awards } from '../lib/awards'
@@ -1906,7 +1907,7 @@ export default function NewSchool() {
               <span className="eyebrow">From The Founder</span>
               <h2>The future belongs to problem solvers.</h2>
               <p>The Student Impact Challenge is built to give young people the tools, mentorship, and stage to lead real change in their communities — and to recognize the schools and educators who make it possible.</p>
-              <p className="ns-credibility__sign">Frantz Coutard</p>
+              <img className="ns-credibility__sign signature-mark" src={FRANTZ_SIGNATURE} alt="Frantz Coutard signature" loading="lazy" decoding="async" />
               <p className="ns-credibility__role">CEO &amp; Founder · TrendCatch Network</p>
               <div className="ns-medal-strip" aria-label="Founder recognition">
                 {featuredAwards.map((award) => (

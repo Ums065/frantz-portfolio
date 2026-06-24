@@ -3533,6 +3533,7 @@
 .ns-credibility__body h2 { font-family: var(--f-serif); font-size: clamp(24px, 3vw, 40px); line-height: 1.1; margin: 8px 0 14px; color: #f4efe4; }
 .ns-credibility__body p { color: #cfc9bd; line-height: 1.85; font-size: 15px; max-width: 600px; }
 .ns-credibility__sign { font-family: var(--f-script); font-size: 40px; line-height: 1; color: var(--gold-light); margin: 16px 0 2px !important; }
+.ns-credibility__sign.signature-mark { width: min(100%, 240px); height: auto; object-fit: contain; }
 .ns-credibility__role { color: var(--muted); font-size: 13px; letter-spacing: 0.05em; text-transform: uppercase; }
 .ns-medal-strip { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 20px; }
 .ns-medal-strip__item {

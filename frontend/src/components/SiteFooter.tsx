@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { SocialLinks } from './SocialIcons'
-import { BRAND_LOGO } from '../lib/brandAssets'
+import { BRAND_LOGO, FRANTZ_SIGNATURE } from '../lib/brandAssets'
 
 const logo = BRAND_LOGO
 
@@ -57,7 +57,7 @@ export default function SiteFooter() {
           </div>
 
           <div className="footer__sign">
-            <div className="sg">Frantz Coutard</div>
+            <img className="sg signature-mark" src={FRANTZ_SIGNATURE} alt="Frantz Coutard signature" loading="lazy" decoding="async" />
             <div className="sgt">Building Technology<br />That Serves People</div>
           </div>
         </div>
