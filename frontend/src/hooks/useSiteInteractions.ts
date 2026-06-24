@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 
 interface Handlers {
-  onAuth: (which: 'login' | 'register') => void
+  onAuth: (which: 'login' | 'register', role?: string) => void
   onRequest: (label: string) => void
   onSubscribe: (email: string) => void
 }
@@ -293,7 +293,7 @@ export function useSiteInteractions({ onAuth, onRequest, onSubscribe }: Handlers
       if (authEl) {
         e.preventDefault()
         const which = authEl.getAttribute('data-auth')
-        if (which === 'login' || which === 'register') onAuth(which)
+        if (which === 'login' || which === 'register') onAuth(which, authEl.getAttribute('data-role') || undefined)
         return
       }
 
@@ -311,7 +311,7 @@ export function useSiteInteractions({ onAuth, onRequest, onSubscribe }: Handlers
         return
       }
 
-      const galleryCell = target.closest<HTMLElement>('.gallery .cell')
+      const galleryCell = target.closest<HTMLElement>('.gallery .cell, .ns-medal-strip [data-lightbox-src]')
       if (galleryCell) {
         e.preventDefault()
         openGalleryLightbox?.(galleryCell)
@@ -386,7 +386,7 @@ export function useSiteInteractions({ onAuth, onRequest, onSubscribe }: Handlers
       const onDocumentKeyDown = (e: KeyboardEvent) => {
         const target = e.target
         if (!(target instanceof Element)) return
-        const galleryCell = target.closest<HTMLElement>('.gallery .cell')
+        const galleryCell = target.closest<HTMLElement>('.gallery .cell, .ns-medal-strip [data-lightbox-src]')
         if (!galleryCell) return
         if (e.key !== 'Enter' && e.key !== ' ') return
         e.preventDefault()

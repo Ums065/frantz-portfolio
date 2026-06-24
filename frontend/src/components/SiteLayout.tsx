@@ -4,15 +4,20 @@ import SiteFooter from './SiteFooter'
 import { AuthModal, RequestModal } from './Modals'
 import { useSiteInteractions } from '../hooks/useSiteInteractions'
 import { api } from '../lib/api'
+import type { RegistrationRole } from '../context/AuthContext'
 
 /* Page shell shared by Home, About and Awards.
    Owns the auth / request modal state and wires the DOM-level
    interactions (nav, mobile menu, toast, data-* buttons, lightbox). */
 export default function SiteLayout({ children, home = false }: { children: ReactNode; home?: boolean }) {
   const [authMode, setAuthMode] = useState<'login' | 'register' | null>(null)
+  const [authRole, setAuthRole] = useState<RegistrationRole | null>(null)
   const [requestLabel, setRequestLabel] = useState<string | null>(null)
 
-  const onAuth = useCallback((which: 'login' | 'register') => setAuthMode(which), [])
+  const onAuth = useCallback((which: 'login' | 'register', role?: string) => {
+    setAuthMode(which)
+    setAuthRole((role as RegistrationRole) || null)
+  }, [])
   const onRequest = useCallback((label: string) => setRequestLabel(label), [])
   const onSubscribe = useCallback(async (email: string) => {
     try {
@@ -34,6 +39,7 @@ export default function SiteLayout({ children, home = false }: { children: React
       <AuthModal
         open={authMode !== null}
         mode={authMode ?? 'login'}
+        initialRole={authRole}
         onClose={() => setAuthMode(null)}
         onMode={(m) => setAuthMode(m)}
       />

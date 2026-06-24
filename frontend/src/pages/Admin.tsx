@@ -11,6 +11,7 @@ type TabKey =
   | 'overview' | 'analytics' | 'requests' | 'orders' | 'subscribers' | 'contacts'
   | 'members' | 'approvals' | 'sponsors' | 'awards' | 'events' | 'blog'
   | 'testimonials' | 'media' | 'community' | 'rsvps' | 'inventory'
+  | 'ns-submissions' | 'ns-interviews'
 
 interface NavItem { key: TabKey; label: string }
 const NAV_GROUPS: Array<{ group: string; items: NavItem[] }> = [
@@ -20,6 +21,10 @@ const NAV_GROUPS: Array<{ group: string; items: NavItem[] }> = [
     { key: 'approvals', label: 'Account Approvals' },
     { key: 'contacts', label: 'Contact Messages' },
     { key: 'subscribers', label: 'Newsletter' },
+  ] },
+  { group: 'New School', items: [
+    { key: 'ns-submissions', label: 'Student Submissions' },
+    { key: 'ns-interviews', label: 'Business Interviews' },
   ] },
   { group: 'Commerce', items: [
     { key: 'orders', label: 'Store Orders' },
@@ -117,14 +122,17 @@ export default function Admin() {
   const [selectedUserDetail, setSelectedUserDetail] = useState<UserDetailPayload | null>(null)
   const [selectedUserLoading, setSelectedUserLoading] = useState(false)
   const [selectedUserError, setSelectedUserError] = useState('')
+  const [nsData, setNsData] = useState<any>(null)
 
   const refreshData = async () => {
-    try {
-      const payload = await api.get<Submissions>('admin/submissions')
-      setData(payload)
-    } catch {
-      setData(null)
-    }
+    // Load the main submissions AND the New School summary (student interviews +
+    // project submissions) so the Command Center can review challenge activity too.
+    const [main, ns] = await Promise.allSettled([
+      api.get<Submissions>('admin/submissions'),
+      api.get<any>('admin/new-school/summary'),
+    ])
+    setData(main.status === 'fulfilled' ? main.value : null)
+    if (ns.status === 'fulfilled') setNsData(ns.value)
   }
 
   useEffect(() => { if (isAdmin(user?.role)) void refreshData() }, [user])
@@ -241,6 +249,23 @@ export default function Admin() {
     await refreshData()
   }
 
+  // ---- New School: review (approve/reject) student PROJECT submissions ----
+  const reviewSubmission = async (id: number, status: 'approved' | 'rejected') => {
+    if (status === 'rejected' && !confirm('Reject this submission?')) return
+    try {
+      await api.post('new-school/submission/review', { submission_id: id, status })
+      await refreshData()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Could not update the submission.')
+    }
+  }
+  const bulkReviewSubmissions = async (ids: number[], status: 'approved' | 'rejected') => {
+    if (!ids.length) return
+    if (status === 'rejected' && !confirm(`Reject ${ids.length} submission${ids.length === 1 ? '' : 's'}?`)) return
+    await Promise.allSettled(ids.map((id) => api.post('new-school/submission/review', { submission_id: id, status })))
+    await refreshData()
+  }
+
   const reviewableAccounts = data?.members.filter((m) => !isAdmin(m.role)) ?? []
   const pendingAccounts = reviewableAccounts.filter((m) => (m.approval_status || 'pending') === 'pending').length
   const rejectedAccounts = reviewableAccounts.filter((m) => (m.approval_status || 'pending') === 'rejected').length
@@ -256,6 +281,12 @@ export default function Admin() {
     .filter((o) => ['paid', 'fulfilled'].includes((o.status || '').toLowerCase()))
     .reduce((sum, o) => sum + (parseFloat(o.total) || 0), 0)
 
+  // New School challenge activity (from admin/new-school/summary).
+  const nsSubmissions: any[] = Array.isArray(nsData?.submissions) ? nsData.submissions : []
+  const nsInterviews: any[] = Array.isArray(nsData?.businesses) ? nsData.businesses : []
+  const nsSubBy = (s: string) => nsSubmissions.filter((x) => (x.status || '').toLowerCase() === s).length
+  const nsPendingReview = nsSubBy('submitted')
+
   // Sidebar badges behave like NOTIFICATION counters: only "new/actionable" items,
   // hidden when zero. Full totals live in the per-tab StatChips strips instead.
   const notifications: Partial<Record<TabKey, number>> = {
@@ -264,6 +295,7 @@ export default function Admin() {
     requests: reqBy('new'),
     orders: ordBy('pending'),
     contacts: data?.contacts.length ?? 0,
+    'ns-submissions': nsPendingReview,
   }
 
   if (loading) {
@@ -599,6 +631,73 @@ export default function Admin() {
                   </tr>
                 )
               }}
+            />
+          </>
+        )}
+
+        {tab === 'ns-submissions' && (
+          <>
+            <StatChips items={[
+              { label: 'Total', value: nsSubmissions.length },
+              { label: 'Pending', value: nsSubBy('submitted'), tone: 'gold' },
+              { label: 'Approved', value: nsSubBy('approved'), tone: 'green' },
+              { label: 'Rejected', value: nsSubBy('rejected'), tone: 'red' },
+              { label: 'Winners', value: nsSubBy('winner'), tone: 'blue' },
+            ]} />
+            <DataTable
+              head={['#', 'Participant', 'Student', 'Problem', 'Status', 'Score', '']}
+              rows={nsSubmissions}
+              searchPlaceholder="Search submissions…"
+              searchText={(s) => `${s.student_name ?? ''} ${s.participant_id ?? ''} ${s.problem_identified ?? ''}`}
+              statusOf={(s) => (s.status || '')}
+              statusOptions={['submitted', 'approved', 'rejected', 'winner', 'draft']}
+              rowId={(s) => s.id}
+              bulkActions={[
+                { label: 'Approve selected', onClick: (ids) => bulkReviewSubmissions(ids, 'approved') },
+                { label: 'Reject selected', danger: true, onClick: (ids) => bulkReviewSubmissions(ids, 'rejected') },
+              ]}
+              renderRow={(s, checkbox, index) => {
+                const st = (s.status || '').toLowerCase()
+                return (
+                  <tr key={s.id}>{checkbox}
+                    <td className="admin-table__idx">{index}</td>
+                    <td className="admin-table__uid">{s.participant_id || '—'}</td>
+                    <td>{s.student_name}</td>
+                    <td style={{ maxWidth: 300 }}>{s.problem_identified ? `${String(s.problem_identified).slice(0, 80)}${String(s.problem_identified).length > 80 ? '…' : ''}` : '—'}</td>
+                    <td><StatusPill status={st} /></td>
+                    <td>{s.score ?? '—'}</td>
+                    <td>
+                      <RowMenu actions={[
+                        { label: 'Approve', onClick: () => void reviewSubmission(s.id, 'approved'), disabled: st === 'approved' || st === 'winner' },
+                        { label: 'Reject', danger: true, onClick: () => void reviewSubmission(s.id, 'rejected'), disabled: st === 'rejected' },
+                        { label: 'Open in New School dashboard', onClick: () => navigate('/new-school/dashboard') },
+                      ]} />
+                    </td>
+                  </tr>
+                )
+              }}
+            />
+          </>
+        )}
+
+        {tab === 'ns-interviews' && (
+          <>
+            <StatChips items={[{ label: 'Business Interviews', value: nsInterviews.length, tone: 'gold' }]} />
+            <DataTable
+              head={['#', 'Student', 'Participant', 'Business', 'Visit', 'Date']}
+              rows={nsInterviews}
+              searchPlaceholder="Search interviews…"
+              searchText={(b) => `${b.student_name ?? ''} ${b.participant_id ?? ''} ${b.business_name ?? ''}`}
+              renderRow={(b, _checkbox, index) => (
+                <tr key={b.id}>
+                  <td className="admin-table__idx">{index}</td>
+                  <td>{b.student_name}</td>
+                  <td className="admin-table__uid">{b.participant_id || '—'}</td>
+                  <td>{b.business_name}</td>
+                  <td>{b.visit_number ?? '—'}</td>
+                  <td>{b.date_of_visit || b.created_at || '—'}</td>
+                </tr>
+              )}
             />
           </>
         )}

@@ -6,6 +6,7 @@ import { buildLocalQrDataUri } from '../lib/localQr.js'
 import { useAuth } from '../context/AuthContext'
 import { useSeo } from '../hooks/useSeo'
 import { resolveDashboardRoute } from '../lib/dashboardRoute'
+import { awards } from '../lib/awards'
 import TermsAgreement from '../components/TermsAgreement'
 import { CHALLENGE_TERMS_VERSION } from '../lib/terms'
 import { recordTermsAcceptance } from '../lib/recordTermsAcceptance'
@@ -409,6 +410,33 @@ const sponsorPillars = [
   },
 ]
 
+// ---- Flyer-aligned marketing content for the public landing redesign ----
+const challengePillars = ['Building Future Entrepreneurs', 'Strengthening Communities', 'Creating Real Change']
+
+const callingAudiences = [
+  { title: 'Schools', detail: 'Bring the challenge into the building.' },
+  { title: 'Educators', detail: 'Guide and mentor student teams.' },
+  { title: 'Students', detail: 'Lead the work and the impact.' },
+  { title: 'Parents', detail: 'Consent, support, and stay informed.' },
+]
+
+const schoolTypeChips = ['Public Schools', 'Private Schools', 'Charter Schools', 'Trade & Technical Schools']
+
+const studentGains = [
+  { title: 'Real-World Experience', detail: 'Interview local businesses and tackle real community problems.' },
+  { title: 'Leadership Development', detail: 'Lead a team from problem to measurable solution.' },
+  { title: 'Entrepreneurship Skills', detail: 'Think like a founder and build practical plans.' },
+  { title: 'Scholarship Opportunities', detail: 'Compete for scholarships that reward impact.' },
+  { title: 'Community Impact', detail: 'Leave your community better than you found it.' },
+]
+
+const coreValues = [
+  { title: 'Educate', detail: 'Building Knowledge' },
+  { title: 'Empower', detail: 'Inspiring Leaders' },
+  { title: 'Engage', detail: 'Strengthening Communities' },
+  { title: 'Elevate', detail: 'Creating A Better Tomorrow' },
+]
+
 const dashboardTabsByRole: Record<string, DashboardTabConfig[]> = {
   student: [
     { key: 'overview', label: 'Overview', hint: 'Status and progress' },
@@ -543,10 +571,10 @@ export default function NewSchool() {
   const [reviewForm, setReviewForm] = useState<{ status: string; score: string; rank_position: string; reviewer_notes: string }>({ status: 'approved', score: '', rank_position: '', reviewer_notes: '' })
 
   useSeo({
-    title: isDashboardRoute ? 'New School Dashboard' : 'What Problem Will You Solve?',
+    title: isDashboardRoute ? 'New School Dashboard' : '1st Annual Student Impact Challenge',
     description: isDashboardRoute
       ? 'Private role dashboard for approved students, parents, schools, teachers, and admins.'
-      : 'Join New York\'s Largest Student Problem-Solving Movement. Students interview 10 local businesses, build solutions, and compete for scholarships, school grants, and statewide recognition.',
+      : 'Leave It Better Than You Found It. Students interview local businesses, identify a community problem, build a solution, and compete for over $35,000 in scholarships, school grants, and recognition.',
     noindex: isDashboardRoute,
   })
 
@@ -1154,12 +1182,31 @@ export default function NewSchool() {
     { label: 'Community Problems Identified', value: Number(summary.submissions ?? 0) },
     { label: 'Scholarships Awarded', value: formatMoney(scholarshipsAwarded) },
   ]
+  // ---- Flyer-aligned derived content for the redesigned landing ----
+  const grantAmount = Number(challenge.school_grant_amount ?? 25000)
+  const scholarshipMax = Number(challenge.student_scholarship_max_amount ?? 10000)
+  const educatorAwardLabel = String(challenge.educator_award_label || 'All-Inclusive Educator Vacation Award')
+  const ageRange = String(challenge.age_range || '11-19')
+  const gradeRange = String(challenge.grade_range || '6-12')
+  const totalAwardsLabel = `${formatMoney(grantAmount + scholarshipMax)}+`
+  const awardHighlights = [
+    { amount: formatMoney(grantAmount), label: 'School Impact Grant', detail: 'Fueling student-led solutions and lasting community impact.' },
+    { amount: `Up to ${formatMoney(scholarshipMax)}`, label: 'Student Scholarships', detail: 'Investing in the next generation of leaders.' },
+    { amount: educatorAwardLabel, label: 'Educator Award', detail: 'An all-inclusive vacation award for an outstanding educator.' },
+  ]
+  const timelineMilestones = [
+    { phase: 'Registration Opens', when: registrationOpenLabel },
+    { phase: 'Community Challenge Period', when: 'July – November 2026' },
+    { phase: 'Judging & Review', when: 'November – December 2026' },
+    { phase: 'Winners Announced', when: winnersAnnouncedLabel, highlight: true },
+  ]
+  const featuredAwards = awards.filter((a) => a.featured)
   const heroFacts = [
-    `${formatMoney(Number(challenge.school_grant_amount ?? 25000))} School Impact Grant`,
-    `Up to ${formatMoney(Number(challenge.student_scholarship_max_amount ?? 10000))} Student Scholarships`,
-    String(challenge.educator_award_label || 'Educator Recognition Award'),
-    `Ages ${String(challenge.age_range || '11-19')}`,
-    `Grades ${String(challenge.grade_range || '6-12')}`,
+    `${formatMoney(grantAmount)} School Impact Grant`,
+    `Up to ${formatMoney(scholarshipMax)} Student Scholarships`,
+    educatorAwardLabel,
+    `Ages ${ageRange}`,
+    `Grades ${gradeRange}`,
     `Registration Opens: ${registrationOpenLabel}`,
     `Winners Announced: ${winnersAnnouncedLabel}`,
   ]
@@ -1580,37 +1627,32 @@ export default function NewSchool() {
     <div className="ns-page">
       {!isDashboardRoute && (
         <>
-      <section className="ns-hero">
+      <section className="ns-hero ns-hero--founder">
         <div className="ns-hero__bg" aria-hidden="true">
           <span className="ns-hero__orb ns-hero__orb--one" />
           <span className="ns-hero__orb ns-hero__orb--two" />
           <span className="ns-hero__grid" />
         </div>
         <div className="wrap ns-hero__grid-wrap">
-          <div className="ns-hero__copy reveal in">
-            <p className="eyebrow">{challenge.title || 'WHAT PROBLEM WILL YOU SOLVE?'}</p>
-            <h1 className="ns-hero__headline">{challenge.subtitle || 'Join New York\'s Largest Student Problem-Solving Movement'}</h1>
-            <div className="ns-hero__legacy" aria-hidden="true">
-              <span>Join New York&apos;s Largest</span>
-              <span>Student Problem-Solving</span>
-              <span>Movement{'™'}</span>
-            </div>
+          <div className="ns-hero__copy reveal">
+            <p className="eyebrow">Frantz Coutard Presents · 1st Annual</p>
+            <h1 className="ns-hero__headline">
+              <span className="ns-hero__headline-kicker">Student</span>
+              <span className="ns-hero__headline-main gold-text">Impact Challenge</span>
+            </h1>
+            <p className="ns-hero__script">Leave It Better Than You Found It.</p>
             <p className="ns-lead">
-              {challenge.lead || 'Students interview 10 local businesses, identify a community problem, develop a solution, and compete for scholarships, school grants, and statewide recognition.'}
+              {challenge.lead || `Students interview local businesses, solve a real community problem, and compete for over ${totalAwardsLabel} in scholarships, school grants, and recognition.`}
             </p>
-            <div className="ns-hero__facts" aria-label="Challenge highlights">
-              {heroFacts.map((fact) => (
-                <div className="glass ns-hero__fact" key={fact}>
-                  <span>{fact}</span>
-                </div>
-              ))}
-            </div>
-            <div className="ns-hero__actions ns-hero__actions--primary">
-              <button className="btn btn--solid" type="button" onClick={() => openRegistrationTag('school')}>School Registration</button>
-              <button className="btn" type="button" onClick={() => openRegistrationTag('student')}>Student Registration</button>
-              <button className="btn" type="button" onClick={() => openRegistrationTag('teacher')}>Teacher Registration</button>
-              <button className="btn" type="button" onClick={() => openRegistrationTag('parent')}>Parent Consent Registration</button>
-              <Link className="btn" to="/new-school/become-a-founding-sponsor">Founding Sponsor Registration</Link>
+            <div className="ns-hero__register">
+              <span className="ns-hero__register-label">Get started — register as</span>
+              <div className="ns-hero__register-grid">
+                <button className="btn btn--solid" type="button" data-auth="register" data-role="student">Student</button>
+                <button className="btn" type="button" data-auth="register" data-role="parent">Parent</button>
+                <button className="btn" type="button" data-auth="register" data-role="school">School</button>
+                <button className="btn" type="button" data-auth="register" data-role="teacher">Teacher</button>
+              </div>
+              <a className="ns-hero__how" href="#workflow">See how it works ↓</a>
             </div>
             {notice && <div className={`ns-alert ns-alert--${notice.tone}`}>{notice.text}</div>}
             {token && parentLink?.student && (
@@ -1630,84 +1672,79 @@ export default function NewSchool() {
             )}
           </div>
 
-          <aside className="ns-hero__summary glass reveal in">
-            <div className="ns-hero__summary-head">
-              <span className="eyebrow">Challenge Overview</span>
-              <h2>Built for schools, students, educators, families, and community partners.</h2>
+          <aside className="ns-hero__portrait-wrap reveal">
+            <div className="ns-hero__portrait glass">
+              <img src="/assets/challenge-poster.png" alt="TrendCatch Student Impact Challenge — Leave It Better Than You Found It, founded by Frantz Coutard" loading="eager" decoding="async" />
             </div>
-            <div className="ns-hero__summary-list">
-              <div className="ns-board__row">
-                <div>
-                  <strong>What is it?</strong>
-                  <span>A statewide student problem-solving challenge grounded in real local business interviews.</span>
-                </div>
-              </div>
-              <div className="ns-board__row">
-                <div>
-                  <strong>Who can join?</strong>
-                  <span>Students ages 11-19 in grades 6-12, supported by parents, teachers, school leaders, sponsors, and partners.</span>
-                </div>
-              </div>
-              <div className="ns-board__row">
-                <div>
-                  <strong>How do you start?</strong>
-                  <span>Choose the registration path above, complete the right form, and move into the challenge workflow immediately.</span>
-                </div>
-              </div>
-            </div>
-            <p className="ns-muted">The goal is full clarity in the first 10-15 seconds: what it is, who it is for, what can be won, and how to begin.</p>
           </aside>
+        </div>
+      </section>
+
+      <section className="block ns-section" id="purpose">
+        <div className="wrap">
+          <div className="ns-purpose">
+            <div className="ns-purpose__lead reveal">
+              <span className="eyebrow">A Challenge With Purpose</span>
+              <h2>Every community faces challenges. Every student has ideas.</h2>
+              <p>This initiative empowers students to identify real-world problems, collaborate with local businesses, develop solutions, and create measurable impact in their communities — building future entrepreneurs and stronger neighborhoods along the way.</p>
+            </div>
+            <div className="ns-calling glass reveal d1">
+              <span className="eyebrow">Calling</span>
+              <h3>Schools · Educators · Students · Parents</h3>
+              <p>Join New York's growing movement of future innovators, entrepreneurs, and community leaders.</p>
+              <div className="ns-calling__chips">
+                {callingAudiences.map((aud) => (
+                  <div className="ns-calling__chip" key={aud.title}>
+                    <strong>{aud.title}</strong>
+                    <span>{aud.detail}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="block ns-section ns-section--awards" id="awards">
+        <div className="wrap">
+          <div className="ns-section__head reveal">
+            <span className="eyebrow">Awards &amp; Recognition</span>
+            <h2>Over <span className="gold-text">{totalAwardsLabel}</span> in Awards &amp; Recognition</h2>
+            <p>Real investment in students, schools, and the educators who make it possible.</p>
+          </div>
+          <div className="ns-awards">
+            {awardHighlights.map((award, i) => (
+              <article className={`glass ns-award-card reveal d${i + 1}`} key={award.label}>
+                <span className="ns-award-card__amount gold-text">{award.amount}</span>
+                <strong className="ns-award-card__label">{award.label}</strong>
+                <p>{award.detail}</p>
+              </article>
+            ))}
+          </div>
         </div>
       </section>
 
       <section className="block ns-section" id="live-stats">
         <div className="wrap">
-          <div className="ns-section__head reveal in">
-            <span className="eyebrow">Live Challenge Statistics</span>
-            <h2>Program activity, timing, and recognition in one place.</h2>
-            <p>Visitors should be able to see challenge momentum, key dates, and the latest competitive snapshot without scrolling into the forms first.</p>
+          <div className="ns-section__head reveal">
+            <span className="eyebrow">The Movement So Far</span>
+            <h2>Live challenge momentum, updated in real time.</h2>
+            <p>Schools, students, interviews, and community problems tracked as the movement grows across New York.</p>
           </div>
 
-          <div className="ns-stats-layout">
-            <article className="glass ns-stats-panel reveal in">
-              <div className="ns-stats-panel__head">
-                <span className="eyebrow">Movement Data</span>
-                <h3>Live impact tracker</h3>
-              </div>
-              <div className="ns-metrics">
-                {movementStats.map((item) => (
-                  <div className="ns-metric" key={item.label}>
-                    <strong>{item.value}</strong>
-                    <span>{item.label}</span>
-                  </div>
-                ))}
-              </div>
-            </article>
+          <div className="ns-stat-tiles">
+            {movementStats.map((item, i) => (
+              <article className={`glass ns-stat-tile reveal d${(i % 4) + 1}`} key={item.label}>
+                <strong>{item.value}</strong>
+                <span>{item.label}</span>
+              </article>
+            ))}
+          </div>
 
-            <article className="glass ns-stats-panel reveal in">
-              <div className="ns-stats-panel__head">
-                <span className="eyebrow">Challenge Timeline</span>
-                <h3>Key dates and live snapshot</h3>
-              </div>
-              <div className="ns-hero__panel-foot ns-hero__panel-foot--stats">
-                <div>
-                  <span>Registration Opens</span>
-                  <strong>{registrationOpenLabel}</strong>
-                </div>
-                <div>
-                  <span>Winners Announced</span>
-                  <strong>{winnersAnnouncedLabel}</strong>
-                </div>
-                <div>
-                  <span>Submission Deadline</span>
-                  <strong>{deadlineLabel}</strong>
-                </div>
-                <div>
-                  <span>Days Left</span>
-                  <strong>{deadlineDays !== null ? `${deadlineDays} days` : 'Open now'}</strong>
-                </div>
-              </div>
-              <div className="ns-award">
+          <article className="glass ns-snapshot reveal">
+            <div className="ns-snapshot__head">
+              <span className="eyebrow">Live Snapshot</span>
+              <div className="ns-snapshot__progress">
                 <div className="ns-award__head">
                   <strong>Challenge Completion</strong>
                   <span>{completionPercent}%</span>
@@ -1716,42 +1753,40 @@ export default function NewSchool() {
                   <span style={{ width: `${completionPercent}%` }} />
                 </div>
               </div>
-              <div className="ns-hero__winners">
-                <h3>Live Snapshot</h3>
-                {latestWinner && (
-                  <div className="ns-winner-row">
-                    <strong>Winner</strong>
-                    <em>{latestWinner.student_name}</em>
-                    <span>{formatMoney(latestWinner.scholarship_amount)}</span>
-                  </div>
-                )}
-                {topSchool && (
-                  <div className="ns-winner-row">
-                    <strong>Top School</strong>
-                    <em>{topSchool.label}</em>
-                    <span>{topSchool.submissions || 0} subs</span>
-                  </div>
-                )}
-                {topStudent && (
-                  <div className="ns-winner-row">
-                    <strong>Top Student</strong>
-                    <em>{topStudent.label}</em>
-                    <span>{topStudent.interview_count || 0} interviews</span>
-                  </div>
-                )}
-                {!latestWinner && !topSchool && !topStudent && (
-                  <p className="ns-muted">Live rankings will appear once schools, students, and winners are added.</p>
-                )}
-              </div>
-              <p className="ns-muted">Counts update from registrations, interviews, submissions, and published winners.</p>
-            </article>
-          </div>
+            </div>
+            <div className="ns-snapshot__rows">
+              {latestWinner && (
+                <div className="ns-winner-row">
+                  <strong>Winner</strong>
+                  <em>{latestWinner.student_name}</em>
+                  <span>{formatMoney(latestWinner.scholarship_amount)}</span>
+                </div>
+              )}
+              {topSchool && (
+                <div className="ns-winner-row">
+                  <strong>Top School</strong>
+                  <em>{topSchool.label}</em>
+                  <span>{topSchool.submissions || 0} subs</span>
+                </div>
+              )}
+              {topStudent && (
+                <div className="ns-winner-row">
+                  <strong>Top Student</strong>
+                  <em>{topStudent.label}</em>
+                  <span>{topStudent.interview_count || 0} interviews</span>
+                </div>
+              )}
+              {!latestWinner && !topSchool && !topStudent && (
+                <p className="ns-muted">Live rankings will appear once schools, students, and winners are added.</p>
+              )}
+            </div>
+          </article>
         </div>
       </section>
 
       <section className="block ns-section" id="workflow">
         <div className="wrap">
-          <div className="ns-section__head reveal in">
+          <div className="ns-section__head reveal">
             <span className="eyebrow">How It Works</span>
             <h2>From registration to scholarships and school grants.</h2>
             <p>Each step moves students closer to a solution that addresses a real community problem.</p>
@@ -1771,15 +1806,25 @@ export default function NewSchool() {
 
       <section className="block ns-section" id="participants">
         <div className="wrap">
-          <div className="ns-section__head reveal in">
+          <div className="ns-section__head reveal">
             <span className="eyebrow">Who Can Participate</span>
-            <h2>Students lead it, and schools, families, educators, sponsors, and partners make it possible.</h2>
-            <p>The landing page should immediately make clear that this is school-friendly, community-focused, and designed for broad support around each student.</p>
+            <h2>Students lead. Everyone makes it possible.</h2>
+            <p>Open to students ages {ageRange} in grades {gradeRange} — supported by schools, families, educators, sponsors, and community partners.</p>
+          </div>
+
+          <div className="ns-eligibility reveal">
+            <div className="ns-eligibility__pills">
+              <span className="ns-pill ns-pill--solid">Ages {ageRange}</span>
+              <span className="ns-pill ns-pill--solid">Grades {gradeRange}</span>
+            </div>
+            <div className="ns-eligibility__pills">
+              {schoolTypeChips.map((type) => (<span className="ns-pill" key={type}>{type}</span>))}
+            </div>
           </div>
 
           <div className="ns-participant-grid">
-            {participantCards.map((card) => (
-              <article className="glass ns-info-card reveal in" key={card.title}>
+            {participantCards.map((card, i) => (
+              <article className={`glass ns-info-card reveal d${(i % 4) + 1}`} key={card.title}>
                 <span className="ns-info-card__kicker">{card.kicker}</span>
                 <h3>{card.title}</h3>
                 <p>{card.detail}</p>
@@ -1789,12 +1834,90 @@ export default function NewSchool() {
         </div>
       </section>
 
-      <section className="block ns-section" id="registration">
+      <section className="block ns-section" id="gains">
         <div className="wrap">
-          <div className="ns-section__head reveal in">
-            <span className="eyebrow">Registration Hub</span>
-            <h2>Student, parent, school, and teacher forms.</h2>
-            <p>Choose a user tag first. The matching registration fields appear so each account type only sees the inputs it needs. Sponsors use the founding sponsor page linked above.</p>
+          <div className="ns-section__head reveal">
+            <span className="eyebrow">What Students Will Gain</span>
+            <h2>More than a competition — a launchpad for problem solvers.</h2>
+            <p>Every participant walks away with skills, experience, and opportunities that outlast the challenge.</p>
+          </div>
+          <div className="ns-gains">
+            {studentGains.map((gain, i) => (
+              <article className={`glass ns-gain reveal d${(i % 4) + 1}`} key={gain.title}>
+                <span className="ns-gain__marker" aria-hidden="true" />
+                <strong>{gain.title}</strong>
+                <p>{gain.detail}</p>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="block ns-section" id="timeline">
+        <div className="wrap">
+          <div className="ns-section__head reveal">
+            <span className="eyebrow">Challenge Timeline</span>
+            <h2>From launch to winners — the full journey.</h2>
+            <p>{deadlineDays !== null ? `${deadlineDays} days left to make your impact.` : 'Key dates for the 2026 challenge.'}</p>
+          </div>
+          <ol className="ns-timeline">
+            {timelineMilestones.map((m, i) => (
+              <li className={`ns-timeline__item reveal${m.highlight ? ' is-highlight' : ''}`} key={m.phase}>
+                <span className="ns-timeline__dot" aria-hidden="true">{i + 1}</span>
+                <div className="ns-timeline__body glass">
+                  <strong>{m.phase}</strong>
+                  <span>{m.when}</span>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </section>
+
+      <section className="block ns-section ns-section--founder" id="founder">
+        <div className="wrap">
+          <div className="ns-credibility">
+            <div className="ns-credibility__portrait reveal">
+              <img src="/assets/frantz-half-face.webp" alt="Frantz Coutard" loading="lazy" decoding="async" />
+            </div>
+            <div className="ns-credibility__body reveal d1">
+              <span className="eyebrow">From The Founder</span>
+              <h2>The future belongs to problem solvers.</h2>
+              <p>The Student Impact Challenge is built to give young people the tools, mentorship, and stage to lead real change in their communities — and to recognize the schools and educators who make it possible.</p>
+              <p className="ns-credibility__sign">Frantz Coutard</p>
+              <p className="ns-credibility__role">CEO &amp; Founder · TrendCatch Network</p>
+              <div className="ns-medal-strip" aria-label="Founder recognition">
+                {featuredAwards.map((award) => (
+                  <button
+                    key={award.id}
+                    type="button"
+                    className="ns-medal-strip__item"
+                    data-lightbox-src={award.image}
+                    data-lightbox-cap={award.name}
+                    data-lightbox-alt={award.name}
+                    aria-label={`Open award image: ${award.name}`}
+                    title={award.name}
+                  >
+                    <img src={award.image} alt={award.name} title={award.name} loading="lazy" decoding="async" />
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="block ns-section ns-section--register" id="registration">
+        <div className="wrap">
+          <div className="ns-cta-band reveal">
+            <div>
+              <span className="eyebrow">Register Today</span>
+              <h2>Students ages {ageRange} welcome · Grades {gradeRange}</h2>
+              <p>Public · Private · Charter · Trade Schools. Choose your role below to get started.</p>
+            </div>
+          </div>
+          <div className="ns-section__head reveal">
+            <p>Choose a user tag first — the matching registration fields appear so each account type only sees the inputs it needs. Sponsors use the founding sponsor page.</p>
           </div>
 
           <div className="ns-role-switch reveal in" role="tablist" aria-label="Registration user tags">
@@ -2071,7 +2194,7 @@ export default function NewSchool() {
 
       <section className="block ns-section" id="dashboard-info">
         <div className="wrap">
-          <div className="ns-section__head reveal in">
+          <div className="ns-section__head reveal">
             <span className="eyebrow">Dashboard Information</span>
             <h2>Every role gets a focused workspace after registration and approval.</h2>
             <p>Students, parents, school leaders, and teachers each land in a role-based dashboard built from the same challenge data.</p>
@@ -2103,7 +2226,7 @@ export default function NewSchool() {
 
       <section className="block ns-section" id="founding-sponsors">
         <div className="wrap">
-          <div className="ns-section__head reveal in">
+          <div className="ns-section__head reveal">
             <span className="eyebrow">Founding Sponsors</span>
             <h2>Support a scholarship-driven challenge that schools can rally behind.</h2>
             <p>Founding sponsors help power school grants, student scholarships, educator recognition, and the community visibility needed to grow the movement across New York.</p>
@@ -2132,6 +2255,20 @@ export default function NewSchool() {
           </div>
         </div>
       </section>
+
+      <section className="block ns-section ns-section--values" id="values">
+        <div className="wrap">
+          <div className="ns-values">
+            {coreValues.map((value, i) => (
+              <article className={`ns-value reveal d${(i % 4) + 1}`} key={value.title}>
+                <strong className="gold-text">{value.title}</strong>
+                <span>{value.detail}</span>
+              </article>
+            ))}
+          </div>
+          <p className="ns-values__tagline reveal">The future belongs to problem solvers.</p>
+        </div>
+      </section>
         </>
       )}
 
@@ -2140,7 +2277,7 @@ export default function NewSchool() {
       <section className={`block ns-section ns-dashboard-page ${dashboardThemeClass}`} id="dashboard" data-dashboard-role={dashboardRole || 'guest'}>
         <div className="wrap">
           {!isReferenceLayout && (
-            <div className="ns-section__head reveal in">
+            <div className="ns-section__head reveal">
               <span className="eyebrow">Live Dashboard</span>
               <h2>Role-based tracking for every account type.</h2>
               <p>Student, parent, school, teacher, and admin views are driven from the same data tables.</p>

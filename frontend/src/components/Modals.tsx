@@ -275,12 +275,13 @@ const validateRegisterForm = (form: RegisterFormState, termsAccepted: boolean) =
 
 /* ============================ AUTH MODAL ============================ */
 export function AuthModal({
-  open, mode, onClose, onMode,
+  open, mode, onClose, onMode, initialRole,
 }: {
   open: boolean
   mode: 'login' | 'register'
   onClose: () => void
   onMode: (m: 'login' | 'register') => void
+  initialRole?: RegistrationRole | null
 }) {
   const { login, register } = useAuth()
   type AuthResult = Awaited<ReturnType<typeof login>>
@@ -297,12 +298,15 @@ export function AuthModal({
     if (open) {
       setError('')
       setDone(null)
-      setForm(createRegisterForm())
+      // Pre-select the User Type when launched from a role-specific button (e.g. hero "Student").
+      setForm(mode === 'register' && initialRole
+        ? { ...createRegisterForm(), role: initialRole }
+        : createRegisterForm())
       setTermsAccepted(false)
       setTermsSig('')
     }
     document.body.style.overflow = open ? 'hidden' : ''
-  }, [open, mode])
+  }, [open, mode, initialRole])
 
   // Load the approved schools + teachers so challenge registration uses the same
   // dropdowns as the /new-school challenge page.
