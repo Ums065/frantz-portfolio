@@ -9,7 +9,7 @@ const About = lazy(() => import('./pages/About'))
 const Awards = lazy(() => import('./pages/Awards'))
 const Blog = lazy(() => import('./pages/Blog'))
 const BlogPost = lazy(() => import('./pages/BlogPost'))
-const Community = lazy(() => import('./pages/Community'))
+
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const Events = lazy(() => import('./pages/Events'))
 const DemoLogin = lazy(() => import('./pages/DemoLogin'))
@@ -53,8 +53,20 @@ function ScrollToTop() {
   const { pathname, hash } = useLocation()
 
   useEffect(() => {
-    if (hash) return
-    window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+    if (!hash) {
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+      return
+    }
+
+    const timer = window.setTimeout(() => {
+      const target = document.querySelector(hash)
+      if (target instanceof HTMLElement) {
+        const top = target.getBoundingClientRect().top + window.scrollY - 96
+        window.scrollTo({ top: Math.max(0, top), left: 0, behavior: 'auto' })
+      }
+    }, 0)
+
+    return () => window.clearTimeout(timer)
   }, [pathname, hash])
 
   return null
@@ -81,7 +93,7 @@ export default function App() {
           <Route path="/blog/:id" element={<RoutedPage pageKey="blogpost"><BlogPost /></RoutedPage>} />
           <Route path="/events" element={<RoutedPage pageKey="events"><Events /></RoutedPage>} />
           <Route path="/media" element={<RoutedPage pageKey="media"><Media /></RoutedPage>} />
-          <Route path="/community" element={<RoutedPage pageKey="community"><Community /></RoutedPage>} />
+          
           <Route path="/demo-login" element={<RoutedPage pageKey="demo-login"><DemoLogin /></RoutedPage>} />
           <Route path="/become-a-founding-sponsor" element={<RoutedPage pageKey="become-a-founding-sponsor"><FoundingSponsor /></RoutedPage>} />
           <Route path="/founding-sponsors" element={<RoutedPage pageKey="founding-sponsors"><FoundingSponsors /></RoutedPage>} />

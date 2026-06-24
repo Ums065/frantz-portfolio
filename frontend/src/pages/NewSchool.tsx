@@ -437,6 +437,28 @@ const coreValues = [
   { title: 'Elevate', detail: 'Creating A Better Tomorrow' },
 ]
 
+const challengeFaqItems = [
+  {
+    question: "Who can participate?",
+    answer: "Students ages 11-19 in grades 6-12 can join, with parent and school support where required.",
+  },
+  {
+    question: "What do students do?",
+    answer: "They interview local businesses, identify a real community problem, and build a solution that creates measurable impact.",
+  },
+  {
+    question: "Do parents and schools need to approve?",
+    answer: "Yes. The workflow is built around the correct approvals and consent steps before a student can move forward.",
+  },
+  {
+    question: "What can students win?",
+    answer: "Schools can earn impact grants, students can win scholarships, and outstanding educators can receive the educator award.",
+  },
+  {
+    question: "How do I begin?",
+    answer: "Choose the correct registration role at the top of the page, then follow the workflow through the dashboard.",
+  },
+] as const
 const dashboardTabsByRole: Record<string, DashboardTabConfig[]> = {
   student: [
     { key: 'overview', label: 'Overview', hint: 'Status and progress' },
@@ -2256,6 +2278,23 @@ export default function NewSchool() {
         </div>
       </section>
 
+      <section className="block ns-section faq-section" id="faq">
+        <div className="wrap">
+          <div className="ns-section__head reveal">
+            <span className="eyebrow">Frequently Asked Questions</span>
+            <h2>Answers before you register.</h2>
+            <p>Everything families, schools, and students ask most often.</p>
+          </div>
+          <div className="faq-grid reveal">
+            {challengeFaqItems.map((faq) => (
+              <details className="faq-item" key={faq.question}>
+                <summary>{faq.question}</summary>
+                <div className="faq-item__answer"><p>{faq.answer}</p></div>
+              </details>
+            ))}
+          </div>
+        </div>
+      </section>
       <section className="block ns-section ns-section--values" id="values">
         <div className="wrap">
           <div className="ns-values">

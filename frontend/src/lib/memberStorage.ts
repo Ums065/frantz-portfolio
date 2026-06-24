@@ -38,7 +38,7 @@ export const DEFAULT_MEMBER_NOTIFICATIONS: MemberNotification[] = [
     title: 'VIP community access is live',
     body: 'Registered members can claim early invites, founder updates, and private resources.',
     tone: 'green',
-    href: '/community',
+    href: '/#community',
     createdAt: 'This week',
   },
   {

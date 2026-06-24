@@ -130,7 +130,7 @@ export default function Events() {
             <span className="chip">{past.length} past appearances</span>
           </div>
           <div className="profile-actions" style={{ justifyContent: 'center', marginTop: 20, flexWrap: 'wrap' }}>
-            <Link className="btn btn--solid btn--sm" to="/community">Join Community</Link>
+            <Link className="btn btn--solid btn--sm" to="/#community">Join Community</Link>
             <button className="btn btn--sm" data-request="Speaking Engagement">Book Frantz</button>
           </div>
         </div>

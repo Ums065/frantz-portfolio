@@ -227,7 +227,7 @@ export default function Dashboard() {
           </div>
           <div className="dashboard-hero__actions">
             <Link className="btn btn--sm btn--solid" to="/store">Shop</Link>
-            <Link className="btn btn--sm" to="/community">Community</Link>
+            <Link className="btn btn--sm" to="/#community">Community</Link>
             <Link className="btn btn--sm" to="/profile">Profile</Link>
           </div>
         </div>
@@ -259,7 +259,7 @@ export default function Dashboard() {
           ))}
           <div className="dashboard-side__foot">
             <Link className="btn btn--sm btn--solid" to="/store">Shop</Link>
-            <Link className="btn btn--sm" to="/community">Community</Link>
+            <Link className="btn btn--sm" to="/#community">Community</Link>
             <button className="btn btn--sm" type="button" onClick={() => logout()}>Logout</button>
           </div>
         </aside>
@@ -310,7 +310,7 @@ export default function Dashboard() {
               <div className="dashboard-notifications" style={{ marginTop: 22 }}>
                 <div className="dashboard-section-head">
                   <h3>Notification Center</h3>
-                  <Link to="/community">More updates</Link>
+                  <Link to="/#community">More updates</Link>
                 </div>
                 <div className="notification-list">
                   {notifications.slice(0, 3).map((note) => (

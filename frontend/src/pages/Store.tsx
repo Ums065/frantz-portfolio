@@ -583,7 +583,7 @@ export default function Store() {
             <NavLink className={({ isActive }) => `sh-link${isActive ? ' active' : ''}`} to="/" end>
               Site
             </NavLink>
-            <NavLink className={({ isActive }) => `sh-link${isActive ? ' active' : ''}`} to="/community">
+            <NavLink className={({ isActive }) => `sh-link${isActive ? ' active' : ''}`} to="/#community">
               Community
             </NavLink>
             <NavLink className={({ isActive }) => `sh-link${isActive ? ' active' : ''}`} to="/profile">

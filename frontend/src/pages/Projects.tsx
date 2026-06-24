@@ -46,7 +46,7 @@ export default function Projects() {
                       </div>
                     ))}
                   </div>
-                  <Link className="proj__link" to={project.href || '/community'}>
+                  <Link className="proj__link" to={project.href || '/#community'}>
                     {project.action}
                     <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth={2}><path d="M7 17L17 7M9 7h8v8" /></svg>
                   </Link>
@@ -64,7 +64,7 @@ export default function Projects() {
                   The project system is built to scale. Each platform has a different audience, but the same core rule: create value that stays connected to people and place.
                 </p>
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 18 }}>
-                  <Link className="btn btn--solid" to="/community">Join the Community</Link>
+                  <Link className="btn btn--solid" to="/#community">Join the Community</Link>
                   <Link className="btn" to="/media">See Media Center</Link>
                 </div>
               </div>

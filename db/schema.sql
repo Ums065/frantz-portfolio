@@ -353,7 +353,7 @@ INSERT INTO media_items (title, type, summary, body, image, link_url, published_
   ('Interview and podcast assets', 'interview',
    'Brand-ready photos and message points for hosts and producers.',
    'The media kit path is built for timely booking requests, interview prep, and quick turnaround production needs.',
-   '/assets/brand-signature-white.jpg', '/community', '2026-05-01', 0, 4),
+   '/assets/brand-signature-white.jpg', '/#community', '2026-05-01', 0, 4),
   ('Photo gallery selection', 'photo',
    'Stage, community, and brand imagery chosen for editorial use.',
    'A curated gallery that supports campaigns, announcements, and promotional materials.',

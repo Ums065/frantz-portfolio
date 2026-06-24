@@ -190,6 +190,25 @@ const partnerItems = [
   { name: 'Leadership Circle', image: awardSenate },
 ] as const
 
+const homeFaqItems = [
+  {
+    question: "What is this site about?",
+    answer: "It brings together the founder story, projects, awards, media, mentorship, and ways to connect with the brand.",
+  },
+  {
+    question: "How do I join the community?",
+    answer: "Use the Join the Community area on the home page to log in or register. The community experience now lives on the homepage instead of a separate page.",
+  },
+  {
+    question: "How can I book Frantz?",
+    answer: "Use the speaking, interview, mentorship, or event request buttons to start the conversation.",
+  },
+  {
+    question: "Where do I go for the student challenge?",
+    answer: "Open the New School challenge page to register for the Student Impact Challenge and see the full workflow.",
+  },
+] as const
+
 function VisionNodeIcon({ kind }: { kind: VisionNode['kind'] }) {
   switch (kind) {
     case 'schools':
@@ -746,6 +765,24 @@ export default function Home() {
 
       <div className="wrap"><div className="sec-divider" /></div>
 
+      <section className="block faq-section block--alt" id="faq" data-screen-label="FAQ">
+        <div className="wrap">
+          <div className="block__head reveal">
+            <div className="section-title"><span className="ln l" /><h2 className="gold-text">Frequently Asked Questions</h2><span className="ln r" /></div>
+            <p className="sub">Quick answers for visitors, partners, and community members.</p>
+          </div>
+          <div className="faq-grid reveal">
+            {homeFaqItems.map((faq) => (
+              <details className="faq-item" key={faq.question}>
+                <summary>{faq.question}</summary>
+                <div className="faq-item__answer"><p>{faq.answer}</p></div>
+              </details>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <div className="wrap"><div className="sec-divider" /></div>
       <section className="block block--alt" id="social" data-screen-label="Social">
         <div className="wrap">
           <div className="block__head reveal">

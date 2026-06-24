@@ -62,7 +62,7 @@ export const projectShowcase: ProjectFeature[] = [
       { label: 'Status', value: 'In rollout' },
     ],
     action: 'Explore the platform vision',
-    href: '/community',
+    href: '/#community',
   },
   {
     title: 'Unlock A Cause',
@@ -100,7 +100,7 @@ export const projectShowcase: ProjectFeature[] = [
       { label: 'Status', value: 'Ongoing' },
     ],
     action: 'Join the movement',
-    href: '/community',
+    href: '/#community',
   },
   {
     title: 'TrendCatch Player Technology',
@@ -119,7 +119,7 @@ export const projectShowcase: ProjectFeature[] = [
       { label: 'Status', value: 'Concept' },
     ],
     action: 'Follow future updates',
-    href: '/community',
+    href: '/#community',
   },
 ]
 
@@ -158,7 +158,7 @@ export const mediaShowcase: MediaFeature[] = [
     summary: 'Brand-ready photos and message points for hosts and producers.',
     detail: 'The media kit path is built for timely booking requests, interview prep, and quick turnaround production needs.',
     image: '/assets/brand-signature-white.webp',
-    href: '/community',
+    href: '/#community',
     published: '2026-05',
   },
   {
