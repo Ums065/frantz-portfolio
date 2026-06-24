@@ -602,6 +602,8 @@ export default function NewSchool() {
   const [schoolApprovalStatus, setSchoolApprovalStatus] = useState('all')
   const [approvalDetail, setApprovalDetail] = useState<{ type: 'student' | 'teacher'; id: number } | null>(null)
   const [schoolRankingTab, setSchoolRankingTab] = useState<'students' | 'teachers'>('students')
+  const [adminRankingTab, setAdminRankingTab] = useState<'students' | 'teachers'>('students')
+  const [adminRankSchoolId, setAdminRankSchoolId] = useState('')
   const [studentRankTab, setStudentRankTab] = useState<'school' | 'class'>('school')
   const [schoolRankings, setSchoolRankings] = useState<any[]>([])
   const [recordModal, setRecordModal] = useState<{ entity: RecordEntity; mode: 'view' | 'edit' | 'create'; id: number | null } | null>(null)
@@ -1416,6 +1418,39 @@ export default function NewSchool() {
   const adminNotifications = asArray<any>(adminDashboard?.notifications)
   const adminSchools = asArray<any>(adminDashboard?.schools)
   const adminStudentSummary = adminDashboard?.student_summary || {}
+  // Admin Rankings: the same rich leaderboard the principal sees, but across every school
+  // with a school filter (empty = all schools / global). Students & teachers carry a
+  // GLOBAL rank_position, so the filtered set is re-indexed to keep the podium at #1/#2/#3.
+  const adminStudents = asArray<any>(adminDashboard?.students)
+  const adminTeachers = asArray<any>(adminDashboard?.teachers)
+  const adminRankSchoolIdNum = adminRankSchoolId ? Number(adminRankSchoolId) : null
+  const adminRankSchool = adminSchools.find((s: any) => String(s.id) === adminRankSchoolId) || null
+  const adminRankStudentsScoped = adminRankSchoolIdNum
+    ? adminStudents.filter((s: any) => Number(s.school_id) === adminRankSchoolIdNum)
+    : adminStudents
+  const adminRankTeachersScoped = adminRankSchoolIdNum
+    ? adminTeachers.filter((t: any) => Number(t.school_id) === adminRankSchoolIdNum)
+    : adminTeachers
+  const adminLeaderRows = (adminRankingTab === 'students'
+    ? adminRankStudentsScoped.slice()
+        .sort((a: any, b: any) => (a.rank_position || 9999) - (b.rank_position || 9999))
+        .map((r: any, i: number) => ({
+          id: Number(r.id), type: 'student' as const, rank: i + 1,
+          name: r.full_name, sub: r.school_name || (r.teacher_full_name ? `Mentor · ${r.teacher_full_name}` : '—'),
+          score: Number(r.student_points) || 0, tag: r.submission_status || '—', tagType: 'status' as const,
+        }))
+    : adminRankTeachersScoped.slice()
+        .sort((a: any, b: any) => (a.rank_position || 9999) - (b.rank_position || 9999))
+        .map((r: any, i: number) => ({
+          id: Number(r.id), type: 'teacher' as const, rank: i + 1,
+          name: r.teacher_full_name, sub: r.linked_school_name || r.school_name || r.role_department || 'Faculty',
+          score: Number(r.teacher_points) || 0, tag: `${r.students_total ?? 0} students`, tagType: 'count' as const,
+        }))
+  )
+  const adminLeaderMax = Math.max(1, ...adminLeaderRows.map((r) => r.score))
+  const adminPodium = adminLeaderRows.length >= 3
+    ? [2, 1, 3].map((rank) => adminLeaderRows.find((r) => r.rank === rank)).filter(Boolean) as typeof adminLeaderRows
+    : adminLeaderRows.slice(0, 3)
   const studentSchoolRankings = asArray<any>(studentDashboard?.rankings?.school?.leaderboard)
   const studentTeacherRankings = asArray<any>(studentDashboard?.rankings?.teacher?.leaderboard)
   const studentLeaderSource = studentRankTab === 'school' ? studentSchoolRankings : studentTeacherRankings
@@ -4106,50 +4141,110 @@ export default function NewSchool() {
                 </div>
               </article>
 
-              <article className="glass ns-dash-card ns-dash-card--wide reveal in" hidden={dashboardTab !== 'rankings'}>
+              <article className="glass ns-dash-card ns-dash-card--wide reveal in ns-leaderboard-card" hidden={dashboardTab !== 'rankings'}>
                 <div className="ns-dash-card__head">
-                  <span className="eyebrow">Global Rankings</span>
-                  <span className="ns-board__badge">Top 3 by type</span>
+                  <span className="eyebrow">Competition Leaderboard</span>
+                  <span className="ns-board__badge">🏆 {adminRankSchool ? adminRankSchool.school_name : 'All schools'}</span>
                 </div>
-                <div className="ns-rank-columns">
-                  <div>
-                    <strong className="ns-subtitle">Schools</strong>
-                    <div className="ns-notification-list">
-                      {asArray<any>(adminDashboard.leaderboards?.schools).slice(0, 3).map((row: any) => (
-                        <div className="ns-notification-item" key={`admin-school-${row.id}`}>
-                          <strong>{row.label}</strong>
-                          <p>{row.submissions} submissions</p>
-                          <span>{row.students} students</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <strong className="ns-subtitle">Teachers</strong>
-                    <div className="ns-notification-list">
-                      {asArray<any>(adminDashboard.leaderboards?.teachers).slice(0, 3).map((row: any) => (
-                        <div className="ns-notification-item" key={`admin-teacher-${row.id}`}>
-                          <strong>{row.label}</strong>
-                          <p>{row.teacher_approved || 0} approved</p>
-                          <span>{row.students} students</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <strong className="ns-subtitle">Students</strong>
-                    <div className="ns-notification-list">
-                      {asArray<any>(adminDashboard.leaderboards?.students).slice(0, 3).map((row: any) => (
-                        <div className="ns-notification-item" key={`admin-student-${row.id}`}>
-                          <strong>{row.label}</strong>
-                          <p>{row.interview_count} interviews</p>
-                          <span>{row.grade_level}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                <p className="ns-leaderboard-tagline">
+                  Every interview, approval and submission earns points. Filter by a single school or view every school together — {adminRankingTab === 'students' ? 'students' : 'teachers'} climb the board in real time.
+                </p>
+
+                <div className="ns-school-toolbar">
+                  <label className="ns-school-select">
+                    <span>School</span>
+                    <select value={adminRankSchoolId} onChange={(e) => setAdminRankSchoolId(e.target.value)}>
+                      <option value="">All schools (global)</option>
+                      {adminSchools.map((s: any) => <option key={s.id} value={s.id}>{s.school_name}</option>)}
+                    </select>
+                  </label>
+                  {adminRankSchool && <button type="button" className="btn btn--sm" onClick={() => setAdminRankSchoolId('')}>← All schools</button>}
                 </div>
+
+                <div className="ns-record-tabs" role="tablist" aria-label="Leaderboard view">
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={adminRankingTab === 'students'}
+                    className={`ns-record-tabs__btn ${adminRankingTab === 'students' ? 'is-active' : ''}`}
+                    onClick={() => setAdminRankingTab('students')}
+                  >
+                    <strong>Students</strong>
+                    <span>Champions board</span>
+                    <em>{adminRankStudentsScoped.length}</em>
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={adminRankingTab === 'teachers'}
+                    className={`ns-record-tabs__btn ${adminRankingTab === 'teachers' ? 'is-active' : ''}`}
+                    onClick={() => setAdminRankingTab('teachers')}
+                  >
+                    <strong>Teachers</strong>
+                    <span>Mentor board</span>
+                    <em>{adminRankTeachersScoped.length}</em>
+                  </button>
+                </div>
+
+                {adminLeaderRows.length === 0 ? (
+                  <p className="ns-muted" style={{ marginTop: 16 }}>No ranked {adminRankingTab} yet — standings appear once scores are recorded.</p>
+                ) : (
+                  <>
+                    {adminPodium.length > 0 && (
+                      <div className="ns-podium" aria-label="Top performers">
+                        {adminPodium.map((p) => (
+                          <div
+                            key={`admin-podium-${p.type}-${p.id}`}
+                            className="ns-podium__place ns-podium__place--static"
+                            data-rank={p.rank}
+                          >
+                            <span className="ns-podium__medal" aria-hidden="true">{['🥇', '🥈', '🥉'][p.rank - 1] || `#${p.rank}`}</span>
+                            <span className="ns-podium__avatar">{String(p.name || '?').trim().charAt(0).toUpperCase()}</span>
+                            <strong className="ns-podium__name">{p.name}</strong>
+                            <span className="ns-podium__sub">{p.sub}</span>
+                            <span className="ns-podium__score">{p.score}<small>pts</small></span>
+                            <span className="ns-podium__pedestal">{p.rank}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="ns-leaderboard" role="list">
+                      <div className="ns-leaderboard__head" aria-hidden="true">
+                        <span>Rank</span>
+                        <span />
+                        <span>{adminRankingTab === 'students' ? 'Student' : 'Teacher'}</span>
+                        <span>Points</span>
+                        <span>{adminRankingTab === 'students' ? 'Status' : 'Class'}</span>
+                      </div>
+                      {adminLeaderRows.map((r) => (
+                        <div
+                          role="listitem"
+                          key={`admin-leader-${r.type}-${r.id}`}
+                          className={`ns-leader-row ns-leader-row--static ${r.rank >= 1 && r.rank <= 3 ? 'is-podium' : ''}`}
+                          data-rank={r.rank}
+                        >
+                          <span className="ns-leader-rank">{r.rank >= 1 && r.rank <= 3 ? (['🥇', '🥈', '🥉'][r.rank - 1]) : (r.rank || '—')}</span>
+                          <span className="ns-leader-avatar" aria-hidden="true">{String(r.name || '?').trim().charAt(0).toUpperCase()}</span>
+                          <div className="ns-leader-id">
+                            <strong>{r.name}</strong>
+                            <span>{r.sub}</span>
+                          </div>
+                          <div className="ns-leader-score">
+                            <div className="ns-leader-bar"><span style={{ width: `${Math.max(6, Math.round((r.score / adminLeaderMax) * 100))}%` }} /></div>
+                            <strong>{r.score}<small>pts</small></strong>
+                          </div>
+                          {r.tagType === 'status'
+                            ? <span className="ns-status-pill" data-status={String(r.tag).toLowerCase()}>{r.tag}</span>
+                            : <span className="ns-leader-tag">{r.tag}</span>}
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
               </article>
+
+              <SchoolRankBoard schools={schoolRankings} mySchoolId={null} hidden={dashboardTab !== 'rankings'} />
 
               <article className="glass ns-dash-card ns-dash-card--wide reveal in" hidden={dashboardTab !== 'data'}>
                 <div className="ns-dash-card__head">

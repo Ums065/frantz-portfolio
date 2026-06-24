@@ -63,6 +63,59 @@ const CHECKLIST: [string, string][] = [
 const truthy = (v: any) => v === true || v === 1 || v === '1' || v === 'yes' || v === 'true'
 const hasValue = (v: any) => v !== null && v !== undefined && String(v).trim() !== ''
 
+// The inner content of a record (facts + checklist + long answers + uploads),
+// without the modal shell — reused inside the full student profile.
+export function NsRecordBody({ kind, record }: { kind: Kind; record: Record<string, any> }) {
+  const facts = FACT_FIELDS[kind].filter(([, k]) => hasValue(record[k]))
+  const longs = LONG_FIELDS[kind].filter(([, k]) => hasValue(record[k]))
+  const checks = kind === 'interview' ? CHECKLIST : []
+  const links: [string, string][] = kind === 'project'
+    ? ([['Video upload', 'video_url'], ['Written upload', 'written_url']] as [string, string][]).filter(([, k]) => hasValue(record[k]))
+    : []
+  return (
+    <>
+      {facts.length > 0 && (
+        <div className="ns-detail__facts">
+          {facts.map(([label, k]) => (
+            <div key={k} className="ns-detail__fact">
+              <span>{label}</span>
+              <strong>{String(record[k])}</strong>
+            </div>
+          ))}
+        </div>
+      )}
+      {checks.length > 0 && (
+        <section className="ns-detail__section">
+          <h4>Business checklist</h4>
+          <div className="ns-detail__chips">
+            {checks.map(([label, k]) => (
+              <span key={k} className={`ns-detail__chip ${truthy(record[k]) ? 'is-yes' : 'is-no'}`}>
+                {truthy(record[k]) ? '✓' : '✕'} {label}
+              </span>
+            ))}
+          </div>
+        </section>
+      )}
+      {longs.map(([label, k]) => (
+        <section key={k} className="ns-detail__section">
+          <h4>{label}</h4>
+          <p className="ns-detail__text">{String(record[k])}</p>
+        </section>
+      ))}
+      {links.length > 0 && (
+        <section className="ns-detail__section">
+          <h4>Uploads</h4>
+          <div className="ns-detail__links">
+            {links.map(([label, k]) => (
+              <a key={k} className="btn btn--sm" href={String(record[k])} target="_blank" rel="noreferrer">{label}</a>
+            ))}
+          </div>
+        </section>
+      )}
+    </>
+  )
+}
+
 export default function NsRecordDetail({ open, onClose, kind, record, scholarship = [], showStudent = false }: Props) {
   useEffect(() => {
     if (!open) return
@@ -72,13 +125,6 @@ export default function NsRecordDetail({ open, onClose, kind, record, scholarshi
   }, [open, onClose])
 
   if (!open || !record) return null
-
-  const facts = FACT_FIELDS[kind].filter(([, k]) => hasValue(record[k]))
-  const longs = LONG_FIELDS[kind].filter(([, k]) => hasValue(record[k]))
-  const checks = kind === 'interview' ? CHECKLIST : []
-  const links: [string, string][] = kind === 'project'
-    ? ([['Video upload', 'video_url'], ['Written upload', 'written_url']] as [string, string][]).filter(([, k]) => hasValue(record[k]))
-    : []
 
   const title = kind === 'interview'
     ? `Business Interview${record.visit_number ? ` · Visit ${record.visit_number}` : ''}`
@@ -103,47 +149,7 @@ export default function NsRecordDetail({ open, onClose, kind, record, scholarshi
         </header>
 
         <div className="ns-detail__body">
-          {facts.length > 0 && (
-            <div className="ns-detail__facts">
-              {facts.map(([label, k]) => (
-                <div key={k} className="ns-detail__fact">
-                  <span>{label}</span>
-                  <strong>{String(record[k])}</strong>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {checks.length > 0 && (
-            <section className="ns-detail__section">
-              <h4>Business checklist</h4>
-              <div className="ns-detail__chips">
-                {checks.map(([label, k]) => (
-                  <span key={k} className={`ns-detail__chip ${truthy(record[k]) ? 'is-yes' : 'is-no'}`}>
-                    {truthy(record[k]) ? '✓' : '✕'} {label}
-                  </span>
-                ))}
-              </div>
-            </section>
-          )}
-
-          {longs.map(([label, k]) => (
-            <section key={k} className="ns-detail__section">
-              <h4>{label}</h4>
-              <p className="ns-detail__text">{String(record[k])}</p>
-            </section>
-          ))}
-
-          {links.length > 0 && (
-            <section className="ns-detail__section">
-              <h4>Uploads</h4>
-              <div className="ns-detail__links">
-                {links.map(([label, k]) => (
-                  <a key={k} className="btn btn--sm" href={String(record[k])} target="_blank" rel="noreferrer">{label}</a>
-                ))}
-              </div>
-            </section>
-          )}
+          <NsRecordBody kind={kind} record={record} />
 
           {scholarship.length > 0 && (
             <section className="ns-detail__section ns-detail__section--scholar">

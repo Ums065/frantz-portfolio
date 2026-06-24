@@ -2284,6 +2284,14 @@
   background: linear-gradient(90deg, rgba(95, 227, 155, 0.16), rgba(255, 255, 255, 0.02));
 }
 
+/* Display-only rows (admin leaderboard): no per-person detail view here, so suppress the
+   interactive cursor and hover lift while keeping the podium/standing styling intact. */
+.ns-leader-row--static,
+.ns-podium__place--static { cursor: default; }
+.ns-leader-row--static:hover { transform: none; border-color: rgba(255, 255, 255, 0.06); }
+.ns-leader-row--static.is-podium:hover { border-color: rgba(212, 175, 90, 0.28); }
+.ns-podium__place--static:hover { transform: none; }
+
 .ns-podium__place.is-me .ns-podium__avatar {
   box-shadow: 0 0 0 3px rgba(95, 227, 155, 0.55), 0 0 22px rgba(95, 227, 155, 0.4);
 }
@@ -3964,3 +3972,22 @@
   .ns-detail { padding: 20px 18px; }
   .ns-detail__overlay { padding: 20px 10px; }
 }
+
+/* Admin student/teacher profile modal (reuses .ns-detail shell) */
+.ns-detail--profile { max-width: 760px; }
+.ns-profile__record {
+  padding: 14px 16px; border-radius: 14px; margin-bottom: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.07); background: rgba(255, 255, 255, 0.02);
+}
+.ns-profile__record-title { display: block; color: var(--gold-light, #e7cf8a); font-size: 13px; margin-bottom: 10px; }
+.ns-profile__roster { display: flex; flex-direction: column; gap: 6px; }
+.ns-profile__rosteritem {
+  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+  padding: 10px 12px; border-radius: 10px; cursor: pointer; color: #e8e3d6; font: inherit;
+  border: 1px solid rgba(255, 255, 255, 0.06); background: rgba(255, 255, 255, 0.02);
+  transition: background 0.16s ease, border-color 0.16s ease;
+}
+.ns-profile__rosteritem:hover { background: rgba(201, 168, 76, 0.08); border-color: rgba(201, 168, 76, 0.4); }
+.ns-profile__rosterrank { width: 38px; flex-shrink: 0; color: var(--muted); font-weight: 700; font-variant-numeric: tabular-nums; }
+.ns-profile__rostername { flex: 1; min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ns-profile__rostermeta { color: var(--muted-dim, #9c9585); font-size: 12px; white-space: nowrap; }

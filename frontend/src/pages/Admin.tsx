@@ -8,12 +8,13 @@ import { resolveDashboardRoute } from '../lib/dashboardRoute'
 import SponsorsAdminPanel from '../components/admin/SponsorsAdminPanel'
 import NsRecordDetail from '../components/NsRecordDetail'
 import AdminNavIcon from '../components/admin/AdminNavIcon'
+import NsProfileModal, { type ProfileView } from '../components/admin/NsProfileModal'
 
 type TabKey =
   | 'overview' | 'analytics' | 'requests' | 'orders' | 'subscribers' | 'contacts'
   | 'members' | 'approvals' | 'sponsors' | 'awards' | 'events' | 'blog'
   | 'testimonials' | 'media' | 'community' | 'rsvps' | 'inventory'
-  | 'ns-submissions' | 'ns-interviews' | 'ns-chat'
+  | 'ns-schools' | 'ns-ranking' | 'ns-submissions' | 'ns-interviews' | 'ns-chat'
 
 interface NavItem { key: TabKey; label: string }
 const NAV_GROUPS: Array<{ group: string; items: NavItem[] }> = [
@@ -27,7 +28,9 @@ const NAV_GROUPS: Array<{ group: string; items: NavItem[] }> = [
     { key: 'contacts', label: 'Contact Messages' },
     { key: 'subscribers', label: 'Newsletter' },
   ] },
-  { group: 'New School', items: [
+  { group: 'Schools', items: [
+    { key: 'ns-schools', label: 'School Dashboard' },
+    { key: 'ns-ranking', label: 'Ranking' },
     { key: 'ns-submissions', label: 'Student Submissions' },
     { key: 'ns-interviews', label: 'Business Interviews' },
     { key: 'ns-chat', label: 'Messages' },
@@ -132,6 +135,10 @@ export default function Admin() {
   const [selectedUserError, setSelectedUserError] = useState('')
   const [nsData, setNsData] = useState<any>(null)
   const [nsDetail, setNsDetail] = useState<{ kind: 'interview' | 'project'; record: any } | null>(null)
+  const [nsProfile, setNsProfile] = useState<ProfileView | null>(null)
+  const [schoolDashId, setSchoolDashId] = useState('')
+  const [rankSchoolId, setRankSchoolId] = useState('')
+  const [schoolRosterTab, setSchoolRosterTab] = useState<'students' | 'teachers' | 'parents'>('students')
   const [chatThreads, setChatThreads] = useState<any[]>([])
   const [chatActiveUser, setChatActiveUser] = useState<number | null>(null)
   const [chatMessages, setChatMessages] = useState<any[]>([])
@@ -329,6 +336,56 @@ export default function Admin() {
   const scholarshipFor = (studentId: any) => (nsScholarship[String(studentId)]?.answers || [])
   const nsSubBy = (s: string) => nsSubmissions.filter((x) => (x.status || '').toLowerCase() === s).length
   const nsPendingReview = nsSubBy('submitted')
+
+  // Schools area: ranked students/teachers, schools list + global school ranking.
+  const nsStudents: any[] = Array.isArray(nsData?.students) ? nsData.students : []
+  const nsTeachers: any[] = Array.isArray(nsData?.teachers) ? nsData.teachers : []
+  const nsSchools: any[] = Array.isArray(nsData?.schools) ? nsData.schools : []
+  const nsParents: any[] = Array.isArray(nsData?.parents) ? nsData.parents : []
+  const nsSchoolRankings: any[] = Array.isArray(nsData?.school_rankings) ? nsData.school_rankings : []
+  const studentSchoolMap = new Map<number, number>(nsStudents.map((s: any) => [Number(s.id), Number(s.school_id || 0)]))
+  const studentsInSchool = (schoolId: number) => nsStudents.filter((s: any) => Number(s.school_id) === schoolId)
+  const teachersInSchool = (schoolId: number) => nsTeachers.filter((t: any) => Number(t.school_id) === schoolId)
+  const parentsInSchool = (schoolId: number) => nsParents.filter((p: any) => studentSchoolMap.get(Number(p.student_id)) === schoolId)
+  const byRank = (a: any, b: any) => (a.rank_position || 9999) - (b.rank_position || 9999)
+  const openStudentProfile = (studentId: number) => {
+    const student = nsStudents.find((s: any) => Number(s.id) === studentId)
+    if (!student) return
+    setNsProfile({ kind: 'student', data: {
+      student,
+      interviews: nsInterviews.filter((b: any) => Number(b.student_id) === studentId),
+      project: nsSubmissions.find((s: any) => Number(s.student_id) === studentId) || null,
+      scholarship: scholarshipFor(studentId),
+    } })
+  }
+  const openTeacherProfile = (teacherId: number) => {
+    const teacher = nsTeachers.find((t: any) => Number(t.id) === teacherId)
+    if (!teacher) return
+    const roster = nsStudents.filter((s: any) => Number(s.teacher_id) === teacherId).slice().sort(byRank)
+    setNsProfile({ kind: 'teacher', data: { teacher, students: roster } })
+  }
+  const selectedDashSchool = nsSchools.find((s: any) => String(s.id) === schoolDashId) || null
+  const selectedRankSchool = nsSchools.find((s: any) => String(s.id) === rankSchoolId) || null
+  // A clickable leaderboard list of students or teachers -> opens the profile modal.
+  const renderRankList = (people: any[], kind: 'student' | 'teacher') => (
+    <div className="ns-rankboard">
+      {people.length === 0 && <p className="admin-muted" style={{ color: 'var(--muted)', fontSize: 13 }}>No data yet.</p>}
+      {people.map((p: any, i: number) => (
+        <button
+          key={p.id}
+          type="button"
+          className="ns-rankrow"
+          onClick={() => (kind === 'student' ? openStudentProfile(Number(p.id)) : openTeacherProfile(Number(p.id)))}
+        >
+          <span className={`ns-rankrow__rank${(p.rank_position ?? i + 1) <= 3 ? ' is-top' : ''}`}>#{p.rank_position ?? i + 1}</span>
+          <span className="ns-rankrow__name">{kind === 'student' ? p.full_name : p.teacher_full_name}</span>
+          <span className="ns-rankrow__meta">{kind === 'student' ? `${p.interview_count ?? 0}/10 · ${p.submission_status || '—'}` : `${p.students_total ?? 0} students`}</span>
+          <span className="ns-rankrow__pts">{(kind === 'student' ? p.student_points : p.teacher_points) ?? 0} pts</span>
+          <span className="ns-rankrow__go" aria-hidden="true">→</span>
+        </button>
+      ))}
+    </div>
+  )
 
   // Sidebar badges behave like NOTIFICATION counters: only "new/actionable" items,
   // hidden when zero. Full totals live in the per-tab StatChips strips instead.
@@ -748,6 +805,184 @@ export default function Admin() {
           </>
         )}
 
+        {tab === 'ns-schools' && (
+          <>
+            <div className="ns-school-toolbar">
+              <label className="ns-school-select">
+                <span>School</span>
+                <select value={schoolDashId} onChange={(e) => { setSchoolDashId(e.target.value); setSchoolRosterTab('students') }}>
+                  <option value="">All schools</option>
+                  {nsSchools.map((s: any) => <option key={s.id} value={s.id}>{s.school_name}</option>)}
+                </select>
+              </label>
+              {selectedDashSchool && <button type="button" className="btn btn--sm" onClick={() => setSchoolDashId('')}>← All schools</button>}
+            </div>
+
+            {!selectedDashSchool ? (
+              <div className="admin-stats">
+                {nsSchools.length === 0 && <p style={{ color: 'var(--muted)' }}>No schools registered yet.</p>}
+                {nsSchools.map((s: any) => (
+                  <button key={s.id} type="button" className="admin-stat admin-stat--btn glass" onClick={() => { setSchoolDashId(String(s.id)); setSchoolRosterTab('students') }} title={`Open ${s.school_name}`}>
+                    <span className="admin-stat__icon" aria-hidden="true"><AdminNavIcon name="school" /></span>
+                    <span className="admin-stat__label">{s.school_name}</span>
+                    <strong>{studentsInSchool(Number(s.id)).length}</strong>
+                    <p>{(s.school_district || '—')} · {s.status}</p>
+                    <span className="admin-stat__go" aria-hidden="true">→</span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <>
+                <div className="ns-school-head glass">
+                  <div>
+                    <span className="eyebrow">School &amp; Principal</span>
+                    <h3 className="gold-text">{selectedDashSchool.school_name}</h3>
+                    <p className="ns-school-head__meta">{[selectedDashSchool.school_district, selectedDashSchool.status].filter(Boolean).join(' · ')}</p>
+                    <div className="ns-school-head__facts">
+                      {selectedDashSchool.principal_name && <span><b>Principal:</b> {selectedDashSchool.principal_name}</span>}
+                      {selectedDashSchool.administrator_name && <span><b>Administrator:</b> {selectedDashSchool.administrator_name}</span>}
+                      {selectedDashSchool.administrator_email && <span><b>Email:</b> {selectedDashSchool.administrator_email}</span>}
+                      {(selectedDashSchool.administrator_phone || selectedDashSchool.main_phone) && <span><b>Phone:</b> {selectedDashSchool.administrator_phone || selectedDashSchool.main_phone}</span>}
+                      {selectedDashSchool.school_address && <span><b>Address:</b> {selectedDashSchool.school_address}</span>}
+                    </div>
+                  </div>
+                </div>
+
+                <StatChips items={[
+                  { label: 'Students', value: studentsInSchool(Number(selectedDashSchool.id)).length, tone: 'gold' },
+                  { label: 'Teachers', value: teachersInSchool(Number(selectedDashSchool.id)).length, tone: 'blue' },
+                  { label: 'Parents', value: parentsInSchool(Number(selectedDashSchool.id)).length, tone: 'green' },
+                ]} />
+
+                <div className="admin-ov-tabs" role="tablist" aria-label="School roster" style={{ marginBottom: 14 }}>
+                  {(['students', 'teachers', 'parents'] as const).map((rt) => (
+                    <button key={rt} type="button" role="tab" aria-selected={schoolRosterTab === rt}
+                      className={`admin-ov-tab${schoolRosterTab === rt ? ' is-active' : ''}`} onClick={() => setSchoolRosterTab(rt)}>
+                      {rt === 'students' ? 'Students' : rt === 'teachers' ? 'Teachers' : 'Parents'}
+                    </button>
+                  ))}
+                </div>
+
+                {schoolRosterTab === 'students' && (
+                  <DataTable
+                    head={['#', 'Rank', 'Student', 'Participant', 'Points', 'Interviews', 'Status', '']}
+                    rows={studentsInSchool(Number(selectedDashSchool.id)).slice().sort(byRank)}
+                    searchPlaceholder="Search students…"
+                    searchText={(s: any) => `${s.full_name ?? ''} ${s.participant_id ?? ''}`}
+                    rowId={(s: any) => s.id}
+                    renderRow={(s: any, _cb: any, i?: number) => (
+                      <tr key={s.id} className="admin-row--clickable" onClick={() => openStudentProfile(Number(s.id))}>
+                        <td className="admin-table__idx">{i}</td>
+                        <td>#{s.rank_position ?? '—'}</td>
+                        <td>{s.full_name}</td>
+                        <td className="admin-table__uid">{s.participant_id || '—'}</td>
+                        <td>{s.student_points ?? 0}</td>
+                        <td>{s.interview_count ?? 0}/10</td>
+                        <td>{s.submission_status || '—'}</td>
+                        <td><span className="admin-linkcell">View →</span></td>
+                      </tr>
+                    )}
+                  />
+                )}
+                {schoolRosterTab === 'teachers' && (
+                  <DataTable
+                    head={['#', 'Rank', 'Teacher', 'Students', 'Points', 'Status', '']}
+                    rows={teachersInSchool(Number(selectedDashSchool.id)).slice().sort(byRank)}
+                    searchPlaceholder="Search teachers…"
+                    searchText={(t: any) => `${t.teacher_full_name ?? ''} ${t.role_department ?? ''}`}
+                    rowId={(t: any) => t.id}
+                    renderRow={(t: any, _cb: any, i?: number) => (
+                      <tr key={t.id} className="admin-row--clickable" onClick={() => openTeacherProfile(Number(t.id))}>
+                        <td className="admin-table__idx">{i}</td>
+                        <td>#{t.rank_position ?? '—'}</td>
+                        <td>{t.teacher_full_name}</td>
+                        <td>{t.students_total ?? 0}</td>
+                        <td>{t.teacher_points ?? 0}</td>
+                        <td>{t.status || '—'}</td>
+                        <td><span className="admin-linkcell">View →</span></td>
+                      </tr>
+                    )}
+                  />
+                )}
+                {schoolRosterTab === 'parents' && (
+                  <DataTable
+                    head={['#', 'Parent', 'Student', 'Relationship', 'Link status']}
+                    rows={parentsInSchool(Number(selectedDashSchool.id))}
+                    searchPlaceholder="Search parents…"
+                    searchText={(p: any) => `${p.parent_full_name ?? ''} ${p.student_name ?? ''}`}
+                    rowId={(p: any) => p.id}
+                    renderRow={(p: any, _cb: any, i?: number) => (
+                      <tr key={p.id} className={p.student_id ? 'admin-row--clickable' : ''} onClick={() => p.student_id && openStudentProfile(Number(p.student_id))}>
+                        <td className="admin-table__idx">{i}</td>
+                        <td>{p.parent_full_name || '—'}</td>
+                        <td>{p.student_name || '—'}</td>
+                        <td>{p.relationship || p.relationship_to_student || '—'}</td>
+                        <td>{p.link_status || '—'}</td>
+                      </tr>
+                    )}
+                  />
+                )}
+              </>
+            )}
+          </>
+        )}
+
+        {tab === 'ns-ranking' && (
+          <>
+            <div className="ns-school-toolbar">
+              <label className="ns-school-select">
+                <span>School</span>
+                <select value={rankSchoolId} onChange={(e) => setRankSchoolId(e.target.value)}>
+                  <option value="">All schools (global)</option>
+                  {nsSchools.map((s: any) => <option key={s.id} value={s.id}>{s.school_name}</option>)}
+                </select>
+              </label>
+              {selectedRankSchool && <button type="button" className="btn btn--sm" onClick={() => setRankSchoolId('')}>← Global ranking</button>}
+            </div>
+
+            {!selectedRankSchool ? (
+              <>
+                <div className="ns-rank-section">
+                  <h4 className="ns-rank-title">School ranking</h4>
+                  <DataTable
+                    head={['Rank', 'School', 'Students', 'Movement']}
+                    rows={nsSchoolRankings}
+                    searchPlaceholder="Search schools…"
+                    searchText={(s: any) => `${s.school_name ?? ''}`}
+                    rowId={(s: any) => s.school_id}
+                    renderRow={(s: any) => (
+                      <tr key={s.school_id} className="admin-row--clickable" onClick={() => setRankSchoolId(String(s.school_id))}>
+                        <td><span className={`ns-rankrow__rank${(s.rank ?? 99) <= 3 ? ' is-top' : ''}`}>#{s.rank}</span></td>
+                        <td>{s.school_name}</td>
+                        <td>{s.student_count}</td>
+                        <td>{s.movement > 0 ? `▲ ${s.movement}` : s.movement < 0 ? `▼ ${Math.abs(s.movement)}` : '—'}</td>
+                      </tr>
+                    )}
+                  />
+                </div>
+                <div className="ns-rank-columns">
+                  <div className="ns-rank-col glass"><h4 className="ns-rank-title">Top students (global)</h4>{renderRankList(nsStudents.slice().sort(byRank).slice(0, 10), 'student')}</div>
+                  <div className="ns-rank-col glass"><h4 className="ns-rank-title">Top teachers (global)</h4>{renderRankList(nsTeachers.slice().sort(byRank).slice(0, 10), 'teacher')}</div>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="ns-school-head glass">
+                  <div>
+                    <span className="eyebrow">School ranking</span>
+                    <h3 className="gold-text">{selectedRankSchool.school_name}</h3>
+                    <p className="ns-school-head__meta">Top students &amp; teachers · click anyone to read full details</p>
+                  </div>
+                </div>
+                <div className="ns-rank-columns">
+                  <div className="ns-rank-col glass"><h4 className="ns-rank-title">Top students</h4>{renderRankList(studentsInSchool(Number(selectedRankSchool.id)).slice().sort(byRank), 'student')}</div>
+                  <div className="ns-rank-col glass"><h4 className="ns-rank-title">Top teachers</h4>{renderRankList(teachersInSchool(Number(selectedRankSchool.id)).slice().sort(byRank), 'teacher')}</div>
+                </div>
+              </>
+            )}
+          </>
+        )}
+
         {tab === 'ns-submissions' && (
           <>
             <StatChips items={[
@@ -896,6 +1131,13 @@ export default function Admin() {
         record={nsDetail?.record || null}
         scholarship={nsDetail ? scholarshipFor(nsDetail.record?.student_id) : []}
         showStudent
+      />
+
+      <NsProfileModal
+        open={!!nsProfile}
+        onClose={() => setNsProfile(null)}
+        view={nsProfile}
+        onOpenStudent={(id) => openStudentProfile(id)}
       />
     </div>
   )

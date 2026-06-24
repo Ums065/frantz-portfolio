@@ -2574,12 +2574,18 @@ function new_school_handle_route(string $method, string $route): bool
             )->fetchAll();
 
             $allStudentIds = array_map(static fn(array $r): int => (int) $r['id'], $students);
+            // Rank students + teachers so the admin Schools area can show points/rank
+            // and per-school leaderboards (filter client-side by school_id).
+            $students = new_school_rank_students($students);
+            $teachers = new_school_rank_teachers(new_school_fetch_all_teachers(), $students);
             json([
                 'summary' => new_school_public_summary(),
                 'student_summary' => new_school_student_status_summary($students),
                 'leaderboards' => new_school_public_leaderboards(),
+                'school_rankings' => new_school_school_rankings(),
                 'schools' => new_school_fetch_all_schools(),
                 'students' => $students,
+                'teachers' => $teachers,
                 'parents' => $parents,
                 'approvals' => $approvals,
                 'businesses' => $businesses,

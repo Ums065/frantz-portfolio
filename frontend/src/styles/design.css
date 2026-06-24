@@ -3244,6 +3244,43 @@ section#challenge .challenge-features .ns-gain p {
 }
 .admin-linkcell:hover { color: #ffdf94; text-decoration-color: #ffdf94; }
 
+/* Admin Schools area: explorer toolbar, school head, rankings */
+.ns-school-toolbar { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.ns-school-select { display: flex; flex-direction: column; gap: 6px; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.ns-school-select select {
+  min-width: 240px; padding: 10px 12px; border-radius: 10px;
+  border: 1px solid rgba(201,168,76,0.25); background: rgba(0,0,0,0.3); color: #f4efe4;
+  font-family: inherit; font-size: 14px; text-transform: none; letter-spacing: normal;
+}
+.ns-school-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; padding: 20px 22px; border-radius: 16px; margin-bottom: 14px; }
+.ns-school-head h3 { font-family: var(--f-serif); font-size: 22px; margin: 4px 0 6px; }
+.ns-school-head__meta { color: var(--muted); font-size: 13px; margin: 0 0 10px; text-transform: capitalize; }
+.ns-school-head__facts { display: flex; flex-wrap: wrap; gap: 8px 22px; color: #d8d3c6; font-size: 13px; }
+.ns-school-head__facts b { color: var(--gold-light); font-weight: 600; }
+
+.ns-rank-section { margin-bottom: 18px; }
+.ns-rank-title { font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--gold-light); margin: 0 0 10px; }
+.ns-rank-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.ns-rank-col { padding: 18px; border-radius: 16px; }
+.ns-rankboard { display: flex; flex-direction: column; gap: 6px; }
+.ns-rankrow {
+  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+  padding: 10px 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.06);
+  background: rgba(255,255,255,0.02); color: #e8e3d6; font: inherit; cursor: pointer;
+  transition: background 0.16s ease, border-color 0.16s ease, transform 0.16s ease;
+}
+.ns-rankrow:hover { background: rgba(201,168,76,0.08); border-color: rgba(201,168,76,0.4); transform: translateY(-1px); }
+.ns-rankrow__rank { flex-shrink: 0; width: 38px; font-variant-numeric: tabular-nums; color: var(--muted); font-weight: 700; }
+.ns-rankrow__rank.is-top { color: var(--gold-light); }
+.ns-rankrow__name { flex: 1; min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ns-rankrow__meta { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.ns-rankrow__pts { color: var(--gold-light); font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ns-rankrow__go { color: var(--gold); opacity: 0; transition: opacity 0.16s ease; }
+.ns-rankrow:hover .ns-rankrow__go { opacity: 1; }
+@media (max-width: 720px) {
+  .ns-rank-columns { grid-template-columns: 1fr; }
+}
+
 /* --- Status pills: proper highlighted badges inside the dark admin theme --- */
 .admin-page .status-pill {
   font-weight: 700;
