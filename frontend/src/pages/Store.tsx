@@ -556,7 +556,6 @@ export default function Store() {
   const addToCart = (row: InventoryRow) => {
     const currentQty = cartQtyMap.get(row.product_id) || 0
     updateQuantity(row, currentQty + 1)
-    setCartOpen(true)
     window.fcToast?.(currentQty > 0 ? `${row.name} quantity updated.` : `${row.name} added to cart.`)
   }
 

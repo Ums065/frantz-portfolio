@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { projectShowcase } from '../lib/brandContent'
+import { ventureCards, ventureVision, ventureVisionNodes, VisionNodeIcon } from '../lib/buildingNow'
 import { useSeo } from '../hooks/useSeo'
 
 export default function Projects() {
@@ -26,50 +26,50 @@ export default function Projects() {
         </div>
       </section>
 
-      <section className="block" style={{ paddingTop: 20 }}>
+            <section className="block" id="ventures">
         <div className="wrap">
-          <div className="building-grid">
-            <div className="proj-row">
-              {projectShowcase.map((project, index) => (
-                <article className={`glass proj reveal d${(index % 3) + 1}`} key={project.title}>
-                  <div className="proj__media">
-                    <img src={project.image} alt="" loading="lazy" decoding="async" />
-                  </div>
+          <div className="block__head reveal">
+            <div className="section-title"><span className="ln l" /><h2 className="gold-text">What I&apos;m Building Now</h2><span className="ln r" /></div>
+            <p className="sub">Building technology, education, and opportunity that empowers communities and creates a better future.</p>
+          </div>
+          <div className="venture-grid venture-grid--editorial">
+            {ventureCards.map((project, index) => (
+              <article className={`glass proj venture-card venture-card--editorial reveal d${(index % 4) + 1}`} key={project.title}>
+                <div className={`proj__media ${project.mediaClass ?? ''}`.trim()}>
+                  <img src={project.media} alt={project.title} loading="lazy" decoding="async" />
+                </div>
+                <div className="venture-card__body">
                   <h3>{project.title}</h3>
-                  <p>{project.detail}</p>
-                  <span className={`tag${project.status.toLowerCase().includes('live') ? ' live' : ''}`.trim()}>{project.status}</span>
-                  <div style={{ display: 'grid', gap: 8, marginTop: 18 }}>
-                    {project.highlights.map((point) => (
-                      <div key={point} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', color: '#ddd6c8', fontSize: 13 }}>
-                        <span style={{ color: 'var(--green-bright)', lineHeight: 1 }}>•</span>
-                        <span>{point}</span>
-                      </div>
+                  <p>{project.copy}</p>
+                  <div className="venture-card__chips" aria-label={`${project.title} highlights`}>
+                    {project.highlights.map((item) => (
+                      <span key={`${project.title}-${item}`}>{item}</span>
                     ))}
                   </div>
-                  <Link className="proj__link" to={project.href || '/#community'}>
-                    {project.action}
-                    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth={2}><path d="M7 17L17 7M9 7h8v8" /></svg>
-                  </Link>
-                </article>
-              ))}
-            </div>
-
-            <aside className="glass stats reveal d2">
-              <div className="stat"><span className="si"><svg viewBox="0 0 34 34" fill="none" stroke="currentColor" strokeWidth={1.5}><path d="M4 17s5-8 13-8 13 8 13 8-5 8-13 8-13-8-13-8z" /><circle cx="17" cy="17" r="3.4" /></svg></span><div><b>{projectShowcase.length}</b><span>Flagship projects</span></div></div>
-              <div className="stat"><span className="si"><svg viewBox="0 0 34 34" fill="none" stroke="currentColor" strokeWidth={1.5}><path d="M8 24h18M8 18h18M8 12h12" /></svg></span><div><b>2</b><span>Live initiatives</span></div></div>
-              <div className="stat"><span className="si"><svg viewBox="0 0 34 34" fill="none" stroke="currentColor" strokeWidth={1.5}><circle cx="17" cy="13" r="6" /><path d="M10 26c1.8-4 4.7-6 7-6s5.2 2 7 6" /></svg></span><div><b>Community</b><span>People first</span></div></div>
-              <div className="stat"><span className="si"><svg viewBox="0 0 34 34" fill="none" stroke="currentColor" strokeWidth={1.5}><path d="M10 6v22" /><path d="M10 7h13l-2.5 4 2.5 4H10" fill="currentColor" fillOpacity={0.12} /></svg></span><div><b>Legacy</b><span>Future ready</span></div></div>
-              <div style={{ gridColumn: '1 / -1', paddingTop: 10 }}>
-                <p style={{ color: 'var(--muted)', fontSize: 14, lineHeight: 1.8 }}>
-                  The project system is built to scale. Each platform has a different audience, but the same core rule: create value that stays connected to people and place.
-                </p>
-                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 18 }}>
-                  <Link className="btn btn--solid" to="/#community">Join the Community</Link>
-                  <Link className="btn" to="/media">See Media Center</Link>
+                  <span className="tag">{project.tag}</span>
                 </div>
-              </div>
-            </aside>
+              </article>
+            ))}
           </div>
+          <article className="venture-vision glass reveal">
+            <img className="venture-vision__image" src={ventureVision.media} alt={ventureVision.title} loading="lazy" decoding="async" />
+            <div className="venture-vision__veil" />
+            <div className="venture-vision__content">
+              <div className="venture-vision__crest">FC</div>
+              <div className="venture-vision__copy">
+                <h3>{ventureVision.title}</h3>
+                <p>{ventureVision.copy}</p>
+              </div>
+              <div className="venture-vision__nodes" aria-label="Vision sectors">
+                {ventureVisionNodes.map((node) => (
+                  <div className="venture-vision__node" key={node.label}>
+                    <span className="venture-vision__node-icon"><VisionNodeIcon kind={node.kind} /></span>
+                    <span>{node.label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </article>
         </div>
       </section>
 
