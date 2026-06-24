@@ -3933,12 +3933,21 @@
 }
 .ns-detail {
   width: 100%; max-width: 720px;
+  /* Cap the card to the viewport and scroll its own content so long submissions
+     never push past the screen. dvh keeps it correct on mobile browser chrome. */
+  max-height: calc(100vh - 80px);
+  max-height: calc(100dvh - 80px);
+  overflow-y: auto;
   border-radius: 20px; padding: 26px 28px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: linear-gradient(180deg, #14110b, #0b0a08);
   color: #ece8de;
+  /* Inherited: breaks long unbroken values (URLs, emails, addresses) so the
+     facts grid and long-answer text can never overflow horizontally. */
+  overflow-wrap: anywhere;
 }
 .ns-detail__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+.ns-detail__head > div { min-width: 0; }
 .ns-detail__head h3 { font-family: var(--ns-dashboard-display, var(--f-serif)); font-size: 24px; margin: 4px 0 0; color: #f6f0e2; }
 .ns-detail__sub { color: var(--muted); font-size: 13px; margin: 6px 0 0; }
 .ns-detail__close {

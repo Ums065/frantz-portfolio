@@ -3016,6 +3016,7 @@ section#challenge .challenge-features .ns-gain p {
   color: #d8d3c6;
   border-bottom: 1px solid rgba(201,168,76,0.08);
   line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 .admin-table tbody tr:hover td { background: rgba(201,168,76,0.05); }
 .admin-table__empty {
@@ -3173,6 +3174,7 @@ section#challenge .challenge-features .ns-gain p {
 .row-menu__dropdown {
   z-index: 4000;
   min-width: 184px;
+  max-width: calc(100vw - 24px);
   padding: 6px;
   border-radius: 12px;
   border: 1px solid rgba(201,168,76,0.22);
@@ -3248,14 +3250,14 @@ section#challenge .challenge-features .ns-gain p {
 .ns-school-toolbar { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
 .ns-school-select { display: flex; flex-direction: column; gap: 6px; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
 .ns-school-select select {
-  min-width: 240px; padding: 10px 12px; border-radius: 10px;
+  min-width: min(240px, 100%); max-width: 100%; padding: 10px 12px; border-radius: 10px;
   border: 1px solid rgba(201,168,76,0.25); background: rgba(0,0,0,0.3); color: #f4efe4;
   font-family: inherit; font-size: 14px; text-transform: none; letter-spacing: normal;
 }
 .ns-school-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; padding: 20px 22px; border-radius: 16px; margin-bottom: 14px; }
 .ns-school-head h3 { font-family: var(--f-serif); font-size: 22px; margin: 4px 0 6px; }
 .ns-school-head__meta { color: var(--muted); font-size: 13px; margin: 0 0 10px; text-transform: capitalize; }
-.ns-school-head__facts { display: flex; flex-wrap: wrap; gap: 8px 22px; color: #d8d3c6; font-size: 13px; }
+.ns-school-head__facts { display: flex; flex-wrap: wrap; gap: 8px 22px; color: #d8d3c6; font-size: 13px; overflow-wrap: anywhere; min-width: 0; }
 .ns-school-head__facts b { color: var(--gold-light); font-weight: 600; }
 
 .ns-rank-section { margin-bottom: 18px; }
