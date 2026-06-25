@@ -68,7 +68,7 @@ DROP PROCEDURE IF EXISTS add_column_if_missing;
 
 CREATE TABLE IF NOT EXISTS new_school_schools (
   id                      INT AUTO_INCREMENT PRIMARY KEY,
-  user_id                 INT NOT NULL UNIQUE,
+  user_id                 INT NULL UNIQUE,
   school_name             VARCHAR(180) NOT NULL,
   school_address          VARCHAR(255) NOT NULL,
   school_district         VARCHAR(180) NOT NULL,
@@ -77,7 +77,11 @@ CREATE TABLE IF NOT EXISTS new_school_schools (
   administrator_name      VARCHAR(120) NOT NULL,
   administrator_email     VARCHAR(160) NOT NULL,
   administrator_phone     VARCHAR(40) NOT NULL,
+  school_website          VARCHAR(255) DEFAULT NULL,
   status                  ENUM('registered','approved','rejected') NOT NULL DEFAULT 'registered',
+  origin                  ENUM('principal','trendcatch_edu') NOT NULL DEFAULT 'principal',
+  claim_status            ENUM('claimed','unclaimed') NOT NULL DEFAULT 'claimed',
+  claimed_at              TIMESTAMP NULL DEFAULT NULL,
   created_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   CONSTRAINT fk_new_school_schools_user

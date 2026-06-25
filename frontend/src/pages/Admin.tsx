@@ -14,7 +14,7 @@ type TabKey =
   | 'overview' | 'analytics' | 'requests' | 'orders' | 'subscribers' | 'contacts'
   | 'members' | 'approvals' | 'sponsors' | 'awards' | 'events' | 'blog'
   | 'testimonials' | 'media' | 'community' | 'rsvps' | 'inventory'
-  | 'ns-schools' | 'ns-ranking' | 'ns-submissions' | 'ns-interviews' | 'ns-chat'
+  | 'ns-schools' | 'ns-ranking' | 'ns-submissions' | 'ns-interviews' | 'ns-chat' | 'ns-trendcatch'
 
 interface NavItem { key: TabKey; label: string }
 const NAV_GROUPS: Array<{ group: string; items: NavItem[] }> = [
@@ -34,6 +34,7 @@ const NAV_GROUPS: Array<{ group: string; items: NavItem[] }> = [
     { key: 'ns-submissions', label: 'Student Submissions' },
     { key: 'ns-interviews', label: 'Business Interviews' },
     { key: 'ns-chat', label: 'Messages' },
+    { key: 'ns-trendcatch', label: 'TrendCatch EDU' },
   ] },
   { group: 'Commerce', items: [
     { key: 'orders', label: 'Store Orders' },
@@ -144,6 +145,11 @@ export default function Admin() {
   const [chatMessages, setChatMessages] = useState<any[]>([])
   const [chatInput, setChatInput] = useState('')
   const [chatBusy, setChatBusy] = useState(false)
+  // TrendCatch EDU: unclaimed schools the admin stewards until a principal claims them.
+  const [nsEdu, setNsEdu] = useState<{ active: any[]; history: any[] } | null>(null)
+  const [nsEduBusy, setNsEduBusy] = useState('')
+  const [eduExpanded, setEduExpanded] = useState<number | null>(null)
+  const [claimSchoolId, setClaimSchoolId] = useState<number | null>(null)
 
   const loadChatThreads = async () => {
     try { const d = await api.get<{ threads: any[] }>('admin/new-school/chats'); setChatThreads(Array.isArray(d?.threads) ? d.threads : []) } catch { setChatThreads([]) }
@@ -170,6 +176,67 @@ export default function Admin() {
     try { await api.post('admin/new-school/chat/clear', { user_id: chatActiveUser }); setChatMessages([]) } catch (err) { alert(err instanceof Error ? err.message : 'Clear failed.') }
   }
   useEffect(() => { if (tab === 'ns-chat') void loadChatThreads() }, [tab])
+
+  // ---- TrendCatch EDU tab ----
+  const loadEdu = async () => {
+    try {
+      const d = await api.get<any>('admin/new-school/trendcatch')
+      setNsEdu({ active: Array.isArray(d?.active) ? d.active : [], history: Array.isArray(d?.history) ? d.history : [] })
+    } catch { setNsEdu({ active: [], history: [] }) }
+  }
+  useEffect(() => { if (tab === 'ns-trendcatch') void loadEdu() }, [tab])
+
+  const eduMakeLive = async (schoolId: number) => {
+    setNsEduBusy(`live-${schoolId}`)
+    try { await api.post('admin/new-school/school/set-status', { school_id: schoolId, status: 'approved' }); await loadEdu(); void refreshData() }
+    catch (err) { alert(err instanceof Error ? err.message : 'Could not update the school.') }
+    finally { setNsEduBusy('') }
+  }
+  const eduApproveTeacher = async (teacher: any) => {
+    setNsEduBusy(`teacher-${teacher.id}`)
+    try {
+      await api.post('new-school/school/teacher/approve', {
+        teacher_id: Number(teacher.id), teacher_name: teacher.teacher_full_name, teacher_email: teacher.school_email,
+        role: teacher.role_department || 'Teacher', approval_status: 'approved', digital_signature: user?.full_name || 'Admin',
+      })
+      await loadEdu(); void refreshData()
+    } catch (err) { alert(err instanceof Error ? err.message : 'Could not approve the teacher.') }
+    finally { setNsEduBusy('') }
+  }
+  const eduApproveStudent = async (student: any) => {
+    setNsEduBusy(`student-${student.id}`)
+    try {
+      await api.post('new-school/teacher/approve', {
+        student_id: Number(student.id), teacher_name: user?.full_name || 'Admin', teacher_email: user?.email || '',
+        approval_status: 'approved', digital_signature: user?.full_name || 'Admin',
+      })
+      await loadEdu(); void refreshData()
+    } catch (err) { alert(err instanceof Error ? err.message : 'Could not approve the student.') }
+    finally { setNsEduBusy('') }
+  }
+  const submitClaim = async (e: React.FormEvent<HTMLFormElement>, schoolId: number) => {
+    e.preventDefault()
+    const fd = new FormData(e.currentTarget)
+    const get = (k: string) => String(fd.get(k) ?? '').trim()
+    setNsEduBusy(`claim-${schoolId}`)
+    try {
+      await api.post('admin/new-school/school/claim', {
+        school_id: schoolId,
+        principal_name: get('principal_name'),
+        administrator_name: get('administrator_name'),
+        administrator_email: get('administrator_email'),
+        administrator_phone: get('administrator_phone'),
+        main_phone: get('main_phone'),
+        school_address: get('school_address'),
+        school_district: get('school_district'),
+        school_website: get('school_website'),
+        password: get('password'),
+      })
+      setClaimSchoolId(null)
+      await loadEdu(); void refreshData()
+    } catch (err) { alert(err instanceof Error ? err.message : 'Could not claim the school.') }
+    finally { setNsEduBusy('') }
+  }
 
   const refreshData = async () => {
     // Load the main submissions AND the New School summary (student interviews +
@@ -1100,6 +1167,127 @@ export default function Admin() {
               )}
             </div>
           </div>
+        )}
+
+        {tab === 'ns-trendcatch' && (
+          <>
+            <StatChips items={[
+              { label: 'Unclaimed schools', value: nsEdu?.active.length ?? 0, tone: 'gold' },
+              { label: 'Members waiting', value: (nsEdu?.active ?? []).reduce((n: number, s: any) => n + (Number(s.user_count) || 0), 0) },
+              { label: 'Claimed (history)', value: nsEdu?.history.length ?? 0, tone: 'green' },
+            ]} />
+            <p className="ns-edu-intro">
+              Schools that joined through &ldquo;Register under TrendCatch EDU&rdquo; (their school wasn&rsquo;t listed yet). You steward each one — approve its teachers &amp; students and <strong>Make live</strong> so it appears in the public dropdown — until a principal <strong>claims</strong> it and takes over.
+            </p>
+
+            {(nsEdu?.active ?? []).length === 0 && (
+              <Table head={['TrendCatch EDU']}><tr><td style={tdS}>No unclaimed schools right now.</td></tr></Table>
+            )}
+
+            {(nsEdu?.active ?? []).map((school: any) => {
+              const open = eduExpanded === school.id
+              const claiming = claimSchoolId === school.id
+              return (
+                <div key={school.id} className="glass ns-edu-card">
+                  <div className="ns-edu-card__top">
+                    <div className="ns-edu-card__id">
+                      <h4>{school.school_name}</h4>
+                      <p className="ns-edu-card__meta">{school.administrator_email || 'no email'}{school.school_website ? ` · ${school.school_website}` : ''}</p>
+                      <div className="ns-edu-tags">
+                        <span className={`ns-edu-badge ns-edu-badge--${school.status === 'approved' ? 'live' : 'pending'}`}>
+                          {school.status === 'approved' ? 'Live in dropdown' : 'Not live yet'}
+                        </span>
+                        <span className="ns-edu-count">{school.user_count} <small>member{Number(school.user_count) === 1 ? '' : 's'}</small></span>
+                      </div>
+                    </div>
+                    <div className="ns-edu-actions">
+                      <button type="button" className="btn btn--sm" onClick={() => setEduExpanded(open ? null : school.id)}>
+                        {open ? 'Hide people' : `People (${(school.teachers?.length || 0) + (school.students?.length || 0)})`}
+                      </button>
+                      {school.status !== 'approved' && (
+                        <button type="button" className="btn btn--sm btn--solid" disabled={nsEduBusy === `live-${school.id}`} onClick={() => void eduMakeLive(school.id)}>
+                          {nsEduBusy === `live-${school.id}` ? 'Saving…' : 'Make live'}
+                        </button>
+                      )}
+                      <button type="button" className="btn btn--sm" onClick={() => setClaimSchoolId(claiming ? null : school.id)}>
+                        {claiming ? 'Cancel claim' : 'Claim'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {open && (
+                    <div className="ns-edu-people">
+                      <div className="ns-edu-col glass">
+                        <h5>Teachers ({school.teachers?.length || 0})</h5>
+                        {(school.teachers ?? []).length === 0 && <p className="ns-edu-empty">None yet.</p>}
+                        {(school.teachers ?? []).map((t: any) => (
+                          <div key={t.id} className="ns-edu-person">
+                            <span className="ns-edu-person__name">{t.teacher_full_name}</span>
+                            <span className="ns-edu-person__status">{t.status}</span>
+                            {t.status !== 'approved'
+                              ? <button type="button" className="btn btn--sm btn--solid" disabled={nsEduBusy === `teacher-${t.id}`} onClick={() => void eduApproveTeacher(t)}>{nsEduBusy === `teacher-${t.id}` ? '…' : 'Approve'}</button>
+                              : <span className="ns-edu-person__ok">✓ Approved</span>}
+                          </div>
+                        ))}
+                      </div>
+                      <div className="ns-edu-col glass">
+                        <h5>Students ({school.students?.length || 0})</h5>
+                        {(school.students ?? []).length === 0 && <p className="ns-edu-empty">None yet.</p>}
+                        {(school.students ?? []).map((s: any) => (
+                          <div key={s.id} className="ns-edu-person">
+                            <span className="ns-edu-person__name">{s.full_name}</span>
+                            <span className="ns-edu-person__status">{s.teacher_approval_status || '—'}</span>
+                            {s.teacher_approval_status !== 'approved'
+                              ? <button type="button" className="btn btn--sm btn--solid" disabled={nsEduBusy === `student-${s.id}`} onClick={() => void eduApproveStudent(s)}>{nsEduBusy === `student-${s.id}` ? '…' : 'Approve'}</button>
+                              : <span className="ns-edu-person__ok">✓ Approved</span>}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {claiming && (
+                    <form onSubmit={(e) => void submitClaim(e, school.id)} className="glass ns-edu-claim">
+                      <strong className="ns-edu-claim__title">Claim {school.school_name} for a principal</strong>
+                      <p className="ns-edu-claim__note">
+                        Creates the principal&rsquo;s login and hands the school (and its {school.user_count} member{Number(school.user_count) === 1 ? '' : 's'}) to them. They manage it from then on; it moves to the claimed history below.
+                      </p>
+                      <div className="ns-edu-claim__grid">
+                        <label>Principal name<input name="principal_name" required /></label>
+                        <label>Administrator name<input name="administrator_name" placeholder="(defaults to principal)" /></label>
+                        <label>Principal email<input name="administrator_email" type="email" required defaultValue={school.administrator_email || ''} /></label>
+                        <label>Principal phone<input name="administrator_phone" required /></label>
+                        <label>Main phone<input name="main_phone" placeholder="(defaults to principal phone)" /></label>
+                        <label>District<input name="school_district" required /></label>
+                        <label>Address<input name="school_address" required /></label>
+                        <label>Website<input name="school_website" defaultValue={school.school_website || ''} /></label>
+                        <label>Principal password<input name="password" type="password" minLength={6} required /></label>
+                      </div>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button type="submit" className="btn btn--sm btn--solid" disabled={nsEduBusy === `claim-${school.id}`}>{nsEduBusy === `claim-${school.id}` ? 'Claiming…' : 'Claim & hand over'}</button>
+                        <button type="button" className="btn btn--sm" onClick={() => setClaimSchoolId(null)}>Cancel</button>
+                      </div>
+                    </form>
+                  )}
+                </div>
+              )
+            })}
+
+            {(nsEdu?.history ?? []).length > 0 && (
+              <div style={{ marginTop: 24 }}>
+                <h3 className="gold-text" style={{ fontSize: 16, marginBottom: 10 }}>Claimed history</h3>
+                <Table head={['School', 'Members', 'Claimed']}>
+                  {(nsEdu?.history ?? []).map((s: any) => (
+                    <tr key={s.id}>
+                      <td style={tdS}>{s.school_name}</td>
+                      <td style={tdS}>{s.user_count}</td>
+                      <td style={tdS}>{s.claimed_at || '—'}</td>
+                    </tr>
+                  ))}
+                </Table>
+              </div>
+            )}
+          </>
         )}
 
         {tab === 'sponsors' && <SponsorsAdminPanel />}

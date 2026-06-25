@@ -777,17 +777,31 @@ function new_school_handle_route(string $method, string $route): bool
             }
 
             $pdo = db();
-            $school = $schoolId > 0
-                ? new_school_fetch_school_by_id($schoolId)
-                : ($schoolName !== '' ? new_school_fetch_school_by_name($schoolName) : null);
-
-            if (!$school) {
-                json(['error' => 'Choose a school from the approved school list.'], 422);
+            $registerMode = field($body, 'register_mode');
+            if ($registerMode === 'trendcatch_edu') {
+                // TrendCatch EDU intake: the student's school isn't listed yet. Create/find an
+                // unclaimed EDU-managed school and let them join it pending admin review.
+                $school = new_school_find_or_create_edu_school($schoolName, field($body, 'edu_school_email'), field($body, 'school_website'));
+                if (!$school) {
+                    json(['error' => 'Enter your school name to register under TrendCatch EDU.'], 422);
+                }
+                new_school_add_notification(
+                    null, 'admin', 'trendcatch_edu_intake', 'New TrendCatch EDU registration',
+                    $fullName . ' registered under TrendCatch EDU for "' . $school['school_name'] . '".',
+                    ['school_id' => (int) $school['id'], 'school_name' => $school['school_name'], 'role' => 'student']
+                );
+            } else {
+                $school = $schoolId > 0
+                    ? new_school_fetch_school_by_id($schoolId)
+                    : ($schoolName !== '' ? new_school_fetch_school_by_name($schoolName) : null);
+                if (!$school) {
+                    json(['error' => 'Choose a school from the approved school list.'], 422);
+                }
+                if ((string) ($school['status'] ?? '') !== 'approved') {
+                    json(['error' => 'This school must be approved before students can register under it.'], 422);
+                }
             }
-            if ((string) ($school['status'] ?? '') !== 'approved') {
-                json(['error' => 'This school must be approved before students can register under it.'], 422);
-            }
-            $schoolId = (int) $school['id']; // resolve to the real id (school may have been matched by name)
+            $schoolId = (int) $school['id']; // resolve to the real id (school may have been matched/created by name)
 
             // Teacher is optional at registration; the school/teacher can assign one later.
             $teacher = $teacherId > 0 ? new_school_fetch_teacher_by_id($teacherId) : null;
@@ -1443,12 +1457,27 @@ function new_school_handle_route(string $method, string $route): bool
                 json(['error' => 'Password must be at least 6 characters.'], 422);
             }
 
-            $school = $schoolId > 0 ? new_school_fetch_school_by_id($schoolId) : ($schoolName !== '' ? new_school_fetch_school_by_name($schoolName) : null);
-            if (!$school) {
-                json(['error' => 'Choose a school from the approved school list.'], 422);
-            }
-            if ((string) ($school['status'] ?? '') !== 'approved') {
-                json(['error' => 'Teacher accounts can only be created for approved schools.'], 422);
+            $registerMode = field($body, 'register_mode');
+            if ($registerMode === 'trendcatch_edu') {
+                // TrendCatch EDU intake: the teacher's school isn't listed yet. Create/find an
+                // unclaimed EDU-managed school and let them register pending admin review.
+                $school = new_school_find_or_create_edu_school($schoolName, field($body, 'edu_school_email'), field($body, 'school_website'));
+                if (!$school) {
+                    json(['error' => 'Enter your school name to register under TrendCatch EDU.'], 422);
+                }
+                new_school_add_notification(
+                    null, 'admin', 'trendcatch_edu_intake', 'New TrendCatch EDU registration',
+                    $teacherFullName . ' registered under TrendCatch EDU for "' . $school['school_name'] . '".',
+                    ['school_id' => (int) $school['id'], 'school_name' => $school['school_name'], 'role' => 'teacher']
+                );
+            } else {
+                $school = $schoolId > 0 ? new_school_fetch_school_by_id($schoolId) : ($schoolName !== '' ? new_school_fetch_school_by_name($schoolName) : null);
+                if (!$school) {
+                    json(['error' => 'Choose a school from the approved school list.'], 422);
+                }
+                if ((string) ($school['status'] ?? '') !== 'approved') {
+                    json(['error' => 'Teacher accounts can only be created for approved schools.'], 422);
+                }
             }
 
             $user = new_school_upsert_user_account($teacherFullName, $schoolEmail, $password, 'teacher');
@@ -2504,6 +2533,125 @@ function new_school_handle_route(string $method, string $route): bool
                 'mime' => $mime,
                 'message' => 'Uploaded.',
             ], 201);
+        }
+
+        case $key === 'GET admin/new-school/trendcatch': {
+            require_admin();
+            $rows = db()->query(
+                "SELECT * FROM new_school_schools WHERE origin = 'trendcatch_edu' ORDER BY created_at DESC"
+            )->fetchAll();
+            $active = [];
+            $history = [];
+            foreach ($rows as $school) {
+                $sid = (int) $school['id'];
+                $entry = [
+                    'id' => $sid,
+                    'school_name' => $school['school_name'],
+                    'administrator_email' => $school['administrator_email'],
+                    'school_website' => $school['school_website'] ?? '',
+                    'status' => $school['status'],
+                    'claim_status' => $school['claim_status'] ?? 'unclaimed',
+                    'created_at' => $school['created_at'],
+                    'claimed_at' => $school['claimed_at'] ?? null,
+                    'user_count' => new_school_school_user_count($sid),
+                    'teachers' => new_school_fetch_teachers_for_school($sid),
+                    'students' => new_school_fetch_students_for_school($school),
+                ];
+                if (($school['claim_status'] ?? 'unclaimed') === 'claimed') {
+                    $history[] = $entry;
+                } else {
+                    $active[] = $entry;
+                }
+            }
+            json(['active' => $active, 'history' => $history]);
+        }
+
+        case $key === 'POST admin/new-school/school/set-status': {
+            require_admin();
+            $schoolId = (int) ($body['school_id'] ?? 0);
+            $status = field($body, 'status') ?: 'approved';
+            if ($schoolId <= 0) {
+                json(['error' => 'A school is required.'], 422);
+            }
+            if (!in_array($status, ['registered', 'approved', 'rejected'], true)) {
+                json(['error' => 'Invalid school status.'], 422);
+            }
+            $school = new_school_fetch_school_by_id($schoolId);
+            if (!$school) {
+                json(['error' => 'School not found.'], 404);
+            }
+            db()->prepare('UPDATE new_school_schools SET status = ?, updated_at = NOW() WHERE id = ?')
+                ->execute([$status, $schoolId]);
+            // Keep the principal's account in sync when one exists (claimed schools).
+            if (!empty($school['user_id'])) {
+                $accountStatus = $status === 'approved' ? 'approved' : ($status === 'rejected' ? 'rejected' : 'pending');
+                try {
+                    db()->prepare('UPDATE users SET approval_status = ?, updated_at = NOW() WHERE id = ?')
+                        ->execute([$accountStatus, (int) $school['user_id']]);
+                } catch (\Throwable $e) { /* non-fatal */ }
+            }
+            json(['message' => 'School status updated.', 'school' => new_school_fetch_school_by_id($schoolId)]);
+        }
+
+        case $key === 'POST admin/new-school/school/claim': {
+            require_admin();
+            $schoolId = (int) ($body['school_id'] ?? 0);
+            $school = $schoolId > 0 ? new_school_fetch_school_by_id($schoolId) : null;
+            if (!$school) {
+                json(['error' => 'School not found.'], 404);
+            }
+            if (($school['claim_status'] ?? 'unclaimed') === 'claimed') {
+                json(['error' => 'This school has already been claimed.'], 409);
+            }
+            $principalName = require_name_field(field($body, 'principal_name'), 'Principal name', 3);
+            $administratorName = field($body, 'administrator_name') !== '' ? field($body, 'administrator_name') : $principalName;
+            $administratorEmail = require_email(field($body, 'administrator_email'));
+            $administratorPhone = field($body, 'administrator_phone');
+            $mainPhone = field($body, 'main_phone') !== '' ? field($body, 'main_phone') : $administratorPhone;
+            $schoolAddress = field($body, 'school_address');
+            $schoolDistrict = field($body, 'school_district');
+            $schoolWebsite = field($body, 'school_website') !== '' ? field($body, 'school_website') : (string) ($school['school_website'] ?? '');
+            $password = field($body, 'password');
+            if ($administratorPhone === '' || $schoolAddress === '' || $schoolDistrict === '') {
+                json(['error' => 'Principal phone, school address, and district are required to claim.'], 422);
+            }
+            $administratorPhone = require_phone($administratorPhone, 'Principal phone');
+            $mainPhone = require_phone($mainPhone, 'Main phone number');
+            if ($password === '' || strlen($password) < 6) {
+                json(['error' => 'Set a principal password of at least 6 characters.'], 422);
+            }
+
+            // Create (or reuse) the principal's login and activate it immediately.
+            $principalUser = new_school_upsert_user_account($administratorName, $administratorEmail, $password, 'school');
+            db()->prepare("UPDATE users SET approval_status = 'approved', updated_at = NOW() WHERE id = ?")
+                ->execute([(int) $principalUser['id']]);
+
+            try {
+                db()->prepare(
+                    'UPDATE new_school_schools
+                     SET user_id = ?, principal_name = ?, administrator_name = ?, administrator_email = ?,
+                         administrator_phone = ?, main_phone = ?, school_address = ?, school_district = ?,
+                         school_website = ?, status = "approved", claim_status = "claimed", claimed_at = NOW(), updated_at = NOW()
+                     WHERE id = ?'
+                )->execute([
+                    (int) $principalUser['id'], $principalName, $administratorName, $administratorEmail,
+                    $administratorPhone, $mainPhone, $schoolAddress, $schoolDistrict, $schoolWebsite,
+                    $schoolId,
+                ]);
+            } catch (\Throwable $e) {
+                json(['error' => 'Could not claim this school — the principal email may already own another school.'], 409);
+            }
+
+            new_school_add_notification(
+                null, 'admin', 'trendcatch_edu_claim', 'School claimed',
+                $school['school_name'] . ' was claimed and handed to ' . $principalName . '.',
+                ['school_id' => $schoolId, 'school_name' => $school['school_name']]
+            );
+
+            json([
+                'message' => 'School claimed. The principal can now sign in and manage it.',
+                'school' => new_school_fetch_school_by_id($schoolId),
+            ]);
         }
 
         case $key === 'GET admin/new-school/summary': {

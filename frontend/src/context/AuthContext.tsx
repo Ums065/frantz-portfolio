@@ -32,6 +32,10 @@ export interface RegistrationInput {
   roleDepartment?: string
   gradeLevelSupported?: string
   consentChecked?: boolean
+  // TrendCatch EDU intake (school not listed yet)
+  registerMode?: string
+  eduSchoolEmail?: string
+  schoolWebsite?: string
 }
 
 interface AuthState {
@@ -151,6 +155,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           school_name: input.schoolName ?? '',
           school_id: input.schoolId ?? '',
           teacher_id: input.teacherId ?? '',
+          register_mode: input.registerMode,
+          edu_school_email: input.eduSchoolEmail ?? '',
+          school_website: input.schoolWebsite ?? '',
           grade_level: input.gradeLevel ?? '',
           parent_name: input.parentName ?? '',
           parent_phone: input.parentPhone ?? '',
@@ -190,6 +197,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           teacher_full_name: input.fullName,
           school_name: input.schoolName ?? '',
           school_id: input.schoolId ?? '',
+          register_mode: input.registerMode,
+          edu_school_email: input.eduSchoolEmail ?? '',
+          school_website: input.schoolWebsite ?? '',
           school_email: input.email,
           phone_number: input.phoneNumber ?? '',
           role_department: input.roleDepartment ?? '',

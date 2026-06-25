@@ -3283,6 +3283,38 @@ section#challenge .challenge-features .ns-gain p {
   .ns-rank-columns { grid-template-columns: 1fr; }
 }
 
+/* === Admin · TrendCatch EDU tab === */
+.ns-edu-intro { color: var(--muted); font-size: 13px; line-height: 1.65; margin: 0 0 16px; max-width: 760px; }
+.ns-edu-card { padding: 18px 20px; border-radius: 16px; margin-bottom: 14px; }
+.ns-edu-card__top { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-start; justify-content: space-between; }
+.ns-edu-card__id { min-width: 0; flex: 1 1 240px; }
+.ns-edu-card__id h4 { font-family: var(--f-serif); font-size: 19px; margin: 0; color: var(--gold-light); }
+.ns-edu-card__meta { color: var(--muted); font-size: 12.5px; margin: 5px 0 0; overflow-wrap: anywhere; }
+.ns-edu-tags { display: flex; align-items: center; gap: 14px; margin-top: 9px; flex-wrap: wrap; }
+.ns-edu-badge { font-size: 10.5px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; padding: 3px 10px; border-radius: 999px; }
+.ns-edu-badge--live { color: #9be6a8; background: rgba(136,223,151,0.14); border: 1px solid rgba(136,223,151,0.4); }
+.ns-edu-badge--pending { color: #f6d98a; background: rgba(243,210,127,0.14); border: 1px solid rgba(243,210,127,0.4); }
+.ns-edu-count { color: var(--gold-light); font-weight: 700; font-size: 13px; }
+.ns-edu-count small { color: var(--muted); font-weight: 500; }
+.ns-edu-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-start; }
+.ns-edu-people { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 16px; }
+.ns-edu-col { padding: 14px 16px; border-radius: 12px; }
+.ns-edu-col h5 { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--gold-light); margin: 0 0 8px; }
+.ns-edu-person { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+.ns-edu-person:last-child { border-bottom: 0; }
+.ns-edu-person__name { flex: 1; min-width: 0; font-weight: 600; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ns-edu-person__status { font-size: 11px; color: var(--muted); text-transform: capitalize; white-space: nowrap; }
+.ns-edu-person__ok { color: #9be6a8; font-weight: 700; }
+.ns-edu-empty { color: var(--muted); font-size: 13px; margin: 0; }
+.ns-edu-claim { margin-top: 16px; padding: 16px 18px; border-radius: 14px; display: grid; gap: 12px; }
+.ns-edu-claim__title { color: var(--gold-light); font-size: 14px; }
+.ns-edu-claim__note { color: var(--muted); font-size: 12px; margin: 0; line-height: 1.55; }
+.ns-edu-claim__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+.ns-edu-claim label { display: flex; flex-direction: column; gap: 4px; font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.ns-edu-claim input { padding: 9px 11px; border-radius: 9px; border: 1px solid rgba(201,168,76,0.25); background: rgba(0,0,0,0.3); color: #f4efe4; font-family: inherit; font-size: 14px; text-transform: none; letter-spacing: normal; }
+.ns-edu-claim input:focus { outline: none; border-color: rgba(240,192,96,0.6); }
+@media (max-width: 720px) { .ns-edu-people { grid-template-columns: 1fr; } }
+
 /* --- Status pills: proper highlighted badges inside the dark admin theme --- */
 .admin-page .status-pill {
   font-weight: 700;

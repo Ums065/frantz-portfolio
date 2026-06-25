@@ -303,7 +303,7 @@ CREATE TABLE IF NOT EXISTS orders (
 -- ---------- New school tables ----------
 CREATE TABLE IF NOT EXISTS new_school_schools (
   id                      INT AUTO_INCREMENT PRIMARY KEY,
-  user_id                 INT NOT NULL UNIQUE,
+  user_id                 INT NULL UNIQUE,
   school_name             VARCHAR(180) NOT NULL,
   school_address          VARCHAR(255) NOT NULL,
   school_district         VARCHAR(180) NOT NULL,
@@ -312,7 +312,11 @@ CREATE TABLE IF NOT EXISTS new_school_schools (
   administrator_name      VARCHAR(120) NOT NULL,
   administrator_email     VARCHAR(160) NOT NULL,
   administrator_phone     VARCHAR(40) NOT NULL,
+  school_website          VARCHAR(255) DEFAULT NULL,
   status                  ENUM('registered','approved','rejected') NOT NULL DEFAULT 'registered',
+  origin                  ENUM('principal','trendcatch_edu') NOT NULL DEFAULT 'principal',
+  claim_status            ENUM('claimed','unclaimed') NOT NULL DEFAULT 'claimed',
+  claimed_at              TIMESTAMP NULL DEFAULT NULL,
   created_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   CONSTRAINT fk_new_school_schools_user
@@ -691,6 +695,15 @@ WHERE status IS NULL OR status = '';
 
 ALTER TABLE new_school_schools
   MODIFY status ENUM('registered','approved','rejected') NOT NULL DEFAULT 'registered';
+
+-- TrendCatch EDU: umbrella intake + claim ownership. EDU-created schools have no
+-- principal until claimed, so user_id must allow NULL. origin/claim_status drive the
+-- admin TrendCatch EDU tab; school_website stores the principal/site field.
+CALL add_column_if_missing('new_school_schools', 'school_website', 'VARCHAR(255) DEFAULT NULL', 'administrator_phone');
+CALL add_column_if_missing('new_school_schools', 'origin', 'ENUM(''principal'',''trendcatch_edu'') NOT NULL DEFAULT ''principal''', 'status');
+CALL add_column_if_missing('new_school_schools', 'claim_status', 'ENUM(''claimed'',''unclaimed'') NOT NULL DEFAULT ''claimed''', 'origin');
+CALL add_column_if_missing('new_school_schools', 'claimed_at', 'TIMESTAMP NULL DEFAULT NULL', 'claim_status');
+ALTER TABLE new_school_schools MODIFY user_id INT NULL;
 
 CALL add_column_if_missing('new_school_teachers', 'status', 'ENUM(''registered'',''approved'',''rejected'') DEFAULT NULL', 'grade_level_supported');
 

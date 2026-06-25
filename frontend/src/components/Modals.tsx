@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type CSSProperties } from 'react'
 import { useAuth, type RegistrationRole } from '../context/AuthContext'
 import { api } from '../lib/api'
 import { BRAND_LOGO } from '../lib/brandAssets'
@@ -99,6 +99,9 @@ type RegisterFormState = {
   roleDepartment: string
   gradeLevelSupported: string
   consentChecked: boolean
+  eduMode: boolean
+  eduSchoolEmail: string
+  schoolWebsite: string
 }
 
 const createRegisterForm = (): RegisterFormState => ({
@@ -131,9 +134,18 @@ const createRegisterForm = (): RegisterFormState => ({
   roleDepartment: '',
   gradeLevelSupported: '',
   consentChecked: false,
+  eduMode: false,
+  eduSchoolEmail: '',
+  schoolWebsite: '',
 })
 
-type RegisterTextFieldKey = Exclude<keyof RegisterFormState, 'role' | 'consentChecked'>
+type RegisterTextFieldKey = Exclude<keyof RegisterFormState, 'role' | 'consentChecked' | 'eduMode'>
+
+// Inline "link" button used for the TrendCatch EDU intake toggle inside the modal.
+const linkBtnStyle: CSSProperties = {
+  background: 'none', border: 0, padding: 0, font: 'inherit', fontWeight: 600,
+  color: 'var(--gold-light, #e7cf8a)', textDecoration: 'underline', cursor: 'pointer',
+}
 
 const phoneFieldKeys: RegisterTextFieldKey[] = ['phoneNumber', 'parentPhone', 'mainPhone', 'administratorPhone']
 const phoneFieldKeySet = new Set<RegisterTextFieldKey>(phoneFieldKeys)
@@ -225,7 +237,9 @@ const validateRegisterForm = (form: RegisterFormState, termsAccepted: boolean) =
       requireEmail(form.email, 'Student email')
       requirePhone(form.phoneNumber, 'Phone number')
       requireText(form.schoolName, 'School name', 2)
-      if (!form.teacherId) {
+      if (form.eduMode) {
+        requireEmail(form.eduSchoolEmail, 'School / Principal email')
+      } else if (!form.teacherId) {
         throw new Error('Please select a teacher.')
       }
       requireText(form.gradeLevel, 'Grade level', 1)
@@ -264,6 +278,7 @@ const validateRegisterForm = (form: RegisterFormState, termsAccepted: boolean) =
     case 'teacher':
       requireText(form.fullName, 'Teacher full name', 3)
       requireText(form.schoolName, 'School name', 2)
+      if (form.eduMode) requireEmail(form.eduSchoolEmail, 'School / Principal email')
       requireEmail(form.email, 'School email')
       requirePhone(form.phoneNumber, 'Phone number')
       requireText(form.roleDepartment, 'Role / Department', 2)
@@ -474,6 +489,9 @@ export function AuthModal({
           schoolName: normalizeSpaces(form.schoolName),
           schoolId: form.schoolId,
           teacherId: form.teacherId,
+          registerMode: form.eduMode ? 'trendcatch_edu' : undefined,
+          eduSchoolEmail: form.eduSchoolEmail.trim().toLowerCase(),
+          schoolWebsite: form.schoolWebsite.trim(),
           gradeLevel: normalizeSpaces(form.gradeLevel),
           parentName: normalizeSpaces(form.parentName),
           parentPhone: digitsOnly(form.parentPhone),
@@ -558,27 +576,43 @@ export function AuthModal({
                         </div>
                         {renderTextField('email', 'Student Email', { type: 'email', full: true, placeholder: 'student@example.com', autoComplete: 'email' })}
                         {renderTextField('phoneNumber', 'Phone Number', { type: 'tel', placeholder: 'Student phone number', autoComplete: 'tel', inputMode: 'numeric', pattern: '[0-9]*', maxLength: 15 })}
-                        <div className="field">
-                          <label>School</label>
-                          <select value={form.schoolId} required onChange={(e) => {
-                            const sc = nsSchools.find((s: any) => String(s.id) === e.target.value)
-                            setForm((p) => ({ ...p, schoolId: e.target.value, schoolName: sc?.school_name || '', teacherId: '' }))
-                          }}>
-                            <option value="">{nsSchools.length ? 'Select your school' : 'No approved schools yet'}</option>
-                            {nsSchools.map((s: any) => (
-                              <option key={s.id} value={s.id}>{s.school_name}{s.school_district ? ` — ${s.school_district}` : ''}</option>
-                            ))}
-                          </select>
-                        </div>
-                        <div className="field">
-                          <label>Teacher</label>
-                          <select value={form.teacherId} required onChange={(e) => updateField('teacherId', e.target.value)}>
-                            <option value="">{form.schoolId ? 'Select a teacher' : 'Choose a school first'}</option>
-                            {nsTeachers.filter((t: any) => String(t.school_id) === String(form.schoolId)).map((t: any) => (
-                              <option key={t.id} value={t.id}>{t.teacher_full_name}{t.role_department ? ` — ${t.role_department}` : ''}</option>
-                            ))}
-                          </select>
-                        </div>
+                        {!form.eduMode ? (
+                          <>
+                            <div className="field">
+                              <label>School</label>
+                              <select value={form.schoolId} required onChange={(e) => {
+                                const sc = nsSchools.find((s: any) => String(s.id) === e.target.value)
+                                setForm((p) => ({ ...p, schoolId: e.target.value, schoolName: sc?.school_name || '', teacherId: '' }))
+                              }}>
+                                <option value="">{nsSchools.length ? 'Select your school' : 'No approved schools yet'}</option>
+                                {nsSchools.map((s: any) => (
+                                  <option key={s.id} value={s.id}>{s.school_name}{s.school_district ? ` — ${s.school_district}` : ''}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div className="field">
+                              <label>Teacher</label>
+                              <select value={form.teacherId} required onChange={(e) => updateField('teacherId', e.target.value)}>
+                                <option value="">{form.schoolId ? 'Select a teacher' : 'Choose a school first'}</option>
+                                {nsTeachers.filter((t: any) => String(t.school_id) === String(form.schoolId)).map((t: any) => (
+                                  <option key={t.id} value={t.id}>{t.teacher_full_name}{t.role_department ? ` — ${t.role_department}` : ''}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <p className="auth-note field--full">School not listed?{' '}
+                              <button type="button" style={linkBtnStyle} onClick={() => setForm((p) => ({ ...p, eduMode: true, schoolId: '', teacherId: '', schoolName: '' }))}>Register under TrendCatch EDU</button>
+                            </p>
+                          </>
+                        ) : (
+                          <>
+                            <p className="auth-note field--full"><strong>Registering under TrendCatch EDU.</strong> Enter your school details — our team reviews it and sets it up; a teacher is assigned after review.{' '}
+                              <button type="button" style={linkBtnStyle} onClick={() => setForm((p) => ({ ...p, eduMode: false, schoolName: '' }))}>Pick from the list instead</button>
+                            </p>
+                            {renderTextField('schoolName', 'School Name', { full: true, placeholder: 'Your school name', minLength: 2 })}
+                            {renderTextField('eduSchoolEmail', 'School / Principal Email', { type: 'email', placeholder: 'principal@school.edu' })}
+                            {renderTextField('schoolWebsite', 'School Website', { type: 'url', placeholder: 'https://', required: false })}
+                          </>
+                        )}
                         {renderTextField('gradeLevel', 'Grade Level', { placeholder: 'Example: 9th Grade' })}
                         {renderTextField('homeAddress', 'Home Address', { as: 'textarea', full: true, placeholder: 'Street address, city, state, zip', rows: 3 })}
                         {renderTextField('parentName', 'Parent / Guardian Name', { placeholder: 'Parent or guardian', minLength: 3 })}
@@ -622,18 +656,34 @@ export function AuthModal({
                     {form.role === 'teacher' && (
                       <>
                         {renderTextField('fullName', 'Teacher Full Name', { full: true, placeholder: 'Teacher full name', autoComplete: 'name', minLength: 3 })}
-                        <div className="field">
-                          <label>School</label>
-                          <select value={form.schoolId} required onChange={(e) => {
-                            const sc = nsSchools.find((s: any) => String(s.id) === e.target.value)
-                            setForm((p) => ({ ...p, schoolId: e.target.value, schoolName: sc?.school_name || '' }))
-                          }}>
-                            <option value="">{nsSchools.length ? 'Select your school' : 'No approved schools yet'}</option>
-                            {nsSchools.map((s: any) => (
-                              <option key={s.id} value={s.id}>{s.school_name}{s.school_district ? ` — ${s.school_district}` : ''}</option>
-                            ))}
-                          </select>
-                        </div>
+                        {!form.eduMode ? (
+                          <>
+                            <div className="field">
+                              <label>School</label>
+                              <select value={form.schoolId} required onChange={(e) => {
+                                const sc = nsSchools.find((s: any) => String(s.id) === e.target.value)
+                                setForm((p) => ({ ...p, schoolId: e.target.value, schoolName: sc?.school_name || '' }))
+                              }}>
+                                <option value="">{nsSchools.length ? 'Select your school' : 'No approved schools yet'}</option>
+                                {nsSchools.map((s: any) => (
+                                  <option key={s.id} value={s.id}>{s.school_name}{s.school_district ? ` — ${s.school_district}` : ''}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <p className="auth-note field--full">School not listed?{' '}
+                              <button type="button" style={linkBtnStyle} onClick={() => setForm((p) => ({ ...p, eduMode: true, schoolId: '', schoolName: '' }))}>Register under TrendCatch EDU</button>
+                            </p>
+                          </>
+                        ) : (
+                          <>
+                            <p className="auth-note field--full"><strong>Registering under TrendCatch EDU.</strong> Enter your school details — our team reviews it and sets it up.{' '}
+                              <button type="button" style={linkBtnStyle} onClick={() => setForm((p) => ({ ...p, eduMode: false, schoolName: '' }))}>Pick from the list instead</button>
+                            </p>
+                            {renderTextField('schoolName', 'School Name', { full: true, placeholder: 'Your school name', minLength: 2 })}
+                            {renderTextField('eduSchoolEmail', 'School / Principal Email', { type: 'email', placeholder: 'principal@school.edu' })}
+                            {renderTextField('schoolWebsite', 'School Website', { full: true, type: 'url', placeholder: 'https://', required: false })}
+                          </>
+                        )}
                         {renderTextField('email', 'School Email', { type: 'email', placeholder: 'teacher@school.edu', autoComplete: 'email' })}
                         {renderTextField('phoneNumber', 'Phone Number', { type: 'tel', placeholder: 'Teacher phone number', autoComplete: 'tel', inputMode: 'numeric', pattern: '[0-9]*', maxLength: 15 })}
                         {renderTextField('roleDepartment', 'Role / Department', { placeholder: 'Example: Social Studies' })}

@@ -2457,6 +2457,49 @@ function new_school_fetch_school_by_name(string $schoolName): ?array
     return $school ?: null;
 }
 
+/**
+ * TrendCatch EDU intake: find a school by name, or create an unclaimed EDU-managed
+ * school (no principal yet, status 'registered' so it stays out of the public dropdown
+ * until an admin makes it live). Lets a teacher/student register before their school is
+ * formally registered/approved. Returns the school row, or null if the name is blank.
+ */
+function new_school_find_or_create_edu_school(string $name, string $email = '', string $website = ''): ?array
+{
+    $name = trim($name);
+    if ($name === '') {
+        return null;
+    }
+    $existing = new_school_fetch_school_by_name($name);
+    if ($existing) {
+        return $existing;
+    }
+    $pdo = db();
+    $stmt = $pdo->prepare(
+        'INSERT INTO new_school_schools
+            (user_id, school_name, school_address, school_district, main_phone,
+             principal_name, administrator_name, administrator_email, administrator_phone,
+             school_website, status, origin, claim_status)
+         VALUES (NULL, ?, "", "", "", "", "", ?, "", ?, "registered", "trendcatch_edu", "unclaimed")'
+    );
+    $stmt->execute([$name, trim($email), trim($website)]);
+    return new_school_fetch_school_by_id((int) $pdo->lastInsertId());
+}
+
+/** Total people (students + teachers + parents) linked to a school — the EDU counter. */
+function new_school_school_user_count(int $schoolId): int
+{
+    $stmt = db()->prepare(
+        'SELECT
+            (SELECT COUNT(*) FROM new_school_students s WHERE s.school_id = ?)
+          + (SELECT COUNT(*) FROM new_school_teachers t WHERE t.school_id = ?)
+          + (SELECT COUNT(*) FROM new_school_parents p
+               INNER JOIN new_school_students ps ON ps.id = p.student_id
+               WHERE ps.school_id = ?) AS total'
+    );
+    $stmt->execute([$schoolId, $schoolId, $schoolId]);
+    return (int) $stmt->fetchColumn();
+}
+
 function new_school_fetch_teacher_by_user_id(int $userId): ?array
 {
     $stmt = db()->prepare(

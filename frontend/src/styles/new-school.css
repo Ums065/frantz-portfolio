@@ -711,6 +711,15 @@
   font-size: 13px;
 }
 
+/* "Register under TrendCatch EDU" intake switch + inline link buttons. */
+.ns-edu-switch { font-size: 13px; color: var(--muted); }
+.ns-linkbtn {
+  background: none; border: 0; padding: 0; cursor: pointer;
+  color: var(--gold-light, #e7cf8a); font: inherit; font-weight: 600;
+  text-decoration: underline; text-underline-offset: 2px;
+}
+.ns-linkbtn:hover { color: #ffdf94; }
+
 .ns-form {
   padding: 22px;
 }

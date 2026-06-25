@@ -593,6 +593,9 @@ export default function NewSchool() {
   const [notice, setNotice] = useState<{ tone: 'success' | 'error' | 'info'; text: string } | null>(null)
   const [studentSchoolSearch, setStudentSchoolSearch] = useState('')
   const [studentTeacherId, setStudentTeacherId] = useState('')
+  // "Register under TrendCatch EDU" intake — used when the school isn't listed yet.
+  const [studentEduMode, setStudentEduMode] = useState(false)
+  const [teacherEduMode, setTeacherEduMode] = useState(false)
   const [teacherSchoolSearch, setTeacherSchoolSearch] = useState('')
   const [parentSchoolSearch, setParentSchoolSearch] = useState('')
   const [parentTeacherId, setParentTeacherId] = useState('')
@@ -868,6 +871,9 @@ export default function NewSchool() {
         school_id: Number(value(fd, 'school_id') || 0) || undefined,
         school_name: value(fd, 'school_name'),
         teacher_id: Number(value(fd, 'teacher_id') || 0) || undefined,
+        register_mode: studentEduMode ? 'trendcatch_edu' : undefined,
+        edu_school_email: value(fd, 'edu_school_email'),
+        school_website: value(fd, 'school_website'),
         grade_level: value(fd, 'grade_level'),
         parent_name: value(fd, 'parent_name'),
         parent_phone: value(fd, 'parent_phone'),
@@ -882,6 +888,7 @@ export default function NewSchool() {
       setStudentSchoolSearch('')
       setStudentTeacherId('')
       setStudentDob('')
+      setStudentEduMode(false)
       await refresh()
       await reloadOverview()
     } catch (err) {
@@ -977,6 +984,9 @@ export default function NewSchool() {
         teacher_full_name: value(fd, 'teacher_full_name'),
         school_id: schoolId > 0 ? schoolId : undefined,
         school_name: value(fd, 'school_name'),
+        register_mode: teacherEduMode ? 'trendcatch_edu' : undefined,
+        edu_school_email: value(fd, 'edu_school_email'),
+        school_website: value(fd, 'school_website'),
         school_email: value(fd, 'school_email'),
         phone_number: value(fd, 'phone_number'),
         role_department: value(fd, 'role_department'),
@@ -991,6 +1001,7 @@ export default function NewSchool() {
       showNotice('success', res.message || 'Teacher registered.')
       form.reset()
       setTeacherSchoolSearch('')
+      setTeacherEduMode(false)
       await refresh()
       await reloadOverview()
     } catch (err) {
@@ -2186,48 +2197,68 @@ export default function NewSchool() {
                 <label className="ns-field"><span>Confirm Password</span><input name="confirm_password" type="password" minLength={6} required /></label>
                 <label className="ns-field"><span>Phone Number</span><input name="phone_number" required /></label>
                 <label className="ns-field ns-field--full"><span>Home Address</span><input name="home_address" required /></label>
-                <label className="ns-field ns-field--full">
-                  <span>Select School</span>
-                  <select
-                    name="school_name"
-                    value={studentSchoolSearch}
-                    onChange={(event) => {
-                      setStudentSchoolSearch(event.target.value)
-                      setStudentTeacherId('')
-                    }}
-                    required
-                  >
-                    <option value="">{schools.length ? 'Select your school' : 'No approved schools yet'}</option>
-                    {schools.map((school: any) => (
-                      <option key={school.id} value={school.school_name}>
-                        {school.school_name}{school.school_district ? ` — ${school.school_district}` : ''}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <input type="hidden" name="school_id" value={matchedStudentSchool?.id || ''} readOnly />
-                {matchedStudentSchool ? (
-                  studentSchoolTeachers.length > 0 ? (
+                {!studentEduMode ? (
+                  <>
                     <label className="ns-field ns-field--full">
-                      <span>Teacher</span>
-                      <select name="teacher_id" value={studentTeacherId} onChange={(event) => setStudentTeacherId(event.target.value)} required>
-                        <option value="">Select a teacher</option>
-                        {studentSchoolTeachers.map((teacher: any) => (
-                          <option key={teacher.id} value={teacher.id}>
-                            {teacher.teacher_full_name} - {teacher.role_department}
+                      <span>Select School</span>
+                      <select
+                        name="school_name"
+                        value={studentSchoolSearch}
+                        onChange={(event) => {
+                          setStudentSchoolSearch(event.target.value)
+                          setStudentTeacherId('')
+                        }}
+                        required
+                      >
+                        <option value="">{schools.length ? 'Select your school' : 'No approved schools yet'}</option>
+                        {schools.map((school: any) => (
+                          <option key={school.id} value={school.school_name}>
+                            {school.school_name}{school.school_district ? ` — ${school.school_district}` : ''}
                           </option>
                         ))}
                       </select>
                     </label>
-                  ) : (
-                    <div className="ns-alert ns-alert--info ns-field--full">
-                      This school has no approved teachers yet. A teacher must be approved before a student can register.
+                    <input type="hidden" name="school_id" value={matchedStudentSchool?.id || ''} readOnly />
+                    {matchedStudentSchool ? (
+                      studentSchoolTeachers.length > 0 ? (
+                        <label className="ns-field ns-field--full">
+                          <span>Teacher</span>
+                          <select name="teacher_id" value={studentTeacherId} onChange={(event) => setStudentTeacherId(event.target.value)} required>
+                            <option value="">Select a teacher</option>
+                            {studentSchoolTeachers.map((teacher: any) => (
+                              <option key={teacher.id} value={teacher.id}>
+                                {teacher.teacher_full_name} - {teacher.role_department}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      ) : (
+                        <div className="ns-alert ns-alert--info ns-field--full">
+                          This school has no approved teachers yet. A teacher must be approved before a student can register.
+                        </div>
+                      )
+                    ) : (
+                      <div className="ns-alert ns-alert--info ns-field--full">
+                        Search and select an approved school to reveal its teacher list.
+                      </div>
+                    )}
+                    <div className="ns-field--full ns-edu-switch">
+                      School not listed?{' '}
+                      <button type="button" className="ns-linkbtn" onClick={() => { setStudentEduMode(true); setStudentSchoolSearch(''); setStudentTeacherId('') }}>
+                        Register under TrendCatch EDU
+                      </button>
                     </div>
-                  )
+                  </>
                 ) : (
-                  <div className="ns-alert ns-alert--info ns-field--full">
-                    Search and select an approved school to reveal its teacher list.
-                  </div>
+                  <>
+                    <div className="ns-alert ns-alert--info ns-field--full">
+                      <strong>Registering under TrendCatch EDU.</strong> Enter your school's details below — our team reviews it and sets your school up. A teacher is assigned after review.{' '}
+                      <button type="button" className="ns-linkbtn" onClick={() => setStudentEduMode(false)}>Pick from the list instead</button>
+                    </div>
+                    <label className="ns-field ns-field--full"><span>School Name</span><input name="school_name" required /></label>
+                    <label className="ns-field"><span>School / Principal Email</span><input name="edu_school_email" type="email" required /></label>
+                    <label className="ns-field"><span>School Website</span><input name="school_website" type="url" placeholder="https://" /></label>
+                  </>
                 )}
                 <label className="ns-field"><span>Grade Level</span><input name="grade_level" placeholder="9th Grade" required /></label>
                 <label className="ns-field"><span>Parent Name</span><input name="parent_name" required /></label>
@@ -2242,7 +2273,7 @@ export default function NewSchool() {
               <button
                 className="btn btn--solid"
                 type="submit"
-                disabled={busy === 'student' || !matchedStudentSchool || studentSchoolTeachers.length === 0 || !studentTermsOk}
+                disabled={busy === 'student' || !studentTermsOk || (!studentEduMode && (!matchedStudentSchool || studentSchoolTeachers.length === 0))}
               >
                 {busy === 'student' ? 'Saving...' : 'Create Student Profile'}
               </button>
@@ -2380,23 +2411,43 @@ export default function NewSchool() {
               </div>
               <div className="ns-field-grid">
                 <label className="ns-field ns-field--full"><span>Teacher Full Name</span><input name="teacher_full_name" required /></label>
-                <label className="ns-field ns-field--full">
-                  <span>Select School</span>
-                  <select
-                    name="school_name"
-                    value={teacherSchoolSearch}
-                    onChange={(event) => setTeacherSchoolSearch(event.target.value)}
-                    required
-                  >
-                    <option value="">{schools.length ? 'Select your school' : 'No approved schools yet'}</option>
-                    {schools.map((school: any) => (
-                      <option key={school.id} value={school.school_name}>
-                        {school.school_name}{school.school_district ? ` — ${school.school_district}` : ''}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <input type="hidden" name="school_id" value={approvedSchool(teacherSchoolSearch)?.id || ''} readOnly />
+                {!teacherEduMode ? (
+                  <>
+                    <label className="ns-field ns-field--full">
+                      <span>Select School</span>
+                      <select
+                        name="school_name"
+                        value={teacherSchoolSearch}
+                        onChange={(event) => setTeacherSchoolSearch(event.target.value)}
+                        required
+                      >
+                        <option value="">{schools.length ? 'Select your school' : 'No approved schools yet'}</option>
+                        {schools.map((school: any) => (
+                          <option key={school.id} value={school.school_name}>
+                            {school.school_name}{school.school_district ? ` — ${school.school_district}` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <input type="hidden" name="school_id" value={approvedSchool(teacherSchoolSearch)?.id || ''} readOnly />
+                    <div className="ns-field--full ns-edu-switch">
+                      School not listed?{' '}
+                      <button type="button" className="ns-linkbtn" onClick={() => { setTeacherEduMode(true); setTeacherSchoolSearch('') }}>
+                        Register under TrendCatch EDU
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="ns-alert ns-alert--info ns-field--full">
+                      <strong>Registering under TrendCatch EDU.</strong> Enter your school's details — our team reviews it and sets your school up.{' '}
+                      <button type="button" className="ns-linkbtn" onClick={() => setTeacherEduMode(false)}>Pick from the list instead</button>
+                    </div>
+                    <label className="ns-field ns-field--full"><span>School Name</span><input name="school_name" required /></label>
+                    <label className="ns-field"><span>School / Principal Email</span><input name="edu_school_email" type="email" required /></label>
+                    <label className="ns-field ns-field--full"><span>School Website</span><input name="school_website" type="url" placeholder="https://" /></label>
+                  </>
+                )}
                 <label className="ns-field"><span>School Email</span><input name="school_email" type="email" required /></label>
                 <label className="ns-field"><span>Phone Number</span><input name="phone_number" required /></label>
                 <label className="ns-field"><span>Role / Department</span><input name="role_department" required /></label>
@@ -2414,7 +2465,7 @@ export default function NewSchool() {
                 <label className="ns-field ns-field--full"><span>Password</span><input name="password" type="password" minLength={6} required /></label>
               </div>
               <TermsAgreement kind="teacher" idPrefix="ns-teacher" signatureName={teacherTermsSig} onSignatureChange={setTeacherTermsSig} onAcceptedChange={setTeacherTermsOk} />
-              <button className="btn btn--solid" type="submit" disabled={busy === 'teacher' || !approvedSchool(teacherSchoolSearch) || !teacherTermsOk}>
+              <button className="btn btn--solid" type="submit" disabled={busy === 'teacher' || !teacherTermsOk || (!teacherEduMode && !approvedSchool(teacherSchoolSearch))}>
                 {busy === 'teacher' ? 'Saving...' : 'Register Teacher'}
               </button>
             </form>
