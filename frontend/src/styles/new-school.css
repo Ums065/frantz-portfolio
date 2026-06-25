@@ -724,6 +724,15 @@
 .ns-field-hint { color: var(--muted); font-weight: 400; font-size: 11px; text-transform: none; letter-spacing: 0; margin-left: 6px; }
 .ns-check-hint { color: var(--muted); font-size: 12.5px; line-height: 1.5; margin: 2px 0 10px; }
 
+/* Parent registration: verify the student's unique ID before consent. */
+.ns-verify-row { display: flex; gap: 8px; align-items: stretch; }
+.ns-verify-row input { flex: 1; min-width: 0; }
+.ns-verify-row .btn { flex: 0 0 auto; white-space: nowrap; }
+.ns-verify-msg { display: block; margin-top: 6px; font-size: 12.5px; color: var(--muted); }
+.ns-verify-msg--ok { color: #9be6a8; }
+.ns-verify-msg--ok strong { color: #c7f0cf; }
+.ns-verify-msg--fail { color: #f0a99a; }
+
 .ns-form {
   padding: 22px;
 }

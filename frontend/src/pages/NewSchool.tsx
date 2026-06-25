@@ -620,6 +620,8 @@ export default function NewSchool() {
   const [parentSchoolSearch, setParentSchoolSearch] = useState('')
   const [parentTeacherId, setParentTeacherId] = useState('')
   const [parentParticipantId, setParentParticipantId] = useState('')
+  // Parent must verify the student's unique ID before consent can be submitted.
+  const [parentVerify, setParentVerify] = useState<{ status: 'idle' | 'checking' | 'ok' | 'fail'; name: string }>({ status: 'idle', name: '' })
   const [schoolApprovalsTab, setSchoolApprovalsTab] = useState<'students' | 'teachers' | 'parents'>('students')
   const [schoolApprovalSearch, setSchoolApprovalSearch] = useState('')
   const [schoolApprovalStatus, setSchoolApprovalStatus] = useState('all')
@@ -755,6 +757,23 @@ export default function NewSchool() {
     setParentParticipantId(data?.student?.participant_id || '')
     setParentSchoolSearch(data?.school?.school_name || '')
     setParentTeacherId(data?.teacher?.id ? String(data.teacher.id) : '')
+    // Opened via QR → the student is already confirmed, so mark it verified.
+    if (data?.student?.full_name) setParentVerify({ status: 'ok', name: data.student.full_name })
+  }
+
+  // Look up the student by their unique ID and show the name so the parent can confirm
+  // they have the right child. Consent submission is blocked until this succeeds.
+  const verifyParentStudent = async () => {
+    const id = parentParticipantId.trim()
+    if (!id) { setParentVerify({ status: 'fail', name: '' }); return }
+    setParentVerify({ status: 'checking', name: '' })
+    try {
+      const data = await api.get<any>(`new-school/student/${encodeURIComponent(id)}`)
+      const name = String(data?.student?.full_name || '').trim()
+      setParentVerify(name ? { status: 'ok', name } : { status: 'fail', name: '' })
+    } catch {
+      setParentVerify({ status: 'fail', name: '' })
+    }
   }
 
   const markNotificationRead = async (notificationId: number) => {
@@ -946,6 +965,7 @@ export default function NewSchool() {
       showNotice('success', res.message || 'Parent consent saved.')
       form.reset()
       setParentParticipantId('')
+      setParentVerify({ status: 'idle', name: '' })
       setParentSchoolSearch('')
       setParentTeacherId('')
       await refresh()
@@ -2350,13 +2370,26 @@ export default function NewSchool() {
               <div className="ns-field-grid">
                 <label className="ns-field ns-field--full">
                   <span>Student Unique Platform ID</span>
-                  <input
-                    name="participant_id"
-                    value={parentParticipantId}
-                    onChange={(event) => setParentParticipantId(event.target.value)}
-                    placeholder="Enter the 8-digit student ID"
-                    required
-                  />
+                  <div className="ns-verify-row">
+                    <input
+                      name="participant_id"
+                      value={parentParticipantId}
+                      onChange={(event) => { setParentParticipantId(event.target.value); setParentVerify({ status: 'idle', name: '' }) }}
+                      placeholder="Enter the 8-digit student ID"
+                      required
+                    />
+                    <button
+                      type="button"
+                      className="btn btn--sm"
+                      onClick={() => void verifyParentStudent()}
+                      disabled={parentVerify.status === 'checking' || !parentParticipantId.trim()}
+                    >
+                      {parentVerify.status === 'checking' ? 'Checking…' : parentVerify.status === 'ok' ? 'Verified ✓' : 'Verify'}
+                    </button>
+                  </div>
+                  {parentVerify.status === 'ok' && <span className="ns-verify-msg ns-verify-msg--ok">✓ Student confirmed: <strong>{parentVerify.name}</strong></span>}
+                  {parentVerify.status === 'fail' && <span className="ns-verify-msg ns-verify-msg--fail">No student found with that ID. Check the number and try again.</span>}
+                  {(parentVerify.status === 'idle' || parentVerify.status === 'checking') && <span className="ns-verify-msg">Enter the student’s ID and tap <strong>Verify</strong> to confirm the student before you submit.</span>}
                 </label>
                 <label className="ns-field ns-field--full">
                   <span>QR Token (Optional)</span>
@@ -2431,7 +2464,8 @@ export default function NewSchool() {
                 </label>
               </div>
               <TermsAgreement kind="parent" idPrefix="ns-parent" hideSignature signatureName="" onSignatureChange={() => {}} onAcceptedChange={setParentTermsOk} />
-              <button className="btn btn--solid" type="submit" disabled={busy === 'parent' || !parentTermsOk}>{busy === 'parent' ? 'Saving...' : 'Approve Consent'}</button>
+              {parentVerify.status !== 'ok' && <p className="ns-check-hint">Verify the student’s unique ID above before you can submit consent.</p>}
+              <button className="btn btn--solid" type="submit" disabled={busy === 'parent' || !parentTermsOk || parentVerify.status !== 'ok'}>{busy === 'parent' ? 'Saving...' : 'Approve Consent'}</button>
             </form>
 
             <form className="glass ns-form reveal in" id="school-registration" onSubmit={submitSchool} hidden={registrationTag !== 'school'}>

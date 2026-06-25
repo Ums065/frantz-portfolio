@@ -113,10 +113,18 @@ const approvalButtonClass = (current: string, action: 'pending' | 'approved' | '
   `btn btn--sm${current === action ? ' btn--solid' : ''}`
 
 const displayValue = (value: unknown): string => {
-  if (value === null || value === undefined || value === '') return 'ó'
+  if (value === null || value === undefined || value === '') return '‚Äî'
   if (typeof value === 'boolean') return value ? 'Yes' : 'No'
   if (typeof value === 'number') return String(value)
   return String(value)
+}
+
+/** Format a MySQL datetime ("2026-06-25 14:30:00") as a short readable date. */
+const fmtDate = (value: unknown): string => {
+  if (!value) return '‚Äî'
+  const d = new Date(String(value).replace(' ', 'T'))
+  if (Number.isNaN(d.getTime())) return String(value)
+  return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
 export default function Admin() {
@@ -499,7 +507,7 @@ export default function Admin() {
         >
           <span className={`ns-rankrow__rank${(p.rank_position ?? i + 1) <= 3 ? ' is-top' : ''}`}>#{p.rank_position ?? i + 1}</span>
           <span className="ns-rankrow__name">{kind === 'student' ? p.full_name : p.teacher_full_name}</span>
-          <span className="ns-rankrow__meta">{kind === 'student' ? `${p.interview_count ?? 0}/10 ∑ ${p.submission_status || 'ó'}` : `${p.students_total ?? 0} students`}</span>
+          <span className="ns-rankrow__meta">{kind === 'student' ? `${p.interview_count ?? 0}/10 ¬∑ ${p.submission_status || '‚Äî'}` : `${p.students_total ?? 0} students`}</span>
           <span className="ns-rankrow__pts">{(kind === 'student' ? p.student_points : p.teacher_points) ?? 0} pts</span>
           <span className="ns-rankrow__go" aria-hidden="true">?</span>
         </button>
@@ -585,7 +593,7 @@ export default function Admin() {
             <div className="field"><label>Email</label>
               <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="admin@frantzcoutard.com" /></div>
             <div className="field"><label>Password</label>
-              <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="ïïïïïïïï" /></div>
+              <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="‚Ä¢‚Ä¢‚Ä¢‚Ä¢‚Ä¢‚Ä¢‚Ä¢‚Ä¢" /></div>
             {error && <p style={{ color: '#e08a8a', fontSize: 13 }}>{error}</p>}
             {user && !isAdmin(user.role) && <p style={{ color: '#e08a8a', fontSize: 13 }}>This account is not an admin.</p>}
             <button className="btn btn--solid" type="submit" style={{ width: '100%', marginTop: 8 }}>Login</button>
@@ -637,7 +645,7 @@ export default function Admin() {
             <div>
               <span className="admin-kicker">Admin Dashboard</span>
               <h1 className="gold-text" style={{ fontFamily: 'var(--f-serif)', fontSize: 26, marginTop: 4 }}>{activeLabel}</h1>
-              <p style={{ color: 'var(--muted)', fontSize: 13 }}>Signed in as {user?.full_name} ∑ {user?.role}</p>
+              <p style={{ color: 'var(--muted)', fontSize: 13 }}>Signed in as {user?.full_name} ¬∑ {user?.role}</p>
             </div>
           </header>
 
@@ -702,7 +710,7 @@ export default function Admin() {
             <DataTable
               head={['Type', 'Name', 'Email', 'Org', 'Message', 'Status', 'Date', '']}
               rows={data?.requests ?? []}
-              searchPlaceholder="Search requestsÖ"
+              searchPlaceholder="Search requests‚Ä¶"
               searchText={(r) => `${r.request_type} ${r.full_name} ${r.email} ${r.organization ?? ''} ${r.message ?? ''}`}
               statusOf={(r) => r.status}
               statusOptions={['new', 'reviewed', 'approved', 'closed']}
@@ -713,8 +721,8 @@ export default function Admin() {
                   <td>{r.request_type}</td>
                   <td>{r.full_name}</td>
                   <td>{r.email}</td>
-                  <td>{r.organization || 'ó'}</td>
-                  <td style={{ maxWidth: 240 }}>{r.message || 'ó'}</td>
+                  <td>{r.organization || '‚Äî'}</td>
+                  <td style={{ maxWidth: 240 }}>{r.message || '‚Äî'}</td>
                   <td>
                     <select value={r.status} onChange={(e) => setStatus(r.id, e.target.value)} style={selectS}>
                       <option value="new">new</option>
@@ -744,7 +752,7 @@ export default function Admin() {
             <DataTable
               head={['Order #', 'Customer', 'Email', 'Items', 'Total', 'Payment', 'Order Status', 'Date', '']}
               rows={data?.orders ?? []}
-              searchPlaceholder="Search ordersÖ"
+              searchPlaceholder="Search orders‚Ä¶"
               searchText={(o) => `${o.order_no} ${o.customer_name} ${o.email}`}
               statusOf={(o) => o.status}
               statusOptions={['pending', 'paid', 'fulfilled', 'cancelled']}
@@ -752,7 +760,7 @@ export default function Admin() {
               bulkActions={[{ label: 'Delete selected', danger: true, onClick: (ids) => bulkDelete('admin/order', ids, 'order') }]}
               renderRow={(o, checkbox) => {
                 let items = ''
-                try { items = (JSON.parse(o.items) as Array<{ name: string; qty: number; size: string }>).map((it) => `${it.qty}◊ ${it.name} (${it.size})`).join(', ') } catch { items = 'ó' }
+                try { items = (JSON.parse(o.items) as Array<{ name: string; qty: number; size: string }>).map((it) => `${it.qty}√ó ${it.name} (${it.size})`).join(', ') } catch { items = '‚Äî' }
                 return (
                   <tr key={o.id}>{checkbox}
                     <td>{o.order_no}</td>
@@ -760,7 +768,7 @@ export default function Admin() {
                     <td>{o.email}</td>
                     <td style={{ maxWidth: 280 }}>{items}</td>
                     <td>${o.total}</td>
-                    <td>{[o.payment_provider, o.payment_status, o.payment_method].filter(Boolean).join(' ∑ ')}</td>
+                    <td>{[o.payment_provider, o.payment_status, o.payment_method].filter(Boolean).join(' ¬∑ ')}</td>
                     <td>
                       <select value={o.status} onChange={(e) => setOrderStatus(o.id, e.target.value)} style={selectS}>
                         <option value="pending">pending</option>
@@ -784,7 +792,7 @@ export default function Admin() {
             <DataTable
               head={['Email', 'Subscribed', '']}
               rows={data?.subscribers ?? []}
-              searchPlaceholder="Search subscribersÖ"
+              searchPlaceholder="Search subscribers‚Ä¶"
               searchText={(s) => s.email}
               rowId={(s) => s.id}
               bulkActions={[{ label: 'Remove selected', danger: true, onClick: (ids) => bulkDelete('admin/subscriber', ids, 'subscriber') }]}
@@ -805,7 +813,7 @@ export default function Admin() {
             <DataTable
               head={['Name', 'Email', 'Message', 'Date', '']}
               rows={data?.contacts ?? []}
-              searchPlaceholder="Search contactsÖ"
+              searchPlaceholder="Search contacts‚Ä¶"
               searchText={(c) => `${c.full_name} ${c.email} ${c.message ?? ''}`}
               rowId={(c) => c.id}
               bulkActions={[{ label: 'Delete selected', danger: true, onClick: (ids) => bulkDelete('admin/contact', ids, 'message') }]}
@@ -813,7 +821,7 @@ export default function Admin() {
                 <tr key={c.id}>{checkbox}
                   <td>{c.full_name}</td>
                   <td>{c.email}</td>
-                  <td>{c.message || 'ó'}</td>
+                  <td>{c.message || '‚Äî'}</td>
                   <td>{c.created_at}</td>
                   <td><RowMenu actions={[{ label: 'Delete message', danger: true, onClick: () => void deleteRow(`admin/contact/${c.id}`, 'Delete this contact message?') }]} /></td>
                 </tr>
@@ -833,7 +841,7 @@ export default function Admin() {
             <DataTable
               head={['#', 'Name', 'User ID', 'Email', 'Role', 'Status', 'Joined', '']}
               rows={data?.members ?? []}
-              searchPlaceholder="Search accountsÖ"
+              searchPlaceholder="Search accounts‚Ä¶"
               searchText={(m) => `${m.full_name} ${m.email} ${m.role} ${m.id}`}
               statusOf={(m) => (isAdmin(m.role) ? 'approved' : (m.approval_status || 'pending'))}
               statusOptions={['approved', 'pending', 'rejected']}
@@ -855,13 +863,13 @@ export default function Admin() {
                     <td>{m.email}</td>
                     <td>{m.role}</td>
                     <td><StatusPill status={status} /></td>
-                    <td>{m.created_at}</td>
+                    <td className="admin-table__date">{fmtDate(m.created_at)}</td>
                     <td>
                       {adminAccount ? (
                         <span style={{ color: 'var(--muted)', fontSize: 12 }}>Protected</span>
                       ) : (
                         <RowMenu actions={[
-                          { label: viewBusyId === m.id ? 'OpeningÖ' : 'View dashboard', onClick: () => void viewAsUser(m), disabled: viewBusyId === m.id },
+                          { label: viewBusyId === m.id ? 'Opening‚Ä¶' : 'View dashboard', onClick: () => void viewAsUser(m), disabled: viewBusyId === m.id },
                           { label: 'Details', onClick: () => void openUserDetails(m) },
                           { label: 'Approve', onClick: () => void setApproval(m.id, 'approved'), disabled: status === 'approved' },
                           { label: 'Keep pending', onClick: () => void setApproval(m.id, 'pending'), disabled: status === 'pending' },
@@ -887,7 +895,7 @@ export default function Admin() {
             <DataTable
               head={['#', 'Name', 'User ID', 'Email', 'Role', 'Status', 'Reviewed', '']}
               rows={(data?.members ?? []).filter((m) => !isAdmin(m.role) && (m.approval_status || 'pending') !== 'approved')}
-              searchPlaceholder="Search pending accountsÖ"
+              searchPlaceholder="Search pending accounts‚Ä¶"
               searchText={(m) => `${m.full_name} ${m.email} ${m.role} ${m.id}`}
               statusOf={(m) => (m.approval_status || 'pending')}
               statusOptions={['pending', 'rejected']}
@@ -907,10 +915,10 @@ export default function Admin() {
                     <td>{m.email}</td>
                     <td>{m.role}</td>
                     <td><StatusPill status={status} /></td>
-                    <td>{m.approval_reviewed_at || 'ó'}</td>
+                    <td>{m.approval_reviewed_at || '‚Äî'}</td>
                     <td>
                       <RowMenu actions={[
-                        { label: viewBusyId === m.id ? 'OpeningÖ' : 'View dashboard', onClick: () => void viewAsUser(m), disabled: viewBusyId === m.id },
+                        { label: viewBusyId === m.id ? 'Opening‚Ä¶' : 'View dashboard', onClick: () => void viewAsUser(m), disabled: viewBusyId === m.id },
                         { label: 'Details', onClick: () => void openUserDetails(m) },
                         { label: 'Approve', onClick: () => void setApproval(m.id, 'approved'), disabled: status === 'approved' },
                         { label: 'Keep pending', onClick: () => void setApproval(m.id, 'pending'), disabled: status === 'pending' },
@@ -946,7 +954,7 @@ export default function Admin() {
                     <span className="admin-stat__icon" aria-hidden="true"><AdminNavIcon name="school" /></span>
                     <span className="admin-stat__label">{s.school_name}</span>
                     <strong>{studentsInSchool(Number(s.id)).length}</strong>
-                    <p>{(s.school_district || 'ó')} ∑ {s.status}</p>
+                    <p>{(s.school_district || '‚Äî')} ¬∑ {s.status}</p>
                     <span className="admin-stat__go" aria-hidden="true">?</span>
                   </button>
                 ))}
@@ -957,7 +965,7 @@ export default function Admin() {
                   <div>
                     <span className="eyebrow">School &amp; Principal</span>
                     <h3 className="gold-text">{selectedDashSchool.school_name}</h3>
-                    <p className="ns-school-head__meta">{[selectedDashSchool.school_district, selectedDashSchool.status].filter(Boolean).join(' ∑ ')}</p>
+                    <p className="ns-school-head__meta">{[selectedDashSchool.school_district, selectedDashSchool.status].filter(Boolean).join(' ¬∑ ')}</p>
                     <div className="ns-school-head__facts">
                       {selectedDashSchool.principal_name && <span><b>Principal:</b> {selectedDashSchool.principal_name}</span>}
                       {selectedDashSchool.administrator_name && <span><b>Administrator:</b> {selectedDashSchool.administrator_name}</span>}
@@ -987,18 +995,18 @@ export default function Admin() {
                   <DataTable
                     head={['#', 'Rank', 'Student', 'Participant', 'Points', 'Interviews', 'Status', '']}
                     rows={studentsInSchool(Number(selectedDashSchool.id)).slice().sort(byRank)}
-                    searchPlaceholder="Search studentsÖ"
+                    searchPlaceholder="Search students‚Ä¶"
                     searchText={(s: any) => `${s.full_name ?? ''} ${s.participant_id ?? ''}`}
                     rowId={(s: any) => s.id}
                     renderRow={(s: any, _cb: any, i?: number) => (
                       <tr key={s.id} className="admin-row--clickable" onClick={() => openStudentProfile(Number(s.id))}>
                         <td className="admin-table__idx">{i}</td>
-                        <td>#{s.rank_position ?? 'ó'}</td>
+                        <td>#{s.rank_position ?? '‚Äî'}</td>
                         <td>{s.full_name}</td>
-                        <td className="admin-table__uid">{s.participant_id || 'ó'}</td>
+                        <td className="admin-table__uid">{s.participant_id || '‚Äî'}</td>
                         <td>{s.student_points ?? 0}</td>
                         <td>{s.interview_count ?? 0}/10</td>
-                        <td>{s.submission_status || 'ó'}</td>
+                        <td>{s.submission_status || '‚Äî'}</td>
                         <td><span className="admin-linkcell">View ?</span></td>
                       </tr>
                     )}
@@ -1008,17 +1016,17 @@ export default function Admin() {
                   <DataTable
                     head={['#', 'Rank', 'Teacher', 'Students', 'Points', 'Status', '']}
                     rows={teachersInSchool(Number(selectedDashSchool.id)).slice().sort(byRank)}
-                    searchPlaceholder="Search teachersÖ"
+                    searchPlaceholder="Search teachers‚Ä¶"
                     searchText={(t: any) => `${t.teacher_full_name ?? ''} ${t.role_department ?? ''}`}
                     rowId={(t: any) => t.id}
                     renderRow={(t: any, _cb: any, i?: number) => (
                       <tr key={t.id} className="admin-row--clickable" onClick={() => openTeacherProfile(Number(t.id))}>
                         <td className="admin-table__idx">{i}</td>
-                        <td>#{t.rank_position ?? 'ó'}</td>
+                        <td>#{t.rank_position ?? '‚Äî'}</td>
                         <td>{t.teacher_full_name}</td>
                         <td>{t.students_total ?? 0}</td>
                         <td>{t.teacher_points ?? 0}</td>
-                        <td>{t.status || 'ó'}</td>
+                        <td>{t.status || '‚Äî'}</td>
                         <td><span className="admin-linkcell">View ?</span></td>
                       </tr>
                     )}
@@ -1028,16 +1036,16 @@ export default function Admin() {
                   <DataTable
                     head={['#', 'Parent', 'Student', 'Relationship', 'Link status']}
                     rows={parentsInSchool(Number(selectedDashSchool.id))}
-                    searchPlaceholder="Search parentsÖ"
+                    searchPlaceholder="Search parents‚Ä¶"
                     searchText={(p: any) => `${p.parent_full_name ?? ''} ${p.student_name ?? ''}`}
                     rowId={(p: any) => p.id}
                     renderRow={(p: any, _cb: any, i?: number) => (
                       <tr key={p.id} className={p.student_id ? 'admin-row--clickable' : ''} onClick={() => p.student_id && openStudentProfile(Number(p.student_id))}>
                         <td className="admin-table__idx">{i}</td>
-                        <td>{p.parent_full_name || 'ó'}</td>
-                        <td>{p.student_name || 'ó'}</td>
-                        <td>{p.relationship || p.relationship_to_student || 'ó'}</td>
-                        <td>{p.link_status || 'ó'}</td>
+                        <td>{p.parent_full_name || '‚Äî'}</td>
+                        <td>{p.student_name || '‚Äî'}</td>
+                        <td>{p.relationship || p.relationship_to_student || '‚Äî'}</td>
+                        <td>{p.link_status || '‚Äî'}</td>
                       </tr>
                     )}
                   />
@@ -1067,7 +1075,7 @@ export default function Admin() {
                   <DataTable
                     head={['Rank', 'School', 'Students', 'Movement']}
                     rows={nsSchoolRankings}
-                    searchPlaceholder="Search schoolsÖ"
+                    searchPlaceholder="Search schools‚Ä¶"
                     searchText={(s: any) => `${s.school_name ?? ''}`}
                     rowId={(s: any) => s.school_id}
                     renderRow={(s: any) => (
@@ -1075,7 +1083,7 @@ export default function Admin() {
                         <td><span className={`ns-rankrow__rank${(s.rank ?? 99) <= 3 ? ' is-top' : ''}`}>#{s.rank}</span></td>
                         <td>{s.school_name}</td>
                         <td>{s.student_count}</td>
-                        <td>{s.movement > 0 ? `? ${s.movement}` : s.movement < 0 ? `? ${Math.abs(s.movement)}` : 'ó'}</td>
+                        <td>{s.movement > 0 ? `? ${s.movement}` : s.movement < 0 ? `? ${Math.abs(s.movement)}` : '‚Äî'}</td>
                       </tr>
                     )}
                   />
@@ -1091,7 +1099,7 @@ export default function Admin() {
                   <div>
                     <span className="eyebrow">School ranking</span>
                     <h3 className="gold-text">{selectedRankSchool.school_name}</h3>
-                    <p className="ns-school-head__meta">Top students &amp; teachers ∑ click anyone to read full details</p>
+                    <p className="ns-school-head__meta">Top students &amp; teachers ¬∑ click anyone to read full details</p>
                   </div>
                 </div>
                 <div className="ns-rank-columns">
@@ -1115,7 +1123,7 @@ export default function Admin() {
             <DataTable
               head={['#', 'Participant', 'Student', 'Problem', 'Status', 'Score', '']}
               rows={nsSubmissions}
-              searchPlaceholder="Search submissionsÖ"
+              searchPlaceholder="Search submissions‚Ä¶"
               searchText={(s) => `${s.student_name ?? ''} ${s.participant_id ?? ''} ${s.problem_identified ?? ''}`}
               statusOf={(s) => (s.status || '')}
               statusOptions={['submitted', 'approved', 'rejected', 'winner', 'draft']}
@@ -1129,15 +1137,15 @@ export default function Admin() {
                 return (
                   <tr key={s.id}>{checkbox}
                     <td className="admin-table__idx">{index}</td>
-                    <td className="admin-table__uid">{s.participant_id || 'ó'}</td>
+                    <td className="admin-table__uid">{s.participant_id || '‚Äî'}</td>
                     <td><button type="button" className="admin-linkcell" onClick={() => setNsDetail({ kind: 'project', record: s })}>{s.student_name}</button></td>
                     <td style={{ maxWidth: 300 }}>
                       <button type="button" className="admin-linkcell" onClick={() => setNsDetail({ kind: 'project', record: s })}>
-                        {s.problem_identified ? `${String(s.problem_identified).slice(0, 80)}${String(s.problem_identified).length > 80 ? 'Ö' : ''}` : 'View details'}
+                        {s.problem_identified ? `${String(s.problem_identified).slice(0, 80)}${String(s.problem_identified).length > 80 ? '‚Ä¶' : ''}` : 'View details'}
                       </button>
                     </td>
                     <td><StatusPill status={st} /></td>
-                    <td>{s.score ?? 'ó'}</td>
+                    <td>{s.score ?? '‚Äî'}</td>
                     <td>
                       <RowMenu actions={[
                         { label: 'View full details', onClick: () => setNsDetail({ kind: 'project', record: s }) },
@@ -1159,16 +1167,16 @@ export default function Admin() {
             <DataTable
               head={['#', 'Student', 'Participant', 'Business', 'Visit', 'Date', '']}
               rows={nsInterviews}
-              searchPlaceholder="Search interviewsÖ"
+              searchPlaceholder="Search interviews‚Ä¶"
               searchText={(b) => `${b.student_name ?? ''} ${b.participant_id ?? ''} ${b.business_name ?? ''}`}
               renderRow={(b, _checkbox, index) => (
                 <tr key={b.id} className="admin-row--clickable" onClick={() => setNsDetail({ kind: 'interview', record: b })}>
                   <td className="admin-table__idx">{index}</td>
                   <td>{b.student_name}</td>
-                  <td className="admin-table__uid">{b.participant_id || 'ó'}</td>
+                  <td className="admin-table__uid">{b.participant_id || '‚Äî'}</td>
                   <td>{b.business_name}</td>
-                  <td>{b.visit_number ?? 'ó'}</td>
-                  <td>{b.date_of_visit || b.created_at || 'ó'}</td>
+                  <td>{b.visit_number ?? '‚Äî'}</td>
+                  <td>{b.date_of_visit || b.created_at || '‚Äî'}</td>
                   <td><span className="admin-linkcell">View ?</span></td>
                 </tr>
               )}
@@ -1217,11 +1225,11 @@ export default function Admin() {
                         aria-label={`Remove ${t.full_name || `User #${t.thread_user_id}`}`}
                         title="Remove from admin view"
                       >
-                        ◊
+                        √ó
                       </button>
                     </div>
                   </div>
-                  <span>{t.role} ∑ {t.total} msg{Number(t.total) === 1 ? '' : 's'}</span>
+                  <span>{t.role} ¬∑ {t.total} msg{Number(t.total) === 1 ? '' : 's'}</span>
                 </button>
               ))}
             </div>
@@ -1245,8 +1253,8 @@ export default function Admin() {
                     ))}
                   </div>
                   <form className="admin-chat__form" onSubmit={sendAdminChat}>
-                    <input type="text" value={chatInput} onChange={(e) => setChatInput(e.target.value)} placeholder="Type a replyÖ" maxLength={2000} />
-                    <button className="btn btn--solid btn--sm" type="submit" disabled={chatBusy || !chatInput.trim()}>{chatBusy ? 'SendingÖ' : 'Send'}</button>
+                    <input type="text" value={chatInput} onChange={(e) => setChatInput(e.target.value)} placeholder="Type a reply‚Ä¶" maxLength={2000} />
+                    <button className="btn btn--solid btn--sm" type="submit" disabled={chatBusy || !chatInput.trim()}>{chatBusy ? 'Sending‚Ä¶' : 'Send'}</button>
                   </form>
                 </>
               )}
@@ -1262,7 +1270,7 @@ export default function Admin() {
               { label: 'Claimed (history)', value: nsEdu?.history.length ?? 0, tone: 'green' },
             ]} />
             <p className="ns-edu-intro">
-              Schools that joined through &ldquo;Register under TrendCatch EDU&rdquo; (their school wasn&rsquo;t listed yet). You steward each one ó approve its teachers &amp; students and <strong>Make live</strong> so it appears in the public dropdown ó until a principal <strong>claims</strong> it and takes over.
+              Schools that joined through &ldquo;Register under TrendCatch EDU&rdquo; (their school wasn&rsquo;t listed yet). You steward each one ‚Äî approve its teachers &amp; students and <strong>Make live</strong> so it appears in the public dropdown ‚Äî until a principal <strong>claims</strong> it and takes over.
             </p>
 
             {(nsEdu?.active ?? []).length === 0 && (
@@ -1277,8 +1285,8 @@ export default function Admin() {
                   <div className="ns-edu-card__top">
                     <div className="ns-edu-card__id">
                       <h4>{school.school_name}</h4>
-                      <p className="ns-edu-card__meta">{school.administrator_email || 'no email'}{school.school_website ? ` ∑ ${school.school_website}` : ''}</p>
-                      <p className="ns-edu-card__meta">{[school.school_district, school.main_phone, school.principal_name].filter(Boolean).join(' ∑ ') || 'Awaiting school details'}</p>
+                      <p className="ns-edu-card__meta">{school.administrator_email || 'no email'}{school.school_website ? ` ¬∑ ${school.school_website}` : ''}</p>
+                      <p className="ns-edu-card__meta">{[school.school_district, school.main_phone, school.principal_name].filter(Boolean).join(' ¬∑ ') || 'Awaiting school details'}</p>
                       <div className="ns-edu-tags">
                         <span className={`ns-edu-badge ns-edu-badge--${school.status === 'approved' ? 'live' : 'pending'}`}>
                           {school.status === 'approved' ? 'Live in dropdown' : 'Not live yet'}
@@ -1292,7 +1300,7 @@ export default function Admin() {
                       </button>
                       {school.status !== 'approved' && (
                         <button type="button" className="btn btn--sm btn--solid" disabled={nsEduBusy === `live-${school.id}`} onClick={() => void eduMakeLive(school.id)}>
-                          {nsEduBusy === `live-${school.id}` ? 'SavingÖ' : 'Make live'}
+                          {nsEduBusy === `live-${school.id}` ? 'Saving‚Ä¶' : 'Make live'}
                         </button>
                       )}
                       {school.status !== 'rejected' && school.status !== 'approved' && (
@@ -1316,7 +1324,7 @@ export default function Admin() {
                             <span className="ns-edu-person__name">{t.teacher_full_name}</span>
                             <span className="ns-edu-person__status">{t.status}</span>
                             {t.status !== 'approved'
-                              ? <button type="button" className="btn btn--sm btn--solid" disabled={nsEduBusy === `teacher-${t.id}`} onClick={() => void eduApproveTeacher(t)}>{nsEduBusy === `teacher-${t.id}` ? 'Ö' : 'Approve'}</button>
+                              ? <button type="button" className="btn btn--sm btn--solid" disabled={nsEduBusy === `teacher-${t.id}`} onClick={() => void eduApproveTeacher(t)}>{nsEduBusy === `teacher-${t.id}` ? '‚Ä¶' : 'Approve'}</button>
                               : <span className="ns-edu-person__ok">? Approved</span>}
                           </div>
                         ))}
@@ -1327,9 +1335,9 @@ export default function Admin() {
                         {(school.students ?? []).map((s: any) => (
                           <div key={s.id} className="ns-edu-person">
                             <span className="ns-edu-person__name">{s.full_name}</span>
-                            <span className="ns-edu-person__status">{s.teacher_approval_status || 'ó'}</span>
+                            <span className="ns-edu-person__status">{s.teacher_approval_status || '‚Äî'}</span>
                             {s.teacher_approval_status !== 'approved'
-                              ? <button type="button" className="btn btn--sm btn--solid" disabled={nsEduBusy === `student-${s.id}`} onClick={() => void eduApproveStudent(s)}>{nsEduBusy === `student-${s.id}` ? 'Ö' : 'Approve'}</button>
+                              ? <button type="button" className="btn btn--sm btn--solid" disabled={nsEduBusy === `student-${s.id}`} onClick={() => void eduApproveStudent(s)}>{nsEduBusy === `student-${s.id}` ? '‚Ä¶' : 'Approve'}</button>
                               : <span className="ns-edu-person__ok">? Approved</span>}
                           </div>
                         ))}
@@ -1355,7 +1363,7 @@ export default function Admin() {
                         <label>Principal password<input name="password" type="password" minLength={6} required /></label>
                       </div>
                       <div style={{ display: 'flex', gap: 8 }}>
-                        <button type="submit" className="btn btn--sm btn--solid" disabled={nsEduBusy === `claim-${school.id}`}>{nsEduBusy === `claim-${school.id}` ? 'ClaimingÖ' : 'Claim & hand over'}</button>
+                        <button type="submit" className="btn btn--sm btn--solid" disabled={nsEduBusy === `claim-${school.id}`}>{nsEduBusy === `claim-${school.id}` ? 'Claiming‚Ä¶' : 'Claim & hand over'}</button>
                         <button type="button" className="btn btn--sm" onClick={() => setClaimSchoolId(null)}>Cancel</button>
                       </div>
                     </form>
@@ -1372,7 +1380,7 @@ export default function Admin() {
                     <tr key={s.id}>
                       <td style={tdS}>{s.school_name}</td>
                       <td style={tdS}>{s.user_count}</td>
-                      <td style={tdS}>{s.claimed_at || 'ó'}</td>
+                      <td style={tdS}>{s.claimed_at || '‚Äî'}</td>
                     </tr>
                   ))}
                 </Table>
@@ -1444,7 +1452,7 @@ function UserDetailModal({
   const status = (detail?.user.approval_status || summary.approval_status || 'pending').toLowerCase()
   const reviewer = detail?.user.approval_reviewed_by_name
     ? `${detail.user.approval_reviewed_by_name}${detail.user.approval_reviewed_by_email ? ` (${detail.user.approval_reviewed_by_email})` : ''}`
-    : 'ó'
+    : '‚Äî'
 
   return (
     <div className="modal-overlay open" onClick={(e) => e.target === e.currentTarget && onClose()}>
@@ -1459,7 +1467,7 @@ function UserDetailModal({
           <div>
             <h3 className="gold-text">{summary.full_name}</h3>
             <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: 6 }}>
-              {summary.email} ∑ {summary.role}
+              {summary.email} ¬∑ {summary.role}
             </p>
           </div>
           <span className={`status-pill ${status === 'approved' ? 'status-pill--approved' : status === 'rejected' ? 'status-pill--closed' : 'status-pill--new'}`}>
@@ -1467,7 +1475,7 @@ function UserDetailModal({
           </span>
         </div>
 
-        {loading && <p style={{ color: 'var(--muted)', marginTop: 18 }}>Loading user detailsÖ</p>}
+        {loading && <p style={{ color: 'var(--muted)', marginTop: 18 }}>Loading user details‚Ä¶</p>}
         {error && <p style={{ color: '#e08a8a', marginTop: 18 }}>{error}</p>}
 
         {!loading && !error && detail && (
@@ -1587,18 +1595,18 @@ function AwardsAdmin() {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <p style={{ color: 'var(--muted)', fontSize: 13 }}>{rows.length} awards ∑ shown on the public Awards page</p>
+        <p style={{ color: 'var(--muted)', fontSize: 13 }}>{rows.length} awards ¬∑ shown on the public Awards page</p>
         <button className="btn btn--sm btn--solid" onClick={() => setEditing({ ...emptyAward, sort_order: rows.length + 1 })}>+ Add Award</button>
       </div>
 
       <Table head={['', 'Title', 'Year', 'Level', 'Featured', 'Order', 'Actions']}>
         {rows.map((a) => (
           <tr key={a.id} style={rowS}>
-            <td style={tdS}>{a.image ? <img src={a.image} alt="" style={{ width: 40, height: 52, objectFit: 'cover', borderRadius: 4 }} /> : 'ó'}</td>
+            <td style={tdS}>{a.image ? <img src={a.image} alt="" style={{ width: 40, height: 52, objectFit: 'cover', borderRadius: 4 }} /> : '‚Äî'}</td>
             <td style={tdS}>{a.title}</td>
-            <td style={tdS}>{a.year || 'ó'}</td>
-            <td style={tdS}>{a.level || 'ó'}</td>
-            <td style={tdS}>{a.is_featured ? '?' : 'ó'}</td>
+            <td style={tdS}>{a.year || '‚Äî'}</td>
+            <td style={tdS}>{a.level || '‚Äî'}</td>
+            <td style={tdS}>{a.is_featured ? '?' : '‚Äî'}</td>
             <td style={tdS}>{a.sort_order}</td>
             <td style={tdS}>
               <div style={{ display: 'flex', gap: 6 }}>
@@ -1645,7 +1653,7 @@ function AwardsAdmin() {
               <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
                 {editing.image && <img src={editing.image} alt="" style={{ width: 54, height: 70, objectFit: 'cover', borderRadius: 6, border: '1px solid var(--line)' }} />}
                 <label className="btn btn--sm" style={{ cursor: 'pointer' }}>
-                  {uploading ? 'UploadingÖ' : 'Upload Image'}
+                  {uploading ? 'Uploading‚Ä¶' : 'Upload Image'}
                   <input type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) onUpload(f) }} />
                 </label>
               </div>
@@ -1654,11 +1662,11 @@ function AwardsAdmin() {
 
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#d8d3c6', margin: '4px 0 16px' }}>
               <input type="checkbox" checked={!!editing.is_featured} onChange={(e) => set({ is_featured: e.target.checked ? 1 : 0 })} />
-              Featured award (shown in the ìFeatured Awardsî row)
+              Featured award (shown in the ‚ÄúFeatured Awards‚Äù row)
             </label>
 
             {error && <p className="msub" style={{ color: '#e08a8a' }}>{error}</p>}
-            <button type="submit" className="btn btn--solid" disabled={busy}>{busy ? 'SavingÖ' : 'Save Award'}</button>
+            <button type="submit" className="btn btn--solid" disabled={busy}>{busy ? 'Saving‚Ä¶' : 'Save Award'}</button>
           </form>
         </div>
       )}
@@ -1695,17 +1703,17 @@ function EventsAdmin() {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <p style={{ color: 'var(--muted)', fontSize: 13 }}>{rows.length} events ∑ shown on the Events page &amp; home</p>
+        <p style={{ color: 'var(--muted)', fontSize: 13 }}>{rows.length} events ¬∑ shown on the Events page &amp; home</p>
         <button className="btn btn--sm btn--solid" onClick={() => setEditing({ ...emptyEvent })}>+ Add Event</button>
       </div>
       <Table head={['Title', 'Location', 'Role', 'Date', 'Past', 'Actions']}>
         {rows.map((ev) => (
           <tr key={ev.id} style={rowS}>
             <td style={tdS}>{ev.title}</td>
-            <td style={tdS}>{ev.location || 'ó'}</td>
-            <td style={tdS}>{ev.role || 'ó'}</td>
+            <td style={tdS}>{ev.location || '‚Äî'}</td>
+            <td style={tdS}>{ev.role || '‚Äî'}</td>
             <td style={tdS}>{ev.event_date}</td>
-            <td style={tdS}>{ev.is_past ? 'Yes' : 'ó'}</td>
+            <td style={tdS}>{ev.is_past ? 'Yes' : '‚Äî'}</td>
             <td style={tdS}><div style={{ display: 'flex', gap: 6 }}>
               <button className="btn btn--sm" onClick={() => setEditing(ev)}>Edit</button>
               <button className="btn btn--sm" onClick={() => remove(ev.id)} style={{ borderColor: '#7a3b3b', color: '#e08a8a' }}>Delete</button>
@@ -1731,10 +1739,10 @@ function EventsAdmin() {
               <input type="date" required value={editing.event_date} onChange={(e) => set({ event_date: e.target.value })} /></div>
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#d8d3c6', margin: '4px 0 16px' }}>
               <input type="checkbox" checked={!!editing.is_past} onChange={(e) => set({ is_past: e.target.checked ? 1 : 0 })} />
-              Past event (shown under ìPast Appearancesî)
+              Past event (shown under ‚ÄúPast Appearances‚Äù)
             </label>
             {error && <p className="msub" style={{ color: '#e08a8a' }}>{error}</p>}
-            <button type="submit" className="btn btn--solid" disabled={busy}>{busy ? 'SavingÖ' : 'Save Event'}</button>
+            <button type="submit" className="btn btn--solid" disabled={busy}>{busy ? 'Saving‚Ä¶' : 'Save Event'}</button>
           </form>
         </div>
       )}
@@ -1775,16 +1783,16 @@ function PostsAdmin() {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <p style={{ color: 'var(--muted)', fontSize: 13 }}>{rows.length} articles ∑ shown on the Blog page &amp; home</p>
+        <p style={{ color: 'var(--muted)', fontSize: 13 }}>{rows.length} articles ¬∑ shown on the Blog page &amp; home</p>
         <button className="btn btn--sm btn--solid" onClick={() => setEditing({ ...emptyPost })}>+ Add Article</button>
       </div>
       <Table head={['', 'Title', 'Category', 'Featured', 'Published', 'Actions']}>
         {rows.map((p) => (
           <tr key={p.id} style={rowS}>
-            <td style={tdS}>{p.cover_image ? <img src={p.cover_image} alt="" style={{ width: 52, height: 32, objectFit: 'cover', borderRadius: 4 }} /> : 'ó'}</td>
+            <td style={tdS}>{p.cover_image ? <img src={p.cover_image} alt="" style={{ width: 52, height: 32, objectFit: 'cover', borderRadius: 4 }} /> : '‚Äî'}</td>
             <td style={tdS}>{p.title}</td>
-            <td style={tdS}>{p.category || 'ó'}</td>
-            <td style={tdS}>{p.is_featured ? '?' : 'ó'}</td>
+            <td style={tdS}>{p.category || '‚Äî'}</td>
+            <td style={tdS}>{p.is_featured ? '?' : '‚Äî'}</td>
             <td style={tdS}>{p.published_at}</td>
             <td style={tdS}><div style={{ display: 'flex', gap: 6 }}>
               <button className="btn btn--sm" onClick={() => setEditing(p)}>Edit</button>
@@ -1815,7 +1823,7 @@ function PostsAdmin() {
               <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
                 {editing.cover_image && <img src={editing.cover_image} alt="" style={{ width: 80, height: 50, objectFit: 'cover', borderRadius: 6, border: '1px solid var(--line)' }} />}
                 <label className="btn btn--sm" style={{ cursor: 'pointer' }}>
-                  {uploading ? 'UploadingÖ' : 'Upload Cover'}
+                  {uploading ? 'Uploading‚Ä¶' : 'Upload Cover'}
                   <input type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) onUpload(f) }} />
                 </label>
               </div>
@@ -1826,7 +1834,7 @@ function PostsAdmin() {
               Featured (large card on the home blog section)
             </label>
             {error && <p className="msub" style={{ color: '#e08a8a' }}>{error}</p>}
-            <button type="submit" className="btn btn--solid" disabled={busy}>{busy ? 'SavingÖ' : 'Save Article'}</button>
+            <button type="submit" className="btn btn--solid" disabled={busy}>{busy ? 'Saving‚Ä¶' : 'Save Article'}</button>
           </form>
         </div>
       )}
@@ -1998,8 +2006,8 @@ function TestimonialsAdmin() {
           <tr key={row.id} style={rowS}>
             <td style={{ ...tdS, maxWidth: 300 }}>{row.quote}</td>
             <td style={tdS}>{row.author_name}</td>
-            <td style={tdS}>{row.company || 'ó'}</td>
-            <td style={tdS}>{row.is_featured ? '?' : 'ó'}</td>
+            <td style={tdS}>{row.company || '‚Äî'}</td>
+            <td style={tdS}>{row.is_featured ? '?' : '‚Äî'}</td>
             <td style={tdS}>{row.sort_order}</td>
             <td style={tdS}>
               <div style={{ display: 'flex', gap: 6 }}>
@@ -2125,8 +2133,8 @@ function MediaAdmin() {
           <tr key={row.id} style={rowS}>
             <td style={tdS}>{row.title}</td>
             <td style={tdS}>{row.type}</td>
-            <td style={tdS}>{row.is_featured ? '?' : 'ó'}</td>
-            <td style={tdS}>{row.published_at || 'ó'}</td>
+            <td style={tdS}>{row.is_featured ? '?' : '‚Äî'}</td>
+            <td style={tdS}>{row.published_at || '‚Äî'}</td>
             <td style={tdS}>
               <div style={{ display: 'flex', gap: 6 }}>
                 <button className="btn btn--sm" onClick={() => setEditing(row)}>Edit</button>
@@ -2254,7 +2262,7 @@ function CommunityAdmin() {
       <div className="glass" style={{ padding: 20, borderRadius: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
         <div>
           <h3 className="gold-text">Community Board</h3>
-          <p style={{ color: 'var(--muted)', fontSize: 13 }}>{threads.length} threads ∑ {comments.length} comments</p>
+          <p style={{ color: 'var(--muted)', fontSize: 13 }}>{threads.length} threads ¬∑ {comments.length} comments</p>
         </div>
         <button className="btn btn--sm btn--solid" onClick={() => setEditing({ ...emptyCommunityThread })}>+ Add Thread</button>
       </div>
@@ -2266,7 +2274,7 @@ function CommunityAdmin() {
           <tr key={row.id} style={rowS}>
             <td style={{ ...tdS, maxWidth: 280 }}>{row.title}</td>
             <td style={tdS}>{row.audience}</td>
-            <td style={tdS}>{row.is_pinned ? 'Yes' : 'ó'}</td>
+            <td style={tdS}>{row.is_pinned ? 'Yes' : '‚Äî'}</td>
             <td style={tdS}>{row.comment_count ?? 0}</td>
             <td style={tdS}>{row.author_name}</td>
             <td style={tdS}>{row.created_at}</td>
@@ -2369,7 +2377,7 @@ function RsvpsAdmin() {
           <tr key={row.id} style={rowS}>
             <td style={tdS}>
               <div style={{ fontWeight: 600, color: '#f0e3bf' }}>{row.event_title || `Event #${row.event_id}`}</div>
-              <div style={{ color: 'var(--muted)', fontSize: 12 }}>{row.location || 'ó'}{row.event_date ? ` ∑ ${row.event_date}` : ''}</div>
+              <div style={{ color: 'var(--muted)', fontSize: 12 }}>{row.location || '‚Äî'}{row.event_date ? ` ¬∑ ${row.event_date}` : ''}</div>
             </td>
             <td style={tdS}>{row.full_name}</td>
             <td style={tdS}>{row.email}</td>
@@ -2382,7 +2390,7 @@ function RsvpsAdmin() {
               </select>
             </td>
             <td style={{ ...tdS, fontFamily: 'monospace', letterSpacing: '.04em' }}>{row.confirmation_code}</td>
-            <td style={{ ...tdS, maxWidth: 260 }}>{row.notes || 'ó'}</td>
+            <td style={{ ...tdS, maxWidth: 260 }}>{row.notes || '‚Äî'}</td>
             <td style={tdS}>{row.created_at}</td>
           </tr>
         ))}
@@ -2982,7 +2990,7 @@ function InventoryAdminLegacy() {
       <div className="glass" style={{ padding: 20, borderRadius: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
         <div>
           <h3 className="gold-text">Inventory</h3>
-          <p style={{ color: 'var(--muted)', fontSize: 13 }}>{rows.length} products ∑ {lowStock} need attention</p>
+          <p style={{ color: 'var(--muted)', fontSize: 13 }}>{rows.length} products ¬∑ {lowStock} need attention</p>
         </div>
       </div>
 
@@ -2999,7 +3007,7 @@ function InventoryAdminLegacy() {
             <tr key={row.product_id} style={rowS}>
               <td style={tdS}>
                 <div style={{ fontWeight: 600, color: '#f0e3bf' }}>{row.name}</div>
-                <div style={{ color: 'var(--muted)', fontSize: 12 }}>{row.product_id} ∑ ${row.price.toFixed(2)}</div>
+                <div style={{ color: 'var(--muted)', fontSize: 12 }}>{row.product_id} ¬∑ ${row.price.toFixed(2)}</div>
               </td>
               <td style={tdS}>
                 <input type="number" min="0" value={draft.stock} onChange={(e) => setDraft(row.product_id, { stock: e.target.value })} style={{ width: 92, ...selectS }} />
@@ -3015,7 +3023,7 @@ function InventoryAdminLegacy() {
               <td style={{ ...tdS, minWidth: 220 }}>
                 <input type="text" value={draft.restock_note} onChange={(e) => setDraft(row.product_id, { restock_note: e.target.value })} placeholder="Restock note" style={{ width: '100%', ...selectS }} />
               </td>
-              <td style={tdS}>{row.updated_at || 'ó'}</td>
+              <td style={tdS}>{row.updated_at || '‚Äî'}</td>
               <td style={tdS}>
                 <button className="btn btn--sm btn--solid" onClick={() => save(row.product_id)} disabled={busyId === row.product_id}>
                   {busyId === row.product_id ? 'Saving‚Ä¶' : 'Save'}
@@ -3040,7 +3048,7 @@ function StatusPill({ status }: { status: string }) {
 }
 
 interface StatChipItem { label: string; value: number | string; tone?: 'gold' | 'green' | 'red' | 'blue' | 'muted' }
-/** In-tab "actual counter" strip ó the full breakdown, distinct from the sidebar notification badges. */
+/** In-tab "actual counter" strip ‚Äî the full breakdown, distinct from the sidebar notification badges. */
 function StatChips({ items }: { items: StatChipItem[] }) {
   return (
     <div className="admin-statchips">
@@ -3194,7 +3202,7 @@ function DataTable<T>({ head, rows, renderRow, searchText, statusOf, statusOptio
             type="search"
             value={query}
             onChange={(e) => { setQuery(e.target.value); setPage(1) }}
-            placeholder={searchPlaceholder || 'SearchÖ'}
+            placeholder={searchPlaceholder || 'Search‚Ä¶'}
           />
         )}
         {statusOptions && statusOf && (
@@ -3259,9 +3267,9 @@ function DataTable<T>({ head, rows, renderRow, searchText, statusOf, statusOptio
 
       {pageCount > 1 && (
         <div className="admin-pager">
-          <button type="button" className="btn btn--sm" disabled={safePage <= 1} onClick={() => setPage(safePage - 1)}>ã Prev</button>
+          <button type="button" className="btn btn--sm" disabled={safePage <= 1} onClick={() => setPage(safePage - 1)}>‚Äπ Prev</button>
           <span className="admin-pager__label">Page {safePage} of {pageCount}</span>
-          <button type="button" className="btn btn--sm" disabled={safePage >= pageCount} onClick={() => setPage(safePage + 1)}>Next õ</button>
+          <button type="button" className="btn btn--sm" disabled={safePage >= pageCount} onClick={() => setPage(safePage + 1)}>Next ‚Ä∫</button>
         </div>
       )}
     </div>
