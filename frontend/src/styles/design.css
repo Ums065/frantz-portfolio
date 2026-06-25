@@ -3375,9 +3375,18 @@ section#challenge .challenge-features .ns-gain p {
 .admin-chat { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 16px; min-height: 460px; }
 .admin-chat__list { border: 1px solid var(--line); border-radius: 14px; background: rgba(255,255,255,0.02); padding: 10px; overflow-y: auto; max-height: 620px; }
 .admin-chat__list-head { display: flex; justify-content: space-between; color: var(--gold-light); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; padding: 8px 8px 12px; }
+.admin-chat__search { padding: 0 8px 10px; }
+.admin-chat__search input { width: 100%; background: rgba(0,0,0,0.35); border: 1px solid rgba(201,168,76,0.16); border-radius: 10px; color: #f4efe4; padding: 10px 12px; font-family: inherit; font-size: 13px; outline: none; }
+.admin-chat__search input:focus { border-color: rgba(240,192,96,0.6); }
 .admin-chat__thread { display: flex; flex-direction: column; gap: 3px; width: 100%; text-align: left; padding: 11px 12px; border-radius: 10px; border: 1px solid transparent; background: transparent; color: #d8d3c6; cursor: pointer; }
 .admin-chat__thread:hover { background: rgba(201,168,76,0.08); }
 .admin-chat__thread.is-active { background: rgba(201,168,76,0.14); border-color: rgba(201,168,76,0.3); }
+.admin-chat__thread-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.admin-chat__thread-actions { display: flex; align-items: center; gap: 8px; }
+.admin-chat__remove { width: 22px; height: 22px; border: 1px solid rgba(224,138,138,0.34); border-radius: 999px; background: rgba(122,59,59,0.18); color: #e6b3b3; display: inline-flex; align-items: center; justify-content: center; font-size: 14px; line-height: 1; cursor: pointer; }
+.admin-chat__remove:hover { background: rgba(122,59,59,0.32); border-color: rgba(224,138,138,0.54); }
+.admin-chat__list-meta { display: flex; align-items: center; gap: 8px; }
+.admin-chat__notify { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; background: linear-gradient(180deg, #f0c060, #c78a1d); color: #1f1707; font-size: 10px; font-weight: 800; line-height: 1; }
 .admin-chat__thread strong { font-size: 14px; color: #f4efe4; }
 .admin-chat__thread span { font-size: 11.5px; color: var(--muted); text-transform: capitalize; }
 .admin-chat__pane { border: 1px solid var(--line); border-radius: 14px; background: rgba(255,255,255,0.02); display: flex; flex-direction: column; padding: 14px; }
@@ -3398,3 +3407,10 @@ section#challenge .challenge-features .ns-gain p {
   .admin-chat { grid-template-columns: 1fr; }
   .admin-chat__list { max-height: 220px; }
 }
+
+.ns-edu-create { margin: 0 0 16px; padding: 16px 18px; border-radius: 14px; display: grid; gap: 12px; }
+.ns-edu-create__head { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; }
+.ns-edu-create__head p { color: var(--muted); font-size: 12px; line-height: 1.55; margin: 4px 0 0; max-width: 560px; }
+
+
+

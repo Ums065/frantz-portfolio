@@ -1299,11 +1299,31 @@ function new_school_handle_route(string $method, string $route): bool
             new_school_chat_ensure_schema();
             $rows = db()->query(
                 'SELECT m.thread_user_id, u.full_name, u.email, u.role,
-                        COUNT(*) AS total, MAX(m.created_at) AS last_at,
-                        SUM(CASE WHEN m.sender = "user" THEN 1 ELSE 0 END) AS user_msgs
+                        SUM(CASE
+                            WHEN ac.cleared_at IS NULL OR m.created_at > ac.cleared_at
+                            THEN 1 ELSE 0
+                        END) AS total,
+                        MAX(CASE
+                            WHEN ac.cleared_at IS NULL OR m.created_at > ac.cleared_at
+                            THEN m.created_at ELSE NULL
+                        END) AS last_at,
+                        SUM(CASE
+                            WHEN m.sender = "user"
+                             AND (ac.cleared_at IS NULL OR m.created_at > ac.cleared_at)
+                            THEN 1 ELSE 0
+                        END) AS user_msgs,
+                        SUM(CASE
+                            WHEN m.sender = "user"
+                             AND (ac.cleared_at IS NULL OR m.created_at > ac.cleared_at)
+                            THEN 1 ELSE 0
+                        END) AS unread_count
                  FROM new_school_chat_messages m
                  INNER JOIN users u ON u.id = m.thread_user_id
+                 LEFT JOIN new_school_chat_clears ac
+                   ON ac.thread_user_id = m.thread_user_id
+                  AND ac.side = "admin"
                  GROUP BY m.thread_user_id, u.full_name, u.email, u.role
+                 HAVING total > 0
                  ORDER BY last_at DESC'
             )->fetchAll();
             json(['threads' => $rows]);
@@ -1316,7 +1336,9 @@ function new_school_handle_route(string $method, string $route): bool
             if ($threadUserId <= 0) {
                 json(['error' => 'A user_id is required.'], 422);
             }
-            json(['messages' => new_school_chat_fetch($threadUserId, 'admin')]);
+            $messages = new_school_chat_fetch($threadUserId, 'admin');
+            new_school_chat_clear($threadUserId, 'admin');
+            json(['messages' => $messages]);
         }
 
         case $key === 'POST admin/new-school/chat': {
@@ -2547,8 +2569,14 @@ function new_school_handle_route(string $method, string $route): bool
                 $entry = [
                     'id' => $sid,
                     'school_name' => $school['school_name'],
+                    'school_address' => $school['school_address'] ?? '',
+                    'school_district' => $school['school_district'] ?? '',
+                    'main_phone' => $school['main_phone'] ?? '',
+                    'principal_name' => $school['principal_name'] ?? '',
+                    'administrator_name' => $school['administrator_name'] ?? '',
                     'administrator_email' => $school['administrator_email'],
                     'school_website' => $school['school_website'] ?? '',
+                    'origin' => $school['origin'] ?? 'principal',
                     'status' => $school['status'],
                     'claim_status' => $school['claim_status'] ?? 'unclaimed',
                     'created_at' => $school['created_at'],
@@ -2566,6 +2594,69 @@ function new_school_handle_route(string $method, string $route): bool
             json(['active' => $active, 'history' => $history]);
         }
 
+        case $key === 'POST admin/new-school/school/create': {
+            require_admin();
+            $schoolName = require_name_field(field($body, 'school_name'), 'School name', 2);
+            $schoolAddress = field($body, 'school_address');
+            $schoolDistrict = field($body, 'school_district');
+            $mainPhone = field($body, 'main_phone');
+            $principalName = field($body, 'principal_name');
+            $administratorName = field($body, 'administrator_name');
+            $administratorEmail = field($body, 'administrator_email');
+            $administratorPhone = field($body, 'administrator_phone');
+            $schoolWebsite = field($body, 'school_website');
+
+            if ($administratorEmail !== '') {
+                $administratorEmail = require_email($administratorEmail);
+            }
+            if ($mainPhone !== '') {
+                $mainPhone = require_phone($mainPhone, 'Main phone number');
+            }
+            if ($administratorPhone !== '') {
+                $administratorPhone = require_phone($administratorPhone, 'Administrator phone');
+            }
+
+            $school = new_school_find_or_create_edu_school($schoolName, $administratorEmail, $schoolWebsite);
+            if (!$school) {
+                json(['error' => 'School name is required.'], 422);
+            }
+            if ((int) ($school['user_id'] ?? 0) > 0 || (string) ($school['claim_status'] ?? '') === 'claimed') {
+                json(['error' => 'That school already has a principal and cannot be recreated.'], 409);
+            }
+
+            $principalName = $principalName !== '' ? $principalName : (string) ($school['principal_name'] ?? '');
+            $administratorName = $administratorName !== '' ? $administratorName : $principalName;
+            $schoolAddress = $schoolAddress !== '' ? $schoolAddress : (string) ($school['school_address'] ?? '');
+            $schoolDistrict = $schoolDistrict !== '' ? $schoolDistrict : (string) ($school['school_district'] ?? '');
+            $mainPhone = $mainPhone !== '' ? $mainPhone : (string) ($school['main_phone'] ?? '');
+            $administratorEmail = $administratorEmail !== '' ? $administratorEmail : (string) ($school['administrator_email'] ?? '');
+            $administratorPhone = $administratorPhone !== '' ? $administratorPhone : (string) ($school['administrator_phone'] ?? '');
+            $schoolWebsite = $schoolWebsite !== '' ? $schoolWebsite : (string) ($school['school_website'] ?? '');
+
+            db()->prepare(
+                'UPDATE new_school_schools
+                 SET school_address = ?, school_district = ?, main_phone = ?, principal_name = ?,
+                     administrator_name = ?, administrator_email = ?, administrator_phone = ?,
+                     school_website = ?, status = "approved", origin = "trendcatch_edu",
+                     claim_status = "unclaimed", user_id = NULL, updated_at = NOW()
+                 WHERE id = ?'
+            )->execute([
+                $schoolAddress,
+                $schoolDistrict,
+                $mainPhone,
+                $principalName,
+                $administratorName,
+                $administratorEmail,
+                $administratorPhone,
+                $schoolWebsite,
+                (int) $school['id'],
+            ]);
+
+            json([
+                'message' => 'School created and published.',
+                'school' => new_school_fetch_school_by_id((int) $school['id']),
+            ], 201);
+        }
         case $key === 'POST admin/new-school/school/set-status': {
             require_admin();
             $schoolId = (int) ($body['school_id'] ?? 0);
@@ -3690,3 +3781,5 @@ function new_school_handle_route(string $method, string $route): bool
             return false;
     }
 }
+
+
