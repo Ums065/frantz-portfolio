@@ -291,8 +291,14 @@
   cursor: pointer;
 }
 
-.ns-notification-action:hover {
+.ns-notification-action:hover:not(:disabled) {
   text-decoration: underline;
+}
+
+.ns-notification-action:disabled {
+  opacity: 0.5;
+  cursor: default;
+  text-decoration: none;
 }
 
 .ns-subtitle {

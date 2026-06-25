@@ -711,11 +711,14 @@ export default function NewSchool() {
   }
   const clearChatForMe = async () => {
     if (!confirm('Clear this chat from your view? The admin team keeps the full history.')) return
+    setChatBusy(true)
     try {
       await api.post('new-school/chat/clear', {})
       setChatMessages([])
     } catch (err) {
       handleError(err, 'Could not clear the chat.')
+    } finally {
+      setChatBusy(false)
     }
   }
   useEffect(() => {
@@ -733,11 +736,14 @@ export default function NewSchool() {
 
   const markNotificationRead = async (notificationId: number) => {
     if (!notificationId) return
+    setBusy(`notif-${notificationId}`)
     try {
       await api.post<any>(`new-school/notifications/${notificationId}/read`, {})
       await reloadDashboard()
     } catch (err) {
       handleError(err, 'Could not update the notification.')
+    } finally {
+      setBusy('')
     }
   }
 
@@ -1080,15 +1086,25 @@ export default function NewSchool() {
   const approveStudentInline = async (student: any, status: 'approved' | 'pending' | 'rejected') => {
     setBusy(`student-${student.id}-${status}`)
     try {
-      // The principal records a "school" approval; a teacher records a "teacher" approval.
-      const approvalType = schoolDashboard ? 'school' : 'teacher'
-      const res = await api.post<any>('new-school/manage/approval', {
-        student_id: Number(student.id) || undefined,
-        approval_type: approvalType,
-        status,
-        reviewer_name: user?.full_name || '',
-        digital_signature: user?.full_name || '',
-      })
+      // Teacher approval is the student's gate and MUST use the dedicated teacher route —
+      // the manage/approval route is closed to teachers (403). The principal/admin record
+      // a secondary "school" approval through the manage route.
+      const res = teacherDashboard
+        ? await api.post<any>('new-school/teacher/approve', {
+            student_id: Number(student.id) || undefined,
+            teacher_name: user?.full_name || '',
+            teacher_email: user?.email || teacherDashboard?.teacher?.school_email || '',
+            role: teacherDashboard?.teacher?.role_department || 'Teacher',
+            approval_status: status,
+            digital_signature: user?.full_name || '',
+          })
+        : await api.post<any>('new-school/manage/approval', {
+            student_id: Number(student.id) || undefined,
+            approval_type: 'school',
+            status,
+            reviewer_name: user?.full_name || '',
+            digital_signature: user?.full_name || '',
+          })
       showNotice('success', res.message || `${student.full_name} marked ${status}.`)
       await reloadDashboard()
       await reloadOverview()
@@ -1131,6 +1147,7 @@ export default function NewSchool() {
       })
       showNotice('success', res.message || `Parent ${status}.`)
       await reloadDashboard()
+      await reloadOverview()
     } catch (err) {
       handleError(err, 'Parent approval failed.')
     } finally {
@@ -1145,6 +1162,7 @@ export default function NewSchool() {
       const res = await api.post<any>('new-school/parent/confirm', { decision })
       showNotice('success', res.message || 'Saved.')
       await reloadDashboard()
+      await reloadOverview()
     } catch (err) {
       handleError(err, 'Could not update the parent link.')
     } finally {
@@ -2703,7 +2721,7 @@ export default function NewSchool() {
                   <article className="glass ns-dash-card ns-dash-card--wide reveal in ns-chat">
                     <div className="ns-dash-card__head">
                       <span className="eyebrow">Chat with Admin</span>
-                      <button type="button" className="btn btn--sm" onClick={() => void clearChatForMe()}>Clear chat</button>
+                      <button type="button" className="btn btn--sm" disabled={chatBusy} onClick={() => void clearChatForMe()}>Clear chat</button>
                     </div>
                     <div className="ns-chat__log">
                       {chatMessages.length === 0 && <p className="ns-muted">No messages yet. Send a message to the admin team below.</p>}
@@ -2946,7 +2964,7 @@ export default function NewSchool() {
                       <p>{item.message}</p>
                       <span>{item.created_at}</span>
                       {!item.is_read && (
-                        <button className="ns-notification-action" type="button" onClick={() => markNotificationRead(item.id)}>
+                        <button className="ns-notification-action" type="button" disabled={busy === `notif-${item.id}`} onClick={() => markNotificationRead(item.id)}>
                           Mark as read
                         </button>
                       )}
@@ -3138,7 +3156,7 @@ export default function NewSchool() {
                       <p>{item.message}</p>
                       <span>{item.created_at}</span>
                       {!item.is_read && (
-                        <button className="ns-notification-action" type="button" onClick={() => markNotificationRead(item.id)}>
+                        <button className="ns-notification-action" type="button" disabled={busy === `notif-${item.id}`} onClick={() => markNotificationRead(item.id)}>
                           Mark as read
                         </button>
                       )}
@@ -3292,7 +3310,7 @@ export default function NewSchool() {
                           <th>Parent</th>
                           <th>School</th>
                           <th>Teacher</th>
-                          <th className="ns-col-actions">Actions</th>
+                          {teacherDashboard && <th className="ns-col-actions">Actions</th>}
                         </tr>
                       </thead>
                       <tbody>
@@ -3315,6 +3333,7 @@ export default function NewSchool() {
                               <td><span className="ns-status-pill" data-status={String(row.parent_consent_status || '').toLowerCase()}>{row.parent_consent_status || '—'}</span></td>
                               <td><span className="ns-status-pill" data-status={String(row.school_approval_status || '').toLowerCase()}>{row.school_approval_status || '—'}</span></td>
                               <td><span className="ns-status-pill" data-status={String(row.teacher_approval_status || '').toLowerCase()}>{row.teacher_approval_status || '—'}</span></td>
+                              {teacherDashboard && (
                               <td className="ns-col-actions">
                                 <div className="ns-row-actions">
                                   <button
@@ -3336,10 +3355,11 @@ export default function NewSchool() {
                                   </button>
                                 </div>
                               </td>
+                              )}
                             </tr>
                           )
                         }) : (
-                          <tr><td colSpan={6}>No students match this search or filter.</td></tr>
+                          <tr><td colSpan={teacherDashboard ? 6 : 5}>No students match this search or filter.</td></tr>
                         )}
                       </tbody>
                     </table>
@@ -3803,7 +3823,7 @@ export default function NewSchool() {
                           <p>{item.message}</p>
                           <span>{item.created_at}</span>
                           {!item.is_read && (
-                            <button className="ns-notification-action" type="button" onClick={() => markNotificationRead(item.id)}>
+                            <button className="ns-notification-action" type="button" disabled={busy === `notif-${item.id}`} onClick={() => markNotificationRead(item.id)}>
                               Mark as read
                             </button>
                           )}
@@ -3829,7 +3849,6 @@ export default function NewSchool() {
 
                     {approvalDetail.type === 'student' ? (() => {
                       const s = approvalDetailRecord
-                      const parentReady = String(s.parent_consent_status || '').toLowerCase() === 'approved'
                       const detailBusy = busy.startsWith(`student-${s.id}-`)
                       return (
                         <>
@@ -3886,12 +3905,13 @@ export default function NewSchool() {
                             </div>
                           </div>
 
+                          {teacherDashboard && (
                           <div className="ns-detail-actions">
                             <button
                               type="button"
                               className="ns-row-btn ns-row-btn--approve"
-                              disabled={detailBusy || !parentReady}
-                              title={parentReady ? 'Approve school participation' : 'Parent consent must be approved first'}
+                              disabled={detailBusy}
+                              title="Approve student participation"
                               onClick={() => approveStudentInline(s, 'approved')}
                             >
                               {busy === `student-${s.id}-approved` ? 'Saving…' : 'Approve'}
@@ -3905,6 +3925,7 @@ export default function NewSchool() {
                               {busy === `student-${s.id}-rejected` ? 'Saving…' : 'Reject'}
                             </button>
                           </div>
+                          )}
                         </>
                       )
                     })() : (() => {
@@ -4445,7 +4466,7 @@ export default function NewSchool() {
                       <p>{item.message}</p>
                       <span>{item.created_at}</span>
                       {!item.is_read && (
-                        <button className="ns-notification-action" type="button" onClick={() => markNotificationRead(item.id)}>
+                        <button className="ns-notification-action" type="button" disabled={busy === `notif-${item.id}`} onClick={() => markNotificationRead(item.id)}>
                           Mark as read
                         </button>
                       )}

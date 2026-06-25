@@ -673,6 +673,16 @@ INSERT IGNORE INTO store_inventory (
   ('book-blueprint', 'The Legacy Blueprint - eBook', 'Books', NULL, 'Digital companion guide for a future resource release.', NULL, NULL, NULL, NULL, '/assets/brand-signature-white.webp', 14.00, 96, 12, 'Upcoming drop', 'upcoming', 10),
   ('print-signed', 'Signed Founder''s Print', 'Art Prints', NULL, 'Signed founder print reserved for a premium future drop.', NULL, NULL, NULL, NULL, '/assets/brand-signature-white.webp', 48.00, 16, 4, 'Upcoming drop', 'upcoming', 11);
 
+-- Orders: payment columns for existing databases (fresh installs already have them from
+-- the CREATE TABLE above). Mirrors storefront_ensure_orders_payment_schema() in api/lib.php.
+CALL add_column_if_missing('orders', 'payment_provider', 'VARCHAR(40) DEFAULT NULL', 'payment_method');
+CALL add_column_if_missing('orders', 'payment_status', 'ENUM(''pending'',''paid'',''failed'',''refunded'') NOT NULL DEFAULT ''pending''', 'payment_provider');
+CALL add_column_if_missing('orders', 'payment_session_id', 'VARCHAR(120) DEFAULT NULL', 'payment_status');
+CALL add_column_if_missing('orders', 'payment_intent_id', 'VARCHAR(120) DEFAULT NULL', 'payment_session_id');
+CALL add_column_if_missing('orders', 'payment_confirmed_at', 'TIMESTAMP NULL DEFAULT NULL', 'payment_intent_id');
+CALL add_column_if_missing('orders', 'payment_url', 'TEXT DEFAULT NULL', 'payment_confirmed_at');
+CALL add_column_if_missing('orders', 'payment_error', 'TEXT DEFAULT NULL', 'payment_url');
+
 CALL add_column_if_missing('new_school_schools', 'status', 'ENUM(''registered'',''approved'',''rejected'') DEFAULT NULL', 'administrator_phone');
 
 UPDATE new_school_schools
