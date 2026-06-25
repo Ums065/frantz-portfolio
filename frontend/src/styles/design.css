@@ -3301,7 +3301,13 @@ section#challenge .challenge-features .ns-gain p {
 .ns-edu-people { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 16px; }
 .ns-edu-col { padding: 14px 16px; border-radius: 12px; }
 .ns-edu-col h5 { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--gold-light); margin: 0 0 8px; }
+.ns-edu-col__head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+.ns-edu-col__head h5 { margin: 0; }
+.ns-edu-pager { display: flex; align-items: center; gap: 8px; }
+.ns-edu-pager span { color: var(--muted); font-size: 11px; }
 .ns-edu-person { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+.ns-edu-person--clickable { cursor: pointer; }
+.ns-edu-person--clickable:hover { background: rgba(255,255,255,0.02); }
 .ns-edu-person:last-child { border-bottom: 0; }
 .ns-edu-person__name { flex: 1; min-width: 0; font-weight: 600; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ns-edu-person__status { font-size: 11px; color: var(--muted); text-transform: capitalize; white-space: nowrap; }
@@ -3412,6 +3418,8 @@ section#challenge .challenge-features .ns-gain p {
 .ns-edu-create { margin: 0 0 16px; padding: 16px 18px; border-radius: 14px; display: grid; gap: 12px; }
 .ns-edu-create__head { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; }
 .ns-edu-create__head p { color: var(--muted); font-size: 12px; line-height: 1.55; margin: 4px 0 0; max-width: 560px; }
+
+
 
 
 

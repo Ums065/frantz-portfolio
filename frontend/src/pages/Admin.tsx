@@ -10,6 +10,8 @@ import NsRecordDetail from '../components/NsRecordDetail'
 import AdminNavIcon from '../components/admin/AdminNavIcon'
 import NsProfileModal, { type ProfileView } from '../components/admin/NsProfileModal'
 
+const EDU_PEOPLE_PAGE_SIZE = 10
+
 type TabKey =
   | 'overview' | 'analytics' | 'requests' | 'orders' | 'subscribers' | 'contacts'
   | 'members' | 'approvals' | 'sponsors' | 'awards' | 'events' | 'blog'
@@ -159,6 +161,8 @@ export default function Admin() {
   const [nsEduBusy, setNsEduBusy] = useState('')
   const [eduExpanded, setEduExpanded] = useState<number | null>(null)
   const [claimSchoolId, setClaimSchoolId] = useState<number | null>(null)
+  const [eduTeacherPages, setEduTeacherPages] = useState<Record<number, number>>({})
+  const [eduStudentPages, setEduStudentPages] = useState<Record<number, number>>({})
 
   const loadChatThreads = async () => {
     try { const d = await api.get<{ threads: any[] }>('admin/new-school/chats'); setChatThreads(Array.isArray(d?.threads) ? d.threads : []) } catch { setChatThreads([]) }
@@ -1280,6 +1284,14 @@ export default function Admin() {
             {(nsEdu?.active ?? []).map((school: any) => {
               const open = eduExpanded === school.id
               const claiming = claimSchoolId === school.id
+              const teacherRows = Array.isArray(school.teachers) ? school.teachers : []
+              const studentRows = Array.isArray(school.students) ? school.students : []
+              const teacherPageCount = Math.max(1, Math.ceil(teacherRows.length / EDU_PEOPLE_PAGE_SIZE))
+              const studentPageCount = Math.max(1, Math.ceil(studentRows.length / EDU_PEOPLE_PAGE_SIZE))
+              const teacherPage = Math.min(eduTeacherPages[school.id] || 1, teacherPageCount)
+              const studentPage = Math.min(eduStudentPages[school.id] || 1, studentPageCount)
+              const visibleTeachers = teacherRows.slice((teacherPage - 1) * EDU_PEOPLE_PAGE_SIZE, teacherPage * EDU_PEOPLE_PAGE_SIZE)
+              const visibleStudents = studentRows.slice((studentPage - 1) * EDU_PEOPLE_PAGE_SIZE, studentPage * EDU_PEOPLE_PAGE_SIZE)
               return (
                 <div key={school.id} className="glass ns-edu-card">
                   <div className="ns-edu-card__top">
@@ -1317,27 +1329,45 @@ export default function Admin() {
                   {open && (
                     <div className="ns-edu-people">
                       <div className="ns-edu-col glass">
-                        <h5>Teachers ({school.teachers?.length || 0})</h5>
-                        {(school.teachers ?? []).length === 0 && <p className="ns-edu-empty">None yet.</p>}
-                        {(school.teachers ?? []).map((t: any) => (
-                          <div key={t.id} className="ns-edu-person">
+                        <div className="ns-edu-col__head">
+                          <h5>Teachers ({teacherRows.length})</h5>
+                          {teacherRows.length > EDU_PEOPLE_PAGE_SIZE && (
+                            <div className="ns-edu-pager">
+                              <button type="button" className="btn btn--sm" disabled={teacherPage <= 1} onClick={() => setEduTeacherPages((prev) => ({ ...prev, [school.id]: Math.max(1, teacherPage - 1) }))}>Prev</button>
+                              <span>{teacherPage}/{teacherPageCount}</span>
+                              <button type="button" className="btn btn--sm" disabled={teacherPage >= teacherPageCount} onClick={() => setEduTeacherPages((prev) => ({ ...prev, [school.id]: Math.min(teacherPageCount, teacherPage + 1) }))}>Next</button>
+                            </div>
+                          )}
+                        </div>
+                        {teacherRows.length === 0 && <p className="ns-edu-empty">None yet.</p>}
+                        {visibleTeachers.map((t: any) => (
+                          <div key={t.id} className="ns-edu-person ns-edu-person--clickable" role="button" tabIndex={0} onClick={() => openTeacherProfile(Number(t.id))} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openTeacherProfile(Number(t.id)) } }}>
                             <span className="ns-edu-person__name">{t.teacher_full_name}</span>
                             <span className="ns-edu-person__status">{t.status}</span>
                             {t.status !== 'approved'
-                              ? <button type="button" className="btn btn--sm btn--solid" disabled={nsEduBusy === `teacher-${t.id}`} onClick={() => void eduApproveTeacher(t)}>{nsEduBusy === `teacher-${t.id}` ? 'â€¦' : 'Approve'}</button>
+                              ? <button type="button" className="btn btn--sm btn--solid" disabled={nsEduBusy === `teacher-${t.id}`} onClick={(event) => { event.stopPropagation(); void eduApproveTeacher(t) }}>{nsEduBusy === `teacher-${t.id}` ? '…' : 'Approve'}</button>
                               : <span className="ns-edu-person__ok">? Approved</span>}
                           </div>
                         ))}
                       </div>
                       <div className="ns-edu-col glass">
-                        <h5>Students ({school.students?.length || 0})</h5>
-                        {(school.students ?? []).length === 0 && <p className="ns-edu-empty">None yet.</p>}
-                        {(school.students ?? []).map((s: any) => (
-                          <div key={s.id} className="ns-edu-person">
+                        <div className="ns-edu-col__head">
+                          <h5>Students ({studentRows.length})</h5>
+                          {studentRows.length > EDU_PEOPLE_PAGE_SIZE && (
+                            <div className="ns-edu-pager">
+                              <button type="button" className="btn btn--sm" disabled={studentPage <= 1} onClick={() => setEduStudentPages((prev) => ({ ...prev, [school.id]: Math.max(1, studentPage - 1) }))}>Prev</button>
+                              <span>{studentPage}/{studentPageCount}</span>
+                              <button type="button" className="btn btn--sm" disabled={studentPage >= studentPageCount} onClick={() => setEduStudentPages((prev) => ({ ...prev, [school.id]: Math.min(studentPageCount, studentPage + 1) }))}>Next</button>
+                            </div>
+                          )}
+                        </div>
+                        {studentRows.length === 0 && <p className="ns-edu-empty">None yet.</p>}
+                        {visibleStudents.map((s: any) => (
+                          <div key={s.id} className="ns-edu-person ns-edu-person--clickable" role="button" tabIndex={0} onClick={() => openStudentProfile(Number(s.id))} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openStudentProfile(Number(s.id)) } }}>
                             <span className="ns-edu-person__name">{s.full_name}</span>
-                            <span className="ns-edu-person__status">{s.teacher_approval_status || 'â€”'}</span>
+                            <span className="ns-edu-person__status">{s.teacher_approval_status || '—'}</span>
                             {s.teacher_approval_status !== 'approved'
-                              ? <button type="button" className="btn btn--sm btn--solid" disabled={nsEduBusy === `student-${s.id}`} onClick={() => void eduApproveStudent(s)}>{nsEduBusy === `student-${s.id}` ? 'â€¦' : 'Approve'}</button>
+                              ? <button type="button" className="btn btn--sm btn--solid" disabled={nsEduBusy === `student-${s.id}`} onClick={(event) => { event.stopPropagation(); void eduApproveStudent(s) }}>{nsEduBusy === `student-${s.id}` ? '…' : 'Approve'}</button>
                               : <span className="ns-edu-person__ok">? Approved</span>}
                           </div>
                         ))}
@@ -3294,6 +3324,7 @@ const thS: React.CSSProperties = { textAlign: 'left', padding: '14px 16px', colo
 const tdS: React.CSSProperties = { padding: '13px 16px', verticalAlign: 'top', color: '#d8d3c6', overflowWrap: 'anywhere', wordBreak: 'break-word' }
 const rowS: React.CSSProperties = { borderBottom: '1px solid rgba(201,168,76,0.08)' }
 const selectS: React.CSSProperties = { background: '#15130c', color: '#e7d8a8', border: '1px solid var(--line)', borderRadius: 6, padding: '4px 8px' }
+
 
 
 
