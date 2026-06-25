@@ -73,6 +73,27 @@ function new_school_upsert_user_account(string $fullName, string $email, string 
     return $user;
 }
 
+/** Word count of a free-text field. */
+function new_school_count_words(string $text): int
+{
+    preg_match_all('/\S+/u', trim($text), $m);
+    return count($m[0] ?? []);
+}
+
+/** Validate a long-answer field is between $min and $max words (sends 422 + exits on failure). */
+function new_school_assert_words(string $text, string $label, int $min = 50, int $max = 500): void
+{
+    $n = new_school_count_words($text);
+    if ($n < $min) { json(['error' => "$label needs at least $min words (you wrote $n)."], 422); }
+    if ($n > $max) { json(['error' => "$label must be $max words or fewer (you wrote $n)."], 422); }
+}
+
+/** Validate a short field meets a character minimum (a single letter is never valid). */
+function new_school_assert_min_chars(string $text, string $label, int $min = 3): void
+{
+    if (mb_strlen(trim($text)) < $min) { json(['error' => "$label must be at least $min characters."], 422); }
+}
+
 /* ---- Records CRUD helpers (role-scoped: admin / school / teacher / student / parent) ---- */
 function ns_manage_require_user(): array
 {
@@ -2185,8 +2206,21 @@ function new_school_handle_route(string $method, string $route): bool
             if ($businessName === '' || $ownerName === '' || $businessPhone === '' || $businessAddress === '' || $businessCategory === '' || $dateOfVisit === '' || $mainChallenge === '' || $studentNotes === '') {
                 json(['error' => 'Business interview fields are incomplete.'], 422);
             }
+            new_school_assert_min_chars($businessName, 'Business name', 3);
+            new_school_assert_min_chars($ownerName, 'Owner / Manager', 3);
+            new_school_assert_min_chars($businessAddress, 'Business address', 3);
+            new_school_assert_min_chars($businessCategory, 'Category', 3);
+            new_school_assert_words($mainChallenge, 'Main challenge', 50, 500);
+            new_school_assert_words($studentNotes, 'Student notes', 50, 500);
             if (!date_create($dateOfVisit)) {
                 json(['error' => 'Date of visit is invalid.'], 422);
+            }
+            if ($dateOfVisit > date('Y-m-d')) {
+                json(['error' => 'Date of visit can’t be in the future.'], 422);
+            }
+            $regDate = substr((string) ($student['created_at'] ?? ''), 0, 10);
+            if ($regDate !== '' && $dateOfVisit < $regDate) {
+                json(['error' => 'Date of visit can’t be before the student registered.'], 422);
             }
 
             $interviewCount = new_school_student_interview_count((int) $student['id']);
@@ -2375,6 +2409,11 @@ function new_school_handle_route(string $method, string $route): bool
             if ($problemIdentified === '' || $whyItMatters === '' || $proposedSolution === '' || $howItHelps === '' || $expectedImpact === '') {
                 json(['error' => 'Submission fields are incomplete.'], 422);
             }
+            new_school_assert_words($problemIdentified, 'Problem identified', 50, 500);
+            new_school_assert_words($whyItMatters, 'Why it matters', 50, 500);
+            new_school_assert_words($proposedSolution, 'Proposed solution', 50, 500);
+            new_school_assert_words($howItHelps, 'How it helps', 50, 500);
+            new_school_assert_words($expectedImpact, 'Expected impact', 50, 500);
             if ($videoUrl === '' || $writtenUrl === '') {
                 json(['error' => 'Both video and written uploads are required.'], 422);
             }
@@ -2397,8 +2436,10 @@ function new_school_handle_route(string $method, string $route): bool
             $submission = $existing->fetch();
 
             if ($submission) {
-                if (in_array((string) $submission['status'], ['approved', 'winner'], true)) {
-                    json(['error' => 'This submission has already been finalized.'], 409);
+                // One-time only: once a student has submitted, the project is locked.
+                // (A 'draft' row, if ever created, may still be finalized.)
+                if ((string) $submission['status'] !== 'draft') {
+                    json(['error' => 'You have already submitted your final project. Submissions are one-time only and cannot be changed.'], 409);
                 }
                 $update = $pdo->prepare(
                     'UPDATE new_school_submissions
@@ -2526,17 +2567,17 @@ function new_school_handle_route(string $method, string $route): bool
             $maxSize = 0;
             if (isset($videoMimes[$mime])) {
                 $extension = $videoMimes[$mime];
-                $maxSize = 120 * 1024 * 1024;
+                $maxSize = 70 * 1024 * 1024;
             } elseif (isset($documentMimes[$mime])) {
                 $extension = $documentMimes[$mime];
-                $maxSize = 15 * 1024 * 1024;
+                $maxSize = 5 * 1024 * 1024;
             }
 
             if ($extension === null) {
                 json(['error' => 'Unsupported file type.'], 422);
             }
             if ((int) ($file['size'] ?? 0) > $maxSize) {
-                json(['error' => $maxSize >= 100 * 1024 * 1024 ? 'Video must be 120MB or smaller.' : 'File must be 15MB or smaller.'], 422);
+                json(['error' => $maxSize >= 50 * 1024 * 1024 ? 'Video must be 70MB or smaller.' : 'File must be 5MB or smaller.'], 422);
             }
 
             $dir = __DIR__ . '/uploads/new_school';

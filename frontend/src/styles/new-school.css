@@ -720,6 +720,10 @@
 }
 .ns-linkbtn:hover { color: #ffdf94; }
 
+/* Inline field hints + checkbox helper line in the student My Work forms. */
+.ns-field-hint { color: var(--muted); font-weight: 400; font-size: 11px; text-transform: none; letter-spacing: 0; margin-left: 6px; }
+.ns-check-hint { color: var(--muted); font-size: 12.5px; line-height: 1.5; margin: 2px 0 10px; }
+
 .ns-form {
   padding: 22px;
 }
@@ -1773,8 +1777,8 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  flex: 1 1 240px;
-  min-width: 200px;
+  flex: 1 1 200px;
+  min-width: 0;
   padding: 0 14px;
   border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.09);
@@ -1802,11 +1806,17 @@
 
 .ns-approvals-filter {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 6px;
+  overflow-x: auto;
+  max-width: 100%;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
 }
 
 .ns-approvals-filter__btn {
+  flex: 0 0 auto;
+  white-space: nowrap;
   padding: 9px 14px;
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -2070,6 +2080,15 @@
   grid-template-columns: 1fr 1fr;
   gap: 10px;
 }
+
+/* Long values (emails, URLs, addresses, school names) wrap inside detail panels and
+   approval/profile cards so data never overflows the card on any screen size. */
+.ns-detail-row strong,
+.ns-detail-row > span,
+.ns-approval-row strong,
+.ns-approval-row span,
+.ns-dash-card h3,
+.ns-detail-head__id h3 { overflow-wrap: anywhere; word-break: break-word; min-width: 0; }
 
 .ns-detail-row {
   display: flex;

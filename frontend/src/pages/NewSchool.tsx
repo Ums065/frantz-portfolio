@@ -110,6 +110,26 @@ function clipText(text: string, max = 120) {
   return text.length > max ? `${text.slice(0, max - 1)}...` : text
 }
 
+// ---- Student form validation helpers ----
+const countWords = (text: string) => (text.trim().match(/\S+/g) || []).length
+/** Throw a friendly error if a long-answer field isn't between min..max words. */
+function assertWordRange(text: string, label: string, min = 50, max = 500) {
+  const n = countWords(text)
+  if (n < min) throw new Error(`${label} needs at least ${min} words — you wrote ${n}.`)
+  if (n > max) throw new Error(`${label} must be ${max} words or fewer — you wrote ${n}.`)
+}
+/** Throw if a short field is under a character minimum (a single letter is never valid). */
+function assertMinChars(text: string, label: string, min = 3) {
+  if (text.trim().length < min) throw new Error(`${label} must be at least ${min} characters.`)
+}
+/** Today's date as YYYY-MM-DD in the local timezone (for <input type="date"> min/max). */
+const todayInputDate = () => {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+const MAX_VIDEO_BYTES = 70 * 1024 * 1024
+const MAX_DOC_BYTES = 5 * 1024 * 1024
+
 const TABLE_PAGE_SIZE = 10
 
 function pagerNumbers(page: number, pages: number): Array<number | 'gap'> {
@@ -1030,6 +1050,21 @@ export default function NewSchool() {
     try {
       const form = event.currentTarget
       const fd = new FormData(form)
+      // Short fields: at least 3 characters (a single letter is never valid).
+      assertMinChars(value(fd, 'business_name'), 'Business name', 3)
+      assertMinChars(value(fd, 'owner_name'), 'Owner / Manager', 3)
+      assertMinChars(value(fd, 'business_address'), 'Business address', 3)
+      assertMinChars(value(fd, 'business_category'), 'Category', 3)
+      if (value(fd, 'business_phone').replace(/\D/g, '').length < 7) throw new Error('Phone number must be at least 7 digits.')
+      // Date of visit: from your registration date up to today.
+      const dateOfVisit = value(fd, 'date_of_visit')
+      const regDate = String(studentDashboard?.student?.created_at || '').slice(0, 10)
+      if (!dateOfVisit) throw new Error('Date of visit is required.')
+      if (regDate && dateOfVisit < regDate) throw new Error('Date of visit can’t be before you registered.')
+      if (dateOfVisit > todayInputDate()) throw new Error('Date of visit can’t be in the future.')
+      // Long answers: 50–500 words.
+      assertWordRange(value(fd, 'main_challenge'), 'Main challenge')
+      assertWordRange(value(fd, 'student_notes'), 'Student notes')
       const payload = {
         student_id: Number(value(fd, 'student_id') || dashboard?.student?.id || parentLink?.student?.id || 0) || undefined,
         visit_number: Number(value(fd, 'visit_number') || 0) || undefined,
@@ -1064,12 +1099,34 @@ export default function NewSchool() {
 
   const submitSubmission = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    // One-time only: confirm before the single allowed submission.
+    if (!window.confirm('Your final project can be submitted only ONCE and cannot be changed afterwards. Make sure everything is correct before you continue. Submit now?')) {
+      return
+    }
     setBusy('submission')
     try {
       const form = event.currentTarget
       const fd = new FormData(form)
-      const videoUrl = await uploadIfPresent(fileValue(fd, 'video_file'))
-      const writtenUrl = await uploadIfPresent(fileValue(fd, 'written_file'))
+      // Long answers: 50–500 words each.
+      assertWordRange(value(fd, 'problem_identified'), 'Problem identified')
+      assertWordRange(value(fd, 'why_it_matters'), 'Why it matters')
+      assertWordRange(value(fd, 'proposed_solution'), 'Proposed solution')
+      assertWordRange(value(fd, 'how_it_helps'), 'How it helps')
+      assertWordRange(value(fd, 'expected_impact'), 'Expected impact')
+      // Upload rules: video ≤ 70 MB; image/PDF ≤ 5 MB.
+      const videoFile = fileValue(fd, 'video_file')
+      const writtenFile = fileValue(fd, 'written_file')
+      if (videoFile) {
+        if (!videoFile.type.startsWith('video/')) throw new Error('The first upload must be a video file.')
+        if (videoFile.size > MAX_VIDEO_BYTES) throw new Error('Video must be 70 MB or smaller.')
+      }
+      if (writtenFile) {
+        const okDoc = writtenFile.type.startsWith('image/') || writtenFile.type === 'application/pdf'
+        if (!okDoc) throw new Error('The second upload must be an image or a PDF.')
+        if (writtenFile.size > MAX_DOC_BYTES) throw new Error('The image / PDF must be 5 MB or smaller.')
+      }
+      const videoUrl = await uploadIfPresent(videoFile)
+      const writtenUrl = await uploadIfPresent(writtenFile)
       const payload = {
         student_id: Number(value(fd, 'student_id') || dashboard?.student?.id || parentLink?.student?.id || 0) || undefined,
         source_business_id: Number(value(fd, 'source_business_id') || 0) || undefined,
@@ -1097,9 +1154,10 @@ export default function NewSchool() {
   const approveStudentInline = async (student: any, status: 'approved' | 'pending' | 'rejected') => {
     setBusy(`student-${student.id}-${status}`)
     try {
-      // Teacher approval is the student's gate and MUST use the dedicated teacher route —
-      // the manage/approval route is closed to teachers (403). The principal/admin record
-      // a secondary "school" approval through the manage route.
+      // One student gate only: principal AND teacher record the SAME "teacher" approval.
+      // The teacher must use the dedicated teacher route (manage/approval is closed to
+      // teachers, 403); the principal/admin record the same gate via manage/approval with
+      // approval_type='teacher' (school-scoped + activates the student's login).
       const res = teacherDashboard
         ? await api.post<any>('new-school/teacher/approve', {
             student_id: Number(student.id) || undefined,
@@ -1111,7 +1169,7 @@ export default function NewSchool() {
           })
         : await api.post<any>('new-school/manage/approval', {
             student_id: Number(student.id) || undefined,
-            approval_type: 'school',
+            approval_type: 'teacher',
             status,
             reviewer_name: user?.full_name || '',
             digital_signature: user?.full_name || '',
@@ -1610,15 +1668,19 @@ export default function NewSchool() {
   const filteredApprovalStudents = activeStudents.filter((row: any) => {
     const matchesSearch = !approvalSearchTerm
       || `${row.full_name || ''} ${row.participant_id || ''}`.toLowerCase().includes(approvalSearchTerm)
-    const matchesStatus = schoolApprovalStatus === 'all'
-      || String(row.school_approval_status || '').toLowerCase() === schoolApprovalStatus
+    // Teacher approval is the single student gate (principal & teacher record the same approval).
+    const st = String(row.teacher_approval_status || 'pending').toLowerCase()
+    const matchesStatus = schoolApprovalStatus === 'all' || st === schoolApprovalStatus
     return matchesSearch && matchesStatus
   })
   const filteredApprovalTeachers = activeTeachers.filter((row: any) => {
     const matchesSearch = !approvalSearchTerm
       || `${row.teacher_full_name || ''} ${row.role_department || ''}`.toLowerCase().includes(approvalSearchTerm)
+    // A freshly registered teacher has status 'registered' — surface it under the Pending filter.
+    const ts = String(row.status || 'registered').toLowerCase()
     const matchesStatus = schoolApprovalStatus === 'all'
-      || String(row.status || '').toLowerCase() === schoolApprovalStatus
+      || ts === schoolApprovalStatus
+      || (schoolApprovalStatus === 'pending' && (ts === 'registered' || ts === 'pending'))
     return matchesSearch && matchesStatus
   })
   // Parents the teacher can approve (student already confirmed the link).
@@ -3073,15 +3135,16 @@ export default function NewSchool() {
                 </div>
                 <div className="ns-field-grid">
                   <label className="ns-field"><span>Visit Number</span><input name="visit_number" type="number" min="1" max="10" placeholder="Auto if blank" /></label>
-                  <label className="ns-field"><span>Business Name</span><input name="business_name" required /></label>
-                  <label className="ns-field"><span>Owner / Manager</span><input name="owner_name" required /></label>
-                  <label className="ns-field"><span>Phone Number</span><input name="business_phone" required /></label>
-                  <label className="ns-field"><span>Business Address</span><input name="business_address" required /></label>
-                  <label className="ns-field"><span>Category</span><input name="business_category" required /></label>
-                  <label className="ns-field"><span>Date of Visit</span><input name="date_of_visit" type="date" required /></label>
-                  <label className="ns-field ns-field--full"><span>Main Challenge</span><textarea name="main_challenge" rows={3} required /></label>
-                  <label className="ns-field ns-field--full"><span>Student Notes</span><textarea name="student_notes" rows={3} required /></label>
+                  <label className="ns-field"><span>Business Name</span><input name="business_name" required minLength={3} placeholder="At least 3 characters" /></label>
+                  <label className="ns-field"><span>Owner / Manager</span><input name="owner_name" required minLength={3} /></label>
+                  <label className="ns-field"><span>Phone Number</span><input name="business_phone" type="tel" inputMode="numeric" required minLength={7} /></label>
+                  <label className="ns-field"><span>Business Address</span><input name="business_address" required minLength={3} /></label>
+                  <label className="ns-field"><span>Category</span><input name="business_category" required minLength={3} /></label>
+                  <label className="ns-field"><span>Date of Visit</span><input name="date_of_visit" type="date" required min={String(studentDashboard.student?.created_at || '').slice(0, 10) || undefined} max={todayInputDate()} /></label>
+                  <label className="ns-field ns-field--full"><span>Main Challenge <small className="ns-field-hint">50–500 words</small></span><textarea name="main_challenge" rows={3} required placeholder="Describe the main challenge this business faces (50–500 words)." /></label>
+                  <label className="ns-field ns-field--full"><span>Student Notes <small className="ns-field-hint">50–500 words</small></span><textarea name="student_notes" rows={3} required placeholder="Your observations and notes from the visit (50–500 words)." /></label>
                 </div>
+                <p className="ns-check-hint">Tick every option this business already has — leave it unticked if they don’t:</p>
                 <div className="ns-check-grid">
                   {[
                     ['has_website', 'Website'],
@@ -3108,34 +3171,41 @@ export default function NewSchool() {
                   <h3>Video and written upload</h3>
                   <p>Unlocked after approvals and the 10 required interviews are complete.</p>
                 </div>
-                <div className="ns-field-grid">
-                  <label className="ns-field">
-                    <span>Selected Business</span>
-                    <select name="source_business_id" defaultValue={selectedBusinessId || ''}>
-                      <option value="">Choose a business</option>
-                      {(studentDashboard.interviews || []).map((row: any) => (
-                        <option key={row.id} value={row.id}>{`Visit ${row.visit_number}: ${row.business_name}`}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="ns-field"><span>Problem Identified</span><textarea name="problem_identified" rows={3} required /></label>
-                  <label className="ns-field"><span>Why It Matters</span><textarea name="why_it_matters" rows={3} required /></label>
-                  <label className="ns-field"><span>Proposed Solution</span><textarea name="proposed_solution" rows={3} required /></label>
-                  <label className="ns-field"><span>How It Helps</span><textarea name="how_it_helps" rows={3} required /></label>
-                  <label className="ns-field"><span>Expected Impact</span><textarea name="expected_impact" rows={3} required /></label>
-                  <label className="ns-field ns-field--full"><span>Video Upload</span><input name="video_file" type="file" accept="video/mp4,video/webm,video/quicktime" required /></label>
-                  <label className="ns-field ns-field--full"><span>Written Upload</span><input name="written_file" type="file" accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg,.webp" required /></label>
-                </div>
-                {!canStudentSubmit && <div className="ns-alert ns-alert--info">Final submission stays locked until parent consent, school approval, teacher approval, and 10 business interviews are complete.</div>}
-                <TermsAgreement kind="website" idPrefix="ns-submission" hideSignature signatureName="" onSignatureChange={() => {}} onAcceptedChange={setSubmissionTermsOk} />
-                <button className="btn btn--solid" type="submit" disabled={busy === 'submission' || !canStudentSubmit || !submissionTermsOk}>
-                  {busy === 'submission' ? 'Saving...' : 'Submit Final Project'}
-                </button>
-                {studentDashboard.submission && (
-                  <div className="ns-submission-summary">
-                    <strong>Current Status: {studentDashboard.submission.status}</strong>
-                    <p>{studentDashboard.submission.problem_identified}</p>
-                  </div>
+                {studentDashboard.submission && String(studentDashboard.submission.status || '').toLowerCase() !== 'draft' ? (
+                  <>
+                    <div className="ns-alert ns-alert--info">Your final project has been submitted. Submissions are <strong>one-time only</strong> and can’t be changed.</div>
+                    <div className="ns-submission-summary">
+                      <strong>Status: {studentDashboard.submission.status}</strong>
+                      <p>{studentDashboard.submission.problem_identified}</p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="ns-field-grid">
+                      <label className="ns-field">
+                        <span>Selected Business</span>
+                        <select name="source_business_id" defaultValue={selectedBusinessId || ''}>
+                          <option value="">Choose a business</option>
+                          {(studentDashboard.interviews || []).map((row: any) => (
+                            <option key={row.id} value={row.id}>{`Visit ${row.visit_number}: ${row.business_name}`}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="ns-field ns-field--full"><span>Problem Identified <small className="ns-field-hint">50–500 words</small></span><textarea name="problem_identified" rows={3} required placeholder="What community problem did you find? (50–500 words)" /></label>
+                      <label className="ns-field ns-field--full"><span>Why It Matters <small className="ns-field-hint">50–500 words</small></span><textarea name="why_it_matters" rows={3} required placeholder="(50–500 words)" /></label>
+                      <label className="ns-field ns-field--full"><span>Proposed Solution <small className="ns-field-hint">50–500 words</small></span><textarea name="proposed_solution" rows={3} required placeholder="(50–500 words)" /></label>
+                      <label className="ns-field ns-field--full"><span>How It Helps <small className="ns-field-hint">50–500 words</small></span><textarea name="how_it_helps" rows={3} required placeholder="(50–500 words)" /></label>
+                      <label className="ns-field ns-field--full"><span>Expected Impact <small className="ns-field-hint">50–500 words</small></span><textarea name="expected_impact" rows={3} required placeholder="(50–500 words)" /></label>
+                      <label className="ns-field ns-field--full"><span>Video Upload <small className="ns-field-hint">Video only · max 70 MB</small></span><input name="video_file" type="file" accept="video/mp4,video/webm,video/quicktime,video/x-matroska" required /></label>
+                      <label className="ns-field ns-field--full"><span>Written Upload <small className="ns-field-hint">Image or PDF · max 5 MB</small></span><input name="written_file" type="file" accept="image/*,application/pdf" required /></label>
+                    </div>
+                    {!canStudentSubmit && <div className="ns-alert ns-alert--info">Final submission stays locked until parent consent, teacher approval, and 10 business interviews are complete.</div>}
+                    <TermsAgreement kind="website" idPrefix="ns-submission" hideSignature signatureName="" onSignatureChange={() => {}} onAcceptedChange={setSubmissionTermsOk} />
+                    <p className="ns-check-hint">Heads up — your final project can be submitted only once and can’t be edited afterward.</p>
+                    <button className="btn btn--solid" type="submit" disabled={busy === 'submission' || !canStudentSubmit || !submissionTermsOk}>
+                      {busy === 'submission' ? 'Saving...' : 'Submit Final Project'}
+                    </button>
+                  </>
                 )}
               </form>
             </div>
@@ -3159,8 +3229,7 @@ export default function NewSchool() {
                 </div>
                 <div className="ns-approval-stack">
                   <div className="ns-approval-row"><strong>Parent consent</strong><span>{parentDashboard.student_context?.student?.parent_consent_status || 'pending'}</span></div>
-                  <div className="ns-approval-row"><strong>School approval</strong><span>{parentDashboard.student_context?.student?.school_approval_status || 'pending'}</span></div>
-                  <div className="ns-approval-row"><strong>Teacher approval</strong><span>{parentDashboard.student_context?.student?.teacher_approval_status || 'pending'}</span></div>
+                  <div className="ns-approval-row"><strong>Approval</strong><span>{parentDashboard.student_context?.student?.teacher_approval_status || 'pending'}</span></div>
                   <div className="ns-approval-row"><strong>Submission</strong><span>{parentDashboard.student_context?.student?.submission_status || 'locked'}</span></div>
                 </div>
                 <div className="ns-actions">
@@ -3236,12 +3305,17 @@ export default function NewSchool() {
                 </div>
                 <span className="ns-overview-label">Approval pipeline · tap a card to open it</span>
                 <div className="ns-quick-stats">
-                  <button type="button" className="is-clickable" onClick={() => onStatClick({ tab: 'approvals', approvalsTab: 'parents', filter: 'pending' })}><span>Parents Waiting</span><strong>{activeSummary.parent_pending || 0}</strong></button>
-                  <button type="button" className="is-clickable" onClick={() => onStatClick({ tab: 'approvals', approvalsTab: 'parents', filter: 'approved' })}><span>Parents Approved</span><strong>{activeSummary.parent_approved || 0}</strong></button>
-                  <button type="button" className="is-clickable" onClick={() => onStatClick({ tab: 'approvals', approvalsTab: 'students', filter: 'pending' })}><span>Students Waiting</span><strong>{activeSummary.school_pending || 0}</strong></button>
-                  <button type="button" className="is-clickable" onClick={() => onStatClick({ tab: 'approvals', approvalsTab: 'students', filter: 'approved' })}><span>Students Approved</span><strong>{activeSummary.school_approved || 0}</strong></button>
-                  <button type="button" className="is-clickable" onClick={() => onStatClick({ tab: 'approvals', approvalsTab: 'teachers', filter: 'pending' })}><span>Teachers Waiting</span><strong>{activeSummary.teacher_pending || 0}</strong></button>
-                  <button type="button" className="is-clickable" onClick={() => onStatClick({ tab: 'approvals', approvalsTab: 'teachers', filter: 'approved' })}><span>Teachers Approved</span><strong>{activeSummary.teacher_approved || 0}</strong></button>
+                  <button type="button" className="is-clickable" onClick={() => onStatClick({ tab: 'approvals', approvalsTab: 'students', filter: 'pending' })}><span>Students Waiting</span><strong>{activeSummary.teacher_pending || 0}</strong></button>
+                  <button type="button" className="is-clickable" onClick={() => onStatClick({ tab: 'approvals', approvalsTab: 'students', filter: 'approved' })}><span>Students Approved</span><strong>{activeSummary.teacher_approved || 0}</strong></button>
+                  {activeManagesTeachers && (
+                    <>
+                      <button type="button" className="is-clickable" onClick={() => onStatClick({ tab: 'approvals', approvalsTab: 'teachers', filter: 'pending' })}><span>Teachers Waiting</span><strong>{activeTeachers.filter((t: any) => { const s = String(t.status || 'registered').toLowerCase(); return s !== 'approved' && s !== 'rejected' }).length}</strong></button>
+                      <button type="button" className="is-clickable" onClick={() => onStatClick({ tab: 'approvals', approvalsTab: 'teachers', filter: 'approved' })}><span>Teachers Approved</span><strong>{activeTeachers.filter((t: any) => String(t.status || '').toLowerCase() === 'approved').length}</strong></button>
+                    </>
+                  )}
+                  {teacherDashboard && (
+                    <button type="button" className="is-clickable" onClick={() => onStatClick({ tab: 'approvals', approvalsTab: 'parents', filter: 'pending' })}><span>Parents Waiting</span><strong>{activeParents.filter((p: any) => String(p.link_status || '').toLowerCase() === 'pending_teacher').length}</strong></button>
+                  )}
                   <button type="button" className="is-clickable" onClick={() => onStatClick({ tab: 'records' })}><span>Interviews Logged</span><strong>{activeSummary.interviews_total || 0}</strong></button>
                 </div>
                 <div className="ns-actions">
@@ -3294,7 +3368,7 @@ export default function NewSchool() {
                     onClick={() => setSchoolApprovalsTab('students')}
                   >
                     <strong>Students</strong>
-                    <span>{schoolDashboard ? 'School approval' : 'Teacher approval'}</span>
+                    <span>Approve participation</span>
                     <em>{activeStudents.length}</em>
                   </button>
                   {activeManagesTeachers && (
@@ -3359,17 +3433,14 @@ export default function NewSchool() {
                           <th>Participant</th>
                           <th>Student</th>
                           <th>Parent</th>
-                          <th>School</th>
-                          <th>Teacher</th>
-                          {teacherDashboard && <th className="ns-col-actions">Actions</th>}
+                          <th>Approval</th>
+                          <th className="ns-col-actions">Actions</th>
                         </tr>
                       </thead>
                       <tbody>
                         {filteredApprovalStudents.length > 0 ? rows.map((row: any) => {
-                          // Teacher approval is the student's only gate — approve directly.
-                          const canApprove = true
-                          const blockedReason = ''
                           const rowBusy = busy.startsWith(`student-${row.id}-`)
+                          const st = String(row.teacher_approval_status || 'pending').toLowerCase()
                           return (
                             <tr
                               key={row.id}
@@ -3382,35 +3453,31 @@ export default function NewSchool() {
                               <td>{row.participant_id}</td>
                               <td>{row.full_name}</td>
                               <td><span className="ns-status-pill" data-status={String(row.parent_consent_status || '').toLowerCase()}>{row.parent_consent_status || '—'}</span></td>
-                              <td><span className="ns-status-pill" data-status={String(row.school_approval_status || '').toLowerCase()}>{row.school_approval_status || '—'}</span></td>
-                              <td><span className="ns-status-pill" data-status={String(row.teacher_approval_status || '').toLowerCase()}>{row.teacher_approval_status || '—'}</span></td>
-                              {teacherDashboard && (
+                              <td><span className="ns-status-pill" data-status={st}>{row.teacher_approval_status || 'pending'}</span></td>
                               <td className="ns-col-actions">
                                 <div className="ns-row-actions">
                                   <button
                                     type="button"
                                     className="ns-row-btn ns-row-btn--approve"
-                                    disabled={rowBusy || !canApprove}
-                                    title={canApprove ? 'Approve' : blockedReason}
+                                    disabled={rowBusy || st === 'approved'}
                                     onClick={(event) => { event.stopPropagation(); approveStudentInline(row, 'approved') }}
                                   >
-                                    {busy === `student-${row.id}-approved` ? '…' : 'Approve'}
+                                    {busy === `student-${row.id}-approved` ? '…' : st === 'approved' ? 'Approved' : 'Approve'}
                                   </button>
                                   <button
                                     type="button"
                                     className="ns-row-btn ns-row-btn--reject"
-                                    disabled={rowBusy}
+                                    disabled={rowBusy || st === 'rejected'}
                                     onClick={(event) => { event.stopPropagation(); approveStudentInline(row, 'rejected') }}
                                   >
-                                    {busy === `student-${row.id}-rejected` ? '…' : 'Reject'}
+                                    {busy === `student-${row.id}-rejected` ? '…' : st === 'rejected' ? 'Rejected' : 'Reject'}
                                   </button>
                                 </div>
                               </td>
-                              )}
                             </tr>
                           )
                         }) : (
-                          <tr><td colSpan={teacherDashboard ? 6 : 5}>No students match this search or filter.</td></tr>
+                          <tr><td colSpan={5}>No students match this search or filter.</td></tr>
                         )}
                       </tbody>
                     </table>
@@ -3434,6 +3501,8 @@ export default function NewSchool() {
                       <tbody>
                         {filteredApprovalTeachers.length > 0 ? rows.map((row: any) => {
                           const rowBusy = busy.startsWith(`teacher-${row.id}-`)
+                          const ts = String(row.status || 'registered').toLowerCase()
+                          const tsLabel = ts === 'registered' ? 'pending' : ts
                           return (
                             <tr
                               key={row.id}
@@ -3446,24 +3515,24 @@ export default function NewSchool() {
                               <td>{row.teacher_full_name}</td>
                               <td>{row.role_department || '—'}</td>
                               <td>{row.students_total ?? 0}</td>
-                              <td><span className="ns-status-pill" data-status={String(row.status || '').toLowerCase()}>{row.status || '—'}</span></td>
+                              <td><span className="ns-status-pill" data-status={tsLabel}>{tsLabel}</span></td>
                               <td className="ns-col-actions">
                                 <div className="ns-row-actions">
                                   <button
                                     type="button"
                                     className="ns-row-btn ns-row-btn--approve"
-                                    disabled={rowBusy}
+                                    disabled={rowBusy || ts === 'approved'}
                                     onClick={(event) => { event.stopPropagation(); approveTeacherInline(row, 'approved') }}
                                   >
-                                    {busy === `teacher-${row.id}-approved` ? '…' : 'Approve'}
+                                    {busy === `teacher-${row.id}-approved` ? '…' : ts === 'approved' ? 'Approved' : 'Approve'}
                                   </button>
                                   <button
                                     type="button"
                                     className="ns-row-btn ns-row-btn--reject"
-                                    disabled={rowBusy}
+                                    disabled={rowBusy || ts === 'rejected'}
                                     onClick={(event) => { event.stopPropagation(); approveTeacherInline(row, 'rejected') }}
                                   >
-                                    {busy === `teacher-${row.id}-rejected` ? '…' : 'Reject'}
+                                    {busy === `teacher-${row.id}-rejected` ? '…' : ts === 'rejected' ? 'Rejected' : 'Reject'}
                                   </button>
                                 </div>
                               </td>
@@ -3527,7 +3596,7 @@ export default function NewSchool() {
                 )}
 
                 <p className="ns-approvals-note">
-                  Actions are signed as <strong>{user?.full_name || 'Reviewer'}</strong>. {teacherDashboard ? 'You approve students directly; parents appear here once the student confirms them.' : 'The teacher approves student participation.'}
+                  Actions are signed as <strong>{user?.full_name || 'Reviewer'}</strong>. {teacherDashboard ? 'You approve students directly; parents appear here once the student confirms them.' : 'Approving a student here is the same gate as a teacher’s approval — either one unlocks the student.'}
                 </p>
               </article>
               <article className="glass ns-dash-card ns-dash-card--wide reveal in" hidden={dashboardTab !== 'records'}>
@@ -3901,6 +3970,7 @@ export default function NewSchool() {
                     {approvalDetail.type === 'student' ? (() => {
                       const s = approvalDetailRecord
                       const detailBusy = busy.startsWith(`student-${s.id}-`)
+                      const sStatus = String(s.teacher_approval_status || 'pending').toLowerCase()
                       return (
                         <>
                           <div className="ns-detail-head">
@@ -3916,8 +3986,7 @@ export default function NewSchool() {
                             <span className="ns-detail-section__title">Approval status</span>
                             <div className="ns-detail-grid">
                               <div className="ns-detail-row"><span>Parent consent</span><span className="ns-status-pill" data-status={String(s.parent_consent_status || '').toLowerCase()}>{s.parent_consent_status || '—'}</span></div>
-                              <div className="ns-detail-row"><span>School approval</span><span className="ns-status-pill" data-status={String(s.school_approval_status || '').toLowerCase()}>{s.school_approval_status || '—'}</span></div>
-                              <div className="ns-detail-row"><span>Teacher approval</span><span className="ns-status-pill" data-status={String(s.teacher_approval_status || '').toLowerCase()}>{s.teacher_approval_status || '—'}</span></div>
+                              <div className="ns-detail-row"><span>Approval</span><span className="ns-status-pill" data-status={String(s.teacher_approval_status || 'pending').toLowerCase()}>{s.teacher_approval_status || 'pending'}</span></div>
                               <div className="ns-detail-row"><span>Submission</span><span className="ns-status-pill" data-status={String(s.submission_status || '').toLowerCase()}>{s.submission_status || '—'}</span></div>
                             </div>
                           </div>
@@ -3956,24 +4025,24 @@ export default function NewSchool() {
                             </div>
                           </div>
 
-                          {teacherDashboard && (
+                          {isManagerLayout && (
                           <div className="ns-detail-actions">
                             <button
                               type="button"
                               className="ns-row-btn ns-row-btn--approve"
-                              disabled={detailBusy}
+                              disabled={detailBusy || sStatus === 'approved'}
                               title="Approve student participation"
                               onClick={() => approveStudentInline(s, 'approved')}
                             >
-                              {busy === `student-${s.id}-approved` ? 'Saving…' : 'Approve'}
+                              {busy === `student-${s.id}-approved` ? 'Saving…' : sStatus === 'approved' ? 'Approved' : 'Approve'}
                             </button>
                             <button
                               type="button"
                               className="ns-row-btn ns-row-btn--reject"
-                              disabled={detailBusy}
+                              disabled={detailBusy || sStatus === 'rejected'}
                               onClick={() => approveStudentInline(s, 'rejected')}
                             >
-                              {busy === `student-${s.id}-rejected` ? 'Saving…' : 'Reject'}
+                              {busy === `student-${s.id}-rejected` ? 'Saving…' : sStatus === 'rejected' ? 'Rejected' : 'Reject'}
                             </button>
                           </div>
                           )}
@@ -3982,6 +4051,8 @@ export default function NewSchool() {
                     })() : (() => {
                       const t = approvalDetailRecord
                       const detailBusy = busy.startsWith(`teacher-${t.id}-`)
+                      const tStatus = String(t.status || 'registered').toLowerCase()
+                      const tStatusLabel = tStatus === 'registered' ? 'pending' : tStatus
                       return (
                         <>
                           <div className="ns-detail-head">
@@ -3989,7 +4060,7 @@ export default function NewSchool() {
                             <div className="ns-detail-head__id">
                               <span className="eyebrow">Teacher</span>
                               <h3>{t.teacher_full_name}</h3>
-                              <span className="ns-status-pill" data-status={String(t.status || '').toLowerCase()}>{t.status || '—'}</span>
+                              <span className="ns-status-pill" data-status={tStatusLabel}>{tStatusLabel}</span>
                             </div>
                           </div>
 
@@ -4029,18 +4100,18 @@ export default function NewSchool() {
                             <button
                               type="button"
                               className="ns-row-btn ns-row-btn--approve"
-                              disabled={detailBusy}
+                              disabled={detailBusy || tStatus === 'approved'}
                               onClick={() => approveTeacherInline(t, 'approved')}
                             >
-                              {busy === `teacher-${t.id}-approved` ? 'Saving…' : 'Approve'}
+                              {busy === `teacher-${t.id}-approved` ? 'Saving…' : tStatus === 'approved' ? 'Approved' : 'Approve'}
                             </button>
                             <button
                               type="button"
                               className="ns-row-btn ns-row-btn--reject"
-                              disabled={detailBusy}
+                              disabled={detailBusy || tStatus === 'rejected'}
                               onClick={() => approveTeacherInline(t, 'rejected')}
                             >
-                              {busy === `teacher-${t.id}-rejected` ? 'Saving…' : 'Reject'}
+                              {busy === `teacher-${t.id}-rejected` ? 'Saving…' : tStatus === 'rejected' ? 'Rejected' : 'Reject'}
                             </button>
                           </div>
                         </>
