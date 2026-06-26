@@ -118,7 +118,7 @@ function current_user(): ?array
     }
     try {
         $stmt = db()->prepare(
-            'SELECT id, full_name, email, role, email_verified_at, approval_status,
+            'SELECT id, full_name, email, role, avatar_url, email_verified_at, approval_status,
                     approval_note, approval_reviewed_by_user_id, approval_reviewed_at,
                     created_at, updated_at
              FROM users WHERE id = ?'
@@ -3055,9 +3055,11 @@ function new_school_fetch_all_teachers(bool $approvedOnly = false): array
         SELECT t.id, t.user_id, t.school_id, t.teacher_full_name, t.school_email, t.phone_number, t.role_department,
                t.grade_level_supported, t.status, t.created_at, t.updated_at,
                s.school_name AS linked_school_name,
-               s.status AS linked_school_status
+               s.status AS linked_school_status,
+               u.avatar_url AS avatar_url
         FROM new_school_teachers t
-        LEFT JOIN new_school_schools s ON s.id = t.school_id';
+        LEFT JOIN new_school_schools s ON s.id = t.school_id
+        LEFT JOIN users u ON u.id = t.user_id';
 
     if ($approvedOnly) {
         $sql .= ' WHERE t.status = "approved" AND s.status = "approved"';
@@ -3079,14 +3081,16 @@ function new_school_fetch_teachers_for_school(int $schoolId): array
                 SUM(CASE WHEN st.parent_consent_status = "approved" THEN 1 ELSE 0 END) AS parent_approved,
                 SUM(CASE WHEN st.school_approval_status = "approved" THEN 1 ELSE 0 END) AS school_approved,
                 SUM(CASE WHEN st.teacher_approval_status = "approved" THEN 1 ELSE 0 END) AS teacher_approved,
-                COUNT(DISTINCT sub.id) AS submissions
+                COUNT(DISTINCT sub.id) AS submissions,
+                u.avatar_url AS avatar_url
          FROM new_school_teachers t
          LEFT JOIN new_school_schools s ON s.id = t.school_id
+         LEFT JOIN users u ON u.id = t.user_id
          LEFT JOIN new_school_students st ON st.teacher_id = t.id
          LEFT JOIN new_school_submissions sub ON sub.student_id = st.id
          WHERE t.school_id = ?
          GROUP BY t.id, t.user_id, t.school_id, t.teacher_full_name, t.school_email, t.phone_number, t.role_department,
-                  t.grade_level_supported, t.status, t.created_at, t.updated_at, s.school_name, s.status
+                  t.grade_level_supported, t.status, t.created_at, t.updated_at, s.school_name, s.status, u.avatar_url
          ORDER BY submissions DESC, teacher_approved DESC, students_total DESC, t.teacher_full_name ASC'
     );
     $stmt->execute([$schoolId]);
@@ -3096,7 +3100,7 @@ function new_school_fetch_teachers_for_school(int $schoolId): array
 function new_school_fetch_students_for_school(array $school): array
 {
     $stmt = db()->prepare(
-        'SELECT s.*, u.full_name AS user_full_name, u.email AS user_email,
+        'SELECT s.*, u.full_name AS user_full_name, u.email AS user_email, u.avatar_url AS avatar_url,
                 t.teacher_full_name AS teacher_full_name,
                 t.status AS teacher_status,
                 sc.status AS school_status,
@@ -3118,7 +3122,7 @@ function new_school_fetch_students_for_school(array $school): array
 function new_school_fetch_students_for_teacher(array $teacher): array
 {
     $stmt = db()->prepare(
-        'SELECT s.*, u.full_name AS user_full_name, u.email AS user_email,
+        'SELECT s.*, u.full_name AS user_full_name, u.email AS user_email, u.avatar_url AS avatar_url,
                 t.teacher_full_name AS teacher_full_name,
                 t.status AS teacher_status,
                 sc.status AS school_status,

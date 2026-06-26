@@ -633,6 +633,21 @@ function new_school_handle_route(string $method, string $route): bool
             json(['error' => 'Unsupported account role for this dashboard.'], 403);
         }
 
+        case $key === 'POST new-school/profile/photo': {
+            // Any logged-in user sets/clears their own profile photo (stored on users.avatar_url).
+            $user = require_login();
+            $avatarUrl = trim((string) field($body, 'avatar_url'));
+            if ($avatarUrl !== '' && !preg_match('#^(/api/uploads/|https?://)#i', $avatarUrl)) {
+                json(['error' => 'Invalid photo URL.'], 422);
+            }
+            if (mb_strlen($avatarUrl) > 255) {
+                json(['error' => 'Photo URL is too long.'], 422);
+            }
+            db()->prepare('UPDATE users SET avatar_url = ?, updated_at = NOW() WHERE id = ?')
+                ->execute([$avatarUrl !== '' ? $avatarUrl : null, (int) $user['id']]);
+            json(['success' => true, 'avatar_url' => $avatarUrl !== '' ? $avatarUrl : null]);
+        }
+
         case preg_match('#^GET new-school/parent/([a-f0-9]+)$#i', $key, $m) === 1: {
             $student = new_school_fetch_student_by_token($m[1]);
             if (!$student) {
@@ -2801,7 +2816,7 @@ function new_school_handle_route(string $method, string $route): bool
         case $key === 'GET admin/new-school/summary': {
             require_admin();
             $students = db()->query(
-                'SELECT s.*, u.full_name AS user_full_name, u.email AS user_email,
+                'SELECT s.*, u.full_name AS user_full_name, u.email AS user_email, u.avatar_url AS avatar_url,
                         (SELECT COUNT(*) FROM new_school_business_interviews bi WHERE bi.student_id = s.id) AS interview_count,
                         (SELECT COUNT(*) FROM new_school_submissions sub WHERE sub.student_id = s.id) AS has_submission
                  FROM new_school_students s

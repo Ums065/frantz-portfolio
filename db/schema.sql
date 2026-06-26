@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS users (
   full_name     VARCHAR(120) NOT NULL,
   email         VARCHAR(160) NOT NULL UNIQUE,
   password_hash VARCHAR(255) NOT NULL,
+  avatar_url    VARCHAR(255) DEFAULT NULL,
   role          ENUM('member','vip','editor','admin','super_admin') NOT NULL DEFAULT 'member',
   email_verified_at TIMESTAMP NULL DEFAULT NULL,
   approval_status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending',

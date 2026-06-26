@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS users (
   full_name     VARCHAR(120) NOT NULL,
   email         VARCHAR(160) NOT NULL UNIQUE,
   password_hash VARCHAR(255) NOT NULL,
+  avatar_url    VARCHAR(255) DEFAULT NULL,
   role          ENUM('member','vip','editor','admin','super_admin','student','parent','school','teacher') NOT NULL DEFAULT 'member',
   email_verified_at TIMESTAMP NULL DEFAULT NULL,
   approval_status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending',
@@ -679,6 +680,7 @@ DELIMITER ;
 ALTER TABLE users
   MODIFY role ENUM('member','vip','editor','admin','super_admin','student','parent','school','teacher') NOT NULL DEFAULT 'member';
 
+CALL add_column_if_missing('users', 'avatar_url', 'VARCHAR(255) DEFAULT NULL', 'password_hash');
 CALL add_column_if_missing('users', 'email_verified_at', 'TIMESTAMP NULL DEFAULT NULL', 'role');
 CALL add_column_if_missing('users', 'approval_status', 'ENUM(''pending'',''approved'',''rejected'') NOT NULL DEFAULT ''pending''', 'email_verified_at');
 CALL add_column_if_missing('users', 'approval_note', 'TEXT DEFAULT NULL', 'approval_status');

@@ -142,6 +142,7 @@ export interface User {
   full_name: string
   email: string
   role: string
+  avatar_url?: string | null
   email_verified_at?: string | null
   approval_status?: string | null
   approval_note?: string | null

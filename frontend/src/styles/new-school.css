@@ -1301,6 +1301,10 @@
   border: 1px solid rgba(212, 175, 90, 0.22);
 }
 
+/* Tabs that carry a counter reserve room on the right so the label/hint text can
+   never slide underneath the badge (fixes the counter overlap). */
+.ns-dashboard-tabs__btn:has(.ns-dashboard-tabs__badge) { padding-right: 52px; }
+
 .ns-dashboard-tabs__btn.is-active {
   border-color: rgba(143, 224, 166, 0.32);
   background:
@@ -2147,6 +2151,35 @@
   background: linear-gradient(180deg, var(--ns-dashboard-accent-strong), var(--ns-dashboard-accent));
   box-shadow: 0 10px 22px rgba(0, 0, 0, 0.28);
 }
+
+/* ---- Profile photos ---- */
+/* When a photo is set, it fills the avatar/initial circle anywhere it's shown. */
+.ns-avatar-img { width: 100%; height: 100%; object-fit: cover; border-radius: inherit; display: block; }
+.ns-detail-avatar,
+.ns-leader-avatar,
+.ns-podium__avatar,
+.ns-principal-topbar__avatar,
+.ns-photo-avatar { overflow: hidden; }
+
+/* Profile photo card in each dashboard's Profile tab. */
+.ns-photo-card__body { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.ns-photo-avatar {
+  flex: none;
+  width: 84px;
+  height: 84px;
+  border-radius: 20px;
+  display: grid;
+  place-items: center;
+  font-family: var(--ns-dashboard-display);
+  font-weight: 700;
+  font-size: 32px;
+  color: #1a1608;
+  background: linear-gradient(180deg, var(--ns-dashboard-accent-strong), var(--ns-dashboard-accent));
+}
+.ns-photo-card__actions { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.ns-photo-card__actions .btn { cursor: pointer; }
+.ns-photo-card__actions .btn.is-disabled { opacity: 0.6; pointer-events: none; }
+.ns-photo-card__hint { color: var(--muted); font-size: 12px; margin: 2px 0 0; }
 
 .ns-detail-head__id {
   display: grid;
@@ -3267,11 +3300,33 @@
   .ns-dashboard-tabs {
     display: flex;
     overflow-x: auto;
+    gap: 8px;
+    padding: 8px;
+    -webkit-overflow-scrolling: touch;
   }
 
+  /* Compact pill tabs: just the label + counter, scrolled horizontally. The big
+     left number, the corner dot, and the hint line are dropped so the counter
+     sits inline and can't overlap anything. */
   .ns-dashboard-tabs__btn {
-    min-width: 160px;
+    min-width: 0;
+    min-height: 0;
     flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 14px;
+    white-space: nowrap;
+  }
+  .ns-dashboard-tabs__btn::before,
+  .ns-dashboard-tabs__btn::after { display: none; }
+  .ns-dashboard-tabs__btn span { display: none; }
+  .ns-dashboard-tabs__btn:has(.ns-dashboard-tabs__badge) { padding-right: 14px; }
+  .ns-dashboard-tabs__badge {
+    position: static;
+    right: auto;
+    top: auto;
+    padding: 3px 8px;
   }
 
   .ns-hero {
@@ -3368,11 +3423,13 @@
   }
 }
 
-/* ---- Responsive polish: dashboard + principal components ---- */
-@media (max-width: 1100px) {
-  /* When the rail stacks full-width, let the nav flow in rows instead of one tall column */
+/* ---- Responsive polish: dashboard tabs on tablets (phones use the compact
+   horizontal pills defined in the max-width:720px block) ---- */
+@media (min-width: 721px) and (max-width: 1100px) {
+  /* Rail is full-width here — tile the tabs into a wrapping grid. Min 220px keeps
+     each tab wide enough for the number + label + counter badge (no overlap). */
   .ns-dashboard-tabs {
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   }
   .ns-dashboard-tabs__btn {
     min-height: 62px;

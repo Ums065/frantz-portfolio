@@ -1,4 +1,4 @@
-import { useEffect, useState, type Dispatch, type FormEvent, type ReactNode, type SetStateAction } from 'react'
+import { useEffect, useState, type ChangeEvent, type Dispatch, type FormEvent, type ReactNode, type SetStateAction } from 'react'
 import { createPortal } from 'react-dom'
 import { Link, useLocation, useParams } from 'react-router-dom'
 import { api } from '../lib/api'
@@ -227,6 +227,69 @@ const validateAddress = (fd: FormData, prefix = 'addr_'): FieldErrors => ({
 function FieldError({ msg, full = false }: { msg?: string; full?: boolean }) {
   if (!msg) return null
   return <span className={`ns-field-error${full ? ' ns-field--full' : ''}`} role="alert">{msg}</span>
+}
+
+/** Avatar contents: the uploaded photo if present, otherwise the name's first letter.
+ *  Drop this inside any existing avatar/initial <span> to show profile photos everywhere. */
+const avatarInner = (name: any, photo?: string | null): ReactNode =>
+  photo ? <img className="ns-avatar-img" src={photo} alt="" loading="lazy" /> : String(name || '?').trim().charAt(0).toUpperCase()
+
+/** Profile photo upload card shown in each role's Profile tab. Image only, max 5 MB,
+ *  stored once on the user account (users.avatar_url) so it appears everywhere. */
+function ProfilePhotoCard() {
+  const { user, refresh } = useAuth()
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const photo = user?.avatar_url || ''
+  const onPick = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    if (!file.type.startsWith('image/')) { setErr('Please choose an image file (JPG, PNG, or WebP).'); return }
+    if (file.size > MAX_DOC_BYTES) { setErr('Image must be 5 MB or smaller.'); return }
+    setErr('')
+    setBusy(true)
+    try {
+      const up = await api.upload<{ url: string }>('new-school/upload', file)
+      await api.post('new-school/profile/photo', { avatar_url: up.url })
+      await refresh()
+      window.fcToast?.('Profile photo updated.')
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Could not upload the photo.')
+    } finally {
+      setBusy(false)
+    }
+  }
+  const removePhoto = async () => {
+    setBusy(true)
+    setErr('')
+    try {
+      await api.post('new-school/profile/photo', { avatar_url: '' })
+      await refresh()
+      window.fcToast?.('Profile photo removed.')
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Could not remove the photo.')
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <article className="glass ns-dash-card reveal in ns-photo-card">
+      <div className="ns-dash-card__head"><span className="eyebrow">Profile Photo</span></div>
+      <div className="ns-photo-card__body">
+        <span className="ns-photo-avatar">{avatarInner(user?.full_name, photo)}</span>
+        <div className="ns-photo-card__actions">
+          <label className={`btn btn--sm${busy ? ' is-disabled' : ''}`}>
+            {busy ? 'Uploading…' : photo ? 'Change photo' : 'Upload photo'}
+            <input type="file" accept="image/png,image/jpeg,image/webp" hidden disabled={busy} onChange={onPick} />
+          </label>
+          {photo && <button type="button" className="btn btn--sm" disabled={busy} onClick={() => void removePhoto()}>Remove</button>}
+          <p className="ns-photo-card__hint">Image only (JPG, PNG, WebP) · max 5 MB</p>
+        </div>
+      </div>
+      {err && <p className="ns-field-error">{err}</p>}
+    </article>
+  )
 }
 
 /** Reusable split-address inputs (Street / Floor / City / State / ZIP / Country). */
@@ -1793,14 +1856,14 @@ export default function NewSchool() {
         .sort((a: any, b: any) => (a.rank_position || 9999) - (b.rank_position || 9999))
         .map((r: any, i: number) => ({
           id: Number(r.id), type: 'student' as const, rank: i + 1,
-          name: r.full_name, sub: r.school_name || (r.teacher_full_name ? `Mentor · ${r.teacher_full_name}` : '—'),
+          name: r.full_name, avatar: r.avatar_url, sub: r.school_name || (r.teacher_full_name ? `Mentor · ${r.teacher_full_name}` : '—'),
           score: Number(r.student_points) || 0, tag: r.submission_status || '—', tagType: 'status' as const,
         }))
     : adminRankTeachersScoped.slice()
         .sort((a: any, b: any) => (a.rank_position || 9999) - (b.rank_position || 9999))
         .map((r: any, i: number) => ({
           id: Number(r.id), type: 'teacher' as const, rank: i + 1,
-          name: r.teacher_full_name, sub: r.linked_school_name || r.school_name || r.role_department || 'Faculty',
+          name: r.teacher_full_name, avatar: r.avatar_url, sub: r.linked_school_name || r.school_name || r.role_department || 'Faculty',
           score: Number(r.teacher_points) || 0, tag: `${r.students_total ?? 0} students`, tagType: 'count' as const,
         }))
   )
@@ -1816,6 +1879,7 @@ export default function NewSchool() {
       id: Number(r.id),
       rank: Number(r.rank_position) || 0,
       name: r.full_name,
+      avatar: r.avatar_url,
       sub: `${r.interview_count || 0}/10 interviews`,
       score: Number(r.student_points) || 0,
       tag: r.submission_status || '—',
@@ -1856,12 +1920,12 @@ export default function NewSchool() {
   const schoolLeaderRows = (schoolRankingTab === 'students'
     ? activeRankedStudents.map((r: any) => ({
         id: Number(r.id), type: 'student' as const, rank: Number(r.rank_position) || 0,
-        name: r.full_name, sub: r.teacher_full_name ? `Mentor · ${r.teacher_full_name}` : r.school_name || '—',
+        name: r.full_name, avatar: r.avatar_url, sub: r.teacher_full_name ? `Mentor · ${r.teacher_full_name}` : r.school_name || '—',
         score: Number(r.student_points) || 0, tag: r.submission_status || '—', tagType: 'status' as const,
       }))
     : activeRankedTeachers.map((r: any) => ({
         id: Number(r.id), type: 'teacher' as const, rank: Number(r.rank_position) || 0,
-        name: r.teacher_full_name, sub: r.role_department || 'Faculty',
+        name: r.teacher_full_name, avatar: r.avatar_url, sub: r.role_department || 'Faculty',
         score: Number(r.teacher_points) || 0, tag: `${r.students_total ?? 0} students`, tagType: 'count' as const,
       }))
   ).slice().sort((a, b) => (a.rank || 999) - (b.rank || 999))
@@ -3067,7 +3131,7 @@ export default function NewSchool() {
                     <button className="btn btn--sm ns-guide-btn" type="button" onClick={() => setGuideOpen(true)} title="Open the guide and rule book">📘 Guide &amp; Rules</button>
                     <span className="ns-principal-topbar__live"><i aria-hidden="true" />Live</span>
                     <span className="ns-principal-topbar__role">{dashboardRoleLabel}</span>
-                    <span className="ns-principal-topbar__avatar" aria-hidden="true">{dashboardAvatarChar}</span>
+                    <span className="ns-principal-topbar__avatar" aria-hidden="true">{avatarInner(user?.full_name, user?.avatar_url)}</span>
                   </div>
                 </header>
               )}
@@ -3229,6 +3293,8 @@ export default function NewSchool() {
                 </div>
               </article>
 
+              {dashboardTab === 'profile' && <ProfilePhotoCard />}
+
               <article className="glass ns-dash-card reveal in" hidden={dashboardTab !== 'profile'}>
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">Approvals</span>
@@ -3317,7 +3383,7 @@ export default function NewSchool() {
                         {studentPodium.map((pdm) => (
                           <div key={`spodium-${pdm.id}`} className={`ns-podium__place ${pdm.isMe ? 'is-me' : ''}`} data-rank={pdm.rank}>
                             <span className="ns-podium__medal" aria-hidden="true">{['🥇', '🥈', '🥉'][pdm.rank - 1] || `#${pdm.rank}`}</span>
-                            <span className="ns-podium__avatar">{String(pdm.name || '?').trim().charAt(0).toUpperCase()}</span>
+                            <span className="ns-podium__avatar">{avatarInner(pdm.name, pdm.avatar)}</span>
                             <strong className="ns-podium__name">{pdm.name}{pdm.isMe ? ' (you)' : ''}</strong>
                             <span className="ns-podium__sub">{pdm.sub}</span>
                             <span className="ns-podium__score">{pdm.score}<small>pts</small></span>
@@ -3343,7 +3409,7 @@ export default function NewSchool() {
                           data-rank={r.rank}
                         >
                           <span className="ns-leader-rank">{r.rank >= 1 && r.rank <= 3 ? (['🥇', '🥈', '🥉'][r.rank - 1]) : (r.rank || '—')}</span>
-                          <span className="ns-leader-avatar" aria-hidden="true">{String(r.name || '?').trim().charAt(0).toUpperCase()}</span>
+                          <span className="ns-leader-avatar" aria-hidden="true">{avatarInner(r.name, r.avatar)}</span>
                           <div className="ns-leader-id">
                             <strong>{r.name}{r.isMe ? ' (you)' : ''}</strong>
                             <span>{r.sub}</span>
@@ -3535,6 +3601,7 @@ export default function NewSchool() {
                   <button className="btn btn--sm" type="button" onClick={() => openDashboardTab('notifications')}>Open Alerts</button>
                 </div>
               </article>
+              {dashboardTab === 'profile' && <ProfilePhotoCard />}
               <article className="glass ns-dash-card reveal in" hidden={dashboardTab !== 'profile'}>
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">Profile</span>
@@ -3623,6 +3690,7 @@ export default function NewSchool() {
                 </div>
               </article>
 
+              {dashboardTab === 'profile' && <ProfilePhotoCard />}
               <article className="glass ns-dash-card reveal in" hidden={dashboardTab !== 'profile'}>
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">{schoolDashboard ? 'School Profile' : 'Teacher Profile'}</span>
@@ -4155,7 +4223,7 @@ export default function NewSchool() {
                             onClick={() => setApprovalDetail({ type: p.type, id: p.id })}
                           >
                             <span className="ns-podium__medal" aria-hidden="true">{['🥇', '🥈', '🥉'][p.rank - 1] || `#${p.rank}`}</span>
-                            <span className="ns-podium__avatar">{String(p.name || '?').trim().charAt(0).toUpperCase()}</span>
+                            <span className="ns-podium__avatar">{avatarInner(p.name, p.avatar)}</span>
                             <strong className="ns-podium__name">{p.name}</strong>
                             <span className="ns-podium__sub">{p.sub}</span>
                             <span className="ns-podium__score">{p.score}<small>pts</small></span>
@@ -4183,7 +4251,7 @@ export default function NewSchool() {
                           onClick={() => setApprovalDetail({ type: r.type, id: r.id })}
                         >
                           <span className="ns-leader-rank">{r.rank >= 1 && r.rank <= 3 ? (['🥇', '🥈', '🥉'][r.rank - 1]) : (r.rank || '—')}</span>
-                          <span className="ns-leader-avatar" aria-hidden="true">{String(r.name || '?').trim().charAt(0).toUpperCase()}</span>
+                          <span className="ns-leader-avatar" aria-hidden="true">{avatarInner(r.name, r.avatar)}</span>
                           <div className="ns-leader-id">
                             <strong>{r.name}</strong>
                             <span>{r.sub}</span>
@@ -4271,7 +4339,7 @@ export default function NewSchool() {
                       return (
                         <>
                           <div className="ns-detail-head">
-                            <span className="ns-detail-avatar" aria-hidden="true">{String(s.full_name || 'S').trim().charAt(0).toUpperCase()}</span>
+                            <span className="ns-detail-avatar" aria-hidden="true">{avatarInner(s.full_name, s.avatar_url)}</span>
                             <div className="ns-detail-head__id">
                               <span className="eyebrow">Student · {s.participant_id}</span>
                               <h3>{s.full_name}</h3>
@@ -4353,7 +4421,7 @@ export default function NewSchool() {
                       return (
                         <>
                           <div className="ns-detail-head">
-                            <span className="ns-detail-avatar" aria-hidden="true">{String(t.teacher_full_name || 'T').trim().charAt(0).toUpperCase()}</span>
+                            <span className="ns-detail-avatar" aria-hidden="true">{avatarInner(t.teacher_full_name, t.avatar_url)}</span>
                             <div className="ns-detail-head__id">
                               <span className="eyebrow">Teacher</span>
                               <h3>{t.teacher_full_name}</h3>
@@ -4578,6 +4646,7 @@ export default function NewSchool() {
                 </div>
               </article>
 
+              {dashboardTab === 'profile' && <ProfilePhotoCard />}
               <article className="glass ns-dash-card reveal in" hidden={dashboardTab !== 'profile'}>
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">Profile</span>
@@ -4653,7 +4722,7 @@ export default function NewSchool() {
                             data-rank={p.rank}
                           >
                             <span className="ns-podium__medal" aria-hidden="true">{['🥇', '🥈', '🥉'][p.rank - 1] || `#${p.rank}`}</span>
-                            <span className="ns-podium__avatar">{String(p.name || '?').trim().charAt(0).toUpperCase()}</span>
+                            <span className="ns-podium__avatar">{avatarInner(p.name, p.avatar)}</span>
                             <strong className="ns-podium__name">{p.name}</strong>
                             <span className="ns-podium__sub">{p.sub}</span>
                             <span className="ns-podium__score">{p.score}<small>pts</small></span>
@@ -4679,7 +4748,7 @@ export default function NewSchool() {
                           data-rank={r.rank}
                         >
                           <span className="ns-leader-rank">{r.rank >= 1 && r.rank <= 3 ? (['🥇', '🥈', '🥉'][r.rank - 1]) : (r.rank || '—')}</span>
-                          <span className="ns-leader-avatar" aria-hidden="true">{String(r.name || '?').trim().charAt(0).toUpperCase()}</span>
+                          <span className="ns-leader-avatar" aria-hidden="true">{avatarInner(r.name, r.avatar)}</span>
                           <div className="ns-leader-id">
                             <strong>{r.name}</strong>
                             <span>{r.sub}</span>
