@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { SCHOLARSHIP_QUESTIONS, SCHOLARSHIP_WORD_LIMIT, countWords, type ScholarshipQuestion } from '../lib/scholarship'
+import { SCHOLARSHIP_QUESTIONS, SCHOLARSHIP_WORD_LIMIT, SCHOLARSHIP_WORD_MIN, countWords, type ScholarshipQuestion } from '../lib/scholarship'
 
 export type ScholarshipAnswer = { key: string; question: string; answer: string }
 
@@ -26,7 +26,8 @@ export default function ScholarshipWizard({ initialAnswers = [], busy = false, o
   const value = values[current.key] || ''
   const words = useMemo(() => countWords(value), [value])
   const overLimit = words > SCHOLARSHIP_WORD_LIMIT
-  const canAdvance = value.trim().length > 0 && !overLimit
+  const underMin = words < SCHOLARSHIP_WORD_MIN
+  const canAdvance = !underMin && !overLimit
   const isLast = step === questions.length - 1
 
   const setValue = (text: string) => setValues((prev) => ({ ...prev, [current.key]: text }))
@@ -70,8 +71,9 @@ export default function ScholarshipWizard({ initialAnswers = [], busy = false, o
           placeholder="Type your answer here…"
           autoFocus
         />
-        <div className={`ns-scholar__count ${overLimit ? 'is-over' : ''}`}>
-          {words} / {SCHOLARSHIP_WORD_LIMIT} words
+        <div className={`ns-scholar__count ${overLimit || underMin ? 'is-over' : ''}`}>
+          {words} words (min {SCHOLARSHIP_WORD_MIN}, max {SCHOLARSHIP_WORD_LIMIT})
+          {underMin && <span> — please write at least {SCHOLARSHIP_WORD_MIN} words.</span>}
           {overLimit && <span> — please shorten your answer.</span>}
         </div>
       </div>

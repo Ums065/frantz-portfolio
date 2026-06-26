@@ -347,7 +347,8 @@ CREATE TABLE IF NOT EXISTS new_school_schools (
   id                      INT AUTO_INCREMENT PRIMARY KEY,
   user_id                 INT NULL UNIQUE,
   school_name             VARCHAR(180) NOT NULL,
-  school_address          VARCHAR(255) NOT NULL,
+  school_address          VARCHAR(512) NOT NULL,
+  zip_code                VARCHAR(10) DEFAULT NULL,
   school_district         VARCHAR(180) NOT NULL,
   main_phone              VARCHAR(40) NOT NULL,
   principal_name          VARCHAR(120) NOT NULL,
@@ -397,7 +398,8 @@ CREATE TABLE IF NOT EXISTS new_school_students (
   date_of_birth           DATE NOT NULL,
   email                   VARCHAR(160) NOT NULL,
   phone_number            VARCHAR(40) NOT NULL,
-  home_address            VARCHAR(255) NOT NULL,
+  home_address            VARCHAR(512) NOT NULL,
+  zip_code                VARCHAR(10) DEFAULT NULL,
   school_name             VARCHAR(180) NOT NULL,
   grade_level             VARCHAR(60) NOT NULL,
   parent_name             VARCHAR(120) NOT NULL,
@@ -438,7 +440,8 @@ CREATE TABLE IF NOT EXISTS new_school_parents (
   relationship_to_student VARCHAR(80) NOT NULL,
   phone_number            VARCHAR(40) NOT NULL,
   email                   VARCHAR(160) NOT NULL,
-  home_address            VARCHAR(255) NOT NULL,
+  home_address            VARCHAR(512) NOT NULL,
+  zip_code                VARCHAR(10) DEFAULT NULL,
   government_id_url       VARCHAR(255) DEFAULT NULL,
   consent_checked         TINYINT(1) NOT NULL DEFAULT 0,
   digital_signature       VARCHAR(255) NOT NULL,
@@ -822,6 +825,21 @@ CALL add_column_if_missing('new_school_submissions', 'reviewed_by_user_id', 'INT
 CALL add_column_if_missing('new_school_submissions', 'reviewed_at', 'TIMESTAMP NULL DEFAULT NULL', 'reviewed_by_user_id');
 CALL add_column_if_missing('new_school_submissions', 'score', 'DECIMAL(6,2) DEFAULT NULL', 'reviewed_at');
 CALL add_column_if_missing('new_school_submissions', 'rank_position', 'TINYINT UNSIGNED DEFAULT NULL', 'score');
+
+-- Registration address is now collected as separate parts (street, floor, city, state,
+-- ZIP, country) on the student / parent / school forms and stored as one combined line,
+-- which can run past the original 255 characters. Widen the stored address columns so a
+-- full address is never truncated. Idempotent: re-running just re-applies the same type.
+ALTER TABLE new_school_students MODIFY home_address   VARCHAR(512) NOT NULL;
+ALTER TABLE new_school_parents  MODIFY home_address   VARCHAR(512) NOT NULL;
+ALTER TABLE new_school_schools  MODIFY school_address VARCHAR(512) NOT NULL;
+
+-- ZIP / postal code is also stored in its own column (in addition to the combined
+-- address line) so the admin dashboard can filter students / parents / schools by ZIP.
+-- Existing free-form addresses leave this NULL; new registrations populate it.
+CALL add_column_if_missing('new_school_students', 'zip_code', 'VARCHAR(10) DEFAULT NULL', 'home_address');
+CALL add_column_if_missing('new_school_parents',  'zip_code', 'VARCHAR(10) DEFAULT NULL', 'home_address');
+CALL add_column_if_missing('new_school_schools',  'zip_code', 'VARCHAR(10) DEFAULT NULL', 'school_address');
 
 -- Scholarship intake questionnaire (one JSON row of {key,question,answer} per student).
 CREATE TABLE IF NOT EXISTS new_school_scholarship_answers (

@@ -10,32 +10,33 @@ export type ScholarshipQuestion = {
 }
 
 export const SCHOLARSHIP_WORD_LIMIT = 500
+export const SCHOLARSHIP_WORD_MIN = 20
 
 export const SCHOLARSHIP_QUESTIONS: ScholarshipQuestion[] = [
   {
     key: 'deserve',
-    question: 'Why should you receive this scholarship?',
+    question: 'Why do you believe you deserve this scholarship?',
     helper: 'Tell us what makes you a great choice in your own words.',
   },
   {
     key: 'story',
-    question: 'What is your story?',
+    question: "What's your story?",
     helper: 'Tell us about yourself, your family, and where you come from.',
   },
   {
     key: 'goals',
-    question: 'What are your dreams and goals?',
-    helper: 'Share what you hope to do, and how this scholarship would help you get there.',
+    question: 'What are your biggest dreams and ambitions?',
+    helper: 'Share what you hope to achieve in life.',
   },
   {
     key: 'problem',
-    question: 'What problem in your community do you care about the most?',
-    helper: 'Explain the problem and why it matters to you.',
+    question: 'What change would you like to see in your community?',
+    helper: 'Describe the change you care about and why it matters to you.',
   },
   {
     key: 'change',
-    question: 'How will you use this challenge to make things better?',
-    helper: 'Tell us how you want to help other people with what you learn.',
+    question: 'How will this scholarship help you achieve your goals?',
+    helper: 'Tell us how this support would move you closer to your dreams.',
   },
 ]
 

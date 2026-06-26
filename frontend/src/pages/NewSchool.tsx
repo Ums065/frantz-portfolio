@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useState, type Dispatch, type FormEvent, type ReactNode, type SetStateAction } from 'react'
 import { createPortal } from 'react-dom'
 import { Link, useLocation, useParams } from 'react-router-dom'
 import { api } from '../lib/api'
@@ -129,6 +129,120 @@ const todayInputDate = () => {
 }
 const MAX_VIDEO_BYTES = 70 * 1024 * 1024
 const MAX_DOC_BYTES = 5 * 1024 * 1024
+
+// ---- Inline (below-field) registration validation ----
+// Each helper RETURNS an error string ('' = valid) so a submit handler can build a
+// { fieldName: message } map and render the message under the matching field instead
+// of a popup. Empty entries are pruned before deciding whether the form is valid.
+type FieldErrors = Record<string, string>
+const REQUIRED_MSG = 'This field is required.'
+const vRequired = (v: string, msg = REQUIRED_MSG) => (v.trim() ? '' : msg)
+const vMinChars = (v: string, min: number, label = 'This field') =>
+  !v.trim() ? REQUIRED_MSG : v.trim().length >= min ? '' : `${label} must be at least ${min} characters.`
+const vEmail = (v: string) =>
+  !v.trim() ? REQUIRED_MSG : /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim()) ? '' : 'Enter a valid email address.'
+const vPhone = (v: string, required = true) => {
+  const digits = v.replace(/\D/g, '')
+  if (!digits) return required ? REQUIRED_MSG : ''
+  return digits.length >= 7 && digits.length <= 15 ? '' : 'Enter a valid phone number (7–15 digits).'
+}
+const vZip = (v: string) =>
+  !v.trim() ? REQUIRED_MSG : /^[A-Za-z0-9][A-Za-z0-9 -]{2,9}$/.test(v.trim()) ? '' : 'Enter a valid ZIP / postal code.'
+const vUrl = (v: string, required = false) =>
+  !v.trim() ? (required ? REQUIRED_MSG : '') : /^https?:\/\/[^\s.]+\.[^\s]+$/.test(v.trim()) ? '' : 'Enter a full URL (https://…).'
+const vPassword = (v: string) => (!v ? REQUIRED_MSG : v.length >= 6 ? '' : 'Password must be at least 6 characters.')
+const vUsername = (v: string) =>
+  !v.trim()
+    ? REQUIRED_MSG
+    : /^[A-Za-z0-9._-]{3,30}$/.test(v.trim())
+      ? ''
+      : 'Username must be 3–30 characters: letters, numbers, dot, dash or underscore.'
+
+/**
+ * Live, as-you-type input filtering keyed off the field's `name`. Strips characters
+ * that can never be valid (letters in a phone number, symbols in a ZIP) and hard-caps
+ * the length, so the user simply cannot enter junk. Returns the cleaned value.
+ */
+const sanitizeField = (name: string, value: string): string => {
+  if (name === 'student_username') return value.replace(/[^A-Za-z0-9._-]/g, '').slice(0, 30)
+  if (/phone/i.test(name) || name === 'main_phone') return value.replace(/[^\d+\-() ]/g, '').slice(0, 20)
+  if (name === 'addr_zip') return value.replace(/[^A-Za-z0-9 -]/g, '').slice(0, 10)
+  if (/email/i.test(name)) return value.replace(/\s/g, '').slice(0, 254)
+  if (name === 'password' || name === 'confirm_password') return value.slice(0, 64)
+  if (name === 'addr_floor') return value.slice(0, 20)
+  if (name === 'grade_level' || name === 'addr_state' || name === 'addr_country') return value.slice(0, 40)
+  if (/website|url/i.test(name)) return value.replace(/\s/g, '').slice(0, 200)
+  if (name === 'digital_signature') return value.slice(0, 80)
+  // Generic text fields: names, addresses, school/role fields — cap at a sane length.
+  return value.slice(0, 100)
+}
+
+/** Drop the '' (valid) entries so the caller can test `Object.keys(...).length`. */
+const pruneErrors = (errs: FieldErrors): FieldErrors =>
+  Object.fromEntries(Object.entries(errs).filter(([, msg]) => msg))
+
+/** Scroll to and focus the first field that has an error. */
+const focusFirstError = (form: HTMLFormElement, errs: FieldErrors) => {
+  const first = Object.keys(errs)[0]
+  if (!first) return
+  const el = form.querySelector<HTMLElement>(`[name="${first}"]`)
+  if (el) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    window.setTimeout(() => el.focus?.(), 250)
+  }
+}
+
+/** Map a server-side registration error to the field it belongs to (duplicate username / email). */
+const mapRegisterError = (err: unknown, emailField = 'email'): FieldErrors | null => {
+  const m = (err instanceof Error ? err.message : '').toLowerCase()
+  if (m.includes('username')) return { student_username: 'That username is already taken — please choose another.' }
+  if (m.includes('email') && (m.includes('use') || m.includes('exist') || m.includes('registered') || m.includes('account') || m.includes('taken')))
+    return { [emailField]: 'An account with this email already exists.' }
+  return null
+}
+
+/** Combine the split address inputs (addr_*) into one stored address line. */
+const joinAddress = (fd: FormData, prefix = 'addr_') => {
+  const street = value(fd, `${prefix}street`)
+  const floor = value(fd, `${prefix}floor`)
+  const city = value(fd, `${prefix}city`)
+  const state = value(fd, `${prefix}state`)
+  const zip = value(fd, `${prefix}zip`)
+  const country = value(fd, `${prefix}country`)
+  const line1 = [street, floor].filter(Boolean).join(', ')
+  const cityZip = [[city, state].filter(Boolean).join(', '), zip].filter(Boolean).join(' ')
+  return [line1, cityZip, country].filter(Boolean).join(', ')
+}
+
+/** Build the { addr_*: error } slice for a required address (floor is optional). */
+const validateAddress = (fd: FormData, prefix = 'addr_'): FieldErrors => ({
+  [`${prefix}street`]: vRequired(value(fd, `${prefix}street`)),
+  [`${prefix}city`]: vRequired(value(fd, `${prefix}city`)),
+  [`${prefix}state`]: vRequired(value(fd, `${prefix}state`)),
+  [`${prefix}zip`]: vZip(value(fd, `${prefix}zip`)),
+  [`${prefix}country`]: vRequired(value(fd, `${prefix}country`)),
+})
+
+/** Inline error message rendered directly under a form field. */
+function FieldError({ msg, full = false }: { msg?: string; full?: boolean }) {
+  if (!msg) return null
+  return <span className={`ns-field-error${full ? ' ns-field--full' : ''}`} role="alert">{msg}</span>
+}
+
+/** Reusable split-address inputs (Street / Floor / City / State / ZIP / Country). */
+function AddressFields({ errs, title = 'Home Address' }: { errs: FieldErrors; title?: string }) {
+  return (
+    <>
+      <div className="ns-form__subhead">{title}</div>
+      <label className="ns-field ns-field--full"><span>Street Name</span><input name="addr_street" /><FieldError msg={errs.addr_street} /></label>
+      <label className="ns-field"><span>Floor / Apt <span className="ns-field-hint">(optional)</span></span><input name="addr_floor" /></label>
+      <label className="ns-field"><span>City</span><input name="addr_city" /><FieldError msg={errs.addr_city} /></label>
+      <label className="ns-field"><span>State / Province</span><input name="addr_state" /><FieldError msg={errs.addr_state} /></label>
+      <label className="ns-field"><span>ZIP / Postal Code</span><input name="addr_zip" inputMode="numeric" maxLength={10} /><FieldError msg={errs.addr_zip} /></label>
+      <label className="ns-field"><span>Country</span><input name="addr_country" defaultValue="United States" /><FieldError msg={errs.addr_country} /></label>
+    </>
+  )
+}
 
 const TABLE_PAGE_SIZE = 10
 
@@ -622,6 +736,37 @@ export default function NewSchool() {
   const [parentParticipantId, setParentParticipantId] = useState('')
   // Parent must verify the student's unique ID before consent can be submitted.
   const [parentVerify, setParentVerify] = useState<{ status: 'idle' | 'checking' | 'ok' | 'fail'; name: string }>({ status: 'idle', name: '' })
+  // Inline (below-field) validation errors per registration form.
+  const [studentErr, setStudentErr] = useState<FieldErrors>({})
+  const [parentErr, setParentErr] = useState<FieldErrors>({})
+  const [schoolErr, setSchoolErr] = useState<FieldErrors>({})
+  const [teacherErr, setTeacherErr] = useState<FieldErrors>({})
+  // Form-level change handler: (1) live-filters the typed value so invalid characters
+  // and over-long input can't be entered, and (2) clears that field's error as the user
+  // edits it. React fires onChange on every keystroke, and input events bubble to the
+  // form, so this runs for every field. Controlled inputs (date picker, selects, the
+  // participant-ID lookup) manage their own value and are skipped from rewriting.
+  const clearFieldErr = (setter: Dispatch<SetStateAction<FieldErrors>>) =>
+    (event: FormEvent<HTMLFormElement>) => {
+      const el = event.target as HTMLInputElement
+      const name = el?.name
+      if (!name) return
+      if (
+        el.tagName === 'INPUT' &&
+        !el.readOnly &&
+        name !== 'participant_id' &&
+        !['checkbox', 'file', 'date', 'radio'].includes(el.type)
+      ) {
+        const cleaned = sanitizeField(name, el.value)
+        if (cleaned !== el.value) el.value = cleaned
+      }
+      setter((prev) => {
+        if (!prev[name]) return prev
+        const next = { ...prev }
+        delete next[name]
+        return next
+      })
+    }
   const [schoolApprovalsTab, setSchoolApprovalsTab] = useState<'students' | 'teachers' | 'parents'>('students')
   const [schoolApprovalSearch, setSchoolApprovalSearch] = useState('')
   const [schoolApprovalStatus, setSchoolApprovalStatus] = useState('all')
@@ -763,8 +908,8 @@ export default function NewSchool() {
 
   // Look up the student by their unique ID and show the name so the parent can confirm
   // they have the right child. Consent submission is blocked until this succeeds.
-  const verifyParentStudent = async () => {
-    const id = parentParticipantId.trim()
+  const verifyParentStudent = async (idArg?: string) => {
+    const id = (idArg ?? parentParticipantId).trim()
     if (!id) { setParentVerify({ status: 'fail', name: '' }); return }
     setParentVerify({ status: 'checking', name: '' })
     try {
@@ -885,28 +1030,52 @@ export default function NewSchool() {
 
   const submitStudent = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    const form = event.currentTarget
+    const fd = new FormData(form)
+    const password = value(fd, 'password')
+    const confirmPassword = value(fd, 'confirm_password')
+    const dob = value(fd, 'date_of_birth')
+    const age = Number(ageFromDob(dob))
+    const errs: FieldErrors = {
+      full_name: vMinChars(value(fd, 'full_name'), 3, 'Full name'),
+      student_username: vUsername(value(fd, 'student_username')),
+      date_of_birth: !dob ? REQUIRED_MSG : !age ? 'Enter a valid date of birth.' : age < 11 || age > 19 ? 'Student must be between 11 and 19 years old.' : '',
+      email: vEmail(value(fd, 'email')),
+      password: vPassword(password),
+      confirm_password: !confirmPassword ? REQUIRED_MSG : password !== confirmPassword ? 'Passwords do not match.' : '',
+      phone_number: vPhone(value(fd, 'phone_number'), false),
+      ...validateAddress(fd),
+      grade_level: vRequired(value(fd, 'grade_level')),
+      parent_name: vMinChars(value(fd, 'parent_name'), 3, 'Parent name'),
+      parent_phone: vPhone(value(fd, 'parent_phone')),
+      parent_email: vEmail(value(fd, 'parent_email')),
+      student_acknowledgement: checked(fd, 'student_acknowledgement') ? '' : 'Please confirm the participation acknowledgement.',
+    }
+    if (studentEduMode) {
+      errs.school_name = vMinChars(value(fd, 'school_name'), 2, 'School name')
+      errs.edu_school_email = vEmail(value(fd, 'edu_school_email'))
+      errs.school_website = vUrl(value(fd, 'school_website'), false)
+    } else {
+      errs.school_name = vRequired(value(fd, 'school_name'), 'Please select your school.')
+      if (matchedStudentSchool && studentSchoolTeachers.length > 0) {
+        errs.teacher_id = vRequired(value(fd, 'teacher_id'), 'Please select a teacher.')
+      }
+    }
+    const clean = pruneErrors(errs)
+    if (Object.keys(clean).length) { setStudentErr(clean); focusFirstError(form, clean); return }
+    setStudentErr({})
     setBusy('student')
     try {
-      const form = event.currentTarget
-      const fd = new FormData(form)
-      const password = value(fd, 'password')
-      const confirmPassword = value(fd, 'confirm_password')
-      const acknowledged = checked(fd, 'student_acknowledgement')
-      if (password !== confirmPassword) {
-        throw new Error('Student password and confirmation must match.')
-      }
-      if (!acknowledged) {
-        throw new Error('Please confirm the student participation acknowledgement.')
-      }
       const payload = {
         full_name: value(fd, 'full_name'),
         student_username: value(fd, 'student_username'),
-        age: Number(value(fd, 'age')),
-        date_of_birth: value(fd, 'date_of_birth'),
+        age,
+        date_of_birth: dob,
         email: value(fd, 'email'),
         password,
         phone_number: value(fd, 'phone_number'),
-        home_address: value(fd, 'home_address'),
+        home_address: joinAddress(fd),
+        zip_code: value(fd, 'addr_zip'),
         school_id: Number(value(fd, 'school_id') || 0) || undefined,
         school_name: value(fd, 'school_name'),
         teacher_id: Number(value(fd, 'teacher_id') || 0) || undefined,
@@ -917,7 +1086,7 @@ export default function NewSchool() {
         parent_name: value(fd, 'parent_name'),
         parent_phone: value(fd, 'parent_phone'),
         parent_email: value(fd, 'parent_email'),
-        student_acknowledgement: acknowledged,
+        student_acknowledgement: true,
         terms_signature: studentTermsSig,
         terms_version: CHALLENGE_TERMS_VERSION,
       }
@@ -928,9 +1097,12 @@ export default function NewSchool() {
       setStudentTeacherId('')
       setStudentDob('')
       setStudentEduMode(false)
+      setStudentErr({})
       await refresh()
       await reloadOverview()
     } catch (err) {
+      const mapped = mapRegisterError(err, 'email')
+      if (mapped) { setStudentErr(mapped); focusFirstError(form, mapped) }
       handleError(err, 'Student registration failed.')
     } finally {
       setBusy('')
@@ -939,11 +1111,30 @@ export default function NewSchool() {
 
   const submitParent = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    const form = event.currentTarget
+    const fd = new FormData(form)
+    const governmentId = fileValue(fd, 'government_id_file')
+    const errs: FieldErrors = {
+      participant_id: !value(fd, 'participant_id').trim()
+        ? REQUIRED_MSG
+        : parentVerify.status !== 'ok'
+          ? 'Verify the student ID above before submitting.'
+          : '',
+      parent_full_name: vMinChars(value(fd, 'parent_full_name'), 3, 'Parent name'),
+      relationship_to_student: vRequired(value(fd, 'relationship_to_student')),
+      phone_number: vPhone(value(fd, 'phone_number')),
+      email: vEmail(value(fd, 'email')),
+      password: vPassword(value(fd, 'password')),
+      ...validateAddress(fd),
+      digital_signature: vMinChars(value(fd, 'digital_signature'), 3, 'Signature'),
+      consent_checked: checked(fd, 'consent_checked') ? '' : 'You must give consent to continue.',
+      government_id_file: governmentId && governmentId.size > MAX_DOC_BYTES ? 'Government ID must be 5 MB or smaller.' : '',
+    }
+    const clean = pruneErrors(errs)
+    if (Object.keys(clean).length) { setParentErr(clean); focusFirstError(form, clean); return }
+    setParentErr({})
     setBusy('parent')
     try {
-      const form = event.currentTarget
-      const fd = new FormData(form)
-      const governmentId = fileValue(fd, 'government_id_file')
       const governmentIdUrl = await uploadIfPresent(governmentId)
       const payload = {
         token: value(fd, 'token') || token || parentLink?.token || '',
@@ -952,7 +1143,8 @@ export default function NewSchool() {
         relationship_to_student: value(fd, 'relationship_to_student'),
         phone_number: value(fd, 'phone_number'),
         email: value(fd, 'email'),
-        home_address: value(fd, 'home_address'),
+        home_address: joinAddress(fd),
+        zip_code: value(fd, 'addr_zip'),
         password: value(fd, 'password'),
         government_id_url: governmentIdUrl,
         consent_checked: checked(fd, 'consent_checked'),
@@ -968,12 +1160,15 @@ export default function NewSchool() {
       setParentVerify({ status: 'idle', name: '' })
       setParentSchoolSearch('')
       setParentTeacherId('')
+      setParentErr({})
       await refresh()
       await reloadOverview()
       if (payload.token) {
         await reloadParentLink(payload.token)
       }
     } catch (err) {
+      const mapped = mapRegisterError(err, 'email')
+      if (mapped) { setParentErr(mapped); focusFirstError(form, mapped) }
       handleError(err, 'Parent consent failed.')
     } finally {
       setBusy('')
@@ -982,13 +1177,29 @@ export default function NewSchool() {
 
   const submitSchool = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    const form = event.currentTarget
+    const fd = new FormData(form)
+    const errs: FieldErrors = {
+      school_name: vMinChars(value(fd, 'school_name'), 3, 'School name'),
+      ...validateAddress(fd),
+      school_district: vRequired(value(fd, 'school_district')),
+      main_phone: vPhone(value(fd, 'main_phone')),
+      principal_name: vMinChars(value(fd, 'principal_name'), 3, 'Principal name'),
+      administrator_name: vMinChars(value(fd, 'administrator_name'), 3, 'Administrator name'),
+      administrator_email: vEmail(value(fd, 'administrator_email')),
+      administrator_phone: vPhone(value(fd, 'administrator_phone')),
+      school_website: vUrl(value(fd, 'school_website'), false),
+      password: vPassword(value(fd, 'password')),
+    }
+    const clean = pruneErrors(errs)
+    if (Object.keys(clean).length) { setSchoolErr(clean); focusFirstError(form, clean); return }
+    setSchoolErr({})
     setBusy('school')
     try {
-      const form = event.currentTarget
-      const fd = new FormData(form)
       const payload = {
         school_name: value(fd, 'school_name'),
-        school_address: value(fd, 'school_address'),
+        school_address: joinAddress(fd),
+        zip_code: value(fd, 'addr_zip'),
         school_district: value(fd, 'school_district'),
         school_type: value(fd, 'school_type'),
         main_phone: value(fd, 'main_phone'),
@@ -1004,9 +1215,12 @@ export default function NewSchool() {
       const res = await api.post<any>('new-school/school/register', payload)
       showNotice('success', res.message || 'School registered.')
       form.reset()
+      setSchoolErr({})
       await refresh()
       await reloadOverview()
     } catch (err) {
+      const mapped = mapRegisterError(err, 'administrator_email')
+      if (mapped) { setSchoolErr(mapped); focusFirstError(form, mapped) }
       handleError(err, 'School registration failed.')
     } finally {
       setBusy('')
@@ -1015,11 +1229,29 @@ export default function NewSchool() {
 
   const submitTeacher = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    const form = event.currentTarget
+    const fd = new FormData(form)
+    const schoolId = Number(value(fd, 'school_id'))
+    const errs: FieldErrors = {
+      teacher_full_name: vMinChars(value(fd, 'teacher_full_name'), 3, 'Teacher name'),
+      school_email: vEmail(value(fd, 'school_email')),
+      phone_number: vPhone(value(fd, 'phone_number')),
+      role_department: vRequired(value(fd, 'role_department')),
+      grade_level_supported: vRequired(value(fd, 'grade_level_supported')),
+      password: vPassword(value(fd, 'password')),
+    }
+    if (teacherEduMode) {
+      errs.school_name = vMinChars(value(fd, 'school_name'), 2, 'School name')
+      errs.edu_school_email = vEmail(value(fd, 'edu_school_email'))
+      errs.school_website = vUrl(value(fd, 'school_website'), false)
+    } else {
+      errs.school_name = vRequired(value(fd, 'school_name'), 'Please select your school.')
+    }
+    const clean = pruneErrors(errs)
+    if (Object.keys(clean).length) { setTeacherErr(clean); focusFirstError(form, clean); return }
+    setTeacherErr({})
     setBusy('teacher')
     try {
-      const form = event.currentTarget
-      const fd = new FormData(form)
-      const schoolId = Number(value(fd, 'school_id'))
       const payload = {
         teacher_full_name: value(fd, 'teacher_full_name'),
         school_id: schoolId > 0 ? schoolId : undefined,
@@ -1042,9 +1274,12 @@ export default function NewSchool() {
       form.reset()
       setTeacherSchoolSearch('')
       setTeacherEduMode(false)
+      setTeacherErr({})
       await refresh()
       await reloadOverview()
     } catch (err) {
+      const mapped = mapRegisterError(err, 'school_email')
+      if (mapped) { setTeacherErr(mapped); focusFirstError(form, mapped) }
       handleError(err, 'Teacher registration failed.')
     } finally {
       setBusy('')
@@ -2263,35 +2498,47 @@ export default function NewSchool() {
           </p>
 
           <div className="ns-form-grid ns-form-grid--single">
-            <form className="glass ns-form reveal in" id="student-registration" onSubmit={submitStudent} hidden={registrationTag !== 'student'}>
+            <form className="glass ns-form reveal in" id="student-registration" onSubmit={submitStudent} onChange={clearFieldErr(setStudentErr)} hidden={registrationTag !== 'student'} noValidate>
               <div className="ns-form__head">
                 <span className="eyebrow">Step 1</span>
                 <h3>Student Registration</h3>
                 <p>Creates the participant profile and QR code for parent consent.</p>
               </div>
               <div className="ns-field-grid">
-                <label className="ns-field"><span>Full Name</span><input name="full_name" required /></label>
-                <label className="ns-field"><span>Student Username</span><input name="student_username" required /></label>
-                <label className="ns-field"><span>Date of Birth</span><input name="date_of_birth" type="date" value={studentDob} onChange={(e) => setStudentDob(e.target.value)} required /></label>
-                <label className="ns-field"><span>Age</span><input name="age" type="number" min="11" max="19" value={ageFromDob(studentDob)} readOnly required title="Auto-calculated from date of birth" /></label>
-                <label className="ns-field"><span>Email</span><input name="email" type="email" required /></label>
-                <label className="ns-field"><span>Password</span><input name="password" type="password" minLength={6} required /></label>
-                <label className="ns-field"><span>Confirm Password</span><input name="confirm_password" type="password" minLength={6} required /></label>
-                <label className="ns-field"><span>Phone Number</span><input name="phone_number" required /></label>
-                <label className="ns-field ns-field--full"><span>Home Address</span><input name="home_address" required /></label>
+                <label className="ns-field"><span>Full Name</span><input name="full_name" /><FieldError msg={studentErr.full_name} /></label>
+                <label className="ns-field"><span>Enter your Username <span className="ns-field-hint">(must be unique)</span></span><input name="student_username" autoComplete="off" /><FieldError msg={studentErr.student_username} /></label>
+                <label className="ns-field"><span>Date of Birth <span className="ns-field-hint">(MM-DD-YYYY)</span></span><input name="date_of_birth" type="date" value={studentDob} onChange={(e) => setStudentDob(e.target.value)} /><FieldError msg={studentErr.date_of_birth} /></label>
+                <label className="ns-field"><span>Age</span><input name="age" type="number" min="11" max="19" value={ageFromDob(studentDob)} readOnly title="Auto-calculated from date of birth" /></label>
+                <label className="ns-field"><span>Email</span><input name="email" type="email" /><FieldError msg={studentErr.email} /></label>
+                <label className="ns-field"><span>Enter Password</span><input name="password" type="password" /><FieldError msg={studentErr.password} /></label>
+                <label className="ns-field"><span>Confirm Password</span><input name="confirm_password" type="password" /><FieldError msg={studentErr.confirm_password} /></label>
+                <label className="ns-field"><span>Phone Number <span className="ns-field-hint">(optional)</span></span><input type="tel" name="phone_number" /><FieldError msg={studentErr.phone_number} /></label>
+                <AddressFields errs={studentErr} />
                 {!studentEduMode ? (
                   <>
-                    <label className="ns-field ns-field--full">
+                    <div className="ns-field--full ns-edu-switch ns-edu-switch--top">
+                      School not listed?{' '}
+                      <button type="button" className="ns-linkbtn" onClick={() => { setStudentEduMode(true); setStudentSchoolSearch(''); setStudentTeacherId('') }}>
+                        Register under TrendCatch EDU
+                      </button>
+                    </div>
+                    <label className="ns-field ns-field--full ns-field--pick">
                       <span>Select School</span>
                       <select
                         name="school_name"
                         value={studentSchoolSearch}
                         onChange={(event) => {
+                          if (event.target.value === '__edu__') {
+                            setStudentEduMode(true)
+                            setStudentSchoolSearch('')
+                            setStudentTeacherId('')
+                            return
+                          }
                           setStudentSchoolSearch(event.target.value)
                           setStudentTeacherId('')
                         }}
-                        required
                       >
+                        <option value="__edu__" className="ns-edu-option" style={{ color: '#ffdf94', fontWeight: 700, background: '#2a2410' }}>★ School not listed? Register under TrendCatch EDU</option>
                         <option value="">{schools.length ? 'Select your school' : 'No approved schools yet'}</option>
                         {schools.map((school: any) => (
                           <option key={school.id} value={school.school_name}>
@@ -2299,13 +2546,14 @@ export default function NewSchool() {
                           </option>
                         ))}
                       </select>
+                      <FieldError msg={studentErr.school_name} />
                     </label>
                     <input type="hidden" name="school_id" value={matchedStudentSchool?.id || ''} readOnly />
                     {matchedStudentSchool ? (
                       studentSchoolTeachers.length > 0 ? (
                         <label className="ns-field ns-field--full">
                           <span>Teacher</span>
-                          <select name="teacher_id" value={studentTeacherId} onChange={(event) => setStudentTeacherId(event.target.value)} required>
+                          <select name="teacher_id" value={studentTeacherId} onChange={(event) => setStudentTeacherId(event.target.value)}>
                             <option value="">Select a teacher</option>
                             {studentSchoolTeachers.map((teacher: any) => (
                               <option key={teacher.id} value={teacher.id}>
@@ -2313,6 +2561,7 @@ export default function NewSchool() {
                               </option>
                             ))}
                           </select>
+                          <FieldError msg={studentErr.teacher_id} />
                         </label>
                       ) : (
                         <div className="ns-alert ns-alert--info ns-field--full">
@@ -2324,12 +2573,6 @@ export default function NewSchool() {
                         Search and select an approved school to reveal its teacher list.
                       </div>
                     )}
-                    <div className="ns-field--full ns-edu-switch">
-                      School not listed?{' '}
-                      <button type="button" className="ns-linkbtn" onClick={() => { setStudentEduMode(true); setStudentSchoolSearch(''); setStudentTeacherId('') }}>
-                        Register under TrendCatch EDU
-                      </button>
-                    </div>
                   </>
                 ) : (
                   <>
@@ -2337,19 +2580,20 @@ export default function NewSchool() {
                       <strong>Registering under TrendCatch EDU.</strong> Enter your school's details below — our team reviews it and sets your school up. A teacher is assigned after review.{' '}
                       <button type="button" className="ns-linkbtn" onClick={() => setStudentEduMode(false)}>Pick from the list instead</button>
                     </div>
-                    <label className="ns-field ns-field--full"><span>School Name</span><input name="school_name" required /></label>
-                    <label className="ns-field"><span>School / Principal Email</span><input name="edu_school_email" type="email" required /></label>
-                    <label className="ns-field"><span>School Website</span><input name="school_website" type="url" placeholder="https://" /></label>
+                    <label className="ns-field ns-field--full ns-field--edu"><span>School Name</span><input name="school_name" /><FieldError msg={studentErr.school_name} /></label>
+                    <label className="ns-field ns-field--edu"><span>School / Principal Email</span><input name="edu_school_email" type="email" /><FieldError msg={studentErr.edu_school_email} /></label>
+                    <label className="ns-field ns-field--edu"><span>School Website</span><input name="school_website" type="url" placeholder="https://" /><FieldError msg={studentErr.school_website} /></label>
                   </>
                 )}
-                <label className="ns-field"><span>Grade Level</span><input name="grade_level" placeholder="9th Grade" required /></label>
-                <label className="ns-field"><span>Parent Name</span><input name="parent_name" required /></label>
-                <label className="ns-field"><span>Parent Phone</span><input name="parent_phone" required /></label>
-                <label className="ns-field ns-field--full"><span>Parent Email</span><input name="parent_email" type="email" required /></label>
+                <label className="ns-field"><span>Grade Level</span><input name="grade_level" placeholder="9th Grade" /><FieldError msg={studentErr.grade_level} /></label>
+                <label className="ns-field"><span>Parent Name</span><input name="parent_name" /><FieldError msg={studentErr.parent_name} /></label>
+                <label className="ns-field"><span>Parent Phone</span><input type="tel" name="parent_phone" /><FieldError msg={studentErr.parent_phone} /></label>
+                <label className="ns-field ns-field--full"><span>Parent Email</span><input name="parent_email" type="email" /><FieldError msg={studentErr.parent_email} /></label>
                 <label className="ns-check ns-field--full">
-                  <input name="student_acknowledgement" type="checkbox" required />
+                  <input name="student_acknowledgement" type="checkbox" />
                   <span>I confirm this student is between 11 and 19 and understands parent consent is required before submission.</span>
                 </label>
+                <FieldError msg={studentErr.student_acknowledgement} full />
               </div>
               <TermsAgreement kind="student" idPrefix="ns-student" signatureName={studentTermsSig} onSignatureChange={setStudentTermsSig} onAcceptedChange={setStudentTermsOk} />
               <button
@@ -2361,7 +2605,7 @@ export default function NewSchool() {
               </button>
             </form>
 
-            <form className="glass ns-form reveal in" id="parent-consent" onSubmit={submitParent} hidden={registrationTag !== 'parent'}>
+            <form className="glass ns-form reveal in" id="parent-consent" onSubmit={submitParent} onChange={clearFieldErr(setParentErr)} hidden={registrationTag !== 'parent'} noValidate>
               <div className="ns-form__head">
                 <span className="eyebrow">Step 2</span>
                 <h3>Parent Consent via Student ID</h3>
@@ -2373,10 +2617,16 @@ export default function NewSchool() {
                   <div className="ns-verify-row">
                     <input
                       name="participant_id"
+                      inputMode="numeric"
+                      maxLength={8}
                       value={parentParticipantId}
-                      onChange={(event) => { setParentParticipantId(event.target.value); setParentVerify({ status: 'idle', name: '' }) }}
+                      onChange={(event) => {
+                        const next = event.target.value.replace(/\D/g, '').slice(0, 8)
+                        setParentParticipantId(next)
+                        if (/^\d{8}$/.test(next)) void verifyParentStudent(next)
+                        else setParentVerify({ status: 'idle', name: '' })
+                      }}
                       placeholder="Enter the 8-digit student ID"
-                      required
                     />
                     <button
                       type="button"
@@ -2389,17 +2639,18 @@ export default function NewSchool() {
                   </div>
                   {parentVerify.status === 'ok' && <span className="ns-verify-msg ns-verify-msg--ok">✓ Student confirmed: <strong>{parentVerify.name}</strong></span>}
                   {parentVerify.status === 'fail' && <span className="ns-verify-msg ns-verify-msg--fail">No student found with that ID. Check the number and try again.</span>}
-                  {(parentVerify.status === 'idle' || parentVerify.status === 'checking') && <span className="ns-verify-msg">Enter the student’s ID and tap <strong>Verify</strong> to confirm the student before you submit.</span>}
+                  {(parentVerify.status === 'idle' || parentVerify.status === 'checking') && <span className="ns-verify-msg">Type the 8-digit ID — it verifies automatically, or tap <strong>Verify</strong>.</span>}
+                  <FieldError msg={parentErr.participant_id} />
                 </label>
                 <label className="ns-field ns-field--full">
                   <span>QR Token (Optional)</span>
                   <input name="token" defaultValue={token || parentLink?.token || ''} placeholder="Use this if you opened the QR link" />
                 </label>
-                <label className="ns-field"><span>Parent Name</span><input name="parent_full_name" required /></label>
-                <label className="ns-field"><span>Relationship</span><input name="relationship_to_student" required /></label>
-                <label className="ns-field"><span>Phone Number</span><input name="phone_number" required /></label>
-                <label className="ns-field"><span>Email</span><input name="email" type="email" required /></label>
-                <label className="ns-field"><span>Password</span><input name="password" type="password" minLength={6} required /></label>
+                <label className="ns-field"><span>Parent Name</span><input name="parent_full_name" /><FieldError msg={parentErr.parent_full_name} /></label>
+                <label className="ns-field"><span>Relationship</span><input name="relationship_to_student" placeholder="Mother, Father, Guardian…" /><FieldError msg={parentErr.relationship_to_student} /></label>
+                <label className="ns-field"><span>Phone Number</span><input type="tel" name="phone_number" /><FieldError msg={parentErr.phone_number} /></label>
+                <label className="ns-field"><span>Email</span><input name="email" type="email" /><FieldError msg={parentErr.email} /></label>
+                <label className="ns-field"><span>Password</span><input name="password" type="password" /><FieldError msg={parentErr.password} /></label>
                 <label className="ns-field"><span>Preferred Contact Method</span>
                   <select name="preferred_contact_method" defaultValue="phone">
                     <option value="phone">Phone</option>
@@ -2407,7 +2658,7 @@ export default function NewSchool() {
                     <option value="text">Text</option>
                   </select>
                 </label>
-                <label className="ns-field ns-field--full"><span>Home Address</span><input name="home_address" required /></label>
+                <AddressFields errs={parentErr} />
                 <label className="ns-field ns-field--full">
                   <span>Select School</span>
                   <select
@@ -2431,7 +2682,7 @@ export default function NewSchool() {
                   parentSchoolTeachers.length > 0 ? (
                     <label className="ns-field ns-field--full">
                       <span>Teacher</span>
-                      <select name="teacher_id" value={parentTeacherId} onChange={(event) => setParentTeacherId(event.target.value)} required>
+                      <select name="teacher_id" value={parentTeacherId} onChange={(event) => setParentTeacherId(event.target.value)}>
                         <option value="">Select a teacher</option>
                         {parentSchoolTeachers.map((teacher: any) => (
                           <option key={teacher.id} value={teacher.id}>
@@ -2451,33 +2702,36 @@ export default function NewSchool() {
                   </div>
                 )}
                 <label className="ns-field ns-field--full">
-                  <span>Government ID Upload Optional</span>
+                  <span>Government ID Upload <span className="ns-field-hint">(optional, max 5 MB)</span></span>
                   <input name="government_id_file" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" />
+                  <FieldError msg={parentErr.government_id_file} />
                 </label>
                 <label className="ns-field ns-field--full">
                   <span>Type your full name</span>
-                  <input name="digital_signature" placeholder="Your full name" required />
+                  <input name="digital_signature" placeholder="Your full name" />
+                  <FieldError msg={parentErr.digital_signature} />
                 </label>
                 <label className="ns-check ns-field--full">
-                  <input name="consent_checked" type="checkbox" required />
+                  <input name="consent_checked" type="checkbox" />
                   <span>I confirm I am the parent or legal guardian and give permission for participation.</span>
                 </label>
+                <FieldError msg={parentErr.consent_checked} full />
               </div>
               <TermsAgreement kind="parent" idPrefix="ns-parent" hideSignature signatureName="" onSignatureChange={() => {}} onAcceptedChange={setParentTermsOk} />
               {parentVerify.status !== 'ok' && <p className="ns-check-hint">Verify the student’s unique ID above before you can submit consent.</p>}
               <button className="btn btn--solid" type="submit" disabled={busy === 'parent' || !parentTermsOk || parentVerify.status !== 'ok'}>{busy === 'parent' ? 'Saving...' : 'Approve Consent'}</button>
             </form>
 
-            <form className="glass ns-form reveal in" id="school-registration" onSubmit={submitSchool} hidden={registrationTag !== 'school'}>
+            <form className="glass ns-form reveal in" id="school-registration" onSubmit={submitSchool} onChange={clearFieldErr(setSchoolErr)} hidden={registrationTag !== 'school'} noValidate>
               <div className="ns-form__head">
                 <span className="eyebrow">Step 3</span>
                 <h3>School Registration</h3>
                 <p>Creates the school account and approval workspace.</p>
               </div>
               <div className="ns-field-grid">
-                <label className="ns-field ns-field--full"><span>School Name</span><input name="school_name" required /></label>
-                <label className="ns-field ns-field--full"><span>School Address</span><input name="school_address" required /></label>
-                <label className="ns-field"><span>School District</span><input name="school_district" required /></label>
+                <label className="ns-field ns-field--full"><span>School Name</span><input name="school_name" /><FieldError msg={schoolErr.school_name} /></label>
+                <AddressFields errs={schoolErr} title="School Address" />
+                <label className="ns-field"><span>School District</span><input name="school_district" /><FieldError msg={schoolErr.school_district} /></label>
                 <label className="ns-field"><span>School Type</span>
                   <select name="school_type" defaultValue="public">
                     <option value="public">Public</option>
@@ -2487,36 +2741,49 @@ export default function NewSchool() {
                     <option value="other">Other</option>
                   </select>
                 </label>
-                <label className="ns-field"><span>Main Phone</span><input name="main_phone" required /></label>
-                <label className="ns-field"><span>Principal Name</span><input name="principal_name" required /></label>
-                <label className="ns-field"><span>Administrator Name</span><input name="administrator_name" required /></label>
-                <label className="ns-field"><span>Administrator Email</span><input name="administrator_email" type="email" required /></label>
-                <label className="ns-field"><span>Administrator Phone</span><input name="administrator_phone" required /></label>
-                <label className="ns-field ns-field--full"><span>School Website</span><input name="school_website" placeholder="https://example.edu" /></label>
-                <label className="ns-field ns-field--full"><span>Password</span><input name="password" type="password" minLength={6} required /></label>
+                <label className="ns-field"><span>Main Phone</span><input type="tel" name="main_phone" /><FieldError msg={schoolErr.main_phone} /></label>
+                <label className="ns-field"><span>Principal Name</span><input name="principal_name" /><FieldError msg={schoolErr.principal_name} /></label>
+                <label className="ns-field"><span>Administrator Name</span><input name="administrator_name" /><FieldError msg={schoolErr.administrator_name} /></label>
+                <label className="ns-field"><span>Administrator Email</span><input name="administrator_email" type="email" /><FieldError msg={schoolErr.administrator_email} /></label>
+                <label className="ns-field"><span>Administrator Phone</span><input type="tel" name="administrator_phone" /><FieldError msg={schoolErr.administrator_phone} /></label>
+                <label className="ns-field ns-field--full"><span>School Website <span className="ns-field-hint">(optional)</span></span><input name="school_website" type="url" placeholder="https://example.edu" /><FieldError msg={schoolErr.school_website} /></label>
+                <label className="ns-field ns-field--full"><span>Password</span><input name="password" type="password" /><FieldError msg={schoolErr.password} /></label>
               </div>
               <TermsAgreement kind="school" idPrefix="ns-school" signatureName={schoolTermsSig} onSignatureChange={setSchoolTermsSig} onAcceptedChange={setSchoolTermsOk} />
               <button className="btn btn--solid" type="submit" disabled={busy === 'school' || !schoolTermsOk}>{busy === 'school' ? 'Saving...' : 'Register School'}</button>
             </form>
 
-            <form className="glass ns-form reveal in" id="teacher-registration" onSubmit={submitTeacher} hidden={registrationTag !== 'teacher'}>
+            <form className="glass ns-form reveal in" id="teacher-registration" onSubmit={submitTeacher} onChange={clearFieldErr(setTeacherErr)} hidden={registrationTag !== 'teacher'} noValidate>
               <div className="ns-form__head">
                 <span className="eyebrow">Step 4</span>
                 <h3>Teacher Registration</h3>
                 <p>Links a teacher to a school for tracking, approval, and leaderboard scoring.</p>
               </div>
               <div className="ns-field-grid">
-                <label className="ns-field ns-field--full"><span>Teacher Full Name</span><input name="teacher_full_name" required /></label>
+                <label className="ns-field ns-field--full"><span>Teacher Full Name</span><input name="teacher_full_name" /><FieldError msg={teacherErr.teacher_full_name} /></label>
                 {!teacherEduMode ? (
                   <>
-                    <label className="ns-field ns-field--full">
+                    <div className="ns-field--full ns-edu-switch ns-edu-switch--top">
+                      School not listed?{' '}
+                      <button type="button" className="ns-linkbtn" onClick={() => { setTeacherEduMode(true); setTeacherSchoolSearch('') }}>
+                        Register under TrendCatch EDU
+                      </button>
+                    </div>
+                    <label className="ns-field ns-field--full ns-field--pick">
                       <span>Select School</span>
                       <select
                         name="school_name"
                         value={teacherSchoolSearch}
-                        onChange={(event) => setTeacherSchoolSearch(event.target.value)}
-                        required
+                        onChange={(event) => {
+                          if (event.target.value === '__edu__') {
+                            setTeacherEduMode(true)
+                            setTeacherSchoolSearch('')
+                            return
+                          }
+                          setTeacherSchoolSearch(event.target.value)
+                        }}
                       >
+                        <option value="__edu__" className="ns-edu-option" style={{ color: '#ffdf94', fontWeight: 700, background: '#2a2410' }}>★ School not listed? Register under TrendCatch EDU</option>
                         <option value="">{schools.length ? 'Select your school' : 'No approved schools yet'}</option>
                         {schools.map((school: any) => (
                           <option key={school.id} value={school.school_name}>
@@ -2524,14 +2791,9 @@ export default function NewSchool() {
                           </option>
                         ))}
                       </select>
+                      <FieldError msg={teacherErr.school_name} />
                     </label>
                     <input type="hidden" name="school_id" value={approvedSchool(teacherSchoolSearch)?.id || ''} readOnly />
-                    <div className="ns-field--full ns-edu-switch">
-                      School not listed?{' '}
-                      <button type="button" className="ns-linkbtn" onClick={() => { setTeacherEduMode(true); setTeacherSchoolSearch('') }}>
-                        Register under TrendCatch EDU
-                      </button>
-                    </div>
                   </>
                 ) : (
                   <>
@@ -2539,15 +2801,15 @@ export default function NewSchool() {
                       <strong>Registering under TrendCatch EDU.</strong> Enter your school's details — our team reviews it and sets your school up.{' '}
                       <button type="button" className="ns-linkbtn" onClick={() => setTeacherEduMode(false)}>Pick from the list instead</button>
                     </div>
-                    <label className="ns-field ns-field--full"><span>School Name</span><input name="school_name" required /></label>
-                    <label className="ns-field"><span>School / Principal Email</span><input name="edu_school_email" type="email" required /></label>
-                    <label className="ns-field ns-field--full"><span>School Website</span><input name="school_website" type="url" placeholder="https://" /></label>
+                    <label className="ns-field ns-field--full ns-field--edu"><span>School Name</span><input name="school_name" /><FieldError msg={teacherErr.school_name} /></label>
+                    <label className="ns-field ns-field--edu"><span>School / Principal Email</span><input name="edu_school_email" type="email" /><FieldError msg={teacherErr.edu_school_email} /></label>
+                    <label className="ns-field ns-field--full ns-field--edu"><span>School Website</span><input name="school_website" type="url" placeholder="https://" /><FieldError msg={teacherErr.school_website} /></label>
                   </>
                 )}
-                <label className="ns-field"><span>School Email</span><input name="school_email" type="email" required /></label>
-                <label className="ns-field"><span>Phone Number</span><input name="phone_number" required /></label>
-                <label className="ns-field"><span>Role / Department</span><input name="role_department" required /></label>
-                <label className="ns-field"><span>Grade Level Supported</span><input name="grade_level_supported" required /></label>
+                <label className="ns-field"><span>School Email</span><input name="school_email" type="email" /><FieldError msg={teacherErr.school_email} /></label>
+                <label className="ns-field"><span>Phone Number</span><input type="tel" name="phone_number" /><FieldError msg={teacherErr.phone_number} /></label>
+                <label className="ns-field"><span>Role / Department</span><input name="role_department" /><FieldError msg={teacherErr.role_department} /></label>
+                <label className="ns-field"><span>Grade Level Supported</span><input name="grade_level_supported" /><FieldError msg={teacherErr.grade_level_supported} /></label>
                 <label className="ns-field"><span>Teacher Tag</span>
                   <select name="teacher_tag" defaultValue="teacher">
                     <option value="teacher">Teacher</option>
@@ -2557,8 +2819,8 @@ export default function NewSchool() {
                     <option value="administrator">Administrator</option>
                   </select>
                 </label>
-                <label className="ns-field ns-field--full"><span>Employee ID</span><input name="employee_id" placeholder="Optional staff identifier" /></label>
-                <label className="ns-field ns-field--full"><span>Password</span><input name="password" type="password" minLength={6} required /></label>
+                <label className="ns-field ns-field--full"><span>Employee ID <span className="ns-field-hint">(optional)</span></span><input name="employee_id" placeholder="Optional staff identifier" /></label>
+                <label className="ns-field ns-field--full"><span>Password</span><input name="password" type="password" /><FieldError msg={teacherErr.password} /></label>
               </div>
               <TermsAgreement kind="teacher" idPrefix="ns-teacher" signatureName={teacherTermsSig} onSignatureChange={setTeacherTermsSig} onAcceptedChange={setTeacherTermsOk} />
               <button className="btn btn--solid" type="submit" disabled={busy === 'teacher' || !teacherTermsOk || (!teacherEduMode && !approvedSchool(teacherSchoolSearch))}>

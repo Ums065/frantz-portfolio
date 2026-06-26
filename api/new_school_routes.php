@@ -760,6 +760,7 @@ function new_school_handle_route(string $method, string $route): bool
             $dob = field($body, 'date_of_birth');
             $phone = field($body, 'phone_number');
             $homeAddress = field($body, 'home_address');
+            $zipCode = field($body, 'zip_code');
             $schoolName = field($body, 'school_name');
             $gradeLevel = field($body, 'grade_level');
             $parentName = field($body, 'parent_name');
@@ -871,6 +872,7 @@ function new_school_handle_route(string $method, string $route): bool
                          email = ?,
                          phone_number = ?,
                          home_address = ?,
+                         zip_code = ?,
                          school_name = ?,
                          grade_level = ?,
                          parent_name = ?,
@@ -889,6 +891,7 @@ function new_school_handle_route(string $method, string $route): bool
                     $email,
                     $phone,
                     $homeAddress,
+                    $zipCode,
                     $schoolName,
                     $gradeLevel,
                     $parentName,
@@ -902,9 +905,9 @@ function new_school_handle_route(string $method, string $route): bool
                     'INSERT INTO new_school_students (
                         user_id, school_id, teacher_id, participant_id, qr_token, qr_url,
                         full_name, student_username, age, date_of_birth, email, phone_number,
-                        home_address, school_name, grade_level, parent_name, parent_phone, parent_email,
+                        home_address, zip_code, school_name, grade_level, parent_name, parent_phone, parent_email,
                         parent_consent_status, school_approval_status, teacher_approval_status, submission_status, overall_status
-                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "pending", "pending", "pending", "locked", "student_registered")'
+                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "pending", "pending", "pending", "locked", "student_registered")'
                 );
                 $insert->execute([
                     (int) $user['id'],
@@ -920,6 +923,7 @@ function new_school_handle_route(string $method, string $route): bool
                     $email,
                     $phone,
                     $homeAddress,
+                    $zipCode,
                     $schoolName,
                     $gradeLevel,
                     $parentName,
@@ -993,6 +997,7 @@ function new_school_handle_route(string $method, string $route): bool
             $phone = field($body, 'phone_number');
             $email = require_email(field($body, 'email'));
             $homeAddress = field($body, 'home_address');
+            $zipCode = field($body, 'zip_code');
             $governmentIdUrl = field($body, 'government_id_url');
             $consentChecked = !empty($body['consent_checked']);
             $signature = field($body, 'digital_signature');
@@ -1067,6 +1072,7 @@ function new_school_handle_route(string $method, string $route): bool
                          phone_number = ?,
                          email = ?,
                          home_address = ?,
+                         zip_code = ?,
                          government_id_url = ?,
                          consent_checked = 1,
                          digital_signature = ?,
@@ -1084,6 +1090,7 @@ function new_school_handle_route(string $method, string $route): bool
                     $phone,
                     $email,
                     $homeAddress,
+                    $zipCode,
                     $governmentIdUrl !== '' ? $governmentIdUrl : null,
                     $signature,
                     (int) $existingParent['id'],
@@ -1092,9 +1099,9 @@ function new_school_handle_route(string $method, string $route): bool
                 $insert = $pdo->prepare(
                     'INSERT INTO new_school_parents (
                         user_id, student_id, parent_full_name, relationship_to_student,
-                        phone_number, email, home_address, government_id_url, consent_checked,
+                        phone_number, email, home_address, zip_code, government_id_url, consent_checked,
                         digital_signature, link_status, consented_at
-                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, "pending_student", NOW())'
+                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, "pending_student", NOW())'
                 );
                 $insert->execute([
                     (int) $user['id'],
@@ -1104,6 +1111,7 @@ function new_school_handle_route(string $method, string $route): bool
                     $phone,
                     $email,
                     $homeAddress,
+                    $zipCode,
                     $governmentIdUrl !== '' ? $governmentIdUrl : null,
                     $signature,
                 ]);
@@ -1391,6 +1399,7 @@ function new_school_handle_route(string $method, string $route): bool
         case $key === 'POST new-school/school/register': {
             $schoolName = field($body, 'school_name');
             $schoolAddress = field($body, 'school_address');
+            $zipCode = field($body, 'zip_code');
             $schoolDistrict = field($body, 'school_district');
             $mainPhone = field($body, 'main_phone');
             $principalName = require_name_field(field($body, 'principal_name'), 'Principal name', 3);
@@ -1421,6 +1430,7 @@ function new_school_handle_route(string $method, string $route): bool
                     'UPDATE new_school_schools
                      SET user_id = ?,
                          school_address = ?,
+                         zip_code = ?,
                          school_district = ?,
                          main_phone = ?,
                          principal_name = ?,
@@ -1434,6 +1444,7 @@ function new_school_handle_route(string $method, string $route): bool
                 $update->execute([
                     (int) $user['id'],
                     $schoolAddress,
+                    $zipCode,
                     $schoolDistrict,
                     $mainPhone,
                     $principalName,
@@ -1446,14 +1457,15 @@ function new_school_handle_route(string $method, string $route): bool
             } else {
                 $insert = $pdo->prepare(
                     'INSERT INTO new_school_schools (
-                        user_id, school_name, school_address, school_district, main_phone,
+                        user_id, school_name, school_address, zip_code, school_district, main_phone,
                         principal_name, administrator_name, administrator_email, administrator_phone, status
-                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, "registered")'
+                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "registered")'
                 );
                 $insert->execute([
                     (int) $user['id'],
                     $schoolName,
                     $schoolAddress,
+                    $zipCode,
                     $schoolDistrict,
                     $mainPhone,
                     $principalName,
@@ -2882,7 +2894,7 @@ function new_school_handle_route(string $method, string $route): bool
 
             if ($type === 'schools') {
                 $rows = db()->query(
-                    'SELECT sc.id, sc.school_name, sc.school_address, sc.school_district, sc.main_phone, sc.principal_name,
+                    'SELECT sc.id, sc.school_name, sc.school_address, sc.zip_code, sc.school_district, sc.main_phone, sc.principal_name,
                             sc.administrator_name, sc.administrator_email, sc.administrator_phone, sc.status, sc.created_at, sc.updated_at,
                             (SELECT COUNT(*) FROM new_school_students st WHERE st.school_id = sc.id OR st.school_name = sc.school_name) AS students_count,
                             (SELECT COUNT(*) FROM new_school_teachers t WHERE t.school_id = sc.id) AS teachers_count
@@ -2911,7 +2923,7 @@ function new_school_handle_route(string $method, string $route): bool
             if ($type === 'parents') {
                 $rows = db()->query(
                     'SELECT p.id, p.student_id, s.full_name AS student_name, s.participant_id, s.grade_level, s.school_name,
-                            p.parent_full_name, p.relationship_to_student, p.phone_number, p.email, p.home_address,
+                            p.parent_full_name, p.relationship_to_student, p.phone_number, p.email, p.home_address, p.zip_code,
                             p.consent_checked, p.approved_at, p.consented_at, p.digital_signature, p.created_at, p.updated_at,
                             s.parent_consent_status AS student_parent_status,
                             u.email AS student_email
@@ -3007,7 +3019,7 @@ function new_school_handle_route(string $method, string $route): bool
             }
 
             $rows = db()->query(
-                'SELECT s.id, s.participant_id, s.student_username, s.full_name, s.email, s.phone_number, s.home_address,
+                'SELECT s.id, s.participant_id, s.student_username, s.full_name, s.email, s.phone_number, s.home_address, s.zip_code,
                         s.school_name, s.grade_level, s.parent_name, s.parent_phone, s.parent_email,
                         s.parent_consent_status, s.school_approval_status, s.teacher_approval_status, s.submission_status,
                         s.overall_status, s.created_at, s.updated_at,
@@ -3344,14 +3356,14 @@ function new_school_handle_route(string $method, string $route): bool
                 'INSERT INTO new_school_students (
                     user_id, school_id, teacher_id, participant_id, qr_token, qr_url,
                     full_name, student_username, age, date_of_birth, email, phone_number,
-                    home_address, school_name, grade_level, parent_name, parent_phone, parent_email,
+                    home_address, zip_code, school_name, grade_level, parent_name, parent_phone, parent_email,
                     parent_consent_status, school_approval_status, teacher_approval_status, submission_status, overall_status
-                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "pending", "pending", "pending", "locked", "student_registered")'
+                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "pending", "pending", "pending", "locked", "student_registered")'
             );
             $insert->execute([
                 (int) $account['id'], $schoolId, $teacherId, $participantId, $qrToken, $qrUrl,
                 $fullName, $username, (int) ($body['age'] ?? 0), field($body, 'date_of_birth') ?: '2010-01-01',
-                $email, field($body, 'phone_number'), field($body, 'home_address'), $schoolName,
+                $email, field($body, 'phone_number'), field($body, 'home_address'), field($body, 'zip_code'), $schoolName,
                 field($body, 'grade_level'), field($body, 'parent_name'), field($body, 'parent_phone'), field($body, 'parent_email'),
             ]);
             $studentId = (int) $pdo->lastInsertId();
@@ -3374,7 +3386,7 @@ function new_school_handle_route(string $method, string $route): bool
             $values = [];
             $textMap = [
                 'full_name' => 'full_name', 'email' => 'email', 'phone_number' => 'phone_number',
-                'home_address' => 'home_address', 'grade_level' => 'grade_level',
+                'home_address' => 'home_address', 'zip_code' => 'zip_code', 'grade_level' => 'grade_level',
                 'parent_name' => 'parent_name', 'parent_phone' => 'parent_phone', 'parent_email' => 'parent_email',
             ];
             foreach ($textMap as $bk => $col) {

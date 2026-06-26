@@ -724,6 +724,72 @@
 .ns-field-hint { color: var(--muted); font-weight: 400; font-size: 11px; text-transform: none; letter-spacing: 0; margin-left: 6px; }
 .ns-check-hint { color: var(--muted); font-size: 12.5px; line-height: 1.5; margin: 2px 0 10px; }
 
+/* Inline (below-field) validation errors — replaces the old submit-time popup. */
+.ns-field-error {
+  display: block;
+  margin-top: -2px;
+  color: #ff9d8b;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.ns-field-error::before { content: '⚠ '; }
+.ns-field-error.ns-field--full { margin-top: 0; }
+.ns-field:has(.ns-field-error) > input,
+.ns-field:has(.ns-field-error) > select,
+.ns-field:has(.ns-field-error) > textarea,
+.ns-field:has(.ns-field-error) .ns-verify-row input {
+  border-color: rgba(255, 110, 90, 0.75);
+  box-shadow: 0 0 0 1px rgba(255, 110, 90, 0.28);
+}
+
+/* Address block: a labelled sub-header that spans the two-column field grid. */
+.ns-form__subhead {
+  grid-column: 1 / -1;
+  margin: 6px 0 -4px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--gold-light, #e7cf8a);
+}
+
+/* Highlighted "Select School" dropdown — draws the eye to the primary choice. */
+.ns-field--pick > span { color: #f3e7c4; font-weight: 700; }
+.ns-field--pick > span::after { content: ' ★'; color: var(--gold-light, #e7cf8a); }
+.ns-field--pick > select {
+  border: 1px solid rgba(240, 192, 96, 0.6) !important;
+  background:
+    linear-gradient(rgba(240, 192, 96, 0.12), rgba(240, 192, 96, 0.04)),
+    rgba(0, 0, 0, 0.45) !important;
+  box-shadow: 0 0 0 1px rgba(240, 192, 96, 0.22);
+}
+
+/* Highlighted "Register under TrendCatch EDU" choice inside the school dropdown. */
+.ns-edu-option { color: #ffdf94; font-weight: 700; background: #2a2410; }
+
+/* TrendCatch EDU intake inputs — highlighted the same gold way as the dropdown. */
+.ns-field--edu > span { color: #f3e7c4; font-weight: 700; }
+.ns-field--edu > input {
+  border: 1px solid rgba(240, 192, 96, 0.6) !important;
+  background:
+    linear-gradient(rgba(240, 192, 96, 0.12), rgba(240, 192, 96, 0.04)),
+    rgba(0, 0, 0, 0.45) !important;
+  box-shadow: 0 0 0 1px rgba(240, 192, 96, 0.22);
+}
+
+/* "School not listed?" switch placed ABOVE the dropdown. */
+.ns-edu-switch--top {
+  grid-column: 1 / -1;
+  margin-bottom: 2px;
+  padding: 10px 14px;
+  border: 1px dashed rgba(240, 192, 96, 0.4);
+  border-radius: 12px;
+  background: rgba(240, 192, 96, 0.05);
+}
+
 /* Parent registration: verify the student's unique ID before consent. */
 .ns-verify-row { display: flex; gap: 8px; align-items: stretch; }
 .ns-verify-row input { flex: 1; min-width: 0; }
@@ -1703,12 +1769,17 @@
 }
 
 .ns-record-tabs__btn {
-  position: relative;
+  /* 2-column grid: label text (col 1, can shrink/wrap) + count badge (col 2).
+     This guarantees the counter can never sit on top of the text at any width. */
   display: grid;
-  gap: 4px;
-  min-width: 132px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 10px;
+  row-gap: 3px;
+  flex: 1 1 150px;
+  min-width: 0;
   min-height: 84px;
-  padding: 12px 56px 12px 18px;
+  padding: 12px 14px;
   border-radius: 16px;
   border: 1px solid rgba(255, 255, 255, 0.06);
   background: rgba(255, 255, 255, 0.02);
@@ -1719,23 +1790,32 @@
 }
 
 .ns-record-tabs__btn strong {
+  grid-column: 1;
+  grid-row: 1;
+  min-width: 0;
   font-family: var(--ns-dashboard-ui);
   font-size: 12px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: #f7f1e6;
+  overflow-wrap: anywhere;
 }
 
 .ns-record-tabs__btn span {
+  grid-column: 1;
+  grid-row: 2;
+  min-width: 0;
   font-size: 11px;
   color: var(--muted-dim);
+  overflow-wrap: anywhere;
 }
 
 .ns-record-tabs__btn em {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  min-width: 28px;
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  justify-self: end;
+  min-width: 26px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1743,10 +1823,10 @@
   border-radius: 999px;
   font-style: normal;
   font-size: 10px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.08em;
   color: var(--ns-dashboard-accent-strong);
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .ns-record-tabs__btn:hover {
@@ -1912,6 +1992,7 @@
   font: 700 11px/1 var(--ns-dashboard-ui);
   letter-spacing: 0.04em;
   text-transform: capitalize;
+  white-space: nowrap;
   color: #b9bbb2;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.12);
@@ -1961,7 +2042,15 @@
 
 @media (max-width: 720px) {
   .ns-approvals-toolbar {
+    flex-direction: column;
     align-items: stretch;
+  }
+  .ns-approvals-search {
+    flex: 1 1 auto;
+    width: 100%;
+  }
+  .ns-approvals-filter {
+    width: 100%;
   }
   .ns-table--approvals .ns-col-actions {
     text-align: left;
@@ -2132,6 +2221,16 @@
   font-size: 13px;
   color: #e7e3d8;
   text-align: right;
+  overflow-wrap: anywhere;
+}
+
+/* In status rows (value is a pill) keep the pill at full width and let the
+   uppercase label shrink/wrap instead — otherwise "Approved" gets squeezed to
+   two lines inside the half-width grid cell on laptop/tablet. */
+.ns-detail-row .ns-status-pill { flex: none; }
+.ns-detail-row:has(.ns-status-pill) > span:first-child {
+  flex: 0 1 auto;
+  min-width: 0;
   overflow-wrap: anywhere;
 }
 
@@ -3292,26 +3391,6 @@
   .ns-record-tabs__btn {
     min-width: 0;
     min-height: 0;
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: start;
-    gap: 6px 10px;
-    padding: 12px 14px;
-  }
-  .ns-record-tabs__btn strong {
-    grid-column: 1;
-    min-width: 0;
-    line-height: 1.35;
-  }
-  .ns-record-tabs__btn span {
-    grid-column: 1 / -1;
-    min-width: 0;
-    padding-right: 0;
-  }
-  .ns-record-tabs__btn em {
-    position: static;
-    justify-self: end;
-    align-self: start;
-    margin-left: 8px;
   }
   .ns-record-head__actions {
     flex-wrap: wrap;
@@ -3348,10 +3427,38 @@
     padding: 16px 12px 24px;
   }
   .ns-detail-card {
-    padding: 22px 18px 18px;
+    padding: 22px 16px 18px;
+    gap: 14px;
+  }
+  .ns-detail-head {
+    gap: 12px;
+    padding-right: 36px;
+  }
+  .ns-detail-avatar {
+    width: 46px;
+    height: 46px;
+    font-size: 18px;
+    border-radius: 13px;
   }
   .ns-detail-head__id h3 {
     font-size: 20px;
+  }
+  /* One column, and each row stacks its label above the value so long emails,
+     addresses, and school names read cleanly instead of being squeezed right. */
+  .ns-detail-grid {
+    grid-template-columns: 1fr;
+  }
+  .ns-detail-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+  .ns-detail-row strong {
+    text-align: left;
+  }
+  .ns-detail-actions .ns-row-btn {
+    flex: 1 1 auto;
+    text-align: center;
   }
   .ns-pager {
     justify-content: center;

@@ -3039,7 +3039,7 @@ function new_school_fetch_students_by_teacher_id(int $teacherId): array
 
 function new_school_fetch_all_schools(bool $approvedOnly = false): array
 {
-    $sql = 'SELECT id, school_name, school_address, school_district, main_phone, principal_name, administrator_name, administrator_email, administrator_phone, school_website, status, origin, claim_status, claimed_at, created_at, updated_at
+    $sql = 'SELECT id, school_name, school_address, zip_code, school_district, main_phone, principal_name, administrator_name, administrator_email, administrator_phone, school_website, status, origin, claim_status, claimed_at, created_at, updated_at
             FROM new_school_schools';
     if ($approvedOnly) {
         $sql .= ' WHERE status = "approved"';
