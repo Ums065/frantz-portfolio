@@ -17,9 +17,11 @@ type NavItem =
 export default function SiteHeader({ home = false }: { home?: boolean }) {
   const { user, logout } = useAuth()
   const [menuOpen, setMenuOpen] = useState(false)
-  const [sponsorOpen, setSponsorOpen] = useState(false)
+  const [desktopSponsorOpen, setDesktopSponsorOpen] = useState(false)
+  const [mobileSponsorOpen, setMobileSponsorOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement | null>(null)
-  const sponsorRef = useRef<HTMLDivElement | null>(null)
+  const desktopSponsorRef = useRef<HTMLDivElement | null>(null)
+  const mobileSponsorRef = useRef<HTMLDivElement | null>(null)
   const dashboardHref = resolveDashboardRoute(user?.role)
   const fullName = user?.full_name || ''
   const initial = fullName.trim().charAt(0).toUpperCase() || 'U'
@@ -40,34 +42,42 @@ export default function SiteHeader({ home = false }: { home?: boolean }) {
   ]
 
   useEffect(() => {
-    if (!menuOpen && !sponsorOpen) return
+    if (!menuOpen && !desktopSponsorOpen && !mobileSponsorOpen) return
 
     const onPointerDown = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         setMenuOpen(false)
       }
-      if (sponsorRef.current && !sponsorRef.current.contains(event.target as Node)) {
-        setSponsorOpen(false)
+      if (desktopSponsorRef.current && !desktopSponsorRef.current.contains(event.target as Node)) {
+        setDesktopSponsorOpen(false)
+      }
+      if (mobileSponsorRef.current && !mobileSponsorRef.current.contains(event.target as Node)) {
+        setMobileSponsorOpen(false)
       }
     }
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setMenuOpen(false)
-      if (event.key === 'Escape') setSponsorOpen(false)
+      if (event.key === 'Escape') {
+        setDesktopSponsorOpen(false)
+        setMobileSponsorOpen(false)
+      }
     }
 
     document.addEventListener('mousedown', onPointerDown)
     document.addEventListener('keydown', onKeyDown)
     return () => {
-    document.removeEventListener('mousedown', onPointerDown)
-    document.removeEventListener('keydown', onKeyDown)
+      document.removeEventListener('mousedown', onPointerDown)
+      document.removeEventListener('keydown', onKeyDown)
     }
-  }, [menuOpen, sponsorOpen])
+  }, [menuOpen, desktopSponsorOpen, mobileSponsorOpen])
 
   const closeMenu = () => {
     setMenuOpen(false)
-    setSponsorOpen(false)
+    setDesktopSponsorOpen(false)
+    setMobileSponsorOpen(false)
   }
-  const closeSponsorMenu = () => setSponsorOpen(false)
+  const closeDesktopSponsorMenu = () => setDesktopSponsorOpen(false)
+  const closeMobileSponsorMenu = () => setMobileSponsorOpen(false)
 
   return (
     <>
@@ -91,20 +101,20 @@ export default function SiteHeader({ home = false }: { home?: boolean }) {
                 <a key={item.label} href={item.href} data-nav-section>{item.label}</a>
               ),
             )}
-            <div className={`nav-dropdown${sponsorOpen ? ' open' : ''}`} ref={sponsorRef}>
+            <div className={`nav-dropdown${desktopSponsorOpen ? ' open' : ''}`} ref={desktopSponsorRef}>
               <button
                 type="button"
                 className="nav-dropdown__trigger"
-                aria-expanded={sponsorOpen}
+                aria-expanded={desktopSponsorOpen}
                 aria-haspopup="true"
-                onClick={() => setSponsorOpen((open) => !open)}
+                onClick={() => setDesktopSponsorOpen((open) => !open)}
               >
                 Founding Sponsor
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
               </button>
               <div className="nav-dropdown__menu" role="menu" aria-label="Founding Sponsor menu">
-                <Link to="/become-a-founding-sponsor" onClick={closeSponsorMenu} role="menuitem">Become A Founding Sponsor</Link>
-                <Link to="/founding-sponsors" onClick={closeSponsorMenu} role="menuitem">Founding Sponsors</Link>
+                <Link to="/become-a-founding-sponsor" onClick={closeDesktopSponsorMenu} role="menuitem">Become A Founding Sponsor</Link>
+                <Link to="/founding-sponsors" onClick={closeDesktopSponsorMenu} role="menuitem">Founding Sponsors</Link>
               </div>
             </div>
             <span className="nav__indicator" aria-hidden="true" />
@@ -177,19 +187,19 @@ export default function SiteHeader({ home = false }: { home?: boolean }) {
               <a key={item.label} href={item.href} data-nav-section>{item.label}</a>
             ),
           )}
-          <div className="mobile-menu__group">
+          <div className="mobile-menu__group" ref={mobileSponsorRef}>
             <button
               className="mobile-menu__group-trigger"
               type="button"
-              aria-expanded={sponsorOpen}
-              onClick={() => setSponsorOpen((open) => !open)}
+              aria-expanded={mobileSponsorOpen}
+              onClick={() => setMobileSponsorOpen((open) => !open)}
             >
               Founding Sponsor
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
             </button>
-            <div className={`mobile-menu__group-links${sponsorOpen ? ' open' : ''}`}>
-              <Link to="/become-a-founding-sponsor" onClick={() => { closeMenu(); closeSponsorMenu() }}>Become A Founding Sponsor</Link>
-              <Link to="/founding-sponsors" onClick={() => { closeMenu(); closeSponsorMenu() }}>Founding Sponsors</Link>
+            <div className={`mobile-menu__group-links${mobileSponsorOpen ? ' open' : ''}`}>
+              <Link to="/become-a-founding-sponsor" onClick={() => { closeMenu(); closeMobileSponsorMenu() }}>Become A Founding Sponsor</Link>
+              <Link to="/founding-sponsors" onClick={() => { closeMenu(); closeMobileSponsorMenu() }}>Founding Sponsors</Link>
             </div>
           </div>
           <div className="mcta">
