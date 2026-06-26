@@ -80,7 +80,7 @@ export default function Awards() {
   const [active, setActive] = useState<Award | null>(null)
   const [awards, setAwards] = useState<Award[]>(staticAwards)
 
-  useSeo({ title: 'Awards & Recognition', description: 'Recognized by community, county, state, federal, and national organizations — from the Queens Chamber (2023) to the Presidential Lifetime Achievement Award and the U.S. Senate.', image: '/assets/awards/frantz-coutard.png' })
+  useSeo({ title: 'Awards & Recognition', description: 'Recognized by community, county, state, federal, and national organizations — from the Queens Chamber (2023) to the Presidential Lifetime Achievement Award and the U.S. Senate.', image: '/assets/awards/frantz-coutard.webp' })
   useEffect(() => { window.scrollTo(0, 0) }, [])
 
   // Load from the DB; fall back to the bundled static list if the API is down.

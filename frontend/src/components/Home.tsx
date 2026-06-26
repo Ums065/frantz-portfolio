@@ -69,7 +69,7 @@ const ventureCards: VentureCard[] = [
     title: 'Frantz Coutard',
     copy: 'Entrepreneur, innovator, and advocate building technology that strengthens communities.',
     tag: 'My Journey Continues',
-    media: `${buildingNowBase}/1.png`,
+    media: `${buildingNowBase}/1.webp`,
     highlights: ['Entrepreneur', 'Innovator', 'Advocate', 'Community'],
     mediaClass: 'proj__media--portrait',
   },
@@ -77,14 +77,14 @@ const ventureCards: VentureCard[] = [
     title: 'TrendCatch EDU',
     copy: 'A digital platform helping schools access grants, resources, and opportunity.',
     tag: 'Empowering Communities',
-    media: `${buildingNowBase}/2.png`,
+    media: `${buildingNowBase}/2.webp`,
     highlights: ['Grants', 'Schools', 'Teachers', 'Parents', 'Students'],
   },
   {
     title: 'Leave It Better Than You Found It',
     copy: 'A movement for future problem solvers building better communities.',
     tag: 'Educational Movement',
-    media: `${buildingNowBase}/3.png`,
+    media: `${buildingNowBase}/3.webp`,
     highlights: ['Problem Solvers', 'Innovation', 'Leadership', 'Future Ready'],
     mediaClass: 'proj__media--glow',
   },
@@ -92,21 +92,21 @@ const ventureCards: VentureCard[] = [
     title: 'Referral Partner Program',
     copy: 'Empowering youth to build income through sales, partnerships, and referrals.',
     tag: 'Launching October 17, 2026',
-    media: `${buildingNowBase}/4.png`,
+    media: `${buildingNowBase}/4.webp`,
     highlights: ['Sales Training', 'Business Leads', 'Partnerships', 'Income'],
   },
   {
     title: 'Shelf Link',
     copy: 'Helping local and independent brands launch and grow in retail stores.',
     tag: 'Launching October 3, 2026',
-    media: `${buildingNowBase}/5.png`,
+    media: `${buildingNowBase}/5.webp`,
     highlights: ['Product Launch', 'Retail Partners', 'Growth', 'Distribution'],
   },
   {
     title: 'TrendCatch Network',
     copy: 'The operating system for local commerce, local ads, and instant savings.',
     tag: 'Launching July 25, 2026',
-    media: `${buildingNowBase}/6.png`,
+    media: `${buildingNowBase}/6.webp`,
     highlights: ['Local Ads', 'Coupons', 'Savings', 'Community'],
     mediaClass: 'proj__media--network',
   },
@@ -114,14 +114,14 @@ const ventureCards: VentureCard[] = [
     title: 'TrendCatch Gives Back Inc.',
     copy: 'Technology for community awareness, clean water, public safety, and sustainability.',
     tag: 'Non-Profit Initiative',
-    media: `${buildingNowBase}/7.png`,
+    media: `${buildingNowBase}/7.webp`,
     highlights: ['Education', 'Surveys', 'Sustainability', 'Awareness'],
   },
   {
     title: 'TrendCatch Player',
     copy: 'Powering any screen with remote content updates and live engagement.',
     tag: 'Proprietary Technology',
-    media: `${buildingNowBase}/8.png`,
+    media: `${buildingNowBase}/8.webp`,
     highlights: ['Any Screen', 'Remote Control', 'Global', 'Real-Time'],
   },
 ]
@@ -129,7 +129,7 @@ const ventureCards: VentureCard[] = [
 const ventureVision = {
   title: 'The Vision',
   copy: 'Building technology that strengthens communities through commerce, education, and opportunity.',
-  media: `${buildingNowBase}/9.png`,
+  media: `${buildingNowBase}/9.webp`,
 }
 
 const ventureVisionNodes: VisionNode[] = [
@@ -145,22 +145,22 @@ const awardHighlights = [
   {
     title: 'Presidential Lifetime Achievement Award',
     copy: 'Awarded through AmeriCorps and the Office of the President of the United States â€” one of the nationâ€™s highest volunteer service honors.',
-    image: '/assets/awards/presidential-lifetime.png',
+    image: '/assets/awards/presidential-lifetime.webp',
   },
   {
     title: 'United States Senate Recognition',
     copy: 'Presented by U.S. Senator Charles E. Schumer for entrepreneurial achievement and community leadership.',
-    image: '/assets/awards/us-senate.png',
+    image: '/assets/awards/us-senate.webp',
   },
   {
     title: 'NY State Legislative Resolution No. 998',
     copy: 'A permanent public record from the New York State Assembly honoring innovation and community impact.',
-    image: '/assets/awards/ny-resolution-998.png',
+    image: '/assets/awards/ny-resolution-998.webp',
   },
   {
     title: 'Dr. Martin Luther King Jr. Visionary Award',
     copy: 'For visionary leadership, innovation, and commitment to community advancement and equality.',
-    image: '/assets/awards/mlk-visionary.png',
+    image: '/assets/awards/mlk-visionary.webp',
   },
 ]
 
@@ -377,7 +377,7 @@ export default function Home() {
       <section className="hero" id="home">
         <div className="hero__ghost"><img src={portrait} alt="" decoding="async" /></div>
         <canvas id="particles" />
-        <div className="hero__portrait"><img src={halfFace} alt="Frantz Coutard portrait" decoding="async" /></div>
+        <div className="hero__portrait"><img src={halfFace} alt="Frantz Coutard portrait" decoding="async" fetchPriority="high" /></div>
         <div className="hero__content">
           <div className="hero__mono"><img src={logo} alt="" decoding="async" /></div>
           <h1 className="hero__name">Frantz Coutard</h1>
@@ -682,8 +682,8 @@ export default function Home() {
               </ul>
               <div className="phone">
                 <div className="phone__screen">
-                  <img className="phone__bg" src={abstractNetwork} alt="" />
-                  <div className="mono-sm"><img src={logo} alt="" /></div>
+                  <img className="phone__bg" src={abstractNetwork} alt="" loading="lazy" decoding="async" />
+                  <div className="mono-sm"><img src={logo} alt="" loading="lazy" decoding="async" /></div>
                   <b>Welcome to<br />the Community</b>
                 </div>
               </div>
@@ -702,7 +702,7 @@ export default function Home() {
         <div className="wrap">
           <div className="pin-grid">
             <div className="pin-visual reveal">
-              <img className="pin-badge" src={logo} alt="FC lapel pin" />
+              <img className="pin-badge" src={logo} alt="FC lapel pin" loading="lazy" decoding="async" />
               <div className="pin-note">Product shot - the official FC lapel pin</div>
             </div>
             <div className="pin-copy">

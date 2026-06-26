@@ -792,4 +792,14 @@ CREATE TABLE IF NOT EXISTS new_school_scholarship_answers (
   UNIQUE KEY uniq_ns_scholarship_student (student_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- ---------- Image optimization: point existing rows at the optimized WebP assets ----------
+-- The large /assets/*.png brand images were converted to .webp (≈95% smaller). Update any
+-- DB-stored /assets paths to the .webp version. Uploaded files (/api/uploads/...) are left
+-- untouched. Idempotent: once a path ends in .webp it no longer matches.
+UPDATE awards          SET image       = REPLACE(image, '.png', '.webp')       WHERE image       LIKE '/assets/%.png';
+UPDATE media_items     SET image       = REPLACE(image, '.png', '.webp')       WHERE image       LIKE '/assets/%.png';
+UPDATE posts           SET cover_image = REPLACE(cover_image, '.png', '.webp') WHERE cover_image LIKE '/assets/%.png';
+UPDATE testimonials    SET image       = REPLACE(image, '.png', '.webp')       WHERE image       LIKE '/assets/%.png';
+UPDATE store_inventory SET image       = REPLACE(image, '.png', '.webp')       WHERE image       LIKE '/assets/%.png';
+
 DROP PROCEDURE IF EXISTS add_column_if_missing;

@@ -41,7 +41,7 @@ export default function About() {
   useSeo({
     title: 'About',
     description: 'Faith, family, and purpose - the story of Frantz Coutard, award-winning entrepreneur, technology innovator, and community advocate.',
-    image: '/assets/awards/frantz-coutard.png',
+    image: '/assets/awards/frantz-coutard.webp',
   })
 
   useEffect(() => {

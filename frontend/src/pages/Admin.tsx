@@ -1687,7 +1687,7 @@ function AwardsAdmin() {
                   <input type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) onUpload(f) }} />
                 </label>
               </div>
-              <input type="text" value={editing.image ?? ''} onChange={(e) => set({ image: e.target.value })} placeholder="/assets/awards/example.png" style={{ marginTop: 8 }} />
+              <input type="text" value={editing.image ?? ''} onChange={(e) => set({ image: e.target.value })} placeholder="/assets/awards/example.webp" style={{ marginTop: 8 }} />
             </div>
 
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#d8d3c6', margin: '4px 0 16px' }}>

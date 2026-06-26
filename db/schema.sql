@@ -341,7 +341,7 @@ INSERT INTO media_items (title, type, summary, body, image, link_url, published_
   ('Founder keynote reel', 'video',
    'Highlights from stage appearances centered on innovation and community impact.',
    'A premium reel for event producers, journalists, and community partners who want a quick view of the speaking presence and message.',
-   '/assets/gallery-speaking-stage.png', '/blog', '2026-06-01', 1, 1),
+   '/assets/gallery-speaking-stage.webp', '/blog', '2026-06-01', 1, 1),
   ('Media kit download', 'press_release',
    'Download the official bio, talking points, and brand information for media use.',
    'A downloadable media kit that includes a concise biography, speaking topics, brand context, and contact guidance for producers and journalists.',
@@ -349,7 +349,7 @@ INSERT INTO media_items (title, type, summary, body, image, link_url, published_
   ('Press and recognition archive', 'press_release',
    'Articles, awards, and public records that document the journey.',
    'Source material for public-facing milestones, citations, and brand history.',
-   '/assets/award-presidential-medal.png', '/awards', '2026-05-01', 0, 3),
+   '/assets/award-presidential-medal.webp', '/awards', '2026-05-01', 0, 3),
   ('Interview and podcast assets', 'interview',
    'Brand-ready photos and message points for hosts and producers.',
    'The media kit path is built for timely booking requests, interview prep, and quick turnaround production needs.',
@@ -361,11 +361,11 @@ INSERT INTO media_items (title, type, summary, body, image, link_url, published_
   ('TV and feature clips', 'tv',
    'Short-form clips that make it easy to embed the story in a broadcast or digital package.',
    'This section will grow as interviews and appearances are added.',
-   '/assets/abstract-gold-network.png', '/events', '2026-04-01', 0, 6);
+   '/assets/abstract-gold-network.webp', '/events', '2026-04-01', 0, 6);
 
 INSERT INTO testimonials (quote, author_name, author_title, company, image, is_featured, sort_order) VALUES
-  ('The strategy is practical, community-first, and built with real execution in mind.', 'Community Partner', 'Program Lead', 'Local Impact Group', '/assets/award-senate-medal.png', 1, 1),
-  ('Frantz brings a clear message, strong presence, and a focus on helping people move forward.', 'Event Producer', 'Booking Director', 'Leadership Summit', '/assets/gallery-speaking-stage.png', 0, 2),
+  ('The strategy is practical, community-first, and built with real execution in mind.', 'Community Partner', 'Program Lead', 'Local Impact Group', '/assets/award-senate-medal.webp', 1, 1),
+  ('Frantz brings a clear message, strong presence, and a focus on helping people move forward.', 'Event Producer', 'Booking Director', 'Leadership Summit', '/assets/gallery-speaking-stage.webp', 0, 2),
   ('The brand system is premium, but the mission stays human. That combination stands out.', 'Brand Advisor', 'Creative Strategist', 'Studio Partner', '/assets/brand-signature-white.jpg', 0, 3);
 
 INSERT INTO store_inventory (
