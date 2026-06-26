@@ -316,10 +316,10 @@ const homeChallengeTabs: HomeChallengeTab[] = [
 // Role-based registration CTAs for the challenge section. Each deep-links to the
 // matching registration form on /new-school, where the role tab is preselected.
 const challengeRegisterRoles = [
-  { role: 'student', label: 'Register as Student' },
-  { role: 'parent', label: 'Register as Parent' },
-  { role: 'school', label: 'Register as School' },
-  { role: 'teacher', label: 'Register as Teacher' },
+  { role: 'student', label: 'Register as a Student' },
+  { role: 'parent', label: 'Register as a Parent' },
+  { role: 'school', label: 'Register as a School' },
+  { role: 'teacher', label: 'Register as a Teacher' },
 ] as const
 
 function VisionNodeIcon({ kind }: { kind: VisionNode['kind'] }) {

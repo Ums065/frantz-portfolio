@@ -1637,11 +1637,20 @@ section.block {
   box-shadow: 0 28px 70px -38px rgba(201, 168, 76, 0.34);
 }
 .venture-card--editorial .proj__media {
-  height: 332px;
+  height: auto;
   margin-bottom: 0;
   border: none;
   border-radius: 0;
+  background: #0c0b07;
 }
+/* The "What I'm Building Now" graphics are portrait posters of varying ratios —
+   show each one in full at its natural aspect ratio so nothing is cropped on any
+   screen (cover used to crop the top/bottom, worst on mobile). */
+.venture-card--editorial .proj__media img {
+  height: auto;
+  object-fit: contain;
+}
+.venture-card--editorial .proj__media::after { display: none; }
 .venture-card__body {
   padding: 20px 18px 18px;
   display: flex;
@@ -2111,7 +2120,7 @@ section.block {
   .building-grid { grid-template-columns: 1fr; }
   .venture-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .venture-grid--editorial { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .venture-card--editorial .proj__media { height: 300px; }
+  .venture-card--editorial .proj__media { height: auto; }
   .venture-vision__content { padding: 36px 28px 28px; }
   .venture-vision__nodes { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .legacy-grid { grid-template-columns: 1fr; gap: 36px; }
@@ -2138,7 +2147,7 @@ section.block {
   .building-grid { grid-template-columns: 1fr; }
   .venture-grid { grid-template-columns: 1fr; }
   .venture-grid--editorial { grid-template-columns: 1fr; }
-  .venture-card--editorial .proj__media { height: 240px; }
+  .venture-card--editorial .proj__media { height: auto; }
   .venture-card__body { padding: 18px 16px 18px; }
   .venture-card__chips { gap: 8px; }
   .venture-vision { margin-top: 20px; min-height: 0; }
