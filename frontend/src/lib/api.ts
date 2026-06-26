@@ -93,25 +93,22 @@ async function request<T>(path: string, options: RequestInit = {}, retry = true)
   return data as T
 }
 
-async function upload<T>(path: string, file: File, retry = true): Promise<T> {
-  const fd = new FormData()
-  fd.append('file', file)
-  // No Content-Type header — the browser sets the multipart boundary.
+async function postForm<T>(path: string, form: FormData, retry = true): Promise<T> {
   const res = await fetch(`${BASE}/${path}`, {
     method: 'POST',
     credentials: 'include',
     headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : undefined,
-    body: fd,
+    body: form,
   })
   const raw = await res.text()
   const data = parseResponseBody(raw)
   storeCsrfToken(data)
   if (res.status === 419 && retry) {
     await bootstrapCsrfToken()
-    return upload<T>(path, file, false)
+    return postForm<T>(path, form, false)
   }
   if (!res.ok) {
-    console.error('[api] upload failed', {
+    console.error('[api] form post failed', {
       method: 'POST',
       path,
       status: res.status,
@@ -122,10 +119,17 @@ async function upload<T>(path: string, file: File, retry = true): Promise<T> {
   return data as T
 }
 
+async function upload<T>(path: string, file: File, retry = true): Promise<T> {
+  const fd = new FormData()
+  fd.append('file', file)
+  return postForm<T>(path, fd, retry)
+}
+
 export const api = {
   get: <T>(path: string) => request<T>(path),
   post: <T>(path: string, body: unknown) =>
     request<T>(path, { method: 'POST', body: JSON.stringify(body) }),
+  postForm,
   put: <T>(path: string, body: unknown) =>
     request<T>(path, { method: 'PUT', body: JSON.stringify(body) }),
   del: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
@@ -209,6 +213,54 @@ export interface MediaRow {
   published_at: string | null
   is_featured: number
   sort_order: number
+}
+
+
+export interface PublicGalleryItemRow {
+  id: number
+  submission_id: number
+  display_title: string
+  original_name: string
+  file_url: string
+  mime_type: string
+  media_kind: 'image' | 'video'
+  size_bytes: number
+  credit_name: string
+  credit_organization: string | null
+  submitted_at: string | null
+  approved_at: string | null
+}
+
+export interface GallerySubmissionFileRow {
+  id: number
+  submission_id: number
+  original_name: string
+  display_title: string
+  file_url: string
+  mime_type: string
+  media_kind: 'image' | 'video'
+  size_bytes: number
+  approval_status: 'pending_review' | 'approved' | 'rejected'
+  reviewed_by_user_id: number | null
+  reviewed_by_name: string | null
+  reviewed_at: string | null
+  approved_at: string | null
+  rejected_at: string | null
+  created_at: string | null
+  updated_at: string | null
+}
+
+export interface GallerySubmissionRow {
+  id: number
+  user_id: number | null
+  submitter_name: string
+  submitter_email: string
+  organization: string | null
+  message: string | null
+  overall_status: 'pending_review' | 'partially_approved' | 'approved' | 'rejected'
+  created_at: string | null
+  updated_at: string | null
+  files: GallerySubmissionFileRow[]
 }
 
 export interface TestimonialRow {

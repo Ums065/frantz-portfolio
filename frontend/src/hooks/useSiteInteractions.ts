@@ -3,6 +3,7 @@ import { useEffect } from 'react'
 interface Handlers {
   onAuth: (which: 'login' | 'register', role?: string) => void
   onRequest: (label: string) => void
+  onGallery: () => void
   onSubscribe: (email: string) => void
 }
 
@@ -15,7 +16,7 @@ interface Handlers {
  * Form / modal behaviour (auth, request, subscribe, toast) is delegated
  * back to React through the provided handlers so it can hit the API.
  */
-export function useSiteInteractions({ onAuth, onRequest, onSubscribe }: Handlers) {
+export function useSiteInteractions({ onAuth, onRequest, onGallery, onSubscribe }: Handlers) {
   useEffect(() => {
     const cleanups: Array<() => void> = []
     let raf = 0
@@ -301,6 +302,13 @@ export function useSiteInteractions({ onAuth, onRequest, onSubscribe }: Handlers
       if (reqEl) {
         e.preventDefault()
         onRequest(reqEl.getAttribute('data-request') || 'Request')
+        return
+      }
+
+      const galleryEl = target.closest<HTMLElement>('[data-gallery-upload]')
+      if (galleryEl) {
+        e.preventDefault()
+        onGallery()
         return
       }
 

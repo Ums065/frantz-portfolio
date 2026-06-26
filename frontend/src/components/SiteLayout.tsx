@@ -1,24 +1,33 @@
 import { useCallback, useState, type ReactNode } from 'react'
 import SiteHeader from './SiteHeader'
 import SiteFooter from './SiteFooter'
-import { AuthModal, RequestModal } from './Modals'
+import { AuthModal, GallerySubmitModal, RequestModal } from './Modals'
 import { useSiteInteractions } from '../hooks/useSiteInteractions'
 import { api } from '../lib/api'
-import type { RegistrationRole } from '../context/AuthContext'
+import { useAuth, type RegistrationRole } from '../context/AuthContext'
 
 /* Page shell shared by Home, About and Awards.
    Owns the auth / request modal state and wires the DOM-level
    interactions (nav, mobile menu, toast, data-* buttons, lightbox). */
 export default function SiteLayout({ children, home = false }: { children: ReactNode; home?: boolean }) {
+  const { user } = useAuth()
   const [authMode, setAuthMode] = useState<'login' | 'register' | null>(null)
   const [authRole, setAuthRole] = useState<RegistrationRole | null>(null)
   const [requestLabel, setRequestLabel] = useState<string | null>(null)
+  const [galleryOpen, setGalleryOpen] = useState(false)
 
   const onAuth = useCallback((which: 'login' | 'register', role?: string) => {
     setAuthMode(which)
     setAuthRole((role as RegistrationRole) || null)
   }, [])
   const onRequest = useCallback((label: string) => setRequestLabel(label), [])
+  const onGallery = useCallback(() => {
+    if (!user) {
+      setAuthMode('login')
+      return
+    }
+    setGalleryOpen(true)
+  }, [user])
   const onSubscribe = useCallback(async (email: string) => {
     try {
       const d = await api.post<{ message: string }>('subscribe', { email })
@@ -28,7 +37,7 @@ export default function SiteLayout({ children, home = false }: { children: React
     }
   }, [])
 
-  useSiteInteractions({ onAuth, onRequest, onSubscribe })
+  useSiteInteractions({ onAuth, onRequest, onGallery, onSubscribe })
 
   return (
     <>
@@ -44,6 +53,7 @@ export default function SiteLayout({ children, home = false }: { children: React
         onMode={(m) => setAuthMode(m)}
       />
       <RequestModal label={requestLabel} onClose={() => setRequestLabel(null)} />
+      <GallerySubmitModal open={galleryOpen} onClose={() => setGalleryOpen(false)} />
 
       <div className="lightbox" id="lightbox">
         <button className="close" data-close-lightbox aria-label="Close"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth={2}><path d="M6 6l12 12M18 6L6 18" /></svg></button>

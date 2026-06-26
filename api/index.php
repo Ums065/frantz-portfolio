@@ -490,6 +490,10 @@ try {
             json(['media' => $rows]);
         }
 
+        case $key === 'GET gallery': {
+            json(gallery_public_payload());
+        }
+
         case $key === 'GET testimonials': {
             $rows = db()->query(
                 'SELECT id, quote, author_name, author_title, company, image, is_featured, sort_order, created_at
@@ -707,7 +711,143 @@ try {
             ], 201);
         }
 
+        case $key === 'POST gallery/submission': {
+            $u = require_login();
+            gallery_ensure_schema();
+
+            $submitterName = trim((string) ($u['full_name'] ?? ''));
+            $submitterEmail = require_email((string) ($u['email'] ?? ''));
+            $organization = trim((string) ($_POST['organization'] ?? ''));
+            $message = trim((string) ($_POST['message'] ?? ''));
+            $files = gallery_normalize_uploads($_FILES['files'] ?? []);
+
+            if ($submitterName === '') json(['error' => 'Your account is missing a full name.'], 422);
+            if ($files === []) json(['error' => 'Upload at least one file.'], 422);
+            if (count($files) > 20) json(['error' => 'You can upload up to 20 files at a time.'], 422);
+
+            $imageMimes = gallery_allowed_image_mimes();
+            $videoMimes = gallery_allowed_video_mimes();
+            $dir = __DIR__ . '/uploads/gallery';
+            if (!is_dir($dir) && !mkdir($dir, 0775, true) && !is_dir($dir)) {
+                json(['error' => 'Could not create gallery upload directory.'], 500);
+            }
+
+            $prepared = [];
+            foreach ($files as $file) {
+                if ((int) ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+                    json(['error' => gallery_upload_error_message((int) $file['error'])], 422);
+                }
+                $mime = function_exists('mime_content_type') ? mime_content_type($file['tmp_name']) : ($file['type'] ?? '');
+                $kind = null;
+                $extension = null;
+                $maxSize = 0;
+                if (isset($imageMimes[$mime])) {
+                    $kind = 'image';
+                    $extension = $imageMimes[$mime];
+                    $maxSize = 6 * 1024 * 1024;
+                } elseif (isset($videoMimes[$mime])) {
+                    $kind = 'video';
+                    $extension = $videoMimes[$mime];
+                    $maxSize = 70 * 1024 * 1024;
+                }
+                if ($kind === null || $extension === null) {
+                    json(['error' => 'Only JPG, PNG, WebP, MP4, WebM, MOV, or MKV files are allowed.'], 422);
+                }
+                if ((int) ($file['size'] ?? 0) > $maxSize) {
+                    json(['error' => $kind === 'video' ? 'Video files must be 70MB or smaller.' : 'Image files must be 6MB or smaller.'], 422);
+                }
+                $prepared[] = [
+                    'tmp_name' => (string) $file['tmp_name'],
+                    'original_name' => (string) $file['name'],
+                    'display_title' => gallery_title_from_filename((string) $file['name']),
+                    'mime_type' => (string) $mime,
+                    'media_kind' => $kind,
+                    'size_bytes' => (int) ($file['size'] ?? 0),
+                    'extension' => $extension,
+                ];
+            }
+
+            $pdo = db();
+            $pdo->beginTransaction();
+            try {
+                $stmt = $pdo->prepare(
+                    'INSERT INTO gallery_submissions (user_id, submitter_name, submitter_email, organization, message, overall_status)
+                     VALUES (?, ?, ?, ?, ?, "pending_review")'
+                );
+                $stmt->execute([
+                    isset($u['id']) ? (int) $u['id'] : null,
+                    $submitterName,
+                    $submitterEmail,
+                    $organization !== '' ? $organization : null,
+                    $message !== '' ? $message : null,
+                ]);
+                $submissionId = (int) $pdo->lastInsertId();
+
+                $fileStmt = $pdo->prepare(
+                    'INSERT INTO gallery_submission_files
+                        (submission_id, original_name, display_title, file_url, mime_type, media_kind, size_bytes, approval_status)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, "pending_review")'
+                );
+
+                $savedFiles = [];
+                foreach ($prepared as $item) {
+                    $prefix = $item['media_kind'] === 'video' ? 'gallery-video' : 'gallery-image';
+                    $name = $prefix . '-' . bin2hex(random_bytes(8)) . '.' . $item['extension'];
+                    if (!move_uploaded_file($item['tmp_name'], $dir . '/' . $name)) {
+                        throw new RuntimeException('Failed to save one of the uploaded files.');
+                    }
+                    $url = '/api/uploads/gallery/' . $name;
+                    $fileStmt->execute([
+                        $submissionId,
+                        $item['original_name'],
+                        $item['display_title'],
+                        $url,
+                        $item['mime_type'],
+                        $item['media_kind'],
+                        $item['size_bytes'],
+                    ]);
+                    $savedFiles[] = [
+                        'id' => (int) $pdo->lastInsertId(),
+                        'display_title' => $item['display_title'],
+                        'file_url' => $url,
+                        'mime_type' => $item['mime_type'],
+                        'media_kind' => $item['media_kind'],
+                        'approval_status' => 'pending_review',
+                    ];
+                }
+
+                $pdo->commit();
+                notify(
+                    'New gallery submission',
+                    "Submitter: {$submitterName}
+Email: {$submitterEmail}
+Files: " . count($savedFiles) . "
+Organization: " . ($organization !== '' ? $organization : '?') . "
+
+" . ($message !== '' ? $message : '(no message)')
+                );
+                json([
+                    'message' => 'Gallery submission received.',
+                    'submission' => [
+                        'id' => $submissionId,
+                        'submitter_name' => $submitterName,
+                        'submitter_email' => $submitterEmail,
+                        'organization' => $organization !== '' ? $organization : null,
+                        'message' => $message !== '' ? $message : null,
+                        'overall_status' => 'pending_review',
+                        'files' => $savedFiles,
+                    ],
+                ], 201);
+            } catch (Throwable $e) {
+                if ($pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
+                throw $e;
+            }
+        }
+
         case $key === 'POST request': {
+
             $b    = body();
             $type = field($b, 'request_type') ?: 'General Request';
             $name = field($b, 'full_name') ?: field($b, 'name');
@@ -1073,6 +1213,7 @@ try {
                     'community'    => $countOf('community_threads'),
                     'rsvps'        => $countOf('event_rsvps'),
                     'sponsors'     => $countOf('sponsor_applications'),
+                    'gallery'      => $countOf('gallery_submission_files'),
                 ],
             ]);
         }
@@ -1117,6 +1258,66 @@ try {
                 'paymentInstructions' => sponsor_payment_instruction_lines(),
                 'paymentStatusOptions' => sponsor_payment_status_options(),
                 'approvalStatusOptions' => sponsor_approval_status_options(),
+            ]);
+        }
+
+        case $key === 'GET admin/gallery/submissions': {
+            require_admin();
+            gallery_ensure_schema();
+
+            $submissions = db()->query(
+                'SELECT id, user_id, submitter_name, submitter_email, organization, message, overall_status, created_at, updated_at
+                 FROM gallery_submissions
+                 ORDER BY created_at DESC, id DESC'
+            )->fetchAll();
+            $files = db()->query(
+                'SELECT f.id, f.submission_id, f.original_name, f.display_title, f.file_url, f.mime_type, f.media_kind,
+                        f.size_bytes, f.approval_status, f.reviewed_by_user_id, f.reviewed_by_name, f.reviewed_at,
+                        f.approved_at, f.rejected_at, f.created_at, f.updated_at
+                 FROM gallery_submission_files f
+                 ORDER BY f.created_at ASC, f.id ASC'
+            )->fetchAll();
+
+            $fileMap = [];
+            foreach ($files as $file) {
+                $sid = (int) $file['submission_id'];
+                if (!isset($fileMap[$sid])) {
+                    $fileMap[$sid] = [];
+                }
+                $fileMap[$sid][] = [
+                    'id' => (int) $file['id'],
+                    'submission_id' => $sid,
+                    'original_name' => (string) $file['original_name'],
+                    'display_title' => (string) $file['display_title'],
+                    'file_url' => (string) $file['file_url'],
+                    'mime_type' => (string) $file['mime_type'],
+                    'media_kind' => (string) $file['media_kind'],
+                    'size_bytes' => (int) $file['size_bytes'],
+                    'approval_status' => (string) $file['approval_status'],
+                    'reviewed_by_user_id' => isset($file['reviewed_by_user_id']) && $file['reviewed_by_user_id'] !== null ? (int) $file['reviewed_by_user_id'] : null,
+                    'reviewed_by_name' => $file['reviewed_by_name'] ?: null,
+                    'reviewed_at' => $file['reviewed_at'] ?? null,
+                    'approved_at' => $file['approved_at'] ?? null,
+                    'rejected_at' => $file['rejected_at'] ?? null,
+                    'created_at' => $file['created_at'] ?? null,
+                    'updated_at' => $file['updated_at'] ?? null,
+                ];
+            }
+
+            $rows = [];
+            foreach ($submissions as $submission) {
+                $rows[] = gallery_admin_submission_row($submission, $fileMap[(int) $submission['id']] ?? []);
+            }
+
+            json([
+                'submissions' => $rows,
+                'counts' => [
+                    'submissions' => count($rows),
+                    'files' => count($files),
+                    'pending' => count(array_filter($files, static fn(array $row): bool => (string) $row['approval_status'] === 'pending_review')),
+                    'approved' => count(array_filter($files, static fn(array $row): bool => (string) $row['approval_status'] === 'approved')),
+                    'rejected' => count(array_filter($files, static fn(array $row): bool => (string) $row['approval_status'] === 'rejected')),
+                ],
             ]);
         }
 
@@ -1216,6 +1417,38 @@ try {
                 'message' => 'Approval updated.',
                 'user' => $updatedUser ?: null,
             ]);
+        }
+
+        case $method === 'PUT' && preg_match('#^admin/gallery/file/(\d+)$#', $route, $m) === 1: {
+            $admin = require_admin();
+            gallery_ensure_schema();
+            $status = field(body(), 'approval_status');
+            if (!in_array($status, ['approved', 'rejected'], true)) {
+                json(['error' => 'Invalid gallery approval status.'], 422);
+            }
+            $stmt = db()->prepare('SELECT id, submission_id FROM gallery_submission_files WHERE id = ? LIMIT 1');
+            $stmt->execute([(int) $m[1]]);
+            $file = $stmt->fetch();
+            if (!$file) {
+                json(['error' => 'Gallery file not found.'], 404);
+            }
+            $approvedAt = $status === 'approved' ? date('Y-m-d H:i:s') : null;
+            $rejectedAt = $status === 'rejected' ? date('Y-m-d H:i:s') : null;
+            db()->prepare(
+                'UPDATE gallery_submission_files
+                 SET approval_status = ?, reviewed_by_user_id = ?, reviewed_by_name = ?, reviewed_at = NOW(),
+                     approved_at = ?, rejected_at = ?, updated_at = NOW()
+                 WHERE id = ?'
+            )->execute([
+                $status,
+                (int) $admin['id'],
+                (string) ($admin['full_name'] ?? 'Admin'),
+                $approvedAt,
+                $rejectedAt,
+                (int) $m[1],
+            ]);
+            $overall = gallery_recompute_submission_status((int) $file['submission_id']);
+            json(['message' => 'Gallery file updated.', 'overall_status' => $overall]);
         }
 
         case $method === 'PUT' && preg_match('#^admin/request/(\d+)$#', $route, $m) === 1: {
@@ -2081,3 +2314,5 @@ try {
     }
     json($payload, 500);
 }
+
+

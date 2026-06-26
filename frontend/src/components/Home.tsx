@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { api, type EventItem, type Post } from '../lib/api'
+import { api, type EventItem, type Post, type PublicGalleryItemRow } from '../lib/api'
 import ContactSection from './ContactSection'
 import { SocialIcon } from './SocialIcons'
 import { socials } from '../lib/social'
@@ -342,6 +342,7 @@ function VisionNodeIcon({ kind }: { kind: VisionNode['kind'] }) {
 export default function Home() {
   const [events, setEvents] = useState<EventItem[]>([])
   const [posts, setPosts] = useState<Post[]>([])
+  const [galleryUploads, setGalleryUploads] = useState<PublicGalleryItemRow[]>([])
   const [challengeOverview, setChallengeOverview] = useState<any>(null)
   const [challengeTab, setChallengeTab] = useState<HomeChallengeTabKey>('overview')
 
@@ -354,6 +355,9 @@ export default function Home() {
     api.get<{ posts: Post[] }>('posts')
       .then((d) => setPosts(Array.isArray(d.posts) ? d.posts : []))
       .catch(() => setPosts([]))
+    api.get<{ items: PublicGalleryItemRow[] }>('gallery')
+      .then((d) => setGalleryUploads(Array.isArray(d.items) ? d.items : []))
+      .catch(() => setGalleryUploads([]))
     api.get<any>('new-school/overview')
       .then((data) => setChallengeOverview(data))
       .catch(() => setChallengeOverview(null))
@@ -371,6 +375,19 @@ export default function Home() {
     { label: 'Students joined', value: formatCount(challengeSummary.students ?? 0) },
     { label: 'Parents joined', value: formatCount(challengeSummary.parents ?? 0) },
   ]
+  const approvedGalleryImages = galleryUploads
+    .filter((item) => item.media_kind === 'image')
+    .slice(0, 9)
+    .map((item, index) => ({
+      cls: 'cell',
+      tag: 'Approved Upload',
+      cap: `${item.display_title} | ${item.credit_name}${item.credit_organization ? ` | ${item.credit_organization}` : ''}`,
+      image: item.file_url,
+      key: `gallery-upload-${item.id}-${index}`,
+    }))
+  const homeGalleryItems = approvedGalleryImages.length
+    ? approvedGalleryImages
+    : galleryItems.map((item, index) => ({ ...item, key: `gallery-static-${index}` }))
 
   return (
     <>
@@ -761,14 +778,14 @@ export default function Home() {
             <p className="sub">Moments from the movement - speaking, community, and impact.</p>
           </div>
           <div className="gallery gallery--uniform reveal">
-            {galleryItems.map((c, i) => (
+            {homeGalleryItems.map((c, i) => (
               <div
                 className={c.cls}
                 data-cap={c.cap}
                 data-lightbox-src={c.image}
                 data-lightbox-cap={c.cap}
                 data-lightbox-alt={c.cap}
-                key={i}
+                key={c.key || i}
                 role="button"
                 tabIndex={0}
               >
@@ -779,7 +796,7 @@ export default function Home() {
             ))}
           </div>
           <div className="gallery-admin reveal">
-            <button className="btn btn--solid" data-request="Submit Media to Gallery">+ Add Content to Gallery</button>
+            <button className="btn btn--solid" data-gallery-upload>+ Add Content to Gallery</button>
             <div className="hint">Team members can submit approved photos and video for the website.</div>
           </div>
         </div>

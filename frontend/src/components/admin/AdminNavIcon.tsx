@@ -143,6 +143,14 @@ const ICONS: Record<string, ReactNode> = {
       <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
     </>
   ),
+  gallery: (
+    <>
+      <rect x="3" y="4" width="18" height="14" rx="2" />
+      <path d="M8 20h8" />
+      <circle cx="9" cy="9" r="1.5" />
+      <path d="m21 15-3.2-3.2a1.8 1.8 0 0 0-2.55 0L11 16l-2-2-4 4" />
+    </>
+  ),
   school: (
     <>
       <path d="M14 22v-4a2 2 0 0 0-4 0v4" />

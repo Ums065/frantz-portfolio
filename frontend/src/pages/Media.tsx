@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { mediaShowcase, testimonialFallbacks } from '../lib/brandContent'
-import { api } from '../lib/api'
+import { api, type PublicGalleryItemRow } from '../lib/api'
 import { useSeo } from '../hooks/useSeo'
 
 const mediaKitUrl = '/assets/media-kit/frantz-coutard-media-kit.txt'
@@ -36,6 +36,7 @@ interface TestimonialRow {
 export default function Media() {
   const [media, setMedia] = useState<MediaRow[]>([])
   const [testimonials, setTestimonials] = useState<TestimonialRow[]>([])
+  const [galleryItems, setGalleryItems] = useState<PublicGalleryItemRow[]>([])
 
   useSeo({
     title: 'Media Center',
@@ -51,6 +52,9 @@ export default function Media() {
     api.get<{ testimonials: TestimonialRow[] }>('testimonials')
       .then((d) => setTestimonials(Array.isArray(d.testimonials) ? d.testimonials : []))
       .catch(() => setTestimonials([]))
+    api.get<{ items: PublicGalleryItemRow[] }>('gallery')
+      .then((d) => setGalleryItems(Array.isArray(d.items) ? d.items : []))
+      .catch(() => setGalleryItems([]))
   }, [])
 
   const safeMedia = Array.isArray(media) ? media : []
@@ -85,6 +89,8 @@ export default function Media() {
       }))
 
   const featured = items.find((item) => item.is_featured) || items[0]
+  const galleryImages = galleryItems.filter((item) => item.media_kind === 'image')
+  const galleryVideos = galleryItems.filter((item) => item.media_kind === 'video')
 
   const renderLink = (url: string | null | undefined, label: string) => {
     const href = url || '/blog'
@@ -187,26 +193,52 @@ export default function Media() {
         <div className="wrap">
           <div className="block__head reveal">
             <div className="section-title"><span className="ln l" /><h2 className="gold-text">Photo &amp; Video Library</h2><span className="ln r" /></div>
-            <p className="sub">A fast visual index for editorial use.</p>
+            <p className="sub">Approved community gallery uploads with visible contributor credit.</p>
           </div>
-          <div className="gallery gallery--uniform reveal">
-            {items.slice(0, 6).map((item) => (
-              <div
-                className="cell"
-                data-cap={item.title}
-                data-lightbox-src={item.image || '/assets/abstract-gold-network.webp'}
-                data-lightbox-cap={item.title}
-                data-lightbox-alt={item.title}
-                key={item.id}
-                role="button"
-                tabIndex={0}
-              >
-                <img src={item.image || '/assets/abstract-gold-network.webp'} alt={item.title} loading="lazy" decoding="async" />
-                <span className="tagk">{item.type}</span>
-                <div className="cap">{item.title}</div>
-              </div>
-            ))}
-          </div>
+          {galleryImages.length > 0 ? (
+            <div className="gallery gallery--uniform reveal">
+              {galleryImages.map((item) => (
+                <div
+                  className="cell"
+                  data-cap={`${item.display_title} ? ${item.credit_name}${item.credit_organization ? ` ? ${item.credit_organization}` : ''}`}
+                  data-lightbox-src={item.file_url}
+                  data-lightbox-cap={`${item.display_title} ? ${item.credit_name}`}
+                  data-lightbox-alt={item.display_title}
+                  key={item.id}
+                  role="button"
+                  tabIndex={0}
+                >
+                  <img src={item.file_url} alt={item.display_title} loading="lazy" decoding="async" />
+                  <span className="tagk">Approved Photo</span>
+                  <div className="cap">{item.display_title} ? {item.credit_name}{item.credit_organization ? ` ? ${item.credit_organization}` : ''}</div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="sponsor-note">No approved gallery photos yet.</p>
+          )}
+          {galleryVideos.length > 0 && (
+            <div className="blog-list-grid media-list" style={{ marginTop: 24 }}>
+              {galleryVideos.map((item) => (
+                <article className="glass blog-card reveal" key={item.id}>
+                  <div className="blog-card__img" style={{ display: 'grid', placeItems: 'center', background: 'linear-gradient(180deg, rgba(20,18,12,0.96), rgba(10,10,10,0.96))' }}>
+                    <svg viewBox="0 0 24 24" width="44" height="44" fill="none" stroke="currentColor" strokeWidth={1.6}><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m10 9 5 3-5 3z" /></svg>
+                  </div>
+                  <div className="blog-card__body">
+                    <div className="kicker"><span className="cat">Approved Video</span><span>&bull;</span><span>{item.credit_name}</span></div>
+                    <h3>{item.display_title}</h3>
+                    <p>{item.credit_organization ? `${item.credit_name} ? ${item.credit_organization}` : item.credit_name}</p>
+                    <div className="item-actions">
+                      <a className="read" href={item.file_url} target="_blank" rel="noreferrer">
+                        Open Video
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth={2}><path d="M7 17L17 7M9 7h8v8" /></svg>
+                      </a>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
         </div>
       </section>
 

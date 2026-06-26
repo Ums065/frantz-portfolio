@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext'
 import { useSeo } from '../hooks/useSeo'
 import { resolveDashboardRoute } from '../lib/dashboardRoute'
 import SponsorsAdminPanel from '../components/admin/SponsorsAdminPanel'
+import GalleryAdminPanel from '../components/admin/GalleryAdminPanel'
 import NsRecordDetail from '../components/NsRecordDetail'
 import AdminNavIcon from '../components/admin/AdminNavIcon'
 import NsProfileModal, { type ProfileView } from '../components/admin/NsProfileModal'
@@ -15,7 +16,7 @@ const EDU_PEOPLE_PAGE_SIZE = 10
 type TabKey =
   | 'overview' | 'analytics' | 'requests' | 'orders' | 'subscribers' | 'contacts'
   | 'members' | 'approvals' | 'sponsors' | 'awards' | 'events' | 'blog'
-  | 'testimonials' | 'media' | 'community' | 'rsvps' | 'inventory'
+  | 'testimonials' | 'media' | 'gallery' | 'community' | 'rsvps' | 'inventory'
   | 'ns-schools' | 'ns-ranking' | 'ns-submissions' | 'ns-interviews' | 'ns-chat' | 'ns-trendcatch'
 
 interface NavItem { key: TabKey; label: string }
@@ -54,6 +55,7 @@ const NAV_GROUPS: Array<{ group: string; items: NavItem[] }> = [
     { key: 'blog', label: 'Blog Posts' },
     { key: 'testimonials', label: 'Testimonials' },
     { key: 'media', label: 'Media Library' },
+    { key: 'gallery', label: 'Gallery' },
   ] },
 ]
 
@@ -85,7 +87,7 @@ interface OrderRow {
 }
 interface Submissions {
   requests: RequestRow[]; subscribers: SubRow[]; contacts: ContactRow[]; members: MemberRow[]; orders: OrderRow[]
-  counts?: Partial<Record<'awards' | 'events' | 'blog' | 'testimonials' | 'media' | 'inventory' | 'community' | 'rsvps' | 'sponsors', number>>
+  counts?: Partial<Record<'awards' | 'events' | 'blog' | 'testimonials' | 'media' | 'gallery' | 'inventory' | 'community' | 'rsvps' | 'sponsors', number>>
 }
 
 interface DetailField {
@@ -570,6 +572,7 @@ export default function Admin() {
       { label: 'Blog Posts', value: cnt.blog ?? 0, hint: 'Articles', icon: 'blog', tab: 'blog' },
       { label: 'Testimonials', value: cnt.testimonials ?? 0, hint: 'Published quotes', icon: 'testimonials', tab: 'testimonials' },
       { label: 'Media Library', value: cnt.media ?? 0, hint: 'Images & files', icon: 'media', tab: 'media' },
+      { label: 'Gallery', value: cnt.gallery ?? 0, hint: 'Submitted files', icon: 'gallery', tab: 'gallery' },
     ] },
   ]
   const openOvCard = (card: OvCard) => { if (card.tab) setTab(card.tab); else if (card.to) navigate(card.to) }
@@ -1425,6 +1428,7 @@ export default function Admin() {
         {tab === 'blog' && <PostsAdmin />}
         {tab === 'testimonials' && <TestimonialsAdmin />}
         {tab === 'media' && <MediaAdmin />}
+        {tab === 'gallery' && <GalleryAdminPanel />}
         {tab === 'community' && <CommunityAdmin />}
         {tab === 'rsvps' && <RsvpsAdmin />}
         {tab === 'inventory' && <InventoryAdmin />}

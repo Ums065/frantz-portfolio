@@ -732,6 +732,166 @@ export function AuthModal({
 }
 
 /* ====================== REQUEST / APPLY MODAL ====================== */
+
+const GALLERY_MAX_FILES = 20
+const GALLERY_MAX_IMAGE_BYTES = 6 * 1024 * 1024
+const GALLERY_MAX_VIDEO_BYTES = 70 * 1024 * 1024
+const GALLERY_ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp']
+const GALLERY_ALLOWED_VIDEO_TYPES = ['video/mp4', 'video/webm', 'video/quicktime', 'video/x-matroska']
+
+const formatFileSize = (value: number) => {
+  if (value >= 1024 * 1024) return `${(value / (1024 * 1024)).toFixed(1)} MB`
+  if (value >= 1024) return `${Math.round(value / 1024)} KB`
+  return `${value} B`
+}
+
+export function GallerySubmitModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { user } = useAuth()
+  const [organization, setOrganization] = useState('')
+  const [message, setMessage] = useState('')
+  const [files, setFiles] = useState<File[]>([])
+  const [busy, setBusy] = useState(false)
+  const [done, setDone] = useState(false)
+  const [error, setError] = useState('')
+  const [termsAccepted, setTermsAccepted] = useState(false)
+
+  useEffect(() => {
+    if (open) {
+      setOrganization('')
+      setMessage('')
+      setFiles([])
+      setBusy(false)
+      setDone(false)
+      setError('')
+      setTermsAccepted(false)
+    }
+    document.body.style.overflow = open ? 'hidden' : ''
+    return () => { document.body.style.overflow = '' }
+  }, [open])
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  if (!open) return <div className="modal-overlay" />
+
+  const validate = (nextFiles: File[]) => {
+    if (nextFiles.length === 0) throw new Error('Choose at least one file.')
+    if (nextFiles.length > GALLERY_MAX_FILES) throw new Error('You can upload up to 20 files at a time.')
+    nextFiles.forEach((file) => {
+      const isImage = GALLERY_ALLOWED_IMAGE_TYPES.includes(file.type)
+      const isVideo = GALLERY_ALLOWED_VIDEO_TYPES.includes(file.type)
+      if (!isImage && !isVideo) throw new Error('Only JPG, PNG, WebP, MP4, WebM, MOV, or MKV files are allowed.')
+      if (isImage && file.size > GALLERY_MAX_IMAGE_BYTES) throw new Error(`${file.name} is larger than 6 MB.`)
+      if (isVideo && file.size > GALLERY_MAX_VIDEO_BYTES) throw new Error(`${file.name} is larger than 70 MB.`)
+    })
+  }
+
+  const onFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const nextFiles = Array.from(event.target.files || [])
+    try {
+      validate(nextFiles)
+      setFiles(nextFiles)
+      setError('')
+    } catch (err) {
+      setFiles([])
+      setError(err instanceof Error ? err.message : 'Invalid files.')
+    }
+  }
+
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault()
+    if (!user) {
+      setError('Please sign in first.')
+      return
+    }
+    setBusy(true)
+    setError('')
+    try {
+      validate(files)
+      const fd = new FormData()
+      if (organization.trim()) fd.append('organization', organization.trim())
+      if (message.trim()) fd.append('message', message.trim())
+      files.forEach((file) => fd.append('files[]', file))
+      await api.postForm<{ message: string }>('gallery/submission', fd)
+      recordTermsAcceptance({ kind: 'website', signature: user.full_name, email: user.email, documentLabel: 'Gallery Submission' })
+      setDone(true)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not submit the gallery files.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="modal-overlay open" onClick={(e) => e.target === e.currentTarget && !busy && onClose()}>
+      <div className="modal" style={{ maxWidth: 720, maxHeight: '90vh', overflowY: 'auto' }}>
+        <button className="close" onClick={onClose} aria-label="Close"><CloseIcon /></button>
+        <Mono />
+        {done ? (
+          <div style={{ textAlign: 'center' }}>
+            <OkIcon />
+            <h3 className="gold-text">Gallery Submission Received</h3>
+            <p className="msub">Your files are now waiting for admin review. Approved items will appear publicly with your credit.</p>
+            <button className="btn btn--solid" onClick={onClose}>Done</button>
+          </div>
+        ) : (
+          <div>
+            <h3 className="gold-text">Add Content to Gallery</h3>
+            <p className="msub">Upload up to 20 image or video files. Images can appear on the Home page and Media page after approval; videos appear on the Media page after approval.</p>
+            <form onSubmit={submit}>
+              <div className="field">
+                <label>Submitted By</label>
+                <input type="text" value={user?.full_name || ''} readOnly />
+              </div>
+              <div className="field">
+                <label>Email</label>
+                <input type="email" value={user?.email || ''} readOnly />
+              </div>
+              <div className="field">
+                <label>Organization</label>
+                <input type="text" placeholder="Team / company (optional)" value={organization} onChange={(e) => setOrganization(e.target.value)} />
+              </div>
+              <div className="field">
+                <label>Message</label>
+                <textarea className="fld-area" placeholder="Anything the admin should know about these files?" value={message} onChange={(e) => setMessage(e.target.value)} />
+              </div>
+              <div className="field">
+                <label>Media Files</label>
+                <label className="btn btn--sm" style={{ cursor: 'pointer', width: 'fit-content' }}>
+                  Choose Files
+                  <input type="file" hidden multiple accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime,video/x-matroska" onChange={onFileChange} />
+                </label>
+                <p className="msub" style={{ marginTop: 8 }}>Max 20 files. Images up to 6 MB each. Videos up to 70 MB each.</p>
+                {files.length > 0 && (
+                  <div style={{ display: 'grid', gap: 8, marginTop: 12 }}>
+                    {files.map((file) => (
+                      <div key={`${file.name}-${file.size}`} className="glass" style={{ padding: '10px 12px', display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
+                        <div>
+                          <strong style={{ display: 'block' }}>{file.name}</strong>
+                          <span style={{ color: 'var(--muted)', fontSize: 12 }}>{file.type.startsWith('video/') ? 'Video' : 'Image'} ? {formatFileSize(file.size)}</span>
+                        </div>
+                        <span className="status-pill status-pill--new">Pending upload</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <TermsAgreement kind="website" idPrefix="gallery" hideSignature signatureName="" onSignatureChange={() => {}} onAcceptedChange={setTermsAccepted} />
+              {error && <p className="msub" style={{ color: '#e08a8a' }}>{error}</p>}
+              <button type="submit" className="btn btn--solid" disabled={busy || !termsAccepted || files.length === 0}>
+                {busy ? 'Submitting...' : 'Submit Gallery Files'}
+              </button>
+            </form>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function tailor(label: string): { sub: string; btn: string } {
   const l = label.toLowerCase()
   if (l.includes('apply') || l.includes('broker')) return { sub: 'Apply below - we review every application personally.', btn: 'Submit Application' }
