@@ -1665,8 +1665,8 @@ export default function NewSchool() {
   const topSchool = leaderboardSchools[0] || null
   const topStudent = leaderboardStudents[0] || null
   const deadlineLabel = formatDateLabel(challenge.deadline)
-  const registrationOpenLabel = formatLongDateLabel(challenge.registration_open || '2026-06-25')
-  const winnersAnnouncedLabel = formatLongDateLabel(challenge.winners_announced || '2026-12-22')
+  const registrationOpenLabel = formatLongDateLabel(challenge.registration_open || '2026-06-27')
+  const winnersAnnouncedLabel = formatLongDateLabel(challenge.winners_announced || '2026-12-21')
   const deadlineDate = challenge.deadline ? new Date(challenge.deadline) : null
   const deadlineDays = deadlineDate && !Number.isNaN(deadlineDate.getTime())
     ? Math.max(0, Math.ceil((deadlineDate.getTime() - Date.now()) / 86400000))
@@ -1697,9 +1697,10 @@ export default function NewSchool() {
   ]
   const timelineMilestones = [
     { phase: 'Registration Opens', when: registrationOpenLabel },
-    { phase: 'Community Challenge Period', when: 'July – November 2026' },
-    { phase: 'Judging & Review', when: 'November – December 2026' },
+    { phase: 'Community Challenge Period', when: 'July – 23 November 2026' },
+    { phase: 'Judging & Review', when: '24 November – 20 December 2026' },
     { phase: 'Winners Announced', when: winnersAnnouncedLabel, highlight: true },
+    { phase: 'Award Ceremony', when: 'Early 2027' },
   ]
   const featuredAwards = awards.filter((a) => a.featured)
   const heroFacts = [
