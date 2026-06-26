@@ -1545,6 +1545,9 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
 .scroll-cue .mouse { width: 22px; height: 36px; border: 1.5px solid var(--gold); border-radius: 12px; position: relative; }
 .scroll-cue .mouse::after { content:''; position: absolute; left: 50%; top: 7px; width: 3px; height: 7px; background: var(--gold); border-radius: 2px; transform: translateX(-50%); animation: wheel 1.6s infinite; }
 @keyframes wheel { 0%{opacity:0; transform: translate(-50%,0);} 30%{opacity:1;} 100%{opacity:0; transform: translate(-50%,12px);} }
+/* Hide the decorative scroll hint on phones/tablets — it sits at the bottom of the
+   hero and overlaps the CTA buttons on shorter screens. Stays on desktop. */
+@media (max-width: 1024px) { .scroll-cue { display: none; } }
 
 /* ============================================================
    SECTION GENERIC

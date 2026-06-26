@@ -403,7 +403,8 @@
   .sponsor-timeline,
   .sponsor-level-grid,
   .sponsor-card-grid,
-  .sponsor-ceremony__grid {
+  .sponsor-ceremony__grid,
+  .sponsor-actions {
     grid-template-columns: 1fr;
   }
 

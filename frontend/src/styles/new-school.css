@@ -3998,7 +3998,16 @@
 .ns-guide__foot .btn { min-width: 130px; justify-content: center; }
 .ns-guide-btn { border-color: rgba(143, 191, 150, 0.4); }
 @media (max-width: 560px) {
-  .ns-guide__foot .btn { min-width: 0; flex: 1; }
+  .ns-guide-overlay { padding: 12px; }
+  .ns-guide { padding: 24px 16px 18px; max-height: 92vh; border-radius: 16px; }
+  .ns-guide__close { top: 12px; right: 12px; width: 34px; height: 34px; }
+  .ns-guide__welcome { font-size: 14.5px; padding-right: 38px; }
+  .ns-guide__head h3 { font-size: 20px; }
+  .ns-guide__points { padding-left: 20px; }
+  .ns-guide__points li { font-size: 13.5px; }
+  .ns-guide__points--rules li { padding: 9px 10px 9px 40px; }
+  .ns-guide__foot { flex-wrap: wrap; }
+  .ns-guide__foot .btn { min-width: 0; flex: 1 1 140px; }
 }
 
 /* ============================================================
