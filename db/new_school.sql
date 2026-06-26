@@ -219,6 +219,7 @@ CREATE TABLE IF NOT EXISTS new_school_business_interviews (
   has_delivery_options  TINYINT(1) NOT NULL DEFAULT 0,
   main_challenge        TEXT NOT NULL,
   student_notes         TEXT NOT NULL,
+  is_starred            TINYINT(1) NOT NULL DEFAULT 0,
   created_at            TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at            TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY uniq_student_visit (student_id, visit_number),
@@ -244,6 +245,7 @@ CREATE TABLE IF NOT EXISTS new_school_submissions (
   reviewed_at            TIMESTAMP NULL DEFAULT NULL,
   score                  DECIMAL(6,2) DEFAULT NULL,
   rank_position          TINYINT UNSIGNED DEFAULT NULL,
+  is_starred             TINYINT(1) NOT NULL DEFAULT 0,
   created_at             TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at             TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   CONSTRAINT fk_new_school_submission_student

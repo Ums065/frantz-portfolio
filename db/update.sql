@@ -496,6 +496,7 @@ CREATE TABLE IF NOT EXISTS new_school_business_interviews (
   has_delivery_options  TINYINT(1) NOT NULL DEFAULT 0,
   main_challenge        TEXT NOT NULL,
   student_notes         TEXT NOT NULL,
+  is_starred            TINYINT(1) NOT NULL DEFAULT 0,
   created_at            TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at            TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY uniq_student_visit (student_id, visit_number),
@@ -521,6 +522,7 @@ CREATE TABLE IF NOT EXISTS new_school_submissions (
   reviewed_at            TIMESTAMP NULL DEFAULT NULL,
   score                  DECIMAL(6,2) DEFAULT NULL,
   rank_position          TINYINT UNSIGNED DEFAULT NULL,
+  is_starred             TINYINT(1) NOT NULL DEFAULT 0,
   created_at             TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at             TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   CONSTRAINT fk_new_school_submission_student
@@ -825,6 +827,10 @@ CALL add_column_if_missing('new_school_submissions', 'reviewed_by_user_id', 'INT
 CALL add_column_if_missing('new_school_submissions', 'reviewed_at', 'TIMESTAMP NULL DEFAULT NULL', 'reviewed_by_user_id');
 CALL add_column_if_missing('new_school_submissions', 'score', 'DECIMAL(6,2) DEFAULT NULL', 'reviewed_at');
 CALL add_column_if_missing('new_school_submissions', 'rank_position', 'TINYINT UNSIGNED DEFAULT NULL', 'score');
+
+-- Admin "star" flag for quick-marking standout projects + interviews (filterable in the admin panel).
+CALL add_column_if_missing('new_school_submissions', 'is_starred', 'TINYINT(1) NOT NULL DEFAULT 0', 'rank_position');
+CALL add_column_if_missing('new_school_business_interviews', 'is_starred', 'TINYINT(1) NOT NULL DEFAULT 0', 'student_notes');
 
 -- Registration address is now collected as separate parts (street, floor, city, state,
 -- ZIP, country) on the student / parent / school forms and stored as one combined line,

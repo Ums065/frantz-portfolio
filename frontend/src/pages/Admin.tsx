@@ -151,6 +151,22 @@ export default function Admin() {
   const [nsProfile, setNsProfile] = useState<ProfileView | null>(null)
   const [schoolDashId, setSchoolDashId] = useState('')
   const [rankSchoolId, setRankSchoolId] = useState('')
+  const [nsExporting, setNsExporting] = useState('')
+  // Bonus-points prompt: approve-with-bonus for projects (max 15); award-only for interviews (max 5).
+  const [bonusModal, setBonusModal] = useState<{ kind: 'submission' | 'interview'; id: number; studentName: string; max: number; approveAfter: boolean } | null>(null)
+  const [bonusValue, setBonusValue] = useState(0)
+  const [bonusBusy, setBonusBusy] = useState(false)
+  // Enhanced filters — Student Submissions
+  const [subSchool, setSubSchool] = useState('')
+  const [subStarred, setSubStarred] = useState(false)
+  const [subFrom, setSubFrom] = useState('')
+  const [subTo, setSubTo] = useState('')
+  // Enhanced filters — Business Interviews
+  const [intSchool, setIntSchool] = useState('')
+  const [intCategory, setIntCategory] = useState('')
+  const [intStarred, setIntStarred] = useState(false)
+  const [intFrom, setIntFrom] = useState('')
+  const [intTo, setIntTo] = useState('')
   const [schoolRosterTab, setSchoolRosterTab] = useState<'students' | 'teachers' | 'parents'>('students')
   const [chatThreads, setChatThreads] = useState<any[]>([])
   const [chatActiveUser, setChatActiveUser] = useState<number | null>(null)
@@ -424,6 +440,50 @@ export default function Admin() {
     await refreshData()
   }
 
+  // ---- New School: admin star toggle (standout projects / interviews) ----
+  const toggleStar = async (entity: 'submission' | 'interview', id: number, starred: boolean) => {
+    try {
+      await api.post('admin/new-school/star', { entity, id, starred })
+      await refreshData()
+    } catch (err) {
+      window.fcToast?.(err instanceof Error ? err.message : 'Could not update star.')
+    }
+  }
+
+  // ---- New School: bonus points. Approving a project prompts for bonus first (default 0);
+  // the submission is approved only after the admin confirms. Interviews award up to 5. ----
+  const openApproveBonus = (s: any) => { setBonusValue(0); setBonusModal({ kind: 'submission', id: Number(s.id), studentName: s.student_name || 'this student', max: 15, approveAfter: true }) }
+  const openInterviewBonus = (b: any) => { setBonusValue(0); setBonusModal({ kind: 'interview', id: Number(b.id), studentName: b.student_name || 'this student', max: 5, approveAfter: false }) }
+  const confirmBonus = async () => {
+    if (!bonusModal) return
+    const pts = Math.max(0, Math.min(bonusModal.max, Math.round(Number(bonusValue) || 0)))
+    setBonusBusy(true)
+    try {
+      if (pts > 0) {
+        await api.post('admin/new-school/points', {
+          source_type: bonusModal.kind === 'submission' ? 'project' : 'interview',
+          source_id: bonusModal.id,
+          student_points: pts,
+          teacher_points: 0,
+        })
+      }
+      if (bonusModal.approveAfter) {
+        await api.post('new-school/submission/review', { submission_id: bonusModal.id, status: 'approved' })
+      }
+      window.fcToast?.(
+        bonusModal.approveAfter
+          ? (pts > 0 ? `Approved · ${pts} bonus point${pts === 1 ? '' : 's'} to the student.` : 'Submission approved.')
+          : (pts > 0 ? `${pts} bonus point${pts === 1 ? '' : 's'} awarded.` : 'No points awarded.'),
+      )
+      setBonusModal(null)
+      await refreshData()
+    } catch (err) {
+      window.fcToast?.(err instanceof Error ? err.message : 'Could not save.')
+    } finally {
+      setBonusBusy(false)
+    }
+  }
+
   const reviewableAccounts = data?.members.filter((m) => !isAdmin(m.role)) ?? []
   const pendingAccounts = reviewableAccounts.filter((m) => (m.approval_status || 'pending') === 'pending').length
   const rejectedAccounts = reviewableAccounts.filter((m) => (m.approval_status || 'pending') === 'rejected').length
@@ -481,6 +541,28 @@ export default function Admin() {
   const studentsInSchool = (schoolId: number) => nsStudents.filter((s: any) => Number(s.school_id) === schoolId)
   const teachersInSchool = (schoolId: number) => nsTeachers.filter((t: any) => Number(t.school_id) === schoolId)
   const parentsInSchool = (schoolId: number) => nsParents.filter((p: any) => studentSchoolMap.get(Number(p.student_id)) === schoolId)
+
+  // Enhanced-filter helpers for the Submissions + Interviews tabs.
+  const inDateRange = (val: any, from: string, to: string) => {
+    const d = String(val || '').slice(0, 10)
+    if (from && (!d || d < from)) return false
+    if (to && (!d || d > to)) return false
+    return true
+  }
+  const subFiltered = nsSubmissions.filter((s: any) => {
+    if (subSchool && String(studentSchoolMap.get(Number(s.student_id)) || '') !== subSchool) return false
+    if (subStarred && !Number(s.is_starred)) return false
+    if (!inDateRange(s.submission_date || s.created_at, subFrom, subTo)) return false
+    return true
+  })
+  const intCategories = Array.from(new Set(nsInterviews.map((b: any) => String(b.business_category || '').trim()).filter(Boolean))).sort()
+  const intFiltered = nsInterviews.filter((b: any) => {
+    if (intSchool && String(studentSchoolMap.get(Number(b.student_id)) || '') !== intSchool) return false
+    if (intCategory && String(b.business_category || '') !== intCategory) return false
+    if (intStarred && !Number(b.is_starred)) return false
+    if (!inDateRange(b.date_of_visit || b.created_at, intFrom, intTo)) return false
+    return true
+  })
   const byRank = (a: any, b: any) => (a.rank_position || 9999) - (b.rank_position || 9999)
   const openStudentProfile = (studentId: number) => {
     const student = nsStudents.find((s: any) => Number(s.id) === studentId)
@@ -498,6 +580,38 @@ export default function Admin() {
     const roster = nsStudents.filter((s: any) => Number(s.teacher_id) === teacherId).slice().sort(byRank)
     setNsProfile({ kind: 'teacher', data: { teacher, students: roster } })
   }
+  // New School CSV exports — same admin endpoint the /new-school/dashboard uses, surfaced
+  // here in the Analytics + School Dashboard tabs so the admin never has to leave /admin.
+  const NS_EXPORT_TYPES = ['parents', 'schools', 'teachers', 'businesses', 'submissions', 'winners', 'approvals', 'notifications'] as const
+  const exportNsCsv = async (type: string) => {
+    setNsExporting(type)
+    try {
+      const data = await api.get<any>(`admin/new-school/export?type=${encodeURIComponent(type)}`)
+      const blob = new Blob([data.csv || ''], { type: 'text/csv;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = data.filename || `new-school-${type}.csv`
+      a.click()
+      URL.revokeObjectURL(url)
+      window.fcToast?.(`${type} export downloaded.`)
+    } catch (err) {
+      window.fcToast?.(err instanceof Error ? err.message : 'Could not export CSV.')
+    } finally {
+      setNsExporting('')
+    }
+  }
+  const renderNsExportBar = (title = 'Export New School data (CSV)') => (
+    <div className="admin-export-bar">
+      <span className="admin-export-bar__label">{title}</span>
+      {NS_EXPORT_TYPES.map((type) => (
+        <button key={type} type="button" className="btn btn--sm" onClick={() => exportNsCsv(type)} disabled={nsExporting === type}>
+          {nsExporting === type ? 'Exporting…' : `Export ${type.charAt(0).toUpperCase() + type.slice(1)}`}
+        </button>
+      ))}
+    </div>
+  )
+
   const selectedDashSchool = nsSchools.find((s: any) => String(s.id) === schoolDashId) || null
   const selectedRankSchool = nsSchools.find((s: any) => String(s.id) === rankSchoolId) || null
   // A clickable leaderboard list of students or teachers -> opens the profile modal.
@@ -703,7 +817,12 @@ export default function Admin() {
             </div>
           )}
 
-          {tab === 'analytics' && <AnalyticsAdmin />}
+          {tab === 'analytics' && (
+            <>
+              {renderNsExportBar()}
+              <AnalyticsAdmin />
+            </>
+          )}
 
         {tab === 'requests' && (
           <>
@@ -942,6 +1061,7 @@ export default function Admin() {
 
         {tab === 'ns-schools' && (
           <>
+            {renderNsExportBar()}
             <div className="ns-school-toolbar">
               <label className="ns-school-select">
                 <span>School</span>
@@ -1127,9 +1247,19 @@ export default function Admin() {
               { label: 'Rejected', value: nsSubBy('rejected'), tone: 'red' },
               { label: 'Winners', value: nsSubBy('winner'), tone: 'blue' },
             ]} />
+            <div className="admin-filterbar">
+              <select value={subSchool} onChange={(e) => setSubSchool(e.target.value)} aria-label="Filter by school">
+                <option value="">All schools</option>
+                {nsSchools.map((sc: any) => <option key={sc.id} value={String(sc.id)}>{sc.school_name}</option>)}
+              </select>
+              <label className="admin-filterbar__date"><span>From</span><input type="date" value={subFrom} onChange={(e) => setSubFrom(e.target.value)} /></label>
+              <label className="admin-filterbar__date"><span>To</span><input type="date" value={subTo} onChange={(e) => setSubTo(e.target.value)} /></label>
+              <label className="admin-filterbar__check"><input type="checkbox" checked={subStarred} onChange={(e) => setSubStarred(e.target.checked)} /> Starred only</label>
+              {(subSchool || subFrom || subTo || subStarred) && <button type="button" className="btn btn--sm" onClick={() => { setSubSchool(''); setSubFrom(''); setSubTo(''); setSubStarred(false) }}>Clear filters</button>}
+            </div>
             <DataTable
-              head={['#', 'Participant', 'Student', 'Problem', 'Status', 'Score', '']}
-              rows={nsSubmissions}
+              head={['#', 'Participant', 'Student', 'Problem', 'Status', 'Score', '★', '']}
+              rows={subFiltered}
               searchPlaceholder="Search submissions…"
               searchText={(s) => `${s.student_name ?? ''} ${s.participant_id ?? ''} ${s.problem_identified ?? ''}`}
               statusOf={(s) => (s.status || '')}
@@ -1154,9 +1284,12 @@ export default function Admin() {
                     <td><StatusPill status={st} /></td>
                     <td>{s.score ?? '—'}</td>
                     <td>
+                      <button type="button" className={`ns-star${Number(s.is_starred) ? ' is-on' : ''}`} title={Number(s.is_starred) ? 'Unstar' : 'Star'} aria-label="Toggle star" onClick={() => void toggleStar('submission', s.id, !Number(s.is_starred))}>{Number(s.is_starred) ? '★' : '☆'}</button>
+                    </td>
+                    <td>
                       <RowMenu actions={[
                         { label: 'View full details', onClick: () => setNsDetail({ kind: 'project', record: s }) },
-                        { label: 'Approve', onClick: () => void reviewSubmission(s.id, 'approved'), disabled: st === 'approved' || st === 'winner' },
+                        { label: 'Approve + bonus points', onClick: () => openApproveBonus(s), disabled: st === 'approved' || st === 'winner' },
                         { label: 'Reject', danger: true, onClick: () => void reviewSubmission(s.id, 'rejected'), disabled: st === 'rejected' },
                         { label: 'Open in New School dashboard', onClick: () => navigate('/new-school/dashboard') },
                       ]} />
@@ -1171,9 +1304,23 @@ export default function Admin() {
         {tab === 'ns-interviews' && (
           <>
             <StatChips items={[{ label: 'Business Interviews', value: nsInterviews.length, tone: 'gold' }]} />
+            <div className="admin-filterbar">
+              <select value={intSchool} onChange={(e) => setIntSchool(e.target.value)} aria-label="Filter by school">
+                <option value="">All schools</option>
+                {nsSchools.map((sc: any) => <option key={sc.id} value={String(sc.id)}>{sc.school_name}</option>)}
+              </select>
+              <select value={intCategory} onChange={(e) => setIntCategory(e.target.value)} aria-label="Filter by category">
+                <option value="">All categories</option>
+                {intCategories.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <label className="admin-filterbar__date"><span>From</span><input type="date" value={intFrom} onChange={(e) => setIntFrom(e.target.value)} /></label>
+              <label className="admin-filterbar__date"><span>To</span><input type="date" value={intTo} onChange={(e) => setIntTo(e.target.value)} /></label>
+              <label className="admin-filterbar__check"><input type="checkbox" checked={intStarred} onChange={(e) => setIntStarred(e.target.checked)} /> Starred only</label>
+              {(intSchool || intCategory || intFrom || intTo || intStarred) && <button type="button" className="btn btn--sm" onClick={() => { setIntSchool(''); setIntCategory(''); setIntFrom(''); setIntTo(''); setIntStarred(false) }}>Clear filters</button>}
+            </div>
             <DataTable
-              head={['#', 'Student', 'Participant', 'Business', 'Visit', 'Date', '']}
-              rows={nsInterviews}
+              head={['#', 'Student', 'Participant', 'Business', 'Visit', 'Date', '★', '']}
+              rows={intFiltered}
               searchPlaceholder="Search interviews…"
               searchText={(b) => `${b.student_name ?? ''} ${b.participant_id ?? ''} ${b.business_name ?? ''}`}
               renderRow={(b, _checkbox, index) => (
@@ -1184,7 +1331,15 @@ export default function Admin() {
                   <td>{b.business_name}</td>
                   <td>{b.visit_number ?? '—'}</td>
                   <td>{b.date_of_visit || b.created_at || '—'}</td>
-                  <td><span className="admin-linkcell">View ?</span></td>
+                  <td onClick={(e) => e.stopPropagation()}>
+                    <button type="button" className={`ns-star${Number(b.is_starred) ? ' is-on' : ''}`} title={Number(b.is_starred) ? 'Unstar' : 'Star'} aria-label="Toggle star" onClick={() => void toggleStar('interview', b.id, !Number(b.is_starred))}>{Number(b.is_starred) ? '★' : '☆'}</button>
+                  </td>
+                  <td onClick={(e) => e.stopPropagation()}>
+                    <RowMenu actions={[
+                      { label: 'View full details', onClick: () => setNsDetail({ kind: 'interview', record: b }) },
+                      { label: 'Award bonus points (max 5)', onClick: () => openInterviewBonus(b) },
+                    ]} />
+                  </td>
                 </tr>
               )}
             />
@@ -1460,6 +1615,37 @@ export default function Admin() {
         view={nsProfile}
         onOpenStudent={(id) => openStudentProfile(id)}
       />
+
+      {bonusModal && createPortal((
+        <div className="admin-bonus-overlay" role="dialog" aria-modal="true" onClick={() => { if (!bonusBusy) setBonusModal(null) }}>
+          <div className="admin-bonus-card glass" onClick={(e) => e.stopPropagation()}>
+            <h3>{bonusModal.approveAfter ? 'Approve project & award bonus points' : 'Award bonus points'}</h3>
+            <p>
+              {bonusModal.approveAfter
+                ? <>Award bonus points to <strong>{bonusModal.studentName}</strong>, then approve the project. Approval happens only after you confirm. Leave 0 to approve with no bonus.</>
+                : <>Award bonus points to <strong>{bonusModal.studentName}</strong> for this business interview.</>}
+            </p>
+            <label className="admin-bonus-field">
+              <span>Bonus points for the student (0–{bonusModal.max})</span>
+              <input
+                type="number"
+                min={0}
+                max={bonusModal.max}
+                value={bonusValue}
+                autoFocus
+                onChange={(e) => setBonusValue(Math.max(0, Math.min(bonusModal.max, Math.round(Number(e.target.value) || 0))))}
+              />
+            </label>
+            <p className="admin-bonus-note">These points are allocated to the student and update the ranking table immediately.</p>
+            <div className="admin-bonus-actions">
+              <button type="button" className="btn" onClick={() => setBonusModal(null)} disabled={bonusBusy}>Cancel</button>
+              <button type="button" className="btn btn--solid" onClick={() => void confirmBonus()} disabled={bonusBusy}>
+                {bonusBusy ? 'Saving…' : bonusModal.approveAfter ? 'Confirm & Approve' : 'Award points'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ), document.body)}
     </div>
   )
 }

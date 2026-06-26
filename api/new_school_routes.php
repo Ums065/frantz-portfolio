@@ -3203,6 +3203,23 @@ function new_school_handle_route(string $method, string $route): bool
             ]);
         }
 
+        case $key === 'POST admin/new-school/star': {
+            // Admin "star" toggle for standout projects / business interviews.
+            require_admin();
+            $entity = field($body, 'entity');
+            $id = (int) ($body['id'] ?? 0);
+            $starred = !empty($body['starred']) ? 1 : 0;
+            $table = $entity === 'interview'
+                ? 'new_school_business_interviews'
+                : ($entity === 'submission' ? 'new_school_submissions' : '');
+            if ($table === '' || $id <= 0) {
+                json(['error' => 'A valid entity (submission|interview) and id are required.'], 422);
+            }
+            $stmt = db()->prepare("UPDATE $table SET is_starred = ? WHERE id = ?");
+            $stmt->execute([$starred, $id]);
+            json(['success' => true, 'entity' => $entity, 'id' => $id, 'starred' => (bool) $starred]);
+        }
+
         case $key === 'POST admin/new-school/winners/publish': {
             require_admin();
             $winners = $body['winners'] ?? [];

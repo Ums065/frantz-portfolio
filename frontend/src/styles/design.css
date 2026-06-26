@@ -3249,6 +3249,32 @@ section#challenge .challenge-features .ns-gain p {
 
 /* Admin Schools area: explorer toolbar, school head, rankings */
 .ns-school-toolbar { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+
+/* New School CSV export button bar (Analytics + School Dashboard tabs). */
+.admin-export-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255, 255, 255, 0.02); }
+.admin-export-bar__label { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin-right: 4px; }
+
+/* Enhanced filter bar (Student Submissions + Business Interviews tabs). */
+.admin-filterbar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
+.admin-filterbar select { padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line); background: rgba(0, 0, 0, 0.45); color: #fff; font-size: 13px; max-width: 220px; }
+.admin-filterbar__date { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.admin-filterbar__date input { padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); background: rgba(0, 0, 0, 0.45); color: #fff; font-size: 13px; }
+.admin-filterbar__check { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted); cursor: pointer; }
+
+/* Admin star toggle (standout projects / interviews). */
+.ns-star { background: none; border: 0; cursor: pointer; font-size: 18px; line-height: 1; color: var(--muted); padding: 2px 4px; transition: color 0.15s ease, transform 0.15s ease; }
+.ns-star:hover { transform: scale(1.15); color: #f0c060; }
+.ns-star.is-on { color: #f0c060; }
+
+/* Bonus-points prompt modal (approve-with-bonus + interview award). */
+.admin-bonus-overlay { position: fixed; inset: 0; z-index: 1300; display: flex; align-items: center; justify-content: center; padding: 24px; background: rgba(4, 5, 6, 0.72); backdrop-filter: blur(6px); }
+.admin-bonus-card { width: min(440px, 100%); padding: 24px; border-radius: 18px; display: flex; flex-direction: column; gap: 12px; }
+.admin-bonus-card h3 { margin: 0; font-size: 19px; }
+.admin-bonus-card p { margin: 0; color: var(--muted); font-size: 13.5px; line-height: 1.6; }
+.admin-bonus-field { display: flex; flex-direction: column; gap: 6px; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.admin-bonus-field input { padding: 11px 13px; border-radius: 10px; border: 1px solid var(--line); background: rgba(0, 0, 0, 0.45); color: #fff; font-size: 16px; }
+.admin-bonus-note { font-size: 12px !important; color: #e7cf8a !important; }
+.admin-bonus-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 4px; }
 .ns-school-select { display: flex; flex-direction: column; gap: 6px; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
 .ns-school-select select {
   min-width: min(240px, 100%); max-width: 100%; padding: 10px 12px; border-radius: 10px;
