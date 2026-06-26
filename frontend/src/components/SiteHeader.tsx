@@ -139,7 +139,6 @@ export default function SiteHeader({ home = false }: { home?: boolean }) {
                     <span>{user.email}</span>
                   </div>
                   <Link to={dashboardHref} onClick={closeMenu}>Dashboard</Link>
-                  <Link to="/demo-login" onClick={closeMenu}>Demo Login</Link>
                   <Link to="/profile" onClick={closeMenu}>Profile</Link>
                   <Link to="/become-a-founding-sponsor" onClick={closeMenu}>Founding Sponsor</Link>
                   <Link to="/founding-sponsors" onClick={closeMenu}>Founding Sponsors</Link>
@@ -156,7 +155,6 @@ export default function SiteHeader({ home = false }: { home?: boolean }) {
               </div>
             ) : (
               <>
-                <Link className="btn btn--sm" to="/demo-login">Demo Login</Link>
                 <button className="btn btn--sm" data-auth="login">Login</button>
                 <button className="btn btn--sm btn--solid" data-auth="register">Register</button>
               </>
@@ -205,14 +203,12 @@ export default function SiteHeader({ home = false }: { home?: boolean }) {
           <div className="mcta">
             {user ? (
               <>
-                <Link className="btn btn--sm" to="/demo-login">Demo Login</Link>
                 <Link className="btn btn--sm btn--solid" to={dashboardHref}>Dashboard</Link>
                 <Link className="btn btn--sm" to="/profile">Profile</Link>
                 <button className="btn btn--sm" type="button" onClick={() => logout()}>Logout</button>
               </>
             ) : (
               <>
-                <Link className="btn btn--sm" to="/demo-login">Demo Login</Link>
                 <button className="btn btn--sm" data-auth="login">Login</button>
                 <button className="btn btn--sm btn--solid" data-auth="register">Register</button>
               </>

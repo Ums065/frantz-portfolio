@@ -2,6 +2,8 @@ import { useCallback, useState, type ReactNode } from 'react'
 import SiteHeader from './SiteHeader'
 import SiteFooter from './SiteFooter'
 import { AuthModal, GallerySubmitModal, RequestModal } from './Modals'
+import RegisterModal from './RegisterModal'
+import type { RegistrationTag } from './ChallengeRegistration'
 import { useSiteInteractions } from '../hooks/useSiteInteractions'
 import { api } from '../lib/api'
 import { useAuth, type RegistrationRole } from '../context/AuthContext'
@@ -15,9 +17,17 @@ export default function SiteLayout({ children, home = false }: { children: React
   const [authRole, setAuthRole] = useState<RegistrationRole | null>(null)
   const [requestLabel, setRequestLabel] = useState<string | null>(null)
   const [galleryOpen, setGalleryOpen] = useState(false)
+  // "Register" opens the full challenge registration popup (same forms as the
+  // /new-school page) + a Community option. "Login" still uses AuthModal.
+  const [registerTag, setRegisterTag] = useState<RegistrationTag | null>(null)
 
   const onAuth = useCallback((which: 'login' | 'register', role?: string) => {
-    setAuthMode(which)
+    if (which === 'register') {
+      setAuthMode(null)
+      setRegisterTag((role as RegistrationTag) || 'student')
+      return
+    }
+    setAuthMode('login')
     setAuthRole((role as RegistrationRole) || null)
   }, [])
   const onRequest = useCallback((label: string) => setRequestLabel(label), [])
@@ -46,11 +56,16 @@ export default function SiteLayout({ children, home = false }: { children: React
       <SiteFooter />
 
       <AuthModal
-        open={authMode !== null}
-        mode={authMode ?? 'login'}
+        open={authMode === 'login'}
+        mode="login"
         initialRole={authRole}
         onClose={() => setAuthMode(null)}
-        onMode={(m) => setAuthMode(m)}
+        onMode={(m) => { if (m === 'register') { setAuthMode(null); setRegisterTag('student') } else setAuthMode(m) }}
+      />
+      <RegisterModal
+        open={registerTag !== null}
+        initialTag={registerTag ?? 'student'}
+        onClose={() => setRegisterTag(null)}
       />
       <RequestModal label={requestLabel} onClose={() => setRequestLabel(null)} />
       <GallerySubmitModal open={galleryOpen} onClose={() => setGalleryOpen(false)} />

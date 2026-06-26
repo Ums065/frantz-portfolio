@@ -791,9 +791,11 @@
 }
 
 /* Parent registration: verify the student's unique ID before consent. */
-.ns-verify-row { display: flex; gap: 8px; align-items: stretch; }
-.ns-verify-row input { flex: 1; min-width: 0; }
-.ns-verify-row .btn { flex: 0 0 auto; white-space: nowrap; }
+.ns-verify-row { display: flex; gap: 8px; align-items: stretch; flex-wrap: wrap; }
+.ns-verify-row input { flex: 1 1 160px; min-width: 0; width: auto; }
+/* width:auto overrides the global `.modal .btn { width:100% }` so the Verify button
+   stays compact and the ID field takes the space (also when shown in the popup). */
+.ns-verify-row .btn { flex: 0 0 auto; width: auto; min-width: 96px; white-space: nowrap; }
 .ns-verify-msg { display: block; margin-top: 6px; font-size: 12.5px; color: var(--muted); }
 .ns-verify-msg--ok { color: #9be6a8; }
 .ns-verify-msg--ok strong { color: #c7f0cf; }

@@ -1946,6 +1946,11 @@ section.block {
 }
 .modal--register { max-width: 760px; }
 .modal-overlay.open .modal { transform: none; }
+
+/* Header "Register" popup heading (forms below come from <ChallengeRegistration>). */
+.ns-register-modal__head { margin: 0 0 16px; padding-right: 40px; }
+.ns-register-modal__head h2 { font-family: var(--f-serif, inherit); font-size: clamp(20px, 3vw, 26px); margin: 6px 0 4px; color: #f4efe4; }
+.ns-register-modal__head p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.6; }
 .modal .close { position: absolute; right: 18px; top: 16px; width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line); color: var(--muted); display: grid; place-items: center; transition: all .25s; }
 .modal .close:hover { color: var(--gold); border-color: var(--gold); transform: rotate(90deg); }
 .modal .mmono { width: 60px; height: 60px; margin: 0 auto 14px; }
