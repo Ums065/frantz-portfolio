@@ -3261,6 +3261,19 @@ section#challenge .challenge-features .ns-gain p {
 .admin-filterbar__date input { padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); background: rgba(0, 0, 0, 0.45); color: #fff; font-size: 13px; }
 .admin-filterbar__check { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted); cursor: pointer; }
 
+/* Section header with a grid/table view toggle (School Dashboard list). */
+.admin-section-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.admin-section-bar__title { font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.admin-viewtoggle { display: inline-flex; gap: 2px; padding: 3px; border: 1px solid var(--line); border-radius: 10px; background: rgba(0, 0, 0, 0.3); }
+.admin-viewtoggle button { display: grid; place-items: center; width: 32px; height: 28px; border: 0; border-radius: 7px; background: transparent; color: var(--muted); cursor: pointer; transition: background 0.15s ease, color 0.15s ease; }
+.admin-viewtoggle button svg { fill: currentColor; }
+.admin-viewtoggle button:hover { color: #e7e3d8; }
+.admin-viewtoggle button.is-active { background: rgba(96, 150, 255, 0.18); color: #7aa2ff; }
+
+/* Simple pager (School Dashboard cards). */
+.admin-pager { display: flex; align-items: center; justify-content: center; gap: 14px; margin-top: 16px; }
+.admin-pager__info { font-size: 12.5px; color: var(--muted); }
+
 /* Admin star toggle (standout projects / interviews). */
 .ns-star { background: none; border: 0; cursor: pointer; font-size: 18px; line-height: 1; color: var(--muted); padding: 2px 4px; transition: color 0.15s ease, transform 0.15s ease; }
 .ns-star:hover { transform: scale(1.15); color: #f0c060; }
@@ -3422,6 +3435,11 @@ section#challenge .challenge-features .ns-gain p {
 .admin-chat__notify { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; background: linear-gradient(180deg, #f0c060, #c78a1d); color: #1f1707; font-size: 10px; font-weight: 800; line-height: 1; }
 .admin-chat__thread strong { font-size: 14px; color: #f4efe4; }
 .admin-chat__thread span { font-size: 11.5px; color: var(--muted); text-transform: capitalize; }
+
+/* "Start a new chat" search results (users without an existing conversation). */
+.admin-chat__results { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; padding-top: 8px; border-top: 1px dashed rgba(201,168,76,0.22); }
+.admin-chat__results-label { font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); padding: 2px 12px 4px; }
+.admin-chat__thread--new span { text-transform: none; }
 .admin-chat__pane { border: 1px solid var(--line); border-radius: 14px; background: rgba(255,255,255,0.02); display: flex; flex-direction: column; padding: 14px; }
 .admin-chat__pane-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
 .admin-chat__pane-head strong { color: #f4efe4; font-size: 15px; }

@@ -167,6 +167,9 @@ export default function Admin() {
   const [intStarred, setIntStarred] = useState(false)
   const [intFrom, setIntFrom] = useState('')
   const [intTo, setIntTo] = useState('')
+  // School Dashboard: grid/table view toggle + 16-per-page pagination for the school cards.
+  const [schoolsView, setSchoolsView] = useState<'grid' | 'table'>('grid')
+  const [schoolsPage, setSchoolsPage] = useState(1)
   const [schoolRosterTab, setSchoolRosterTab] = useState<'students' | 'teachers' | 'parents'>('students')
   const [chatThreads, setChatThreads] = useState<any[]>([])
   const [chatActiveUser, setChatActiveUser] = useState<number | null>(null)
@@ -517,6 +520,23 @@ export default function Admin() {
     })
   }, [chatThreads, chatSearch])
 
+  // The search box also finds ANY registered user (not just existing conversations),
+  // so the admin can start a brand-new chat with someone who hasn't messaged yet.
+  const chatUserResults = useMemo(() => {
+    const query = chatSearch.trim().toLowerCase()
+    if (!query) return [] as any[]
+    const threadIds = new Set(chatThreads.map((t: any) => Number(t.thread_user_id)))
+    return (data?.members ?? [])
+      .filter((m) => !isAdmin(m.role) && !threadIds.has(Number(m.id)))
+      .filter((m) => `${m.full_name ?? ''} ${m.email ?? ''} ${m.role ?? ''}`.toLowerCase().includes(query))
+      .slice(0, 25)
+  }, [data?.members, chatThreads, chatSearch])
+  const activeChatName = chatActiveUser
+    ? (chatThreads.find((t: any) => Number(t.thread_user_id) === chatActiveUser)?.full_name
+        || (data?.members ?? []).find((m) => Number(m.id) === chatActiveUser)?.full_name
+        || `User #${chatActiveUser}`)
+    : ''
+
   const removeChatThread = async (userId: number) => {
     if (!confirm('Remove this conversation from your admin view? It will reappear if the user sends a new message.')) return
     try {
@@ -563,6 +583,12 @@ export default function Admin() {
     if (!inDateRange(b.date_of_visit || b.created_at, intFrom, intTo)) return false
     return true
   })
+  // School cards: 16 per page (grid or table view).
+  const SCHOOLS_PAGE_SIZE = 16
+  const schoolsTotalPages = Math.max(1, Math.ceil(nsSchools.length / SCHOOLS_PAGE_SIZE))
+  const schoolsSafePage = Math.min(schoolsPage, schoolsTotalPages)
+  const pagedSchools = nsSchools.slice((schoolsSafePage - 1) * SCHOOLS_PAGE_SIZE, schoolsSafePage * SCHOOLS_PAGE_SIZE)
+  useEffect(() => { if (schoolsPage !== schoolsSafePage) setSchoolsPage(schoolsSafePage) }, [schoolsPage, schoolsSafePage])
   const byRank = (a: any, b: any) => (a.rank_position || 9999) - (b.rank_position || 9999)
   const openStudentProfile = (studentId: number) => {
     const student = nsStudents.find((s: any) => Number(s.id) === studentId)
@@ -1074,18 +1100,70 @@ export default function Admin() {
             </div>
 
             {!selectedDashSchool ? (
-              <div className="admin-stats">
-                {nsSchools.length === 0 && <p style={{ color: 'var(--muted)' }}>No schools registered yet.</p>}
-                {nsSchools.map((s: any) => (
-                  <button key={s.id} type="button" className="admin-stat admin-stat--btn glass" onClick={() => { setSchoolDashId(String(s.id)); setSchoolRosterTab('students') }} title={`Open ${s.school_name}`}>
-                    <span className="admin-stat__icon" aria-hidden="true"><AdminNavIcon name="school" /></span>
-                    <span className="admin-stat__label">{s.school_name}</span>
-                    <strong>{studentsInSchool(Number(s.id)).length}</strong>
-                    <p>{(s.school_district || '—')} · {s.status}</p>
-                    <span className="admin-stat__go" aria-hidden="true">?</span>
-                  </button>
-                ))}
-              </div>
+              <>
+                <StatChips items={[
+                  { label: 'Schools', value: nsSchools.length },
+                  { label: 'Students', value: nsStudents.length, tone: 'gold' },
+                  { label: 'Teachers', value: nsTeachers.length, tone: 'blue' },
+                  { label: 'Parents', value: nsParents.length, tone: 'green' },
+                ]} />
+
+                <div className="admin-section-bar">
+                  <span className="admin-section-bar__title">{nsSchools.length} school{nsSchools.length === 1 ? '' : 's'}</span>
+                  <div className="admin-viewtoggle" role="group" aria-label="View mode">
+                    <button type="button" className={schoolsView === 'table' ? 'is-active' : ''} onClick={() => setSchoolsView('table')} title="Table view" aria-label="Table view">
+                      <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="1" y="2.25" width="14" height="2.5" rx="1" /><rect x="1" y="6.75" width="14" height="2.5" rx="1" /><rect x="1" y="11.25" width="14" height="2.5" rx="1" /></svg>
+                    </button>
+                    <button type="button" className={schoolsView === 'grid' ? 'is-active' : ''} onClick={() => setSchoolsView('grid')} title="Grid view" aria-label="Grid view">
+                      <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="1" y="1" width="6" height="6" rx="1" /><rect x="9" y="1" width="6" height="6" rx="1" /><rect x="1" y="9" width="6" height="6" rx="1" /><rect x="9" y="9" width="6" height="6" rx="1" /></svg>
+                    </button>
+                  </div>
+                </div>
+
+                {nsSchools.length === 0 ? (
+                  <p style={{ color: 'var(--muted)' }}>No schools registered yet.</p>
+                ) : schoolsView === 'grid' ? (
+                  <div className="admin-stats">
+                    {pagedSchools.map((s: any) => (
+                      <button key={s.id} type="button" className="admin-stat admin-stat--btn glass" onClick={() => { setSchoolDashId(String(s.id)); setSchoolRosterTab('students') }} title={`Open ${s.school_name}`}>
+                        <span className="admin-stat__icon" aria-hidden="true"><AdminNavIcon name="school" /></span>
+                        <span className="admin-stat__label">{s.school_name}</span>
+                        <strong>{studentsInSchool(Number(s.id)).length}</strong>
+                        <p>{(s.school_district || '—')} · {s.status}</p>
+                        <span className="admin-stat__go" aria-hidden="true">→</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="admin-table-wrap glass">
+                    <table className="admin-table">
+                      <thead>
+                        <tr><th className="admin-table__idx">#</th><th>School</th><th>District</th><th>Status</th><th>Students</th><th></th></tr>
+                      </thead>
+                      <tbody>
+                        {pagedSchools.map((s: any, i: number) => (
+                          <tr key={s.id} className="admin-row--clickable" onClick={() => { setSchoolDashId(String(s.id)); setSchoolRosterTab('students') }}>
+                            <td className="admin-table__idx">{(schoolsSafePage - 1) * SCHOOLS_PAGE_SIZE + i + 1}</td>
+                            <td>{s.school_name}</td>
+                            <td>{s.school_district || '—'}</td>
+                            <td><StatusPill status={(s.status || '').toLowerCase()} /></td>
+                            <td>{studentsInSchool(Number(s.id)).length}</td>
+                            <td><span className="admin-linkcell">Open →</span></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {nsSchools.length > SCHOOLS_PAGE_SIZE && (
+                  <div className="admin-pager">
+                    <button type="button" className="btn btn--sm" disabled={schoolsSafePage <= 1} onClick={() => setSchoolsPage(schoolsSafePage - 1)}>‹ Prev</button>
+                    <span className="admin-pager__info">Page {schoolsSafePage} of {schoolsTotalPages} · {nsSchools.length} schools</span>
+                    <button type="button" className="btn btn--sm" disabled={schoolsSafePage >= schoolsTotalPages} onClick={() => setSchoolsPage(schoolsSafePage + 1)}>Next ›</button>
+                  </div>
+                )}
+              </>
             ) : (
               <>
                 <div className="ns-school-head glass">
@@ -1361,14 +1439,12 @@ export default function Admin() {
                   type="text"
                   value={chatSearch}
                   onChange={(e) => setChatSearch(e.target.value)}
-                  placeholder="Search person, email, role"
+                  placeholder="Search any user to chat (name, email, role)"
                 />
               </div>
-              {chatThreads.length === 0 ? (
-                <p className="admin-chat__empty">No messages yet.</p>
-              ) : filteredChatThreads.length === 0 ? (
-                <p className="admin-chat__empty">No conversations match your search.</p>
-              ) : null}
+              {chatThreads.length === 0 && !chatSearch.trim() && (
+                <p className="admin-chat__empty">No messages yet. Search a name above to start a chat.</p>
+              )}
               {filteredChatThreads.map((t: any) => (
                 <button
                   key={t.thread_user_id}
@@ -1394,6 +1470,25 @@ export default function Admin() {
                   <span>{t.role} · {t.total} msg{Number(t.total) === 1 ? '' : 's'}</span>
                 </button>
               ))}
+              {chatUserResults.length > 0 && (
+                <div className="admin-chat__results">
+                  <span className="admin-chat__results-label">Start a new chat</span>
+                  {chatUserResults.map((m: any) => (
+                    <button
+                      key={`new-${m.id}`}
+                      type="button"
+                      className={`admin-chat__thread admin-chat__thread--new${chatActiveUser === Number(m.id) ? ' is-active' : ''}`}
+                      onClick={() => void openChatThread(Number(m.id))}
+                    >
+                      <div className="admin-chat__thread-head"><strong>{m.full_name || `User #${m.id}`}</strong></div>
+                      <span>{m.role}{m.email ? ` · ${m.email}` : ''}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {chatSearch.trim() && filteredChatThreads.length === 0 && chatUserResults.length === 0 && (
+                <p className="admin-chat__empty">No people match your search.</p>
+              )}
             </div>
             <div className="admin-chat__pane">
               {!chatActiveUser ? (
@@ -1401,7 +1496,7 @@ export default function Admin() {
               ) : (
                 <>
                   <div className="admin-chat__pane-head">
-                    <strong>{chatThreads.find((t: any) => Number(t.thread_user_id) === chatActiveUser)?.full_name || `User #${chatActiveUser}`}</strong>
+                    <strong>{activeChatName}</strong>
                     <button type="button" className="btn btn--sm" onClick={() => void clearAdminChat()}>Clear chat</button>
                   </div>
                   <div className="admin-chat__log">
