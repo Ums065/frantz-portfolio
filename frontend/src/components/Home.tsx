@@ -429,7 +429,7 @@ export default function Home() {
           <div className="hero__ctas">
             <button className="btn" data-toast="Vision reel coming soon.">Watch the Vision</button>
             <button className="btn btn--solid" onClick={() => document.getElementById('speaking')?.scrollIntoView()}>Book Frantz to Speak</button>
-            <Link className="btn" to="/new-school">Open New School</Link>
+            <Link className="btn" to="/new-school">View Challenges</Link>
             <button className="btn" data-auth="register">
               <span className="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><circle cx="9" cy="8" r="3.2" /><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6" /><path d="M17 8h5M19.5 5.5v5" /></svg></span>Join the Community
             </button>
