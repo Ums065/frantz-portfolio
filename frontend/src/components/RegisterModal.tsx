@@ -23,7 +23,18 @@ export default function RegisterModal({
     if (!open) return
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
     document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
+    // Lock the background page scroll so the form scrolls on its own (no drifting page behind it).
+    // Lock both <body> and <html>: depending on the page, the viewport scroll lives on the root
+    // element, so a body-only lock can leave the page scrollable behind the popup.
+    const prevBodyOverflow = document.body.style.overflow
+    const prevHtmlOverflow = document.documentElement.style.overflow
+    document.body.style.overflow = 'hidden'
+    document.documentElement.style.overflow = 'hidden'
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.body.style.overflow = prevBodyOverflow
+      document.documentElement.style.overflow = prevHtmlOverflow
+    }
   }, [open, onClose])
 
   if (!open) return null

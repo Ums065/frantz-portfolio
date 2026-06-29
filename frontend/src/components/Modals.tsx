@@ -365,6 +365,15 @@ export function AuthModal({
       throw new Error('Unexpected authentication response from the server.')
     }
 
+    // An admin signing in from the header goes straight to the admin dashboard.
+    // (Full navigation so /admin loads fresh against the just-established session.)
+    const role = (result.user.role || '').toString()
+    if (mode === 'login' && ['admin', 'super_admin', 'editor'].includes(role)) {
+      onClose()
+      window.location.assign('/admin')
+      return
+    }
+
     finishSuccess(result)
     setForm(createRegisterForm())
   }

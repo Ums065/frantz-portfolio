@@ -2187,6 +2187,37 @@ function AnalyticsAdmin() {
 
   return (
     <div style={{ display: 'grid', gap: 18 }}>
+      {data?.traffic && (
+        <div className="glass" style={{ padding: 22, borderRadius: 14 }}>
+          <div className="dashboard-section-head" style={{ marginBottom: 18 }}>
+            <h3 className="gold-text">Website Traffic</h3>
+            <span style={{ color: 'var(--muted)', fontSize: 12 }}>First-party page views — daily reach &amp; total visits</span>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 14, marginBottom: 20 }}>
+            {([
+              ['Total visits', data.traffic.total],
+              ['Visits today', data.traffic.today],
+              ['Last 7 days', data.traffic.last_7],
+              ['Last 30 days', data.traffic.last_30],
+              ['Unique visitors', data.traffic.unique_total],
+              ['Unique today', data.traffic.unique_today],
+              ['Unique (30d)', data.traffic.unique_30],
+            ] as const).map(([label, value]) => (
+              <div key={label} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', padding: 14, borderRadius: 12 }}>
+                <div style={{ color: 'var(--muted)', fontSize: 11, letterSpacing: '.1em', textTransform: 'uppercase' }}>{label}</div>
+                <div className="gold-text" style={{ fontFamily: 'var(--f-serif)', fontSize: 24, marginTop: 6 }}>{value.toLocaleString()}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{ marginBottom: 10, fontSize: 12, color: '#e9e1d0', textTransform: 'uppercase', letterSpacing: '.08em' }}>Daily visits (last 30 days)</div>
+          <DailyTraffic rows={data.traffic.daily} />
+          <div style={{ marginTop: 20 }}>
+            <div style={{ marginBottom: 12, fontSize: 12, color: '#e9e1d0', textTransform: 'uppercase', letterSpacing: '.08em' }}>Top pages (30 days)</div>
+            <SeriesBars rows={data.traffic.top_pages || []} />
+          </div>
+        </div>
+      )}
+
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(160px,1fr))', gap: 14 }}>
         {cards.map(([label, value]) => (
           <div key={label} className="glass" style={{ padding: 18, borderRadius: 14 }}>
@@ -2227,6 +2258,25 @@ function AnalyticsAdmin() {
         </div>
         <SeriesBars rows={data?.content_mix || []} />
       </div>
+    </div>
+  )
+}
+
+function DailyTraffic({ rows }: { rows: Array<{ label: string; value: number; unique: number }> }) {
+  if (!rows.length) return <p style={{ color: 'var(--muted)', fontSize: 13 }}>No visits tracked yet — data appears here as people browse the site.</p>
+  const max = Math.max(...rows.map((r) => r.value), 1)
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 170, overflowX: 'auto', paddingBottom: 4 }}>
+      {rows.map((r) => (
+        <div
+          key={r.label}
+          title={`${r.label} — ${r.value} visit${r.value === 1 ? '' : 's'}, ${r.unique} unique`}
+          style={{ flex: '1 0 16px', minWidth: 16, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}
+        >
+          <div style={{ width: '70%', height: `${Math.max(2, (r.value / max) * 130)}px`, borderRadius: '4px 4px 0 0', background: 'var(--gold-grad)' }} />
+          <span style={{ fontSize: 9, color: 'var(--muted)', whiteSpace: 'nowrap' }}>{r.label.slice(5)}</span>
+        </div>
+      ))}
     </div>
   )
 }

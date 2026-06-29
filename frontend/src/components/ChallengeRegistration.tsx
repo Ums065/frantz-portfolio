@@ -8,8 +8,11 @@ import {
   value, checked, fileValue, ageFromDob, uploadIfPresent, MAX_DOC_BYTES,
   REQUIRED_MSG, vRequired, vMinChars, vEmail, vPhone, vUrl, vPassword, vUsername,
   sanitizeField, pruneErrors, focusFirstError, mapRegisterError, joinAddress, validateAddress,
-  FieldError, AddressFields,
+  FieldError, AddressFields, PasswordField,
 } from '../lib/registrationForm'
+
+/** Optional email: valid format only if the user actually typed something. */
+const optionalEmail = (v: string) => (v.trim() ? vEmail(v) : '')
 
 export type RegistrationTag = 'community' | 'student' | 'parent' | 'school' | 'teacher'
 
@@ -41,6 +44,10 @@ export default function ChallengeRegistration({ tag, onTagChange, token, showCom
   const [schools, setSchools] = useState<any[]>([])
   const [teachers, setTeachers] = useState<any[]>([])
   const [busy, setBusy] = useState('')
+  // Referral: a friend's code from the ?ref= link prefills + attributes the signup.
+  const [referralCode] = useState(() => {
+    try { return new URLSearchParams(window.location.search).get('ref')?.trim() || '' } catch { return '' }
+  })
 
   const [studentDob, setStudentDob] = useState('')
   const [studentSchoolSearch, setStudentSchoolSearch] = useState('')
@@ -188,7 +195,8 @@ export default function ChallengeRegistration({ tag, onTagChange, token, showCom
     const dob = value(fd, 'date_of_birth')
     const age = Number(ageFromDob(dob))
     const errs: FieldErrors = {
-      full_name: vMinChars(value(fd, 'full_name'), 3, 'Full name'),
+      first_name: vMinChars(value(fd, 'first_name'), 2, 'First name'),
+      last_name: vMinChars(value(fd, 'last_name'), 2, 'Last name'),
       student_username: vUsername(value(fd, 'student_username')),
       date_of_birth: !dob ? REQUIRED_MSG : !age ? 'Enter a valid date of birth.' : age < 11 || age > 19 ? 'Student must be between 11 and 19 years old.' : '',
       email: vEmail(value(fd, 'email')),
@@ -199,12 +207,12 @@ export default function ChallengeRegistration({ tag, onTagChange, token, showCom
       grade_level: vRequired(value(fd, 'grade_level')),
       parent_name: vMinChars(value(fd, 'parent_name'), 3, 'Parent name'),
       parent_phone: vPhone(value(fd, 'parent_phone')),
-      parent_email: vEmail(value(fd, 'parent_email')),
+      parent_email: optionalEmail(value(fd, 'parent_email')),
       student_acknowledgement: checked(fd, 'student_acknowledgement') ? '' : 'Please confirm the participation acknowledgement.',
     }
     if (studentEduMode) {
       errs.school_name = vMinChars(value(fd, 'school_name'), 2, 'School name')
-      errs.edu_school_email = vEmail(value(fd, 'edu_school_email'))
+      errs.edu_school_email = optionalEmail(value(fd, 'edu_school_email'))
       errs.school_website = vUrl(value(fd, 'school_website'), false)
     } else {
       errs.school_name = vRequired(value(fd, 'school_name'), 'Please select your school.')
@@ -218,8 +226,11 @@ export default function ChallengeRegistration({ tag, onTagChange, token, showCom
     setBusy('student')
     try {
       const payload = {
-        full_name: value(fd, 'full_name'),
+        full_name: `${value(fd, 'first_name')} ${value(fd, 'last_name')}`.trim(),
+        first_name: value(fd, 'first_name'),
+        last_name: value(fd, 'last_name'),
         student_username: value(fd, 'student_username'),
+        referral_code: referralCode || undefined,
         age,
         date_of_birth: dob,
         email: value(fd, 'email'),
@@ -463,7 +474,7 @@ export default function ChallengeRegistration({ tag, onTagChange, token, showCom
               <label className="ns-field ns-field--full"><span>Full Name</span><input name="full_name" /><FieldError msg={communityErr.full_name} /></label>
               <label className="ns-field"><span>Email</span><input name="email" type="email" /><FieldError msg={communityErr.email} /></label>
               <label className="ns-field"><span>Phone Number <span className="ns-field-hint">(optional)</span></span><input type="tel" name="phone_number" /><FieldError msg={communityErr.phone_number} /></label>
-              <label className="ns-field ns-field--full"><span>Password</span><input name="password" type="password" /><FieldError msg={communityErr.password} /></label>
+              <label className="ns-field ns-field--full"><span>Create a Password</span><PasswordField name="password" /><FieldError msg={communityErr.password} /></label>
               <label className="ns-check ns-field--full">
                 <input type="checkbox" checked={communityTermsOk} onChange={(e) => setCommunityTermsOk(e.target.checked)} />
                 <span>I agree to the Terms &amp; Conditions and Privacy Policy.</span>
@@ -480,13 +491,15 @@ export default function ChallengeRegistration({ tag, onTagChange, token, showCom
             <p>Creates the participant profile and QR code for parent consent.</p>
           </div>
           <div className="ns-field-grid">
-            <label className="ns-field"><span>Full Name</span><input name="full_name" /><FieldError msg={studentErr.full_name} /></label>
-            <label className="ns-field"><span>Enter your Username <span className="ns-field-hint">(must be unique)</span></span><input name="student_username" autoComplete="off" /><FieldError msg={studentErr.student_username} /></label>
+            {referralCode && <div className="ns-alert ns-alert--info ns-field--full">You&apos;re joining with a friend&apos;s invite — once your teacher approves you, your friend earns points. 🎉</div>}
+            <label className="ns-field"><span>First Name</span><input name="first_name" /><FieldError msg={studentErr.first_name} /></label>
+            <label className="ns-field"><span>Last Name</span><input name="last_name" /><FieldError msg={studentErr.last_name} /></label>
+            <label className="ns-field"><span>Create a Username <span className="ns-field-hint">(must be unique)</span></span><input name="student_username" autoComplete="off" /><FieldError msg={studentErr.student_username} /></label>
             <label className="ns-field"><span>Date of Birth <span className="ns-field-hint">(MM-DD-YYYY)</span></span><input name="date_of_birth" type="date" value={studentDob} onChange={(e) => setStudentDob(e.target.value)} /><FieldError msg={studentErr.date_of_birth} /></label>
             <label className="ns-field"><span>Age</span><input name="age" type="number" min="11" max="19" value={ageFromDob(studentDob)} readOnly title="Auto-calculated from date of birth" /></label>
             <label className="ns-field"><span>Email</span><input name="email" type="email" /><FieldError msg={studentErr.email} /></label>
-            <label className="ns-field"><span>Enter Password</span><input name="password" type="password" /><FieldError msg={studentErr.password} /></label>
-            <label className="ns-field"><span>Confirm Password</span><input name="confirm_password" type="password" /><FieldError msg={studentErr.confirm_password} /></label>
+            <label className="ns-field"><span>Create a Password</span><PasswordField name="password" /><FieldError msg={studentErr.password} /></label>
+            <label className="ns-field"><span>Confirm Password</span><PasswordField name="confirm_password" /><FieldError msg={studentErr.confirm_password} /></label>
             <label className="ns-field"><span>Phone Number <span className="ns-field-hint">(optional)</span></span><input type="tel" name="phone_number" /><FieldError msg={studentErr.phone_number} /></label>
             <AddressFields errs={studentErr} />
             {!studentEduMode ? (
@@ -554,14 +567,14 @@ export default function ChallengeRegistration({ tag, onTagChange, token, showCom
                   <button type="button" className="ns-linkbtn" onClick={() => setStudentEduMode(false)}>Pick from the list instead</button>
                 </div>
                 <label className="ns-field ns-field--full ns-field--edu"><span>School Name</span><input name="school_name" /><FieldError msg={studentErr.school_name} /></label>
-                <label className="ns-field ns-field--edu"><span>School / Principal Email</span><input name="edu_school_email" type="email" /><FieldError msg={studentErr.edu_school_email} /></label>
+                <label className="ns-field ns-field--edu"><span>School / Principal Email <span className="ns-field-hint">(optional)</span></span><input name="edu_school_email" type="email" /><FieldError msg={studentErr.edu_school_email} /></label>
                 <label className="ns-field ns-field--edu"><span>School Website</span><input name="school_website" type="url" placeholder="https://" /><FieldError msg={studentErr.school_website} /></label>
               </>
             )}
             <label className="ns-field"><span>Grade Level</span><input name="grade_level" placeholder="9th Grade" /><FieldError msg={studentErr.grade_level} /></label>
             <label className="ns-field"><span>Parent Name</span><input name="parent_name" /><FieldError msg={studentErr.parent_name} /></label>
             <label className="ns-field"><span>Parent Phone</span><input type="tel" name="parent_phone" /><FieldError msg={studentErr.parent_phone} /></label>
-            <label className="ns-field ns-field--full"><span>Parent Email</span><input name="parent_email" type="email" /><FieldError msg={studentErr.parent_email} /></label>
+            <label className="ns-field ns-field--full"><span>Parent Email <span className="ns-field-hint">(optional)</span></span><input name="parent_email" type="email" /><FieldError msg={studentErr.parent_email} /></label>
             <label className="ns-check ns-field--full">
               <input name="student_acknowledgement" type="checkbox" />
               <span>I confirm this student is between 11 and 19 and understands parent consent is required before submission.</span>
@@ -623,7 +636,7 @@ export default function ChallengeRegistration({ tag, onTagChange, token, showCom
             <label className="ns-field"><span>Relationship</span><input name="relationship_to_student" placeholder="Mother, Father, Guardian…" /><FieldError msg={parentErr.relationship_to_student} /></label>
             <label className="ns-field"><span>Phone Number</span><input type="tel" name="phone_number" /><FieldError msg={parentErr.phone_number} /></label>
             <label className="ns-field"><span>Email</span><input name="email" type="email" /><FieldError msg={parentErr.email} /></label>
-            <label className="ns-field"><span>Password</span><input name="password" type="password" /><FieldError msg={parentErr.password} /></label>
+            <label className="ns-field"><span>Create a Password</span><PasswordField name="password" /><FieldError msg={parentErr.password} /></label>
             <label className="ns-field"><span>Preferred Contact Method</span>
               <select name="preferred_contact_method" defaultValue="phone">
                 <option value="phone">Phone</option>
@@ -717,7 +730,7 @@ export default function ChallengeRegistration({ tag, onTagChange, token, showCom
             <label className="ns-field"><span>Administrator Email</span><input name="administrator_email" type="email" /><FieldError msg={schoolErr.administrator_email} /></label>
             <label className="ns-field"><span>Administrator Phone</span><input type="tel" name="administrator_phone" /><FieldError msg={schoolErr.administrator_phone} /></label>
             <label className="ns-field ns-field--full"><span>School Website <span className="ns-field-hint">(optional)</span></span><input name="school_website" type="url" placeholder="https://example.edu" /><FieldError msg={schoolErr.school_website} /></label>
-            <label className="ns-field ns-field--full"><span>Password</span><input name="password" type="password" /><FieldError msg={schoolErr.password} /></label>
+            <label className="ns-field ns-field--full"><span>Create a Password</span><PasswordField name="password" /><FieldError msg={schoolErr.password} /></label>
           </div>
           <TermsAgreement kind="school" idPrefix="ns-school" signatureName={schoolTermsSig} onSignatureChange={setSchoolTermsSig} onAcceptedChange={setSchoolTermsOk} />
           <button className="btn btn--solid" type="submit" disabled={busy === 'school' || !schoolTermsOk}>{busy === 'school' ? 'Saving...' : 'Register School'}</button>
@@ -786,7 +799,7 @@ export default function ChallengeRegistration({ tag, onTagChange, token, showCom
               </select>
             </label>
             <label className="ns-field ns-field--full"><span>Employee ID <span className="ns-field-hint">(optional)</span></span><input name="employee_id" placeholder="Optional staff identifier" /></label>
-            <label className="ns-field ns-field--full"><span>Password</span><input name="password" type="password" /><FieldError msg={teacherErr.password} /></label>
+            <label className="ns-field ns-field--full"><span>Create a Password</span><PasswordField name="password" /><FieldError msg={teacherErr.password} /></label>
           </div>
           <TermsAgreement kind="teacher" idPrefix="ns-teacher" signatureName={teacherTermsSig} onSignatureChange={setTeacherTermsSig} onAcceptedChange={setTeacherTermsOk} />
           <button className="btn btn--solid" type="submit" disabled={busy === 'teacher' || !teacherTermsOk || (!teacherEduMode && !approvedSchool(teacherSchoolSearch))}>

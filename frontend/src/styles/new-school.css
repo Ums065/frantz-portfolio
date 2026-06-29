@@ -721,7 +721,7 @@
 .ns-linkbtn:hover { color: #ffdf94; }
 
 /* Inline field hints + checkbox helper line in the student My Work forms. */
-.ns-field-hint { color: var(--muted); font-weight: 400; font-size: 11px; text-transform: none; letter-spacing: 0; margin-left: 6px; }
+.ns-field-hint { color: var(--muted); font-weight: 400; font-size: 12px; text-transform: none; letter-spacing: 0; margin-left: 6px; }
 .ns-check-hint { color: var(--muted); font-size: 12.5px; line-height: 1.5; margin: 2px 0 10px; }
 
 /* Inline (below-field) validation errors — replaces the old submit-time popup. */
@@ -829,7 +829,7 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  font-size: 12px;
+  font-size: 13.5px;
   color: var(--muted);
 }
 
@@ -847,8 +847,45 @@
   background: rgba(0, 0, 0, 0.35);
   color: #f4efe4;
   outline: none;
+  font-size: 15px;
   transition: border-color 0.25s ease, box-shadow 0.25s ease;
 }
+
+/* Password field with show/hide eye toggle. */
+.ns-pw { position: relative; display: block; }
+.ns-pw input { padding-right: 44px; }
+.ns-pw__toggle {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.ns-pw__toggle:hover { color: var(--gold-light, #e7cf8a); }
+
+/* Student overview: progress block + referral "share & earn" card. */
+.ns-progress-block { margin: 14px 0 4px; }
+.ns-progress-block__top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+.ns-progress-block__top span { font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+.ns-progress-block__top strong { font-size: 18px; color: var(--gold-light, #e7cf8a); }
+.ns-progress-next { margin-top: 8px; font-size: 13.5px; color: #d8d3c6; }
+.ns-progress-next strong { color: #f4efe4; }
+.ns-referral-card__intro { color: var(--muted); line-height: 1.6; font-size: 13.5px; }
+.ns-referral-card__row { display: flex; gap: 8px; margin: 12px 0; flex-wrap: wrap; align-items: stretch; }
+.ns-referral-card__row input { flex: 1 1 220px; min-width: 0; padding: 11px 13px; border-radius: 10px; border: 1px solid var(--line); background: rgba(0, 0, 0, 0.4); color: #f4efe4; font-size: 13px; }
+.ns-referral-card__row .btn { flex: 0 0 auto; }
+.ns-referral-card__stats { display: flex; gap: 12px; margin-bottom: 12px; }
+.ns-referral-card__stats div { flex: 1; padding: 12px; border-radius: 12px; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--line); text-align: center; }
+.ns-referral-card__stats span { display: block; font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.ns-referral-card__stats strong { font-size: 22px; color: var(--gold-light, #e7cf8a); }
 
 .ns-field textarea {
   resize: vertical;

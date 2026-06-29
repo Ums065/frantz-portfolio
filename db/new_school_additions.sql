@@ -76,7 +76,7 @@ CREATE TABLE IF NOT EXISTS new_school_points (
   id                 INT AUTO_INCREMENT PRIMARY KEY,
   recipient_role     ENUM('student','teacher') NOT NULL,
   recipient_id       INT NOT NULL,
-  source_type        ENUM('interview','project') NOT NULL,
+  source_type        ENUM('interview','project','referral') NOT NULL,
   source_id          INT NOT NULL,
   kind               ENUM('auto','bonus') NOT NULL,
   points             INT NOT NULL DEFAULT 0,

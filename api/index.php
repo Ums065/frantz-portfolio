@@ -529,6 +529,23 @@ try {
             json(['message' => 'You\'re on the list — welcome to the legacy.'], 201);
         }
 
+        case $key === 'POST analytics/track': {
+            // First-party page-view tracking for the admin Analytics "Website Traffic" panel.
+            // Fire-and-forget: record best-effort and never error out the visitor's page.
+            $b = body();
+            try {
+                site_visits_record(
+                    (string) field($b, 'path'),
+                    (string) field($b, 'visitor_token'),
+                    field($b, 'referrer') !== '' ? (string) field($b, 'referrer') : null,
+                    $_SERVER['HTTP_USER_AGENT'] ?? null
+                );
+            } catch (\Throwable $e) {
+                // Tracking must never break navigation — swallow any failure.
+            }
+            json(['ok' => true], 202);
+        }
+
         case $key === 'POST terms-acceptance': {
             // Records a website "Terms of Use & Privacy Notice" acceptance for any action form.
             // Auditing never blocks the primary action; user_id auto-links if a session exists.
@@ -1331,6 +1348,23 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
                 );
             };
 
+            // Website traffic (first-party page views). Ensure the table exists before querying
+            // so the panel works even before db/update.sql has been run / before any visit.
+            site_visits_ensure_schema();
+            $dailyTraffic = array_map(
+                static fn(array $r): array => [
+                    'label'  => (string) $r['d'],
+                    'value'  => (int) $r['visits'],
+                    'unique' => (int) $r['uniques'],
+                ],
+                db()->query(
+                    'SELECT DATE(created_at) AS d, COUNT(*) AS visits, COUNT(DISTINCT visitor_token) AS uniques
+                     FROM site_visits
+                     WHERE created_at >= (CURDATE() - INTERVAL 29 DAY)
+                     GROUP BY DATE(created_at) ORDER BY d ASC'
+                )->fetchAll()
+            );
+
             json([
                 'totals' => [
                     'users'        => $count('SELECT COUNT(*) FROM users'),
@@ -1367,6 +1401,17 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
                     ['label' => 'Media', 'value' => $count('SELECT COUNT(*) FROM media_items')],
                     ['label' => 'Community', 'value' => $count('SELECT COUNT(*) FROM community_threads')],
                     ['label' => 'RSVPs', 'value' => $count('SELECT COUNT(*) FROM event_rsvps')],
+                ],
+                'traffic' => [
+                    'total'        => $count('SELECT COUNT(*) FROM site_visits'),
+                    'today'        => $count('SELECT COUNT(*) FROM site_visits WHERE DATE(created_at) = CURDATE()'),
+                    'last_7'       => $count('SELECT COUNT(*) FROM site_visits WHERE created_at >= (NOW() - INTERVAL 7 DAY)'),
+                    'last_30'      => $count('SELECT COUNT(*) FROM site_visits WHERE created_at >= (NOW() - INTERVAL 30 DAY)'),
+                    'unique_total' => $count('SELECT COUNT(DISTINCT visitor_token) FROM site_visits'),
+                    'unique_today' => $count('SELECT COUNT(DISTINCT visitor_token) FROM site_visits WHERE DATE(created_at) = CURDATE()'),
+                    'unique_30'    => $count('SELECT COUNT(DISTINCT visitor_token) FROM site_visits WHERE created_at >= (NOW() - INTERVAL 30 DAY)'),
+                    'daily'        => $dailyTraffic,
+                    'top_pages'    => $series('SELECT path AS label, COUNT(*) AS value FROM site_visits WHERE created_at >= (NOW() - INTERVAL 30 DAY) GROUP BY path ORDER BY value DESC, label ASC LIMIT 8'),
                 ],
             ]);
         }

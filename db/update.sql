@@ -393,6 +393,8 @@ CREATE TABLE IF NOT EXISTS new_school_students (
   participant_id          VARCHAR(40) NOT NULL UNIQUE,
   qr_token                VARCHAR(80) NOT NULL UNIQUE,
   qr_url                  VARCHAR(255) NOT NULL,
+  referral_code           VARCHAR(40) DEFAULT NULL UNIQUE,
+  referred_by_student_id  INT DEFAULT NULL,
   full_name               VARCHAR(120) NOT NULL,
   student_username        VARCHAR(80) NOT NULL UNIQUE,
   age                     TINYINT UNSIGNED NOT NULL,
@@ -591,7 +593,7 @@ CREATE TABLE IF NOT EXISTS new_school_points (
   id                 INT AUTO_INCREMENT PRIMARY KEY,
   recipient_role     ENUM('student','teacher') NOT NULL,
   recipient_id       INT NOT NULL,
-  source_type        ENUM('interview','project') NOT NULL,
+  source_type        ENUM('interview','project','referral') NOT NULL,
   source_id          INT NOT NULL,
   kind               ENUM('auto','bonus') NOT NULL,
   points             INT NOT NULL DEFAULT 0,
@@ -846,6 +848,14 @@ ALTER TABLE new_school_schools  MODIFY school_address VARCHAR(512) NOT NULL;
 -- address line) so the admin dashboard can filter students / parents / schools by ZIP.
 -- Existing free-form addresses leave this NULL; new registrations populate it.
 CALL add_column_if_missing('new_school_students', 'zip_code', 'VARCHAR(10) DEFAULT NULL', 'home_address');
+
+-- Referral system: each student gets a share code; referred_by links a new student to
+-- the friend who invited them. Referral points are awarded via the points engine.
+CALL add_column_if_missing('new_school_students', 'referral_code', 'VARCHAR(40) DEFAULT NULL', 'qr_url');
+CALL add_column_if_missing('new_school_students', 'referred_by_student_id', 'INT DEFAULT NULL', 'referral_code');
+UPDATE new_school_students SET referral_code = SUBSTRING(MD5(CONCAT(id, '-', RAND(), NOW())), 1, 12)
+  WHERE referral_code IS NULL OR referral_code = '';
+ALTER TABLE new_school_points MODIFY source_type ENUM('interview','project','referral') NOT NULL;
 CALL add_column_if_missing('new_school_parents',  'zip_code', 'VARCHAR(10) DEFAULT NULL', 'home_address');
 CALL add_column_if_missing('new_school_schools',  'zip_code', 'VARCHAR(10) DEFAULT NULL', 'school_address');
 
@@ -869,5 +879,19 @@ UPDATE media_items     SET image       = REPLACE(image, '.png', '.webp')       W
 UPDATE posts           SET cover_image = REPLACE(cover_image, '.png', '.webp') WHERE cover_image LIKE '/assets/%.png';
 UPDATE testimonials    SET image       = REPLACE(image, '.png', '.webp')       WHERE image       LIKE '/assets/%.png';
 UPDATE store_inventory SET image       = REPLACE(image, '.png', '.webp')       WHERE image       LIKE '/assets/%.png';
+
+-- First-party page-view tracking for the admin Analytics "Website Traffic" panel.
+-- One row per page view; visitor_token is a random id kept in the browser so we can
+-- count unique visitors (reach) without cookies, accounts, or any third-party service.
+CREATE TABLE IF NOT EXISTS site_visits (
+  id            BIGINT AUTO_INCREMENT PRIMARY KEY,
+  visitor_token VARCHAR(64) NOT NULL,
+  path          VARCHAR(512) NOT NULL,
+  referrer      VARCHAR(512) DEFAULT NULL,
+  user_agent    VARCHAR(255) DEFAULT NULL,
+  created_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_visits_created (created_at),
+  INDEX idx_visits_visitor (visitor_token)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 DROP PROCEDURE IF EXISTS add_column_if_missing;

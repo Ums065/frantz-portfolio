@@ -1,6 +1,7 @@
 // Shared registration / form helpers used by both the challenge page (NewSchool.tsx)
 // and the reusable <ChallengeRegistration> component (page + header popup). Pure
 // functions + small presentational components — no page-specific state.
+import { useState } from 'react'
 import { api } from './api'
 
 // ---- FormData readers ----
@@ -146,6 +147,31 @@ export const validateAddress = (fd: FormData, prefix = 'addr_'): FieldErrors => 
 export function FieldError({ msg, full = false }: { msg?: string; full?: boolean }) {
   if (!msg) return null
   return <span className={`ns-field-error${full ? ' ns-field--full' : ''}`} role="alert">{msg}</span>
+}
+
+/** Password input with a show/hide (eye) toggle, so users can verify what they type.
+ *  Drop-in replacement for <input type="password"> inside an .ns-field label. */
+export function PasswordField({ name, placeholder, autoComplete = 'new-password' }: { name: string; placeholder?: string; autoComplete?: string }) {
+  const [show, setShow] = useState(false)
+  return (
+    <span className="ns-pw">
+      <input name={name} type={show ? 'text' : 'password'} placeholder={placeholder} autoComplete={autoComplete} />
+      <button
+        type="button"
+        className="ns-pw__toggle"
+        onClick={() => setShow((s) => !s)}
+        aria-label={show ? 'Hide password' : 'Show password'}
+        title={show ? 'Hide password' : 'Show password'}
+        tabIndex={-1}
+      >
+        {show ? (
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth={2}><path d="M3 3l18 18M10.6 10.6a2 2 0 002.8 2.8M9.9 4.2A9.6 9.6 0 0112 4c5 0 9 4.5 9 8a11 11 0 01-2.2 3.4M6.1 6.1A11 11 0 003 12c0 3.5 4 8 9 8 1.2 0 2.3-.2 3.3-.6" /></svg>
+        ) : (
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth={2}><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z" /><circle cx="12" cy="12" r="3" /></svg>
+        )}
+      </button>
+    </span>
+  )
 }
 
 /** Reusable split-address inputs (Street / Floor / City / State / ZIP / Country). */

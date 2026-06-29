@@ -532,6 +532,46 @@ function require_csrf(): void
     }
 }
 
+/* ---- Website traffic tracking (first-party page views) ---- */
+function site_visits_ensure_schema(): void
+{
+    static $ready = false;
+    if ($ready) {
+        return;
+    }
+    db()->exec(
+        "CREATE TABLE IF NOT EXISTS site_visits (
+            id BIGINT AUTO_INCREMENT PRIMARY KEY,
+            visitor_token VARCHAR(64) NOT NULL,
+            path VARCHAR(512) NOT NULL,
+            referrer VARCHAR(512) DEFAULT NULL,
+            user_agent VARCHAR(255) DEFAULT NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_visits_created (created_at),
+            INDEX idx_visits_visitor (visitor_token)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+    $ready = true;
+}
+
+/** Record one page view. Best-effort: callers swallow errors so tracking never breaks a page. */
+function site_visits_record(string $path, string $visitorToken, ?string $referrer, ?string $userAgent): void
+{
+    $path = trim($path);
+    $visitorToken = trim($visitorToken);
+    if ($path === '' || $visitorToken === '') {
+        return;
+    }
+    site_visits_ensure_schema();
+    $stmt = db()->prepare('INSERT INTO site_visits (visitor_token, path, referrer, user_agent) VALUES (?, ?, ?, ?)');
+    $stmt->execute([
+        substr($visitorToken, 0, 64),
+        substr($path, 0, 512),
+        ($referrer !== null && $referrer !== '') ? substr($referrer, 0, 512) : null,
+        ($userAgent !== null && $userAgent !== '') ? substr($userAgent, 0, 255) : null,
+    ]);
+}
+
 function login_user(array $user): array
 {
     session_regenerate_id(true);
@@ -1689,6 +1729,34 @@ function new_school_qr_url(string $token): string
     return '/new-school/parent/' . rawurlencode($token);
 }
 
+/** Unique share code for a student's referral link (10 hex chars). */
+function new_school_generate_referral_code(): string
+{
+    $pdo = db();
+    for ($i = 0; $i < 20; $i++) {
+        $code = bin2hex(random_bytes(5));
+        $stmt = $pdo->prepare('SELECT 1 FROM new_school_students WHERE referral_code = ? LIMIT 1');
+        $stmt->execute([$code]);
+        if (!$stmt->fetchColumn()) {
+            return $code;
+        }
+    }
+    return bin2hex(random_bytes(8));
+}
+
+/** Resolve a referral code to the referrer's student id (null if unknown). */
+function new_school_referrer_id_by_code(string $code): ?int
+{
+    $code = trim($code);
+    if ($code === '') {
+        return null;
+    }
+    $stmt = db()->prepare('SELECT id FROM new_school_students WHERE referral_code = ? LIMIT 1');
+    $stmt->execute([$code]);
+    $id = $stmt->fetchColumn();
+    return $id ? (int) $id : null;
+}
+
 /* ============================================================================
  * Points engine (drives student + teacher rankings).
  *  - Each interview/project a student submits: student +5, their teacher +2 (auto).
@@ -1701,6 +1769,8 @@ const NS_POINTS_TEACHER_AUTO = 2;
 const NS_POINTS_STUDENT_BONUS_MAX = 15;
 const NS_POINTS_TEACHER_BONUS_MAX = 8;
 const NS_POINTS_TEACHER_BONUS_DEFAULT = 3;
+// Referral: the referrer earns this once the friend they invited is teacher-approved.
+const NS_POINTS_STUDENT_REFERRAL = 10;
 
 /* ============================================================
    Terms & Conditions acceptance audit
@@ -2055,7 +2125,7 @@ function new_school_points_ensure_schema(): void
             id INT AUTO_INCREMENT PRIMARY KEY,
             recipient_role ENUM('student','teacher') NOT NULL,
             recipient_id INT NOT NULL,
-            source_type ENUM('interview','project') NOT NULL,
+            source_type ENUM('interview','project','referral') NOT NULL,
             source_id INT NOT NULL,
             kind ENUM('auto','bonus') NOT NULL,
             points INT NOT NULL DEFAULT 0,
@@ -2075,7 +2145,7 @@ function new_school_points_award(string $role, int $recipientId, string $sourceT
         return;
     }
     if (!in_array($role, ['student', 'teacher'], true)
-        || !in_array($sourceType, ['interview', 'project'], true)
+        || !in_array($sourceType, ['interview', 'project', 'referral'], true)
         || !in_array($kind, ['auto', 'bonus'], true)) {
         return;
     }
@@ -2083,10 +2153,18 @@ function new_school_points_award(string $role, int $recipientId, string $sourceT
     $stmt = db()->prepare(
         'INSERT INTO new_school_points (recipient_role, recipient_id, source_type, source_id, kind, points, awarded_by_user_id)
          VALUES (?, ?, ?, ?, ?, ?, ?)
-         ON DUPLICATE KEY UPDATE points = VALUES(points), awarded_by_user_id = VALUES(awarded_by_user_id), updated_at = NOW()'
+         ON DUPLICATE KEY UPDATE
+            updated_at = IF(points <> VALUES(points) OR NOT (awarded_by_user_id <=> VALUES(awarded_by_user_id)), NOW(), updated_at),
+            points = VALUES(points),
+            awarded_by_user_id = VALUES(awarded_by_user_id)'
     );
     $stmt->execute([$role, $recipientId, $sourceType, $sourceId, $kind, $points, $awardedBy]);
-    $GLOBALS['__ns_points_dirty'] = true;
+    // Only invalidate the rankings cache when this actually inserted or changed a row.
+    // Auto-awards (e.g. the referral award) re-run on every dashboard load, so an
+    // unconditional dirty flag would rebuild the cache on each page view for no reason.
+    if ($stmt->rowCount() > 0) {
+        $GLOBALS['__ns_points_dirty'] = true;
+    }
 }
 
 function new_school_points_clear(string $sourceType, int $sourceId, string $kind): void
@@ -2097,7 +2175,11 @@ function new_school_points_clear(string $sourceType, int $sourceId, string $kind
     new_school_points_ensure_schema();
     $stmt = db()->prepare('DELETE FROM new_school_points WHERE source_type = ? AND source_id = ? AND kind = ?');
     $stmt->execute([$sourceType, $sourceId, $kind]);
-    $GLOBALS['__ns_points_dirty'] = true;
+    // Only invalidate the rankings cache when a row was actually removed — this is called
+    // on every status refresh, so a blind dirty flag would rebuild the cache for nothing.
+    if ($stmt->rowCount() > 0) {
+        $GLOBALS['__ns_points_dirty'] = true;
+    }
 }
 
 function new_school_points_teacher_for_student(int $studentId): int
@@ -3205,6 +3287,19 @@ function new_school_refresh_student_status(int $studentId): ?array
     $student = new_school_fetch_student_by_id($studentId);
     if (!$student) {
         return null;
+    }
+
+    // Referral reward: once the invited friend is teacher-approved, the referrer earns points.
+    // This runs on every status refresh, so it also self-corrects: if a friend who was
+    // approved is later rejected/un-linked, the previously awarded points are revoked.
+    // Both paths are idempotent (the ledger UNIQUE key prevents double awards; the clear
+    // is a no-op when there is nothing to remove).
+    if (!empty($student['referred_by_student_id'])) {
+        if (($student['teacher_approval_status'] ?? '') === 'approved') {
+            new_school_points_award('student', (int) $student['referred_by_student_id'], 'referral', $studentId, 'auto', NS_POINTS_STUDENT_REFERRAL);
+        } else {
+            new_school_points_clear('referral', $studentId, 'auto');
+        }
     }
 
     $interviewCount = new_school_student_interview_count($studentId);

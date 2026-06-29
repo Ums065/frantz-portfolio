@@ -1,5 +1,6 @@
 import { lazy, Suspense, type ReactNode, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom'
+import { trackVisit } from './lib/api'
 import Home from './components/Home'
 import SiteLayout from './components/SiteLayout'
 import ImpersonationBanner from './components/ImpersonationBanner'
@@ -48,6 +49,13 @@ function RoutedPage({ children, home = false, pageKey }: { children: ReactNode; 
   )
 }
 
+function PageTracker() {
+  const { pathname } = useLocation()
+  // One page view per route change (the initial load fires on mount).
+  useEffect(() => { trackVisit(pathname) }, [pathname])
+  return null
+}
+
 function ScrollToTop() {
   const { pathname, hash } = useLocation()
 
@@ -80,6 +88,7 @@ export default function App() {
     <AuthProvider>
       <BrowserRouter>
         <ScrollToTop />
+        <PageTracker />
         <ImpersonationBanner />
         <Routes>
           {/* Unique keys force SiteLayout to remount on navigation so the

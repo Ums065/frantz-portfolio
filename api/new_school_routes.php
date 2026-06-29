@@ -285,6 +285,13 @@ function new_school_build_student_context(array $student): array
     $teacherStudents = $teacher ? new_school_rank_students(new_school_fetch_students_for_teacher($teacher)) : [];
     $schoolTeachers = $school ? new_school_rank_teachers(new_school_fetch_teachers_for_school((int) $school['id']), $schoolStudents) : [];
 
+    $referralCountStmt = db()->prepare('SELECT COUNT(*) FROM new_school_students WHERE referred_by_student_id = ?');
+    $referralCountStmt->execute([$studentId]);
+    $referralCount = (int) $referralCountStmt->fetchColumn();
+    $referralPointsStmt = db()->prepare('SELECT COALESCE(SUM(points),0) FROM new_school_points WHERE recipient_role = "student" AND source_type = "referral" AND recipient_id = ?');
+    $referralPointsStmt->execute([$studentId]);
+    $referralPoints = (int) $referralPointsStmt->fetchColumn();
+
     return [
         'student' => $student,
         'school' => $school,
@@ -310,6 +317,11 @@ function new_school_build_student_context(array $student): array
             'has_submission' => $submission ? 1 : 0,
         ])),
         'student_points' => new_school_points_total('student', $studentId),
+        'referral' => [
+            'code' => (string) ($student['referral_code'] ?? ''),
+            'count' => $referralCount,
+            'points' => $referralPoints,
+        ],
         'rankings' => [
             'school' => [
                 'position' => new_school_find_student_rank_position($schoolStudents, $studentId),
@@ -648,6 +660,25 @@ function new_school_handle_route(string $method, string $route): bool
             json(['success' => true, 'avatar_url' => $avatarUrl !== '' ? $avatarUrl : null]);
         }
 
+        case $key === 'POST new-school/profile/password': {
+            // Any logged-in user changes their own password (verify current, then set new).
+            $user = require_login();
+            $current = (string) field($body, 'current_password');
+            $next = (string) field($body, 'new_password');
+            if (strlen($next) < 6) {
+                json(['error' => 'New password must be at least 6 characters.'], 422);
+            }
+            $row = db()->prepare('SELECT password_hash FROM users WHERE id = ? LIMIT 1');
+            $row->execute([(int) $user['id']]);
+            $hash = (string) ($row->fetchColumn() ?: '');
+            if ($hash === '' || !password_verify($current, $hash)) {
+                json(['error' => 'Your current password is incorrect.'], 422);
+            }
+            db()->prepare('UPDATE users SET password_hash = ?, updated_at = NOW() WHERE id = ?')
+                ->execute([password_hash($next, PASSWORD_DEFAULT), (int) $user['id']]);
+            json(['success' => true, 'message' => 'Password updated.']);
+        }
+
         case preg_match('#^GET new-school/parent/([a-f0-9]+)$#i', $key, $m) === 1: {
             $student = new_school_fetch_student_by_token($m[1]);
             if (!$student) {
@@ -780,7 +811,10 @@ function new_school_handle_route(string $method, string $route): bool
             $gradeLevel = field($body, 'grade_level');
             $parentName = field($body, 'parent_name');
             $parentPhone = field($body, 'parent_phone');
-            $parentEmail = require_email(field($body, 'parent_email'));
+            // Parent email is OPTIONAL — students often don't know it. Validate only if provided.
+            $parentEmail = field($body, 'parent_email');
+            if ($parentEmail !== '') $parentEmail = require_email($parentEmail);
+            $referralCode = field($body, 'referral_code');
 
             $schoolId = (int) ($body['school_id'] ?? 0);
             $teacherId = (int) ($body['teacher_id'] ?? 0);
@@ -793,8 +827,8 @@ function new_school_handle_route(string $method, string $route): bool
             if ($phone === '' || $homeAddress === '' || $gradeLevel === '' || ($schoolId <= 0 && $schoolName === '')) {
                 json(['error' => 'Student contact and school details are required.'], 422);
             }
-            if ($parentName === '' || $parentPhone === '' || $parentEmail === '') {
-                json(['error' => 'Parent contact details are required.'], 422);
+            if ($parentName === '' || $parentPhone === '') {
+                json(['error' => 'Parent name and phone are required.'], 422);
             }
             $phone = require_phone($phone, 'Student phone number');
             $parentName = require_name_field($parentName, 'Parent / Guardian name', 3);
@@ -874,6 +908,10 @@ function new_school_handle_route(string $method, string $route): bool
             $participantId = $existingStudent ? (string) $existingStudent['participant_id'] : new_school_generate_participant_id();
             $qrToken = $existingStudent ? (string) $existingStudent['qr_token'] : new_school_generate_qr_token();
             $qrUrl = $existingStudent ? (string) $existingStudent['qr_url'] : new_school_qr_url($qrToken);
+            // Referral: a new student gets their own share code; if they arrived via a friend's
+            // code, remember who referred them (points are awarded later, on teacher approval).
+            $newReferralCode = new_school_generate_referral_code();
+            $referredById = $referralCode !== '' ? new_school_referrer_id_by_code($referralCode) : null;
 
             if ($existingStudent) {
                 $update = $pdo->prepare(
@@ -919,10 +957,11 @@ function new_school_handle_route(string $method, string $route): bool
                 $insert = $pdo->prepare(
                     'INSERT INTO new_school_students (
                         user_id, school_id, teacher_id, participant_id, qr_token, qr_url,
+                        referral_code, referred_by_student_id,
                         full_name, student_username, age, date_of_birth, email, phone_number,
                         home_address, zip_code, school_name, grade_level, parent_name, parent_phone, parent_email,
                         parent_consent_status, school_approval_status, teacher_approval_status, submission_status, overall_status
-                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "pending", "pending", "pending", "locked", "student_registered")'
+                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "pending", "pending", "pending", "locked", "student_registered")'
                 );
                 $insert->execute([
                     (int) $user['id'],
@@ -931,6 +970,8 @@ function new_school_handle_route(string $method, string $route): bool
                     $participantId,
                     $qrToken,
                     $qrUrl,
+                    $newReferralCode,
+                    $referredById,
                     $fullName,
                     $username,
                     $age,
@@ -3471,6 +3512,11 @@ function new_school_handle_route(string $method, string $route): bool
                 json(['error' => 'Student not found.'], 404);
             }
             ns_manage_assert_student($student, $scope);
+            // Referral cleanup before removal: drop the points anyone earned for referring this
+            // student (their "friends joined" count loses this row too, so keep them in step), and
+            // detach students this one referred so a later approval can't award a deleted referrer.
+            new_school_points_clear('referral', (int) $student['id'], 'auto');
+            db()->prepare('UPDATE new_school_students SET referred_by_student_id = NULL WHERE referred_by_student_id = ?')->execute([(int) $student['id']]);
             db()->prepare('DELETE FROM new_school_students WHERE id = ?')->execute([(int) $student['id']]);
             db()->prepare('DELETE FROM users WHERE id = ? AND role = "student"')->execute([(int) $student['user_id']]);
             json(['message' => 'Student deleted.']);

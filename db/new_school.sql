@@ -115,6 +115,8 @@ CREATE TABLE IF NOT EXISTS new_school_students (
   participant_id          VARCHAR(40) NOT NULL UNIQUE,
   qr_token                VARCHAR(80) NOT NULL UNIQUE,
   qr_url                  VARCHAR(255) NOT NULL,
+  referral_code           VARCHAR(40) DEFAULT NULL UNIQUE,
+  referred_by_student_id  INT DEFAULT NULL,
   full_name               VARCHAR(120) NOT NULL,
   student_username        VARCHAR(80) NOT NULL UNIQUE,
   age                     TINYINT UNSIGNED NOT NULL,

@@ -136,6 +136,24 @@ export const api = {
   upload,
 }
 
+/* Records one page view for the admin Analytics traffic panel. First-party only:
+   a random visitor id is kept in localStorage so we can count unique visitors (reach)
+   without cookies or any third-party analytics service. Fire-and-forget — never throws. */
+export function trackVisit(path: string): void {
+  try {
+    let token = localStorage.getItem('fc_visitor')
+    if (!token) {
+      token = (typeof crypto !== 'undefined' && crypto.randomUUID)
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(16).slice(2)}`
+      localStorage.setItem('fc_visitor', token)
+    }
+    void api.post('analytics/track', { path, visitor_token: token, referrer: document.referrer || '' }).catch(() => {})
+  } catch {
+    /* tracking is best-effort; ignore storage/network errors */
+  }
+}
+
 /* ---- Domain types ---- */
 export interface User {
   id: number
@@ -311,6 +329,17 @@ export interface AnalyticsPayload {
   order_statuses: AnalyticsSeriesRow[]
   content_mix: AnalyticsSeriesRow[]
   top_pages?: AnalyticsSeriesRow[]
+  traffic?: {
+    total: number
+    today: number
+    last_7: number
+    last_30: number
+    unique_total: number
+    unique_today: number
+    unique_30: number
+    daily: Array<{ label: string; value: number; unique: number }>
+    top_pages: AnalyticsSeriesRow[]
+  }
 }
 
 export interface UserRequestRow {

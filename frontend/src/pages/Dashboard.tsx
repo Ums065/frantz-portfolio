@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { api, type EventRsvpRow, type UserOrderRow, type UserRequestRow, type User } from '../lib/api'
 import {
   DEFAULT_MEMBER_NOTIFICATIONS,
@@ -44,6 +44,7 @@ type DashboardTab = typeof dashboardTabs[number]['key']
 export default function Dashboard() {
   useSeo({ title: 'Member Dashboard', noindex: true })
   const { user, loading, logout, refresh } = useAuth()
+  const navigate = useNavigate()
   const [data, setData] = useState<DashboardData | null>(null)
   const [tab, setTab] = useState<DashboardTab>('overview')
   const [name, setName] = useState('')
@@ -63,6 +64,14 @@ export default function Dashboard() {
   const activeTabLabel = dashboardTabs.find((item) => item.key === tab)?.label || 'Overview'
   const approvalStatus = (user?.approval_status || 'approved').toString()
   const requiresApproval = !!user && !isAdmin(user.role) && approvalStatus !== 'approved'
+
+  // An admin's "dashboard" is the admin command center — send them straight there
+  // no matter which Dashboard link they followed.
+  useEffect(() => {
+    if (!loading && user && isAdmin(user.role)) {
+      navigate('/admin', { replace: true })
+    }
+  }, [loading, user, navigate])
 
   useEffect(() => {
     if (!user || isAdmin(user.role) || requiresApproval) return

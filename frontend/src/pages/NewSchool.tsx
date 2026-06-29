@@ -13,6 +13,7 @@ import DashboardGuide from '../components/DashboardGuide'
 import ScholarshipWizard, { type ScholarshipAnswer } from '../components/ScholarshipWizard'
 import NsRecordDetail from '../components/NsRecordDetail'
 import ChallengeRegistration from '../components/ChallengeRegistration'
+import { PasswordField } from '../lib/registrationForm'
 import { DASHBOARD_FAQ } from '../lib/dashboardGuide'
 import { CHALLENGE_TERMS_VERSION } from '../lib/terms'
 import { recordTermsAcceptance } from '../lib/recordTermsAcceptance'
@@ -289,6 +290,47 @@ function ProfilePhotoCard() {
         </div>
       </div>
       {err && <p className="ns-field-error">{err}</p>}
+    </article>
+  )
+}
+
+/** Change-password card shown in every role's Profile tab. */
+function ChangePasswordCard() {
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const form = event.currentTarget
+    const fd = new FormData(form)
+    const current = String(fd.get('current_password') || '')
+    const next = String(fd.get('new_password') || '')
+    const confirm = String(fd.get('confirm_new_password') || '')
+    if (next.length < 6) { setErr('New password must be at least 6 characters.'); return }
+    if (next !== confirm) { setErr('New passwords do not match.'); return }
+    setErr('')
+    setBusy(true)
+    try {
+      await api.post('new-school/profile/password', { current_password: current, new_password: next })
+      form.reset()
+      window.fcToast?.('Password updated.')
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Could not change your password.')
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <article className="glass ns-dash-card reveal in">
+      <div className="ns-dash-card__head"><span className="eyebrow">Change Password</span></div>
+      <form onSubmit={submit} noValidate>
+        <div className="ns-field-grid">
+          <label className="ns-field ns-field--full"><span>Current Password</span><PasswordField name="current_password" autoComplete="current-password" /></label>
+          <label className="ns-field"><span>New Password</span><PasswordField name="new_password" /></label>
+          <label className="ns-field"><span>Confirm New Password</span><PasswordField name="confirm_new_password" /></label>
+        </div>
+        {err && <p className="ns-field-error">{err}</p>}
+        <button className="btn btn--sm btn--solid" type="submit" disabled={busy}>{busy ? 'Saving…' : 'Update Password'}</button>
+      </form>
     </article>
   )
 }
@@ -2602,6 +2644,19 @@ export default function NewSchool() {
                   </div>
                   <p>{studentDashboard.can_submit ? 'Your final submission is unlocked. Use the activity tab to send the project.' : 'Complete approvals and interviews to unlock the final project.'}</p>
                 </div>
+                <div className="ns-progress-block">
+                  <div className="ns-progress-block__top">
+                    <span>Your progress</span>
+                    <strong>{studentStatusProgress}%</strong>
+                  </div>
+                  <div className="ns-progress-track" aria-hidden="true"><span style={{ width: `${studentStatusProgress}%` }} /></div>
+                  {(() => {
+                    const next = (studentDashboard.status_tracker || []).find((s: any) => !s.complete)
+                    return next
+                      ? <p className="ns-progress-next"><strong>Your next step:</strong> {next.label}</p>
+                      : <p className="ns-progress-next">🎉 Every step complete — amazing work!</p>
+                  })()}
+                </div>
                 <div className="ns-status-grid">
                   {(studentDashboard.status_tracker || []).map((step: any) => (
                     <div className={`ns-status ${step.complete ? 'is-on' : ''}`} key={step.label}>
@@ -2629,7 +2684,29 @@ export default function NewSchool() {
                 </div>
               </article>
 
-              {dashboardTab === 'profile' && <ProfilePhotoCard />}
+              {studentDashboard.referral?.code && (() => {
+                const refLink = `${window.location.origin}/new-school?ref=${studentDashboard.referral.code}`
+                return (
+                  <article className="glass ns-dash-card reveal in ns-referral-card" hidden={dashboardTab !== 'overview'}>
+                    <div className="ns-dash-card__head"><span className="eyebrow">Invite Friends · Earn Points</span></div>
+                    <p className="ns-referral-card__intro">Share your link. When a friend joins and gets approved by their teacher, you earn <strong>10 points</strong> — and climb the leaderboard. 🚀</p>
+                    <div className="ns-referral-card__row">
+                      <input readOnly value={refLink} onFocus={(e) => e.currentTarget.select()} aria-label="Your referral link" />
+                      <button className="btn btn--sm btn--solid" type="button" onClick={() => { void navigator.clipboard.writeText(refLink); showNotice('success', 'Referral link copied!') }}>Copy</button>
+                    </div>
+                    <div className="ns-referral-card__stats">
+                      <div><span>Friends joined</span><strong>{studentDashboard.referral.count || 0}</strong></div>
+                      <div><span>Points earned</span><strong>{studentDashboard.referral.points || 0}</strong></div>
+                    </div>
+                    <div className="ns-qr-card">
+                      <img src={qrImageSrc(refLink)} alt="Referral QR code" />
+                      <div><strong>Scan to join</strong><p>Friends can scan this to register under your invite.</p></div>
+                    </div>
+                  </article>
+                )
+              })()}
+
+              {dashboardTab === 'profile' && (<><ProfilePhotoCard /><ChangePasswordCard /></>)}
 
               <article className="glass ns-dash-card reveal in" hidden={dashboardTab !== 'profile'}>
                 <div className="ns-dash-card__head">
@@ -2937,7 +3014,7 @@ export default function NewSchool() {
                   <button className="btn btn--sm" type="button" onClick={() => openDashboardTab('notifications')}>Open Alerts</button>
                 </div>
               </article>
-              {dashboardTab === 'profile' && <ProfilePhotoCard />}
+              {dashboardTab === 'profile' && (<><ProfilePhotoCard /><ChangePasswordCard /></>)}
               <article className="glass ns-dash-card reveal in" hidden={dashboardTab !== 'profile'}>
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">Profile</span>
@@ -3026,7 +3103,7 @@ export default function NewSchool() {
                 </div>
               </article>
 
-              {dashboardTab === 'profile' && <ProfilePhotoCard />}
+              {dashboardTab === 'profile' && (<><ProfilePhotoCard /><ChangePasswordCard /></>)}
               <article className="glass ns-dash-card reveal in" hidden={dashboardTab !== 'profile'}>
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">{schoolDashboard ? 'School Profile' : 'Teacher Profile'}</span>
@@ -3982,7 +4059,7 @@ export default function NewSchool() {
                 </div>
               </article>
 
-              {dashboardTab === 'profile' && <ProfilePhotoCard />}
+              {dashboardTab === 'profile' && (<><ProfilePhotoCard /><ChangePasswordCard /></>)}
               <article className="glass ns-dash-card reveal in" hidden={dashboardTab !== 'profile'}>
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">Profile</span>
