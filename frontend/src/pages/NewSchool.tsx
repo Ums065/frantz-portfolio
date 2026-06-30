@@ -64,6 +64,41 @@ const formatLongDateLabel = (value?: string) => {
   }).format(date)
 }
 
+const formatSyncTime = (value?: number | null) => {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(date)
+}
+
+const firstPositive = (...values: Array<unknown>) => {
+  for (const raw of values) {
+    const n = Number(raw)
+    if (Number.isFinite(n) && n > 0) return n
+  }
+  return 0
+}
+
+const getChallengeProgressPercent = (challenge: Record<string, any>, students: number, submissions: number) => {
+  if (students > 0 && submissions > 0) {
+    const ratio = Math.round((submissions / students) * 100)
+    if (Number.isFinite(ratio) && ratio > 0) return Math.min(100, ratio)
+  }
+
+  const start = new Date(String(challenge.registration_open || '2026-06-27'))
+  const end = new Date(String(challenge.winners_announced || '2026-12-21'))
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end.getTime() <= start.getTime()) return 0
+
+  const now = Date.now()
+  if (now <= start.getTime()) return 0
+  if (now >= end.getTime()) return 100
+  return Math.max(1, Math.round(((now - start.getTime()) / (end.getTime() - start.getTime())) * 100))
+}
 const escapeCsv = (value: unknown) => {
   const text = String(value ?? '')
   const escaped = text.replace(/"/g, '""')
@@ -796,6 +831,7 @@ export default function NewSchool() {
   const { user, loading, refresh } = useAuth()
   const isDashboardRoute = location.pathname.startsWith('/new-school/dashboard')
   const [overview, setOverview] = useState<any>(null)
+  const [overviewSyncedAt, setOverviewSyncedAt] = useState<number | null>(null)
   const [dashboard, setDashboard] = useState<any>(null)
   const [adminSummary, setAdminSummary] = useState<any>(null)
   const [dashboardLoading, setDashboardLoading] = useState(false)
@@ -885,6 +921,7 @@ export default function NewSchool() {
   const reloadOverview = async () => {
     const data = await api.get<any>('new-school/overview')
     setOverview(data)
+    setOverviewSyncedAt(Date.now())
   }
 
   const reloadDashboard = async () => {
@@ -1459,10 +1496,17 @@ export default function NewSchool() {
   const challenge = overview?.challenge || {}
   const leaderboards = overview?.leaderboards || {}
   const leaderboardSchools = asArray<any>(leaderboards.schools)
+  const leaderboardTeachers = asArray<any>(leaderboards.teachers)
   const leaderboardStudents = asArray<any>(leaderboards.students)
   const latestWinner = winners[0] || null
-  const topSchool = leaderboardSchools[0] || null
+  const topSchool = leaderboardSchools[0] || schools[0] || null
+  const topTeacher = leaderboardTeachers[0] || teachers[0] || null
   const topStudent = leaderboardStudents[0] || null
+  const liveSchools = firstPositive(summary.schools, schools.length, leaderboardSchools.length)
+  const liveTeachers = firstPositive(summary.teachers, teachers.length, leaderboardTeachers.length)
+  const liveStudents = firstPositive(summary.students, leaderboardStudents.length)
+  const liveSubmissions = firstPositive(summary.submissions, topSchool?.submissions, topTeacher?.submissions, winners.length)
+  const liveWinners = firstPositive(summary.winners, winners.length)
   const deadlineLabel = formatDateLabel(challenge.deadline)
   const registrationOpenLabel = formatLongDateLabel(challenge.registration_open || '2026-06-27')
   const winnersAnnouncedLabel = formatLongDateLabel(challenge.winners_announced || '2026-12-21')
@@ -1471,15 +1515,13 @@ export default function NewSchool() {
     ? Math.max(0, Math.ceil((deadlineDate.getTime() - Date.now()) / 86400000))
     : null
   const scholarshipsAwarded = winners.reduce((total: number, winner: any) => total + Number(winner.scholarship_amount || 0), 0)
-  const completionPercent = Number(summary.students ?? 0) > 0
-    ? Math.min(100, Math.round((Number(summary.submissions ?? 0) / Number(summary.students ?? 0)) * 100))
-    : 0
+  const challengeProgressPercent = getChallengeProgressPercent(challenge, liveStudents, liveSubmissions)
   const movementStats: Array<{ label: string; value: string | number }> = [
-    { label: 'Schools Registered', value: Number(summary.schools ?? 0) },
-    { label: 'Students Registered', value: Number(summary.students ?? 0) },
-    { label: 'Business Interviews Completed', value: Number(summary.businesses ?? 0) },
+    { label: 'Schools Registered', value: liveSchools },
+    { label: 'Students Registered', value: liveStudents },
+    { label: 'Teachers Joined', value: liveTeachers },
     // Each final submission represents one community problem identified and solved.
-    { label: 'Community Problems Identified', value: Number(summary.submissions ?? 0) },
+    { label: 'Community Problems Identified', value: liveSubmissions },
     { label: 'Scholarships Awarded', value: formatMoney(scholarshipsAwarded) },
   ]
   // ---- Flyer-aligned derived content for the redesigned landing ----
@@ -2096,12 +2138,15 @@ export default function NewSchool() {
               <span className="eyebrow">Live Snapshot</span>
               <div className="ns-snapshot__progress">
                 <div className="ns-award__head">
-                  <strong>Challenge Completion</strong>
-                  <span>{completionPercent}%</span>
+                  <strong>Challenge Momentum</strong>
+                  <span>{challengeProgressPercent}%</span>
                 </div>
                 <div className="ns-award__bar">
-                  <span style={{ width: `${completionPercent}%` }} />
+                  <span style={{ width: `${challengeProgressPercent}%` }} />
                 </div>
+                <p className="ns-muted" style={{ margin: '10px 0 0' }}>
+                  {overviewSyncedAt ? `Synced ${formatSyncTime(overviewSyncedAt)}` : 'Waiting for live sync'} - {liveSchools} schools - {liveTeachers} teachers - {liveStudents} students{liveWinners > 0 ? ` - ${liveWinners} winners` : ''}
+                </p>
               </div>
             </div>
             <div className="ns-snapshot__rows">
@@ -2119,6 +2164,13 @@ export default function NewSchool() {
                   <span>{topSchool.submissions || 0} subs</span>
                 </div>
               )}
+              {topTeacher && (
+                <div className="ns-winner-row">
+                  <strong>Top Teacher</strong>
+                  <em>{topTeacher.label}</em>
+                  <span>{topTeacher.students || 0} students</span>
+                </div>
+              )}
               {topStudent && (
                 <div className="ns-winner-row">
                   <strong>Top Student</strong>
@@ -2127,7 +2179,11 @@ export default function NewSchool() {
                 </div>
               )}
               {!latestWinner && !topSchool && !topStudent && (
-                <p className="ns-muted">Live rankings will appear once schools, students, and winners are added.</p>
+                <div className="ns-winner-row">
+                  <strong>Current Status</strong>
+                  <em>{liveSchools} schools - {liveStudents} students</em>
+                  <span>{overviewSyncedAt ? `Synced ${formatSyncTime(overviewSyncedAt)}` : 'Waiting for first live sync'}</span>
+                </div>
               )}
             </div>
           </article>
@@ -2804,7 +2860,7 @@ export default function NewSchool() {
                           </div>
                         ))}
                       </div>
-                    )}
+                                  )}
 
                     <div className="ns-leaderboard" role="list">
                       <div className="ns-leaderboard__head" aria-hidden="true">
@@ -2856,7 +2912,7 @@ export default function NewSchool() {
                         <button className="ns-notification-action" type="button" disabled={busy === `notif-${item.id}`} onClick={() => markNotificationRead(item.id)}>
                           Mark as read
                         </button>
-                      )}
+                                    )}
                     </div>
                   )) : <p className="ns-muted">No student notifications yet.</p>}
                 </div>
@@ -2879,7 +2935,7 @@ export default function NewSchool() {
                 <div className="ns-interview-grid">
                   {(studentDashboard.interviews || []).length === 0 && (
                     <p className="ns-muted">No interviews yet. Use the form below to add your first business.</p>
-                  )}
+                                )}
                   {(studentDashboard.interviews || []).map((row: any) => (
                     <button type="button" className="ns-interview is-clickable" key={row.id} onClick={() => setRecordDetail({ kind: 'interview', record: row })}>
                       <strong>Visit {row.visit_number}</strong>
@@ -3056,7 +3112,7 @@ export default function NewSchool() {
                         <button className="ns-notification-action" type="button" disabled={busy === `notif-${item.id}`} onClick={() => markNotificationRead(item.id)}>
                           Mark as read
                         </button>
-                      )}
+                                    )}
                     </div>
                   )) : <p className="ns-muted">No parent notifications yet.</p>}
                 </div>
@@ -3089,10 +3145,10 @@ export default function NewSchool() {
                       <button type="button" className="is-clickable" onClick={() => onStatClick({ tab: 'approvals', approvalsTab: 'teachers', filter: 'pending' })}><span>Teachers Waiting</span><strong>{activeTeachers.filter((t: any) => { const s = String(t.status || 'registered').toLowerCase(); return s !== 'approved' && s !== 'rejected' }).length}</strong></button>
                       <button type="button" className="is-clickable" onClick={() => onStatClick({ tab: 'approvals', approvalsTab: 'teachers', filter: 'approved' })}><span>Teachers Approved</span><strong>{activeTeachers.filter((t: any) => String(t.status || '').toLowerCase() === 'approved').length}</strong></button>
                     </>
-                  )}
+                                )}
                   {teacherDashboard && (
                     <button type="button" className="is-clickable" onClick={() => onStatClick({ tab: 'approvals', approvalsTab: 'parents', filter: 'pending' })}><span>Parents Waiting</span><strong>{activeParents.filter((p: any) => String(p.link_status || '').toLowerCase() === 'pending_teacher').length}</strong></button>
-                  )}
+                                )}
                   <button type="button" className="is-clickable" onClick={() => onStatClick({ tab: 'records' })}><span>Interviews Logged</span><strong>{activeSummary.interviews_total || 0}</strong></button>
                 </div>
                 <div className="ns-actions">
@@ -3161,7 +3217,7 @@ export default function NewSchool() {
                       <span>Verification</span>
                       <em>{activeTeachers.length}</em>
                     </button>
-                  )}
+                                )}
                   {teacherDashboard && (
                     <button
                       type="button"
@@ -3174,7 +3230,7 @@ export default function NewSchool() {
                       <span>Verify &amp; approve</span>
                       <em>{activeParents.filter((p: any) => String(p.link_status || '').toLowerCase() === 'pending_teacher').length}</em>
                     </button>
-                  )}
+                                )}
                 </div>
 
                 <div className="ns-approvals-toolbar">
@@ -3256,11 +3312,11 @@ export default function NewSchool() {
                           )
                         }) : (
                           <tr><td colSpan={5}>No students match this search or filter.</td></tr>
-                        )}
+                                      )}
                       </tbody>
                     </table>
                   </div>
-                  )}</PagedRows>
+                                )}</PagedRows>
                 )}
 
                 {schoolApprovalsTab === 'teachers' && (
@@ -3318,11 +3374,11 @@ export default function NewSchool() {
                           )
                         }) : (
                           <tr><td colSpan={5}>No teachers match this search or filter.</td></tr>
-                        )}
+                                      )}
                       </tbody>
                     </table>
                   </div>
-                  )}</PagedRows>
+                                )}</PagedRows>
                 )}
 
                 {schoolApprovalsTab === 'parents' && (
@@ -3366,11 +3422,11 @@ export default function NewSchool() {
                           )
                         }) : (
                           <tr><td colSpan={6}>No parents are waiting for approval.</td></tr>
-                        )}
+                                      )}
                       </tbody>
                     </table>
                   </div>
-                  )}</PagedRows>
+                                )}</PagedRows>
                 )}
 
                 <p className="ns-approvals-note">
@@ -3388,7 +3444,7 @@ export default function NewSchool() {
                       <button type="button" className="ns-row-btn ns-row-btn--approve" onClick={() => openRecordCreate(RECORDS_TAB_ENTITY[schoolRecordsTab])}>
                         + Add {RECORD_DEFS[RECORDS_TAB_ENTITY[schoolRecordsTab]].label}
                       </button>
-                    )}
+                                  )}
                   </div>
                 </div>
                 <p className="ns-record-hint">{isTeacherLayout ? 'Tap any row to view its detail card.' : 'Tap any row to open its detail card — edit or delete from there.'}</p>
@@ -3444,12 +3500,12 @@ export default function NewSchool() {
                             </tr>
                           )) : (
                             <tr><td colSpan={8}>No students registered yet.</td></tr>
-                          )}
+                                        )}
                         </tbody>
                       </table>
                     </div>
-                    )}</PagedRows>
-                  )}
+                                  )}</PagedRows>
+                                )}
 
                   {schoolRecordsTab === 'teachers' && (
                     <PagedRows items={activeTeachers}>{(rows) => (
@@ -3477,12 +3533,12 @@ export default function NewSchool() {
                             </tr>
                           )) : (
                             <tr><td colSpan={6}>No teachers registered yet.</td></tr>
-                          )}
+                                        )}
                         </tbody>
                       </table>
                     </div>
-                    )}</PagedRows>
-                  )}
+                                  )}</PagedRows>
+                                )}
 
                   {schoolRecordsTab === 'interviews' && (
                     <PagedRows items={activeBusinesses}>{(rows) => (
@@ -3508,12 +3564,12 @@ export default function NewSchool() {
                             </tr>
                           )) : (
                             <tr><td colSpan={5}>No business interviews recorded yet.</td></tr>
-                          )}
+                                        )}
                         </tbody>
                       </table>
                     </div>
-                    )}</PagedRows>
-                  )}
+                                  )}</PagedRows>
+                                )}
 
                   {schoolRecordsTab === 'approvals' && (
                     <PagedRows items={activeApprovals}>{(rows) => (
@@ -3541,12 +3597,12 @@ export default function NewSchool() {
                             </tr>
                           )) : (
                             <tr><td colSpan={6}>No approvals recorded yet.</td></tr>
-                          )}
+                                        )}
                         </tbody>
                       </table>
                     </div>
-                    )}</PagedRows>
-                  )}
+                                  )}</PagedRows>
+                                )}
 
                   {schoolRecordsTab === 'projects' && (
                     <PagedRows items={activeSubmissions}>{(rows) => (
@@ -3578,12 +3634,12 @@ export default function NewSchool() {
                             </tr>
                           )) : (
                             <tr><td colSpan={8}>No submissions have been recorded yet.</td></tr>
-                          )}
+                                        )}
                         </tbody>
                       </table>
                     </div>
-                    )}</PagedRows>
-                  )}
+                                  )}</PagedRows>
+                                )}
                 </div>
               </article>
 
@@ -3644,7 +3700,7 @@ export default function NewSchool() {
                           </button>
                         ))}
                       </div>
-                    )}
+                                  )}
 
                     <div className="ns-leaderboard" role="list">
                       <div className="ns-leaderboard__head" aria-hidden="true">
@@ -3705,7 +3761,7 @@ export default function NewSchool() {
                       ))
                     ) : (
                       <p className="ns-muted">No winners published for this school yet.</p>
-                    )}
+                                  )}
                   </div>
                 </article>
                 <article className="glass ns-dash-card reveal in">
@@ -3724,12 +3780,12 @@ export default function NewSchool() {
                             <button className="ns-notification-action" type="button" disabled={busy === `notif-${item.id}`} onClick={() => markNotificationRead(item.id)}>
                               Mark as read
                             </button>
-                          )}
+                                        )}
                         </div>
                       ))
                     ) : (
                       <p className="ns-muted">No school notifications yet.</p>
-                    )}
+                                  )}
                   </div>
                 </article>
               </div>
@@ -3823,7 +3879,7 @@ export default function NewSchool() {
                               {busy === `student-${s.id}-rejected` ? 'Saving…' : sStatus === 'rejected' ? 'Rejected' : 'Reject'}
                             </button>
                           </div>
-                          )}
+                                        )}
                         </>
                       )
                     })() : (() => {
@@ -3949,9 +4005,9 @@ export default function NewSchool() {
                             <button type="button" className="ns-row-btn ns-row-btn--approve" onClick={startRecordEdit}>Edit</button>
                             <button type="button" className="ns-row-btn ns-row-btn--reject" disabled={recordBusy} onClick={deleteRecord}>{recordBusy ? 'Working…' : 'Delete'}</button>
                           </div>
-                        )}
+                                      )}
                       </>
-                    )}
+                                  )}
 
                     {(recordModal.mode === 'edit' || recordModal.mode === 'create') && (
                       <form className="ns-record-form" onSubmit={(event) => { event.preventDefault(); saveRecord() }}>
@@ -3997,7 +4053,7 @@ export default function NewSchool() {
                           <button type="button" className="ns-row-btn ns-row-btn--reject" onClick={() => (recordModal.id != null ? setRecordModal({ ...recordModal, mode: 'view' }) : setRecordModal(null))}>Cancel</button>
                         </div>
                       </form>
-                    )}
+                                  )}
                   </div>
                 </div>
               ), document.body)}
@@ -4143,7 +4199,7 @@ export default function NewSchool() {
                           </div>
                         ))}
                       </div>
-                    )}
+                                  )}
 
                     <div className="ns-leaderboard" role="list">
                       <div className="ns-leaderboard__head" aria-hidden="true">
@@ -4370,7 +4426,7 @@ export default function NewSchool() {
                         <button className="ns-notification-action" type="button" disabled={busy === `notif-${item.id}`} onClick={() => markNotificationRead(item.id)}>
                           Mark as read
                         </button>
-                      )}
+                                    )}
                     </div>
                   )) : <p className="ns-muted">No admin notifications yet.</p>}
                 </div>

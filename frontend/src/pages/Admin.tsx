@@ -312,7 +312,14 @@ export default function Admin() {
     if (ns.status === 'fulfilled') setNsData(ns.value)
   }
 
-  useEffect(() => { if (isAdmin(user?.role)) void refreshData() }, [user])
+  useEffect(() => {
+    if (!isAdmin(user?.role)) return
+    void refreshData()
+    // Preload the chat + TrendCatch EDU data so their sidebar notification badges
+    // (unread messages / unclaimed schools) appear without first opening each tab.
+    void loadChatThreads()
+    void loadEdu()
+  }, [user])
 
   const doLogin = async (e: React.FormEvent) => {
     e.preventDefault(); setError('')
@@ -670,6 +677,8 @@ export default function Admin() {
     orders: ordBy('pending'),
     contacts: data?.contacts.length ?? 0,
     'ns-submissions': nsPendingReview,
+    'ns-chat': chatUnreadCount,
+    'ns-trendcatch': nsEdu?.active.length ?? 0,
   }
 
   // Overview = a complete, clickable map of every section. Each card jumps to the
