@@ -298,7 +298,7 @@ export default function FoundingSponsor() {
             <div className="sponsor-actions">
               <a className="btn btn--solid" href="#sponsor-interest-form">Become A Founding Sponsor</a>
               <Link className="btn" to={sponsorListingPath}>View Founding Sponsors</Link>
-              <a className="btn" href="/docs/founding_sponsor_kit.pdf" download>Download Sponsor Kit</a>
+              <a className="btn" href="/docs/founding_sponsor_media_kit.pdf" download>Download Sponsor Kit</a>
             </div>
 
             {error && <p className="sponsor-note sponsor-note--error">{error}</p>}
@@ -474,7 +474,7 @@ export default function FoundingSponsor() {
               Submit your organization details, choose a sponsorship level, and we will immediately show the check payment
               instructions. No online payments, credit cards, ACH, PayPal, or Stripe are used for this process.
             </p>
-            <a className="btn" href="/docs/founding_sponsor_kit.pdf" download>Download Sponsor Kit</a>
+            <a className="btn" href="/docs/founding_sponsor_media_kit.pdf" download>Download Sponsor Kit</a>
           </div>
 
           <div className="glass sponsor-form-card reveal in">

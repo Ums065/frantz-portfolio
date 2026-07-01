@@ -749,9 +749,12 @@ export default function Home() {
           <div className="action-grid">
             <article className="glass action-card reveal d1">
               <div className="action__ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6}><path d="M14 3v5h5" /><path d="M14 3H6a2 2 0 00-2 2v14a2 2 0 002 2h12a2 2 0 002-2V8z" /><path d="M8 13h8M8 17h6" /></svg></div>
-              <h3>Request a Media Kit</h3>
+              <h3>Media Kit</h3>
               <p>Download official bios, high-resolution photography, brand assets, and fact sheets for Frantz Coutard and TrendCatch.</p>
-              <button className="btn" data-request="Media Kit Request">Request Media Kit</button>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                <a className="btn btn--solid" href="/docs/media_kit.pdf" download>Download Media Kit</a>
+                <button className="btn" data-request="Media Kit Request">Request Media Kit</button>
+              </div>
             </article>
             <article className="glass action-card reveal d2">
               <div className="action__ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6}><path d="M12 15a3 3 0 003-3V6a3 3 0 00-6 0v6a3 3 0 003 3z" /><path d="M19 11a7 7 0 01-14 0M12 18v3" /></svg></div>
@@ -998,7 +1001,10 @@ export default function Home() {
               </div>
             ))}
           </div>
-          <div className="partners-cta reveal"><button className="btn btn--solid" data-request="Partnership / Collaboration Inquiry">Become a Partner</button></div>
+          <div className="partners-cta reveal" style={{ display: 'flex', flexWrap: 'wrap', gap: 10, justifyContent: 'center' }}>
+            <button className="btn btn--solid" data-request="Partnership / Collaboration Inquiry">Become a Partner</button>
+            <a className="btn" href="/docs/partnership_kit.pdf" download>Download Partnership Kit</a>
+          </div>
         </div>
       </section>
 

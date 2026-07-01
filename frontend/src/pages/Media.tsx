@@ -4,7 +4,7 @@ import { mediaShowcase, testimonialFallbacks } from '../lib/brandContent'
 import { api, type PublicGalleryItemRow } from '../lib/api'
 import { useSeo } from '../hooks/useSeo'
 
-const mediaKitUrl = '/assets/media-kit/frantz-coutard-media-kit.txt'
+const mediaKitUrl = '/docs/media_kit.pdf'
 
 const isExternal = (url: string) => /^https?:\/\//i.test(url)
 const isAsset = (url: string) => /^\/assets\//i.test(url)

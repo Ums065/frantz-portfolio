@@ -86,7 +86,10 @@ export default function Projects() {
               <div className="action__ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6}><path d="M20 12v9H4v-9" /><path d="M2 7h20v5H2z" /><path d="M12 22V7M12 7S11 3 8.5 3 6 6 12 7zM12 7s1-4 3.5-4S18 6 12 7z" /></svg></div>
               <h3>Partnership Inquiry</h3>
               <p>Bring sponsorships, collaborations, or strategic support to one of the flagship projects.</p>
-              <button className="btn btn--solid" data-request="Partnership / Collaboration Inquiry">Request Details</button>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                <a className="btn btn--solid" href="/docs/partnership_kit.pdf" download>Download Partnership Kit</a>
+                <button className="btn" data-request="Partnership / Collaboration Inquiry">Request Details</button>
+              </div>
             </article>
             <article className="glass action-card reveal d2">
               <div className="action__ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6}><path d="M12 15a3 3 0 003-3V6a3 3 0 00-6 0v6a3 3 0 003 3z" /><path d="M19 11a7 7 0 01-14 0M12 18v3" /></svg></div>

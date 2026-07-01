@@ -82,7 +82,7 @@ export default function FoundingSponsors() {
             </p>
             <div className="sponsor-actions">
               <Link className="btn btn--solid" to={sponsorPath}>Become A Founding Sponsor</Link>
-              <a className="btn" href="/docs/founding_sponsor_kit.pdf" download>Download Sponsor Kit</a>
+              <a className="btn" href="/docs/founding_sponsor_media_kit.pdf" download>Download Sponsor Kit</a>
             </div>
             {error && <p className="sponsor-note sponsor-note--error">{error}</p>}
           </div>
