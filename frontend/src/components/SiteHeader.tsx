@@ -39,6 +39,7 @@ export default function SiteHeader({ home = false }: { home?: boolean }) {
     ...(user ? [{ label: 'Dashboard', href: dashboardHref, kind: 'route' as const }] : []),
     { label: 'Merch', href: '/store', kind: 'route' },
     { label: 'News', href: '/blog', kind: 'route' },
+    { label: 'Contact', href: '/contact', kind: 'route' },
   ]
 
   useEffect(() => {

@@ -23,6 +23,8 @@ const Store = lazy(() => import('./pages/Store'))
 const Admin = lazy(() => import('./pages/Admin'))
 const Legal = lazy(() => import('./pages/Legal'))
 const ResetPassword = lazy(() => import('./pages/ResetPassword'))
+const Contact = lazy(() => import('./pages/Contact'))
+const NotFound = lazy(() => import('./pages/NotFound'))
 
 function RouteLoading() {
   return (
@@ -102,6 +104,7 @@ export default function App() {
           <Route path="/blog/:id" element={<RoutedPage pageKey="blogpost"><BlogPost /></RoutedPage>} />
           <Route path="/events" element={<RoutedPage pageKey="events"><Events /></RoutedPage>} />
           <Route path="/media" element={<RoutedPage pageKey="media"><Media /></RoutedPage>} />
+          <Route path="/contact" element={<RoutedPage pageKey="contact"><Contact /></RoutedPage>} />
 
           <Route path="/become-a-founding-sponsor" element={<RoutedPage pageKey="become-a-founding-sponsor"><FoundingSponsor /></RoutedPage>} />
           <Route path="/founding-sponsors" element={<RoutedPage pageKey="founding-sponsors"><FoundingSponsors /></RoutedPage>} />
@@ -118,6 +121,7 @@ export default function App() {
           <Route path="/privacy" element={<RoutedPage pageKey="privacy"><Legal slug="privacy" /></RoutedPage>} />
           <Route path="/content-disclaimer" element={<RoutedPage pageKey="content-disclaimer"><Legal slug="content-disclaimer" /></RoutedPage>} />
           <Route path="/admin" element={<Suspense fallback={<RouteLoading />}><Admin /></Suspense>} />
+          <Route path="*" element={<RoutedPage pageKey="notfound"><NotFound /></RoutedPage>} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>

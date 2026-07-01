@@ -197,6 +197,13 @@ try {
             json(['message' => 'We\'ve emailed you a link to reset your password. Please check your inbox.']);
         }
 
+        case $key === 'GET auth/reset-password/verify': {
+            // Non-consuming check so the reset page can show a form or an
+            // "invalid / already used" message on load.
+            $token = trim((string) ($_GET['token'] ?? ''));
+            json(['valid' => password_reset_token_valid($token)]);
+        }
+
         case $key === 'POST auth/reset-password': {
             $b = body();
             $token = trim((string) field($b, 'token'));

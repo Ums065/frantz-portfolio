@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../lib/api'
 
@@ -17,6 +17,25 @@ export default function ResetPassword() {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [done, setDone] = useState(false)
+  // Validate the token on load (without consuming it) so an already-used or
+  // expired link shows an error page instead of the form.
+  const [checking, setChecking] = useState(true)
+  const [valid, setValid] = useState(false)
+
+  useEffect(() => {
+    let active = true
+    if (!token) {
+      setChecking(false)
+      setValid(false)
+      return
+    }
+    setChecking(true)
+    api.get<{ valid: boolean }>(`auth/reset-password/verify?token=${encodeURIComponent(token)}`)
+      .then((d) => { if (active) setValid(Boolean(d.valid)) })
+      .catch(() => { if (active) setValid(false) })
+      .finally(() => { if (active) setChecking(false) })
+    return () => { active = false }
+  }, [token])
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -47,17 +66,22 @@ export default function ResetPassword() {
       <section className="page-hero">
         <div className="wrap" style={{ minHeight: '60vh', display: 'grid', placeItems: 'center' }}>
           <div className="glass" style={{ padding: '28px 26px', maxWidth: 460, width: '100%' }}>
-            {!token ? (
-              <>
-                <h1 className="gold-text" style={{ marginTop: 0 }}>Invalid Link</h1>
-                <p className="msub">This password reset link is missing its token. Please request a new one from the sign-in screen.</p>
-                <Link className="btn btn--solid" to="/">Back to Home</Link>
-              </>
-            ) : done ? (
+            {done ? (
               <>
                 <h1 className="gold-text" style={{ marginTop: 0 }}>Password Reset</h1>
                 <p className="msub">Your password has been updated. You can now sign in with your new password.</p>
                 <button className="btn btn--solid" onClick={() => navigate('/')}>Go to Home</button>
+              </>
+            ) : checking ? (
+              <>
+                <h1 className="gold-text" style={{ marginTop: 0 }}>Checking link…</h1>
+                <p className="msub">Please wait while we verify your reset link.</p>
+              </>
+            ) : (!token || !valid) ? (
+              <>
+                <h1 className="gold-text" style={{ marginTop: 0 }}>Link Expired or Invalid</h1>
+                <p className="msub">This password reset link is invalid, has expired, or has already been used. Please request a new one from the sign-in screen.</p>
+                <Link className="btn btn--solid" to="/">Back to Home</Link>
               </>
             ) : (
               <>

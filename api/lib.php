@@ -4429,6 +4429,26 @@ function create_password_reset(array $user): bool
  * Marks the token used so it cannot be replayed. Returns null when the token is
  * unknown, already used, or expired.
  */
+/**
+ * Check whether a reset token is currently usable (exists, unused, not expired)
+ * WITHOUT consuming it. Used by the reset page to decide whether to show the
+ * form or an "invalid / already used" message on load.
+ */
+function password_reset_token_valid(string $token): bool
+{
+    if (trim($token) === '') {
+        return false;
+    }
+    password_reset_ensure_schema();
+    $stmt = db()->prepare(
+        'SELECT 1 FROM password_resets
+         WHERE token_hash = ? AND used_at IS NULL AND expires_at > NOW()
+         LIMIT 1'
+    );
+    $stmt->execute([hash('sha256', $token)]);
+    return (bool) $stmt->fetchColumn();
+}
+
 function consume_password_reset(string $token): ?array
 {
     password_reset_ensure_schema();
@@ -4460,8 +4480,46 @@ function consume_password_reset(string $token): ?array
 }
 
 /**
- * Fire-and-forget email notification to the team.
- * No-op unless MAIL_ENABLED=true and NOTIFY_EMAIL is set in .env.
+ * Recipients for team notifications: every admin account in the database plus
+ * the optional NOTIFY_EMAIL from .env. De-duplicated (case-insensitive).
+ */
+function notify_recipients(): array
+{
+    $emails = [];
+
+    $notify = trim((string) env('NOTIFY_EMAIL', ''));
+    if ($notify !== '') {
+        $emails[] = $notify;
+    }
+
+    try {
+        $rows = db()->query(
+            "SELECT email FROM users
+             WHERE role IN ('admin','super_admin') AND email IS NOT NULL AND email <> ''"
+        )->fetchAll();
+        foreach ($rows as $row) {
+            $emails[] = (string) $row['email'];
+        }
+    } catch (\Throwable $e) {
+        // If the query fails, fall back to just NOTIFY_EMAIL.
+    }
+
+    $seen = [];
+    $out = [];
+    foreach ($emails as $email) {
+        $key = strtolower(trim($email));
+        if ($key === '' || isset($seen[$key])) {
+            continue;
+        }
+        $seen[$key] = true;
+        $out[] = trim($email);
+    }
+    return $out;
+}
+
+/**
+ * Fire-and-forget email notification to the team (all admin accounts + NOTIFY_EMAIL).
+ * No-op unless MAIL_ENABLED=true and at least one recipient exists.
  * Always non-fatal — a mail failure must never break the API request.
  */
 function notify(string $subject, string $bodyText): void
@@ -4469,13 +4527,15 @@ function notify(string $subject, string $bodyText): void
     if (!filter_var(env('MAIL_ENABLED', 'false'), FILTER_VALIDATE_BOOLEAN)) {
         return;
     }
-    $to = trim((string) env('NOTIFY_EMAIL', ''));
-    if ($to === '') {
+    $recipients = notify_recipients();
+    if ($recipients === []) {
         return;
     }
     try {
         $built = email_admin_notification($subject, $bodyText);
-        queue_themed_mail('notification', $to, $built);
+        foreach ($recipients as $to) {
+            queue_themed_mail('notification', $to, $built);
+        }
     } catch (\Throwable $e) {
         // swallow — notifications are best-effort
     }
