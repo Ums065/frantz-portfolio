@@ -187,6 +187,8 @@ try {
             try {
                 create_password_reset($u);
             } catch (Throwable $e) {
+                // Always log the real cause to the server error log so live 500s are diagnosable.
+                error_log('[forgot-password] ' . $e->getMessage());
                 json([
                     'error' => app_debug() ? $e->getMessage() : 'Unable to send the reset link right now.',
                 ], 500);
