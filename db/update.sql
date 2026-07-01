@@ -229,6 +229,8 @@ CREATE TABLE IF NOT EXISTS mail_outbox (
   recipient_email  VARCHAR(160) NOT NULL,
   subject          VARCHAR(255) NOT NULL,
   body_text        LONGTEXT NOT NULL,
+  body_html        LONGTEXT DEFAULT NULL,
+  attachments_json LONGTEXT DEFAULT NULL,
   status           ENUM('queued','sending','retry','sent','failed') NOT NULL DEFAULT 'queued',
   attempts         TINYINT UNSIGNED NOT NULL DEFAULT 0,
   last_error       TEXT DEFAULT NULL,
@@ -893,5 +895,27 @@ CREATE TABLE IF NOT EXISTS site_visits (
   INDEX idx_visits_created (created_at),
   INDEX idx_visits_visitor (visitor_token)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ---------- Forgot password: single-use reset tokens ----------
+-- Powers POST auth/forgot-password + auth/reset-password. Only the SHA-256 hash of
+-- the token is stored; expiry is enforced with the DB clock (NOW()), used_at makes
+-- each token single-use.
+CREATE TABLE IF NOT EXISTS password_resets (
+  id          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  user_id     INT NOT NULL,
+  token_hash  CHAR(64) NOT NULL,
+  expires_at  DATETIME NOT NULL,
+  used_at     DATETIME NULL,
+  created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_password_resets_token (token_hash),
+  INDEX idx_password_resets_user (user_id, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ---------- HTML email + attachments: widen the mail outbox ----------
+-- The mail queue now carries a themed HTML body and (base64) attachments such as the
+-- daily analytics PDF, in addition to the plain-text body. Add the columns to any
+-- pre-existing mail_outbox table (fresh installs already have them from CREATE above).
+CALL add_column_if_missing('mail_outbox', 'body_html', 'LONGTEXT DEFAULT NULL', 'body_text');
+CALL add_column_if_missing('mail_outbox', 'attachments_json', 'LONGTEXT DEFAULT NULL', 'body_html');
 
 DROP PROCEDURE IF EXISTS add_column_if_missing;
