@@ -4481,7 +4481,12 @@ function notify(string $subject, string $bodyText): void
     }
 }
 
-require_once __DIR__ . '/mail_templates.php';
+// Guarded require: a missing mail_templates.php (e.g. a partial deploy) must not
+// fatal every API request. Content endpoints keep working; only mail features
+// (which need the email_* builders) would then surface a clean error.
+if (is_file(__DIR__ . '/mail_templates.php')) {
+    require_once __DIR__ . '/mail_templates.php';
+}
 
 /**
  * Queue (with inline-drain fallback) a branded email built by one of the
