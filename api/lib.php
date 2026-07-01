@@ -1692,12 +1692,9 @@ function sponsor_send_confirmation_email(array $application, array $program): vo
 {
     $subject = 'Thank You For Your Sponsorship Interest';
     $bodyText = sponsor_confirmation_email_body($application, $program);
-    if (mail_queue_enqueue('sponsor_interest', (string) $application['email_address'], $subject, $bodyText)) {
-        return;
-    }
-
     try {
-        send_mail_message((string) $application['email_address'], $subject, $bodyText);
+        $built = email_admin_notification($subject, $bodyText);
+        queue_themed_mail('sponsor_interest', (string) $application['email_address'], $built);
     } catch (Throwable $e) {
         // Sponsor applications should not fail when email delivery is unavailable.
     }
@@ -3612,21 +3609,96 @@ function mail_base64url_encode(string $value): string
     return rtrim(strtr(base64_encode($value), '+/', '-_'), '=');
 }
 
-function mail_build_message(string $to, string $subject, string $bodyText): string
+/**
+ * Build a full RFC822 message.
+ *  - text only                     -> single text/plain part
+ *  - text + html                   -> multipart/alternative
+ *  - + inline images (item['cid']) -> multipart/related wrapping the alternative
+ *  - + regular attachments          -> multipart/mixed wrapping the above
+ * Each attachment/image item: ['filename','mime','data'(binary)] and, for an
+ * inline image, ['cid' => string, 'inline' => true] referenced from the HTML
+ * as <img src="cid:the-cid">.
+ */
+function mail_build_message(string $to, string $subject, string $bodyText, ?string $bodyHtml = null, array $attachments = []): string
 {
     $fromAddress = mail_from_address();
     $fromName = mail_from_name();
+    $eol = "\r\n";
 
     $headers = [
         'From: ' . mail_encode_header($fromName) . ' <' . $fromAddress . '>',
         'To: <' . $to . '>',
         'Subject: ' . mail_encode_header($subject),
         'MIME-Version: 1.0',
-        'Content-Type: text/plain; charset=UTF-8',
-        'Content-Transfer-Encoding: 8bit',
     ];
 
-    return implode("\r\n", $headers) . "\r\n\r\n" . mail_prepare_body($bodyText);
+    // Split inline images (have a cid) from regular file attachments.
+    $inline = [];
+    $files = [];
+    foreach ($attachments as $att) {
+        if (!empty($att['cid'])) {
+            $inline[] = $att;
+        } else {
+            $files[] = $att;
+        }
+    }
+
+    // 1) The message body: alternative (text+html) or a bare text part.
+    $textPart = 'Content-Type: text/plain; charset=UTF-8' . $eol
+        . 'Content-Transfer-Encoding: 8bit' . $eol . $eol
+        . mail_prepare_body($bodyText);
+
+    if ($bodyHtml !== null && trim($bodyHtml) !== '') {
+        $altBoundary = 'alt_' . bin2hex(random_bytes(12));
+        $htmlPart = 'Content-Type: text/html; charset=UTF-8' . $eol
+            . 'Content-Transfer-Encoding: 8bit' . $eol . $eol
+            . mail_prepare_body($bodyHtml);
+        $content = 'Content-Type: multipart/alternative; boundary="' . $altBoundary . '"' . $eol . $eol
+            . '--' . $altBoundary . $eol . $textPart . $eol
+            . '--' . $altBoundary . $eol . $htmlPart . $eol
+            . '--' . $altBoundary . '--';
+    } else {
+        $content = $textPart;
+    }
+
+    // 2) Wrap in multipart/related when there are inline images.
+    if (!empty($inline)) {
+        $relBoundary = 'rel_' . bin2hex(random_bytes(12));
+        $related = 'Content-Type: multipart/related; boundary="' . $relBoundary . '"' . $eol . $eol
+            . '--' . $relBoundary . $eol . $content . $eol;
+        foreach ($inline as $img) {
+            $cid = str_replace(['"', '<', '>', "\r", "\n"], '', (string) ($img['cid'] ?? ''));
+            $mime = (string) ($img['mime'] ?? 'application/octet-stream');
+            $related .= '--' . $relBoundary . $eol
+                . 'Content-Type: ' . $mime . $eol
+                . 'Content-Transfer-Encoding: base64' . $eol
+                . 'Content-ID: <' . $cid . '>' . $eol
+                . 'Content-Disposition: inline; filename="' . $cid . '"' . $eol . $eol
+                . chunk_split(base64_encode((string) ($img['data'] ?? ''))) . $eol;
+        }
+        $related .= '--' . $relBoundary . '--';
+        $content = $related;
+    }
+
+    // 3) Wrap in multipart/mixed when there are regular attachments.
+    if (!empty($files)) {
+        $mixBoundary = 'mix_' . bin2hex(random_bytes(12));
+        $body = '--' . $mixBoundary . $eol . $content . $eol;
+        foreach ($files as $att) {
+            $filename = str_replace(['"', "\r", "\n"], '', (string) ($att['filename'] ?? 'attachment'));
+            $mime = (string) ($att['mime'] ?? 'application/octet-stream');
+            $body .= '--' . $mixBoundary . $eol
+                . 'Content-Type: ' . $mime . '; name="' . $filename . '"' . $eol
+                . 'Content-Transfer-Encoding: base64' . $eol
+                . 'Content-Disposition: attachment; filename="' . $filename . '"' . $eol . $eol
+                . chunk_split(base64_encode((string) ($att['data'] ?? ''))) . $eol;
+        }
+        $body .= '--' . $mixBoundary . '--';
+        $headers[] = 'Content-Type: multipart/mixed; boundary="' . $mixBoundary . '"';
+        return implode($eol, $headers) . $eol . $eol . $body;
+    }
+
+    return implode($eol, $headers) . $eol . $content;
 }
 
 function mail_http_request(string $url, string $method, ?string $body = null, array $headers = []): array
@@ -3717,7 +3789,7 @@ function mail_gmail_access_token(): string
     return $cachedToken;
 }
 
-function mail_gmail_send_message(string $to, string $subject, string $bodyText): bool
+function mail_gmail_send_message(string $to, string $subject, string $bodyText, ?string $bodyHtml = null, array $attachments = []): bool
 {
     $accessToken = mail_gmail_access_token();
     if ($accessToken === '') {
@@ -3725,7 +3797,7 @@ function mail_gmail_send_message(string $to, string $subject, string $bodyText):
     }
 
     $payload = json_encode([
-        'raw' => mail_base64url_encode(mail_build_message($to, $subject, $bodyText)),
+        'raw' => mail_base64url_encode(mail_build_message($to, $subject, $bodyText, $bodyHtml, $attachments)),
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     if ($payload === false) {
         mail_smtp_log_failure('gmail-api', 'Unable to encode Gmail API payload.');
@@ -3845,6 +3917,8 @@ function mail_queue_ensure_schema(): void
             recipient_email VARCHAR(160) NOT NULL,
             subject VARCHAR(255) NOT NULL,
             body_text LONGTEXT NOT NULL,
+            body_html LONGTEXT DEFAULT NULL,
+            attachments_json LONGTEXT DEFAULT NULL,
             status ENUM('queued','sending','retry','sent','failed') NOT NULL DEFAULT 'queued',
             attempts TINYINT UNSIGNED NOT NULL DEFAULT 0,
             last_error TEXT DEFAULT NULL,
@@ -3857,6 +3931,18 @@ function mail_queue_ensure_schema(): void
             INDEX idx_mail_outbox_recipient (recipient_email, created_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
     );
+
+    // Backfill columns on installs whose mail_outbox predates HTML/attachment support.
+    foreach (['body_html' => 'LONGTEXT DEFAULT NULL', 'attachments_json' => 'LONGTEXT DEFAULT NULL'] as $col => $definition) {
+        $exists = db()->prepare(
+            'SELECT COUNT(*) FROM information_schema.columns
+             WHERE table_schema = DATABASE() AND table_name = "mail_outbox" AND column_name = ?'
+        );
+        $exists->execute([$col]);
+        if ((int) $exists->fetchColumn() === 0) {
+            db()->exec("ALTER TABLE mail_outbox ADD COLUMN {$col} {$definition}");
+        }
+    }
 
     $ready = true;
 }
@@ -3908,7 +3994,7 @@ function mail_queue_spawn_worker(): bool
     return false;
 }
 
-function mail_queue_enqueue(string $kind, string $to, string $subject, string $bodyText): bool
+function mail_queue_enqueue(string $kind, string $to, string $subject, string $bodyText, ?string $bodyHtml = null, array $attachments = []): bool
 {
     $kind = trim($kind) !== '' ? trim($kind) : 'notification';
     $to = trim($to);
@@ -3921,12 +4007,43 @@ function mail_queue_enqueue(string $kind, string $to, string $subject, string $b
 
     try {
         mail_queue_ensure_schema();
+        // Binary attachment data can't live in JSON directly — base64 it for storage.
+        $storable = [];
+        foreach ($attachments as $a) {
+            $item = [
+                'filename' => (string) ($a['filename'] ?? 'attachment'),
+                'mime' => (string) ($a['mime'] ?? 'application/octet-stream'),
+                'data_b64' => base64_encode((string) ($a['data'] ?? '')),
+            ];
+            if (!empty($a['cid'])) {
+                $item['cid'] = (string) $a['cid'];
+                $item['inline'] = true;
+            }
+            $storable[] = $item;
+        }
+        $attachmentsJson = !empty($storable)
+            ? json_encode($storable, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+            : null;
         $stmt = db()->prepare(
-            'INSERT INTO mail_outbox (message_kind, recipient_email, subject, body_text, status, attempts, last_error, next_attempt_at)
-             VALUES (?, ?, ?, ?, \'queued\', 0, NULL, NOW())'
+            'INSERT INTO mail_outbox (message_kind, recipient_email, subject, body_text, body_html, attachments_json, status, attempts, last_error, next_attempt_at)
+             VALUES (?, ?, ?, ?, ?, ?, \'queued\', 0, NULL, NOW())'
         );
-        $stmt->execute([$kind, $to, $subject, $bodyText]);
+        $stmt->execute([$kind, $to, $subject, $bodyText, ($bodyHtml !== null && trim($bodyHtml) !== '') ? $bodyHtml : null, $attachmentsJson]);
         mail_queue_spawn_worker();
+        // Windows/WAMP under Apache cannot reliably launch the detached worker
+        // (popen + `start` silently no-ops as a service), so queued mail would
+        // sit forever. Fall back to a short, best-effort inline drain on the web
+        // request. The atomic FOR UPDATE claim keeps this safe if the spawned
+        // worker also runs. Disable with MAIL_INLINE_DRAIN=false where a real
+        // cron/scheduled task drains the queue instead.
+        if (PHP_SAPI !== 'cli' && PHP_SAPI !== 'phpdbg'
+            && filter_var(env('MAIL_INLINE_DRAIN', 'true'), FILTER_VALIDATE_BOOLEAN)) {
+            try {
+                mail_queue_drain(10, 12);
+            } catch (Throwable $e) {
+                mail_smtp_log_failure('queue-inline', $e->getMessage());
+            }
+        }
         return true;
     } catch (Throwable $e) {
         mail_smtp_log_failure('queue', $e->getMessage());
@@ -3942,7 +4059,7 @@ function mail_queue_claim_next(): ?array
 
     try {
         $stmt = $pdo->query(
-            "SELECT id, message_kind, recipient_email, subject, body_text, attempts
+            "SELECT id, message_kind, recipient_email, subject, body_text, body_html, attachments_json, attempts
              FROM mail_outbox
              WHERE (
                     status = 'queued'
@@ -4034,7 +4151,28 @@ function mail_queue_drain(int $limit = 10, int $timeBudgetSeconds = 15): array
         }
 
         $stats['processed']++;
-        $ok = send_mail_message((string) $mail['recipient_email'], (string) $mail['subject'], (string) $mail['body_text']);
+        $bodyHtml = isset($mail['body_html']) && $mail['body_html'] !== null && $mail['body_html'] !== ''
+            ? (string) $mail['body_html']
+            : null;
+        $attachments = [];
+        if (!empty($mail['attachments_json'])) {
+            $decoded = json_decode((string) $mail['attachments_json'], true);
+            if (is_array($decoded)) {
+                foreach ($decoded as $a) {
+                    $item = [
+                        'filename' => (string) ($a['filename'] ?? 'attachment'),
+                        'mime' => (string) ($a['mime'] ?? 'application/octet-stream'),
+                        'data' => base64_decode((string) ($a['data_b64'] ?? '')),
+                    ];
+                    if (!empty($a['cid'])) {
+                        $item['cid'] = (string) $a['cid'];
+                        $item['inline'] = true;
+                    }
+                    $attachments[] = $item;
+                }
+            }
+        }
+        $ok = send_mail_message((string) $mail['recipient_email'], (string) $mail['subject'], (string) $mail['body_text'], $bodyHtml, $attachments);
         if ($ok) {
             mail_queue_mark_sent((int) $mail['id']);
             $stats['sent']++;
@@ -4048,7 +4186,7 @@ function mail_queue_drain(int $limit = 10, int $timeBudgetSeconds = 15): array
     return $stats;
 }
 
-function send_mail_message(string $to, string $subject, string $bodyText): bool
+function send_mail_message(string $to, string $subject, string $bodyText, ?string $bodyHtml = null, array $attachments = []): bool
 {
     $to = trim($to);
     if ($to === '') {
@@ -4063,7 +4201,7 @@ function send_mail_message(string $to, string $subject, string $bodyText): bool
     try {
         if ($provider === 'gmail_api') {
             if (mail_gmail_configured()) {
-                return mail_gmail_send_message($to, $subject, $bodyText);
+                return mail_gmail_send_message($to, $subject, $bodyText, $bodyHtml, $attachments);
             }
 
             mail_smtp_log_failure('gmail-api', 'Gmail API credentials are missing.');
@@ -4077,7 +4215,7 @@ function send_mail_message(string $to, string $subject, string $bodyText): bool
             $password = mail_normalize_password((string) env('MAIL_PASSWORD', ''));
             $encryption = strtolower(trim((string) env('MAIL_ENCRYPTION', 'tls')));
             $timeout = mail_timeout_seconds();
-            $messageBody = mail_build_message($to, $subject, $bodyText);
+            $messageBody = mail_build_message($to, $subject, $bodyText, $bodyHtml, $attachments);
 
             foreach (mail_smtp_candidates($host, $port, $encryption) as [$candidateHost, $candidatePort, $candidateEncryption]) {
                 $transport = ($candidateEncryption === 'ssl' && $candidatePort > 0)
@@ -4211,6 +4349,116 @@ function issue_email_verification_otp(int $userId, string $email, string $name):
     return send_verification_code_mail($email, $name, $otp);
 }
 
+/* ---- Password reset (forgot password) ---- */
+
+/** Create the password_resets table on first use (self-healing schema). */
+function password_reset_ensure_schema(): void
+{
+    static $ready = false;
+    if ($ready) {
+        return;
+    }
+    db()->exec(
+        "CREATE TABLE IF NOT EXISTS password_resets (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+            user_id INT NOT NULL,
+            token_hash CHAR(64) NOT NULL,
+            expires_at DATETIME NOT NULL,
+            used_at DATETIME NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uniq_password_resets_token (token_hash),
+            INDEX idx_password_resets_user (user_id, created_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+    $ready = true;
+}
+
+/** Absolute link the user opens to choose a new password. */
+function password_reset_link(string $token): string
+{
+    return storefront_public_base_url() . '/reset-password?token=' . rawurlencode($token);
+}
+
+function password_reset_email_body(string $name, string $link): string
+{
+    $safeName = trim($name) !== '' ? trim($name) : 'there';
+    return implode("\n", [
+        'Hi ' . $safeName . ',',
+        '',
+        'We received a request to reset the password for your account.',
+        'Open the link below to choose a new password:',
+        '',
+        $link,
+        '',
+        'This link expires in 60 minutes and can be used only once.',
+        'If you did not request this, you can safely ignore this message — your password will not change.',
+        '',
+        'Thanks,',
+        mail_from_name(),
+    ]);
+}
+
+/**
+ * Issue a single-use reset token for a user, store its SHA-256 hash, and email
+ * the reset link. Returns true when the mail was queued/sent.
+ */
+function create_password_reset(array $user): bool
+{
+    password_reset_ensure_schema();
+
+    $token = bin2hex(random_bytes(32));
+    $tokenHash = hash('sha256', $token);
+
+    // Invalidate any still-pending tokens for this user, then store the new one.
+    // Expiry is computed with MySQL's own clock (NOW() + INTERVAL) so it always
+    // matches the NOW() comparison in consume_password_reset — a PHP-computed
+    // timestamp would break whenever the PHP and MySQL timezones differ.
+    $pdo = db();
+    $pdo->prepare('UPDATE password_resets SET used_at = NOW() WHERE user_id = ? AND used_at IS NULL')
+        ->execute([(int) $user['id']]);
+    $pdo->prepare('INSERT INTO password_resets (user_id, token_hash, expires_at) VALUES (?, ?, NOW() + INTERVAL 60 MINUTE)')
+        ->execute([(int) $user['id'], $tokenHash]);
+
+    $link = password_reset_link($token);
+    $built = email_password_reset((string) ($user['full_name'] ?? ''), $link);
+    return queue_themed_mail('password_reset', (string) $user['email'], $built);
+}
+
+/**
+ * Validate a reset token and, if good, return the matching users row.
+ * Marks the token used so it cannot be replayed. Returns null when the token is
+ * unknown, already used, or expired.
+ */
+function consume_password_reset(string $token): ?array
+{
+    password_reset_ensure_schema();
+
+    $tokenHash = hash('sha256', $token);
+    $pdo = db();
+    $stmt = $pdo->prepare(
+        'SELECT id, user_id FROM password_resets
+         WHERE token_hash = ? AND used_at IS NULL AND expires_at > NOW()
+         LIMIT 1'
+    );
+    $stmt->execute([$tokenHash]);
+    $reset = $stmt->fetch();
+    if (!$reset) {
+        return null;
+    }
+
+    $userStmt = $pdo->prepare('SELECT * FROM users WHERE id = ? LIMIT 1');
+    $userStmt->execute([(int) $reset['user_id']]);
+    $user = $userStmt->fetch();
+    if (!$user) {
+        return null;
+    }
+
+    $pdo->prepare('UPDATE password_resets SET used_at = NOW() WHERE id = ?')
+        ->execute([(int) $reset['id']]);
+
+    return $user;
+}
+
 /**
  * Fire-and-forget email notification to the team.
  * No-op unless MAIL_ENABLED=true and NOTIFY_EMAIL is set in .env.
@@ -4225,16 +4473,36 @@ function notify(string $subject, string $bodyText): void
     if ($to === '') {
         return;
     }
-    if (mail_queue_enqueue('notification', $to, $subject, $bodyText)) {
-        return;
-    }
-
     try {
-        send_mail_message($to, $subject, $bodyText);
+        $built = email_admin_notification($subject, $bodyText);
+        queue_themed_mail('notification', $to, $built);
     } catch (\Throwable $e) {
         // swallow — notifications are best-effort
     }
 }
 
+require_once __DIR__ . '/mail_templates.php';
+
+/**
+ * Queue (with inline-drain fallback) a branded email built by one of the
+ * email_* builders in mail_templates.php. $built = ['subject','html','text'].
+ */
+function queue_themed_mail(string $kind, string $to, array $built, array $attachments = []): bool
+{
+    $subject = (string) ($built['subject'] ?? '');
+    $text = (string) ($built['text'] ?? '');
+    $html = (string) ($built['html'] ?? '');
+    // Embed the brand logo inline (cid:fc-logo) so it renders without a public URL.
+    if (str_contains($html, 'cid:' . EMAIL_LOGO_CID)) {
+        $logo = email_inline_logo();
+        if ($logo !== null) {
+            array_unshift($attachments, $logo);
+        }
+    }
+    if (mail_queue_enqueue($kind, $to, $subject, $text, $html, $attachments)) {
+        return true;
+    }
+    return send_mail_message($to, $subject, $text, $html !== '' ? $html : null, $attachments);
+}
 
 

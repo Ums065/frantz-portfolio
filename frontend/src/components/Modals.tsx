@@ -308,6 +308,9 @@ export function AuthModal({
   const [termsSig, setTermsSig] = useState('')
   const [nsSchools, setNsSchools] = useState<any[]>([])
   const [nsTeachers, setNsTeachers] = useState<any[]>([])
+  // Login sub-view: 'login' = credentials, 'forgot' = request a reset link.
+  const [view, setView] = useState<'login' | 'forgot'>('login')
+  const [notice, setNotice] = useState('')
 
   useEffect(() => {
     if (open) {
@@ -319,6 +322,8 @@ export function AuthModal({
         : createRegisterForm())
       setTermsAccepted(false)
       setTermsSig('')
+      setView('login')
+      setNotice('')
     }
     document.body.style.overflow = open ? 'hidden' : ''
   }, [open, mode, initialRole])
@@ -526,6 +531,33 @@ export function AuthModal({
     }
   }
 
+  const submitForgot = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError('')
+    setNotice('')
+
+    let email: string
+    try {
+      email = requireEmail(form.email, 'Email address')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Please enter a valid email.')
+      return
+    }
+
+    setBusy(true)
+    try {
+      const res = await api.post<{ message: string }>('auth/forgot-password', { email })
+      setNotice(res.message || 'We\'ve emailed you a link to reset your password.')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not send the reset link.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const goForgot = () => { setError(''); setNotice(''); setView('forgot') }
+  const goLogin = () => { setError(''); setNotice(''); setView('login') }
+
   return (
     <div className={`modal-overlay${open ? ' open' : ''}`} onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className={`modal${mode === 'register' ? ' modal--register' : ''}`}>
@@ -538,6 +570,32 @@ export function AuthModal({
             <h3 className="gold-text">{done.title}</h3>
             <p className="msub">{done.message}</p>
             <button className="btn btn--solid" onClick={onClose}>Continue</button>
+          </div>
+        ) : mode === 'login' && view === 'forgot' ? (
+          <div>
+            <h3 className="gold-text">Reset Password</h3>
+            <p className="msub">Enter your account email and we'll send you a link to set a new password.</p>
+            {notice ? (
+              <div style={{ textAlign: 'center' }}>
+                <OkIcon />
+                <p className="msub">{notice}</p>
+                <button className="btn btn--solid" onClick={goLogin}>Back to Sign In</button>
+              </div>
+            ) : (
+              <form onSubmit={submitForgot} className="auth-form">
+                <div className="field">
+                  <label>Email</label>
+                  <input type="email" required placeholder="you@example.com" autoComplete="email" value={form.email} onChange={(e) => updateField('email', e.target.value)} />
+                </div>
+                {error && <p className="msub" style={{ color: '#e08a8a' }}>{error}</p>}
+                <button type="submit" className="btn btn--solid" disabled={busy}>
+                  {busy ? 'Sending...' : 'Send Reset Link'}
+                </button>
+              </form>
+            )}
+            {!notice && (
+              <div className="switch">Remembered it? <a onClick={goLogin}>Sign in</a></div>
+            )}
           </div>
         ) : (
           <div>
@@ -720,6 +778,9 @@ export function AuthModal({
                   <div className="field">
                     <label>Password</label>
                     <input type="password" required placeholder="Enter your password" autoComplete="current-password" value={form.password} onChange={(e) => updateField('password', e.target.value)} />
+                  </div>
+                  <div className="switch" style={{ textAlign: 'right', marginTop: 4 }}>
+                    <a onClick={goForgot}>Forgot password?</a>
                   </div>
                 </>
               )}

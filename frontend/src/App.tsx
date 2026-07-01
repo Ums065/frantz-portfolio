@@ -22,6 +22,7 @@ const Projects = lazy(() => import('./pages/Projects'))
 const Store = lazy(() => import('./pages/Store'))
 const Admin = lazy(() => import('./pages/Admin'))
 const Legal = lazy(() => import('./pages/Legal'))
+const ResetPassword = lazy(() => import('./pages/ResetPassword'))
 
 function RouteLoading() {
   return (
@@ -111,6 +112,7 @@ export default function App() {
           <Route path="/new-school/parent/:token" element={<RoutedPage pageKey="new-school-parent"><NewSchool /></RoutedPage>} />
           <Route path="/dashboard" element={<RoutedPage pageKey="dashboard"><Dashboard /></RoutedPage>} />
           <Route path="/profile" element={<RoutedPage pageKey="profile"><Profile /></RoutedPage>} />
+          <Route path="/reset-password" element={<RoutedPage pageKey="reset-password"><ResetPassword /></RoutedPage>} />
           <Route path="/store" element={<Suspense fallback={<RouteLoading />}><Store /></Suspense>} />
           <Route path="/terms" element={<RoutedPage pageKey="terms"><Legal slug="terms" /></RoutedPage>} />
           <Route path="/privacy" element={<RoutedPage pageKey="privacy"><Legal slug="privacy" /></RoutedPage>} />

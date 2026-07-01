@@ -172,6 +172,52 @@ try {
             }
         }
 
+        case $key === 'POST auth/forgot-password': {
+            $email = require_email(field(body(), 'email'));
+
+            $stmt = db()->prepare('SELECT id, full_name, email FROM users WHERE email = ? LIMIT 1');
+            $stmt->execute([$email]);
+            $u = $stmt->fetch();
+
+            // Per product spec: tell the user when no account matches the email.
+            if (!$u) {
+                json(['error' => 'No account is registered with this email address.'], 404);
+            }
+
+            try {
+                create_password_reset($u);
+            } catch (Throwable $e) {
+                json([
+                    'error' => app_debug() ? $e->getMessage() : 'Unable to send the reset link right now.',
+                ], 500);
+            }
+
+            json(['message' => 'We\'ve emailed you a link to reset your password. Please check your inbox.']);
+        }
+
+        case $key === 'POST auth/reset-password': {
+            $b = body();
+            $token = trim((string) field($b, 'token'));
+            $pass = (string) field($b, 'password');
+
+            if ($token === '') {
+                json(['error' => 'Reset token is required.'], 422);
+            }
+            if (strlen($pass) < 6) {
+                json(['error' => 'Password must be at least 6 characters.'], 422);
+            }
+
+            $u = consume_password_reset($token);
+            if (!$u) {
+                json(['error' => 'This reset link is invalid or has expired. Please request a new one.'], 400);
+            }
+
+            $update = db()->prepare('UPDATE users SET password_hash = ? WHERE id = ?');
+            $update->execute([password_hash($pass, PASSWORD_DEFAULT), (int) $u['id']]);
+
+            json(['message' => 'Your password has been reset. You can now sign in with your new password.']);
+        }
+
         case $key === 'POST auth/verify-email': {
             json([
                 'error' => 'Email verification is temporarily disabled. Please register or log in directly.',
@@ -1455,6 +1501,20 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
                     $schoolSync->execute([$schoolStatus, (int) $m[1]]);
                 } catch (\Throwable $e) {
                     // Never let the school-status sync break the core account approval.
+                }
+            }
+
+            // Let the member know the outcome of their account review.
+            if ($updatedUser && in_array($status, ['approved', 'rejected'], true)) {
+                try {
+                    $memberName = (string) ($updatedUser['full_name'] ?? '');
+                    $memberRole = (string) ($updatedUser['role'] ?? '');
+                    $built = $status === 'approved'
+                        ? email_account_approved($memberName, $memberRole)
+                        : email_account_rejected($memberName, $memberRole, (string) ($approvalNote ?? ''));
+                    queue_themed_mail('account_' . $status, (string) ($updatedUser['email'] ?? ''), $built);
+                } catch (\Throwable $e) {
+                    // Never let a mail failure break the approval action.
                 }
             }
 
