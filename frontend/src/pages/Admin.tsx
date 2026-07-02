@@ -10,6 +10,8 @@ import GalleryAdminPanel from '../components/admin/GalleryAdminPanel'
 import NsRecordDetail from '../components/NsRecordDetail'
 import AdminNavIcon from '../components/admin/AdminNavIcon'
 import NsProfileModal, { type ProfileView } from '../components/admin/NsProfileModal'
+import JudgesAdminPanel from '../components/admin/JudgesAdminPanel'
+import SubmissionScoresModal from '../components/admin/SubmissionScoresModal'
 
 const EDU_PEOPLE_PAGE_SIZE = 10
 
@@ -17,7 +19,7 @@ type TabKey =
   | 'overview' | 'analytics' | 'requests' | 'orders' | 'subscribers' | 'contacts'
   | 'members' | 'approvals' | 'sponsors' | 'awards' | 'events' | 'blog'
   | 'testimonials' | 'media' | 'gallery' | 'community' | 'rsvps' | 'inventory'
-  | 'ns-schools' | 'ns-ranking' | 'ns-submissions' | 'ns-interviews' | 'ns-chat' | 'ns-trendcatch'
+  | 'ns-schools' | 'ns-ranking' | 'ns-submissions' | 'ns-interviews' | 'ns-chat' | 'ns-trendcatch' | 'ns-judges'
 
 interface NavItem { key: TabKey; label: string }
 const NAV_GROUPS: Array<{ group: string; items: NavItem[] }> = [
@@ -35,6 +37,7 @@ const NAV_GROUPS: Array<{ group: string; items: NavItem[] }> = [
     { key: 'ns-schools', label: 'School Dashboard' },
     { key: 'ns-ranking', label: 'Ranking' },
     { key: 'ns-submissions', label: 'Student Submissions' },
+    { key: 'ns-judges', label: 'Judges & Scoring' },
     { key: 'ns-interviews', label: 'Business Interviews' },
     { key: 'ns-chat', label: 'Messages' },
     { key: 'ns-trendcatch', label: 'TrendCatch EDU' },
@@ -148,6 +151,7 @@ export default function Admin() {
   const [selectedUserError, setSelectedUserError] = useState('')
   const [nsData, setNsData] = useState<any>(null)
   const [nsDetail, setNsDetail] = useState<{ kind: 'interview' | 'project'; record: any } | null>(null)
+  const [scoreModal, setScoreModal] = useState<{ id: number; name: string } | null>(null)
   const [nsProfile, setNsProfile] = useState<ProfileView | null>(null)
   const [schoolDashId, setSchoolDashId] = useState('')
   const [rankSchoolId, setRankSchoolId] = useState('')
@@ -1376,6 +1380,7 @@ export default function Admin() {
                     <td>
                       <RowMenu actions={[
                         { label: 'View full details', onClick: () => setNsDetail({ kind: 'project', record: s }) },
+                        { label: 'Judge scores', onClick: () => setScoreModal({ id: s.id, name: s.student_name || '' }) },
                         { label: 'Approve + bonus points', onClick: () => openApproveBonus(s), disabled: st === 'approved' || st === 'winner' },
                         { label: 'Reject', danger: true, onClick: () => void reviewSubmission(s.id, 'rejected'), disabled: st === 'rejected' },
                         { label: 'Open in New School dashboard', onClick: () => navigate('/new-school/dashboard') },
@@ -1387,6 +1392,8 @@ export default function Admin() {
             />
           </>
         )}
+
+        {tab === 'ns-judges' && <JudgesAdminPanel />}
 
         {tab === 'ns-interviews' && (
           <>
@@ -1719,6 +1726,10 @@ export default function Admin() {
         view={nsProfile}
         onOpenStudent={(id) => openStudentProfile(id)}
       />
+
+      {scoreModal && (
+        <SubmissionScoresModal submissionId={scoreModal.id} studentName={scoreModal.name} onClose={() => setScoreModal(null)} />
+      )}
 
       {bonusModal && createPortal((
         <div className="admin-bonus-overlay" role="dialog" aria-modal="true" onClick={() => { if (!bonusBusy) setBonusModal(null) }}>

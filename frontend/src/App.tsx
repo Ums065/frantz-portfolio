@@ -25,6 +25,7 @@ const Legal = lazy(() => import('./pages/Legal'))
 const ResetPassword = lazy(() => import('./pages/ResetPassword'))
 const Contact = lazy(() => import('./pages/Contact'))
 const NotFound = lazy(() => import('./pages/NotFound'))
+const Judge = lazy(() => import('./pages/Judge'))
 
 function RouteLoading() {
   return (
@@ -121,6 +122,7 @@ export default function App() {
           <Route path="/privacy" element={<RoutedPage pageKey="privacy"><Legal slug="privacy" /></RoutedPage>} />
           <Route path="/content-disclaimer" element={<RoutedPage pageKey="content-disclaimer"><Legal slug="content-disclaimer" /></RoutedPage>} />
           <Route path="/admin" element={<Suspense fallback={<RouteLoading />}><Admin /></Suspense>} />
+          <Route path="/judge/dashboard" element={<Suspense fallback={<RouteLoading />}><Judge /></Suspense>} />
           <Route path="*" element={<RoutedPage pageKey="notfound"><NotFound /></RoutedPage>} />
         </Routes>
       </BrowserRouter>

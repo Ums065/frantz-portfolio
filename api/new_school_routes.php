@@ -292,6 +292,13 @@ function new_school_build_student_context(array $student): array
     $referralPointsStmt->execute([$studentId]);
     $referralPoints = (int) $referralPointsStmt->fetchColumn();
 
+    // 215-point automatic model breakdown (+ admin bonus) for the dashboard.
+    $dashPoints = new_school_dashboard_points($studentId, $student);
+    $materialTypeMeta = [];
+    foreach (ns_supporting_material_types() as $mtKey => $mtLabel) {
+        $materialTypeMeta[] = ['key' => $mtKey, 'label' => $mtLabel];
+    }
+
     return [
         'student' => $student,
         'school' => $school,
@@ -316,7 +323,13 @@ function new_school_build_student_context(array $student): array
             'submission_score' => $submission['score'] ?? null,
             'has_submission' => $submission ? 1 : 0,
         ])),
-        'student_points' => new_school_points_total('student', $studentId),
+        'student_points' => $dashPoints['total'],
+        'automatic_points' => $dashPoints['automatic_total'],
+        'admin_bonus' => $dashPoints['admin_bonus'],
+        'automatic_breakdown' => $dashPoints['breakdown'],
+        'automatic_max' => $dashPoints['max'],
+        'supporting_materials' => new_school_fetch_materials($studentId),
+        'material_types' => $materialTypeMeta,
         'referral' => [
             'code' => (string) ($student['referral_code'] ?? ''),
             'count' => $referralCount,
@@ -422,6 +435,53 @@ function new_school_rows_to_csv(array $rows): string
     fclose($handle);
 
     return is_string($csv) ? $csv : '';
+}
+
+/** Resolve the student the current user is acting for (student self, parent's child, or admin via student_id). */
+function ns_resolve_acting_student(array $user, array $body): ?array
+{
+    if ($user['role'] === 'student') {
+        return new_school_fetch_student_by_user_id((int) $user['id']);
+    }
+    if ($user['role'] === 'parent') {
+        $parent = new_school_fetch_parent_by_user_id((int) $user['id']);
+        return $parent ? new_school_fetch_student_by_id((int) $parent['student_id']) : null;
+    }
+    if (in_array($user['role'], ['admin', 'super_admin', 'editor'], true) && (int) ($body['student_id'] ?? 0) > 0) {
+        return new_school_fetch_student_by_id((int) $body['student_id']);
+    }
+    return null;
+}
+
+/** Ensure the supporting-materials table exists (self-healing pre-migration). */
+function new_school_supporting_materials_ensure(): void
+{
+    static $ready = false;
+    if ($ready) {
+        return;
+    }
+    db()->exec(
+        "CREATE TABLE IF NOT EXISTS new_school_supporting_materials (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            student_id INT NOT NULL,
+            material_type ENUM('business_card','photo','storefront_photo','website_screenshot','social_media_screenshot','flyer') NOT NULL,
+            file_url VARCHAR(255) NOT NULL,
+            original_name VARCHAR(255) DEFAULT NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uniq_material_type (student_id, material_type)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+    $ready = true;
+}
+
+/** All supporting-material rows for a student. */
+function new_school_fetch_materials(int $studentId): array
+{
+    new_school_supporting_materials_ensure();
+    $stmt = db()->prepare('SELECT id, material_type, file_url, original_name, created_at FROM new_school_supporting_materials WHERE student_id = ? ORDER BY material_type');
+    $stmt->execute([$studentId]);
+    return $stmt->fetchAll() ?: [];
 }
 
 function new_school_handle_route(string $method, string $route): bool
@@ -2305,6 +2365,9 @@ function new_school_handle_route(string $method, string $route): bool
                 json(['error' => 'The student already has 10 completed interviews.'], 422);
             }
 
+            // Signature makes an interview "verified" (worth 10 pts in the 215-point model).
+            $signature = trim((string) field($body, 'signature'));
+
             $values = [
                 (int) $student['id'],
                 $visitNumber,
@@ -2323,6 +2386,7 @@ function new_school_handle_route(string $method, string $route): bool
                 !empty($body['has_delivery_options']) ? 1 : 0,
                 $mainChallenge,
                 $studentNotes,
+                $signature !== '' ? $signature : null,
             ];
 
             $pdo = db();
@@ -2332,6 +2396,7 @@ function new_school_handle_route(string $method, string $route): bool
                      SET business_name = ?, owner_name = ?, business_phone = ?, business_address = ?, business_category = ?,
                          date_of_visit = ?, has_website = ?, has_google_profile = ?, uses_social_media = ?, uses_digital_signage = ?,
                          offers_rewards = ?, has_online_ordering = ?, has_delivery_options = ?, main_challenge = ?, student_notes = ?,
+                         signature = COALESCE(?, signature),
                          updated_at = NOW()
                      WHERE id = ?'
                 );
@@ -2351,6 +2416,7 @@ function new_school_handle_route(string $method, string $route): bool
                     !empty($body['has_delivery_options']) ? 1 : 0,
                     $mainChallenge,
                     $studentNotes,
+                    $signature !== '' ? $signature : null,
                     (int) $interviewRow['id'],
                 ]);
                 $interviewId = (int) $interviewRow['id'];
@@ -2359,8 +2425,8 @@ function new_school_handle_route(string $method, string $route): bool
                     'INSERT INTO new_school_business_interviews (
                         student_id, visit_number, business_name, owner_name, business_phone, business_address, business_category,
                         date_of_visit, has_website, has_google_profile, uses_social_media, uses_digital_signage, offers_rewards,
-                        has_online_ordering, has_delivery_options, main_challenge, student_notes
-                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                        has_online_ordering, has_delivery_options, main_challenge, student_notes, signature
+                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
                 );
                 $insert->execute($values);
                 $interviewId = (int) $pdo->lastInsertId();
@@ -2472,6 +2538,11 @@ function new_school_handle_route(string $method, string $route): bool
             $expectedImpact = field($body, 'expected_impact');
             $videoUrl = field($body, 'video_url');
             $writtenUrl = field($body, 'written_url');
+            // Optional bonus items (215-model): AI demonstration + community service documentation.
+            $aiNote = trim((string) field($body, 'ai_note'));
+            $aiUrl = trim((string) field($body, 'ai_url'));
+            $communityNote = trim((string) field($body, 'community_note'));
+            $communityUrl = trim((string) field($body, 'community_url'));
             $sourceBusinessId = (int) ($body['source_business_id'] ?? 0);
 
             if ($problemIdentified === '' || $whyItMatters === '' || $proposedSolution === '' || $howItHelps === '' || $expectedImpact === '') {
@@ -2519,6 +2590,10 @@ function new_school_handle_route(string $method, string $route): bool
                          expected_impact = ?,
                          video_url = ?,
                          written_url = ?,
+                         ai_note = ?,
+                         ai_url = ?,
+                         community_note = ?,
+                         community_url = ?,
                          submission_date = NOW(),
                          status = "submitted",
                          updated_at = NOW()
@@ -2533,6 +2608,10 @@ function new_school_handle_route(string $method, string $route): bool
                     $expectedImpact,
                     $videoUrl,
                     $writtenUrl,
+                    $aiNote !== '' ? $aiNote : null,
+                    $aiUrl !== '' ? $aiUrl : null,
+                    $communityNote !== '' ? $communityNote : null,
+                    $communityUrl !== '' ? $communityUrl : null,
                     (int) $submission['id'],
                 ]);
                 $submissionId = (int) $submission['id'];
@@ -2540,8 +2619,8 @@ function new_school_handle_route(string $method, string $route): bool
                 $insert = $pdo->prepare(
                     'INSERT INTO new_school_submissions (
                         student_id, source_business_id, problem_identified, why_it_matters, proposed_solution, how_it_helps,
-                        expected_impact, video_url, written_url, submission_date, status
-                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), "submitted")'
+                        expected_impact, video_url, written_url, ai_note, ai_url, community_note, community_url, submission_date, status
+                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), "submitted")'
                 );
                 $insert->execute([
                     (int) $student['id'],
@@ -2553,6 +2632,10 @@ function new_school_handle_route(string $method, string $route): bool
                     $expectedImpact,
                     $videoUrl,
                     $writtenUrl,
+                    $aiNote !== '' ? $aiNote : null,
+                    $aiUrl !== '' ? $aiUrl : null,
+                    $communityNote !== '' ? $communityNote : null,
+                    $communityUrl !== '' ? $communityUrl : null,
                 ]);
                 $submissionId = (int) $pdo->lastInsertId();
             }
@@ -3254,7 +3337,8 @@ function new_school_handle_route(string $method, string $route): bool
             json([
                 'success' => true,
                 'student_id' => $studentId,
-                'student_points_total' => new_school_points_total('student', $studentId),
+                // Student total now reflects the 215-model automatic points + admin bonus.
+                'student_points_total' => new_school_dashboard_points($studentId)['total'],
                 'teacher_points_total' => $teacherId > 0 ? new_school_points_total('teacher', $teacherId) : 0,
             ]);
         }
@@ -3906,6 +3990,269 @@ function new_school_handle_route(string $method, string $route): bool
             $pdo->prepare('DELETE FROM new_school_submissions WHERE id = ?')->execute([(int) $sub['id']]);
             new_school_refresh_student_status((int) $sub['student_id']);
             json(['message' => 'Submission deleted.']);
+        }
+
+        /* ============ Supporting materials (215-model, 5 pts each) ============ */
+
+        case $key === 'GET new-school/materials/types': {
+            require_login();
+            $types = [];
+            foreach (ns_supporting_material_types() as $k => $label) {
+                $types[] = ['key' => $k, 'label' => $label];
+            }
+            json(['types' => $types, 'points_each' => 5, 'max' => 30]);
+        }
+
+        case $key === 'POST new-school/materials': {
+            $user = require_login();
+            $student = ns_resolve_acting_student($user, $body);
+            if (!$student) {
+                json(['error' => 'Student profile not found.'], 404);
+            }
+            $type = (string) field($body, 'material_type');
+            $fileUrl = trim((string) field($body, 'file_url'));
+            if (!isset(ns_supporting_material_types()[$type])) {
+                json(['error' => 'Invalid material type.'], 422);
+            }
+            if ($fileUrl === '') {
+                json(['error' => 'Upload a file first.'], 422);
+            }
+            new_school_supporting_materials_ensure();
+            db()->prepare(
+                'INSERT INTO new_school_supporting_materials (student_id, material_type, file_url, original_name)
+                 VALUES (?, ?, ?, ?)
+                 ON DUPLICATE KEY UPDATE file_url = VALUES(file_url), original_name = VALUES(original_name), updated_at = NOW()'
+            )->execute([(int) $student['id'], $type, $fileUrl, (field($body, 'original_name') ?: null)]);
+            json([
+                'message' => 'Supporting material saved.',
+                'materials' => new_school_fetch_materials((int) $student['id']),
+                'points' => new_school_dashboard_points((int) $student['id']),
+            ]);
+        }
+
+        case $method === 'DELETE' && preg_match('#^new-school/materials/(\d+)$#', $route, $m) === 1: {
+            $user = require_login();
+            $student = ns_resolve_acting_student($user, $body);
+            if (!$student) {
+                json(['error' => 'Student profile not found.'], 404);
+            }
+            db()->prepare('DELETE FROM new_school_supporting_materials WHERE id = ? AND student_id = ?')
+                ->execute([(int) $m[1], (int) $student['id']]);
+            json([
+                'message' => 'Supporting material removed.',
+                'materials' => new_school_fetch_materials((int) $student['id']),
+                'points' => new_school_dashboard_points((int) $student['id']),
+            ]);
+        }
+
+        /* ==================== JUDGE (scoring) ==================== */
+
+        // Rubric categories (shared by judge + admin views).
+        case $key === 'GET new-school/judge/categories': {
+            require_judge();
+            $cats = [];
+            foreach (ns_judge_categories() as $catKey => [$label, $max]) {
+                $cats[] = ['key' => $catKey, 'label' => $label, 'max' => $max];
+            }
+            json(['categories' => $cats, 'max_total' => NS_JUDGE_MAX_TOTAL]);
+        }
+
+        // Queue of submitted projects for this judge to review (no automatic points shown).
+        case $key === 'GET new-school/judge/queue': {
+            $judge = require_judge();
+            new_school_judge_ensure_schema();
+            $stmt = db()->prepare(
+                "SELECT sub.id AS submission_id, sub.status AS submission_status, sub.submission_date,
+                        s.full_name AS student_name, s.school_name, s.grade_level, s.participant_id,
+                        t.teacher_full_name AS teacher_name,
+                        js.status AS my_status, js.total AS my_total
+                 FROM new_school_submissions sub
+                 INNER JOIN new_school_students s ON s.id = sub.student_id
+                 LEFT JOIN new_school_teachers t ON t.id = s.teacher_id
+                 LEFT JOIN new_school_judge_scores js ON js.submission_id = sub.id AND js.judge_user_id = ?
+                 WHERE sub.status <> 'draft'
+                 ORDER BY (js.status IS NULL) DESC, sub.submission_date DESC, sub.id DESC"
+            );
+            $stmt->execute([(int) $judge['id']]);
+            json(['submissions' => $stmt->fetchAll() ?: []]);
+        }
+
+        // This judge's own review history.
+        case $key === 'GET new-school/judge/my-reviews': {
+            $judge = require_judge();
+            new_school_judge_ensure_schema();
+            $stmt = db()->prepare(
+                'SELECT js.*, sub.status AS submission_status,
+                        s.full_name AS student_name, s.school_name, s.participant_id
+                 FROM new_school_judge_scores js
+                 INNER JOIN new_school_submissions sub ON sub.id = js.submission_id
+                 INNER JOIN new_school_students s ON s.id = sub.student_id
+                 WHERE js.judge_user_id = ?
+                 ORDER BY js.updated_at DESC'
+            );
+            $stmt->execute([(int) $judge['id']]);
+            json(['reviews' => $stmt->fetchAll() ?: []]);
+        }
+
+        // Full read-only detail for scoring one submission (automatic points + other judges hidden).
+        case $method === 'GET' && preg_match('#^new-school/judge/submission/(\d+)$#', $route, $m) === 1: {
+            $judge = require_judge();
+            new_school_judge_ensure_schema();
+            $submissionId = (int) $m[1];
+            $stmt = db()->prepare(
+                'SELECT sub.id, sub.status, sub.submission_date,
+                        sub.problem_identified, sub.why_it_matters, sub.proposed_solution, sub.how_it_helps, sub.expected_impact,
+                        sub.video_url, sub.written_url, sub.ai_note, sub.ai_url, sub.community_note, sub.community_url, sub.source_business_id,
+                        s.id AS student_id, s.full_name AS student_name, s.school_name, s.grade_level, s.participant_id,
+                        t.teacher_full_name AS teacher_name
+                 FROM new_school_submissions sub
+                 INNER JOIN new_school_students s ON s.id = sub.student_id
+                 LEFT JOIN new_school_teachers t ON t.id = s.teacher_id
+                 WHERE sub.id = ? LIMIT 1'
+            );
+            $stmt->execute([$submissionId]);
+            $submission = $stmt->fetch();
+            if (!$submission || (string) $submission['status'] === 'draft') {
+                json(['error' => 'Submission not available for judging.'], 404);
+            }
+
+            // Full submitted evidence for review: interviews (with signature) + supporting materials.
+            $ivStmt = db()->prepare(
+                'SELECT id, visit_number, business_name, owner_name, business_phone, business_address, business_category,
+                        date_of_visit, main_challenge, student_notes, signature
+                 FROM new_school_business_interviews WHERE student_id = ? ORDER BY visit_number ASC'
+            );
+            $ivStmt->execute([(int) $submission['student_id']]);
+
+            $materialLabels = ns_supporting_material_types();
+            $materials = [];
+            foreach (new_school_fetch_materials((int) $submission['student_id']) as $mat) {
+                $mat['label'] = $materialLabels[(string) $mat['material_type']] ?? (string) $mat['material_type'];
+                $materials[] = $mat;
+            }
+
+            $myStmt = db()->prepare('SELECT * FROM new_school_judge_scores WHERE submission_id = ? AND judge_user_id = ? LIMIT 1');
+            $myStmt->execute([$submissionId, (int) $judge['id']]);
+
+            $cats = [];
+            foreach (ns_judge_categories() as $catKey => [$label, $max]) {
+                $cats[] = ['key' => $catKey, 'label' => $label, 'max' => $max];
+            }
+
+            json([
+                'submission' => $submission,
+                'interviews' => $ivStmt->fetchAll() ?: [],
+                'materials' => $materials,
+                'categories' => $cats,
+                'max_total' => NS_JUDGE_MAX_TOTAL,
+                'my_score' => $myStmt->fetch() ?: null,
+            ]);
+        }
+
+        // Save (draft or final) this judge's rubric score for a submission.
+        case $method === 'POST' && preg_match('#^new-school/judge/submission/(\d+)/score$#', $route, $m) === 1: {
+            $judge = require_judge();
+            $submissionId = (int) $m[1];
+
+            $check = db()->prepare('SELECT status FROM new_school_submissions WHERE id = ? LIMIT 1');
+            $check->execute([$submissionId]);
+            $subStatus = $check->fetchColumn();
+            if ($subStatus === false) {
+                json(['error' => 'Submission not found.'], 404);
+            }
+            if ((string) $subStatus === 'draft') {
+                json(['error' => 'This project has not been submitted yet.'], 409);
+            }
+
+            $status = field($body, 'status') === 'submitted' ? 'submitted' : 'draft';
+            $scores = [];
+            foreach (ns_judge_categories() as $catKey => $meta) {
+                $scores[$catKey] = (int) ($body[$catKey] ?? 0);
+            }
+            $result = new_school_judge_score_upsert($submissionId, (int) $judge['id'], $scores, (string) field($body, 'notes'), $status);
+            json([
+                'message' => $status === 'submitted' ? 'Score submitted.' : 'Draft saved.',
+                'scores' => $result['scores'],
+                'total' => $result['total'],
+                'status' => $result['status'],
+            ]);
+        }
+
+        /* ============ ADMIN: judge management + score breakdown ============ */
+
+        // Create a judge account (admin only). Judges cannot self-register.
+        case $key === 'POST admin/new-school/judge': {
+            require_admin();
+            $fullName = trim((string) (field($body, 'full_name') ?: field($body, 'display_name')));
+            $email = require_email(field($body, 'email'));
+            $password = (string) field($body, 'password');
+            if (strlen($fullName) < 3) {
+                json(['error' => 'Judge full name is required.'], 422);
+            }
+            if (strlen($password) < 6) {
+                json(['error' => 'Password must be at least 6 characters.'], 422);
+            }
+
+            // Don't silently convert an existing participant (student/parent/school/teacher)
+            // into a judge — that would strip their dashboard access and orphan their data.
+            $existingStmt = db()->prepare('SELECT role FROM users WHERE email = ? LIMIT 1');
+            $existingStmt->execute([$email]);
+            $existingRole = (string) ($existingStmt->fetchColumn() ?: '');
+            if ($existingRole !== '' && !in_array($existingRole, ['judge'], true)) {
+                json(['error' => 'That email already belongs to a ' . $existingRole . ' account. Use a different email for the judge.'], 409);
+            }
+
+            $u = new_school_upsert_user_account($fullName, $email, $password, 'judge');
+            db()->prepare('UPDATE users SET approval_status = "approved", approval_reviewed_at = NOW() WHERE id = ?')
+                ->execute([(int) $u['id']]);
+            new_school_judge_ensure_schema();
+            db()->prepare(
+                'INSERT INTO new_school_judges (user_id, display_name) VALUES (?, ?)
+                 ON DUPLICATE KEY UPDATE display_name = VALUES(display_name)'
+            )->execute([(int) $u['id'], $fullName]);
+
+            json([
+                'message' => 'Judge account created.',
+                'judge' => [
+                    'user_id' => (int) $u['id'],
+                    'display_name' => $fullName,
+                    'email' => (string) $u['email'],
+                ],
+            ], 201);
+        }
+
+        // List judges with review counts (admin only).
+        case $key === 'GET admin/new-school/judges': {
+            require_admin();
+            new_school_judge_ensure_schema();
+            $rows = db()->query(
+                "SELECT j.id, j.user_id, j.display_name, u.email, u.approval_status, j.created_at,
+                        (SELECT COUNT(*) FROM new_school_judge_scores js WHERE js.judge_user_id = j.user_id AND js.status = 'submitted') AS reviews_submitted,
+                        (SELECT COUNT(*) FROM new_school_judge_scores js WHERE js.judge_user_id = j.user_id) AS reviews_total
+                 FROM new_school_judges j
+                 INNER JOIN users u ON u.id = j.user_id
+                 ORDER BY j.created_at DESC"
+            )->fetchAll();
+            json(['judges' => $rows ?: []]);
+        }
+
+        // Per-judge scores + average + automatic + final for a submission (admin only).
+        case $method === 'GET' && preg_match('#^admin/new-school/submission/(\d+)/scores$#', $route, $m) === 1: {
+            require_admin();
+            $submissionId = (int) $m[1];
+            $cats = [];
+            foreach (ns_judge_categories() as $catKey => [$label, $max]) {
+                $cats[] = ['key' => $catKey, 'label' => $label, 'max' => $max];
+            }
+            $final = new_school_final_score($submissionId);
+            json([
+                'categories' => $cats,
+                'max_total' => NS_JUDGE_MAX_TOTAL,
+                'scores' => new_school_judge_scores_for_submission($submissionId),
+                'automatic' => $final['automatic'],
+                'judge_average' => $final['judge_average'],
+                'final' => $final['final'],
+            ]);
         }
 
         default:

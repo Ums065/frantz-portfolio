@@ -158,6 +158,16 @@ function require_admin(): array
     return $u;
 }
 
+/** Require a judge (or admin, for testing) or fail 403. */
+function require_judge(): array
+{
+    $u = require_login();
+    if (!in_array($u['role'], ['judge', 'admin', 'super_admin'], true)) {
+        json(['error' => 'Judge access required.'], 403);
+    }
+    return $u;
+}
+
 /**
  * Admin "view as user" impersonation. The active session is swapped to the
  * target user while the original admin id is parked in the session so it can
@@ -2240,6 +2250,292 @@ function new_school_points_total(string $role, int $recipientId): int
     return (int) ($map[$recipientId] ?? 0);
 }
 
+/* ---------------- 215-point automatic dashboard model (Phase 2) ---------------- */
+
+/** Supporting-material types => label. 5 points each, 6 types = 30 max. */
+function ns_supporting_material_types(): array
+{
+    return [
+        'business_card'          => 'Business Card',
+        'photo'                  => 'Photo',
+        'storefront_photo'       => 'Storefront Photo',
+        'website_screenshot'     => 'Website Screenshot',
+        'social_media_screenshot' => 'Social Media Screenshot',
+        'flyer'                  => 'Flyer / Menu / Brochure',
+    ];
+}
+
+/** Admin bonus points a student has been granted (ledger, kind='bonus'). */
+function new_school_student_admin_bonus(int $studentId): int
+{
+    new_school_points_ensure_schema();
+    $stmt = db()->prepare(
+        "SELECT COALESCE(SUM(points), 0) FROM new_school_points WHERE recipient_role = 'student' AND kind = 'bonus' AND recipient_id = ?"
+    );
+    $stmt->execute([$studentId]);
+    return (int) $stmt->fetchColumn();
+}
+
+/** Bulk map student_id => admin bonus total (for rankings). Cached per request. */
+function new_school_student_bonus_map(): array
+{
+    static $cache = null;
+    if ($cache !== null && empty($GLOBALS['__ns_points_dirty'])) {
+        return $cache;
+    }
+    new_school_points_ensure_schema();
+    $map = [];
+    foreach (db()->query("SELECT recipient_id, COALESCE(SUM(points),0) AS t FROM new_school_points WHERE recipient_role='student' AND kind='bonus' GROUP BY recipient_id")->fetchAll() as $r) {
+        $map[(int) $r['recipient_id']] = (int) $r['t'];
+    }
+    $cache = $map;
+    return $map;
+}
+
+/** True when a submission row carries a completed AI / community bonus item. */
+function ns_submission_has_ai(?array $sub): bool
+{
+    return $sub !== null && (trim((string) ($sub['ai_url'] ?? '')) !== '' || trim((string) ($sub['ai_note'] ?? '')) !== '');
+}
+function ns_submission_has_community(?array $sub): bool
+{
+    return $sub !== null && (trim((string) ($sub['community_url'] ?? '')) !== '' || trim((string) ($sub['community_note'] ?? '')) !== '');
+}
+
+/**
+ * Compute the 215-point automatic breakdown from prepared parts.
+ * Uses the student's workflow gates (parent/school/teacher = 'approved'), the count
+ * of signed ("verified") interviews, distinct supporting-material types, and the
+ * submission's video / written / AI / community items.
+ */
+function new_school_automatic_parts(array $student, int $verifiedInterviews, int $materialTypes, ?array $sub): array
+{
+    return [
+        'registered'   => true, // an existing student record = registered + email verified
+        'parent_ok'    => (string) ($student['parent_consent_status'] ?? '') === 'approved',
+        'school_ok'    => (string) ($student['school_approval_status'] ?? '') === 'approved',
+        'teacher_ok'   => (string) ($student['teacher_approval_status'] ?? '') === 'approved',
+        'verified_interviews' => max(0, $verifiedInterviews),
+        'material_types'      => max(0, $materialTypes),
+        'has_video'     => $sub !== null && trim((string) ($sub['video_url'] ?? '')) !== '',
+        'has_written'   => $sub !== null && trim((string) ($sub['written_url'] ?? '')) !== '',
+        'has_ai'        => ns_submission_has_ai($sub),
+        'has_community' => ns_submission_has_community($sub),
+    ];
+}
+
+function new_school_automatic_breakdown(array $p): array
+{
+    $rows = [
+        ['registration',    'Student Registration',   $p['registered'] ? 5 : 0, 5],
+        ['parent_consent',  'Parent Consent',          $p['parent_ok'] ? 10 : 0, 10],
+        ['school_verified', 'School Verified',          $p['school_ok'] ? 10 : 0, 10],
+        ['teacher_verified','Teacher Verified',         $p['teacher_ok'] ? 10 : 0, 10],
+        ['interviews',      'Business Interviews',      min(10, (int) $p['verified_interviews']) * 10, 100],
+        ['materials',       'Supporting Materials',     min(6, (int) $p['material_types']) * 5, 30],
+        ['video',           'Video Upload',             $p['has_video'] ? 20 : 0, 20],
+        ['written',         'Written Report',           $p['has_written'] ? 20 : 0, 20],
+        ['ai_bonus',        'AI Demonstration (bonus)', $p['has_ai'] ? 10 : 0, 10],
+        ['community_bonus', 'Community Service (bonus)', $p['has_community'] ? 10 : 0, 10],
+    ];
+    $breakdown = [];
+    $total = 0;
+    $maxTotal = 0;
+    foreach ($rows as [$key, $label, $points, $max]) {
+        $breakdown[] = ['key' => $key, 'label' => $label, 'points' => $points, 'max' => $max];
+        $total += $points;
+        $maxTotal += $max;
+    }
+    // Sum of the category maxima (5+10+10+10+100+30+20+20+10+10 = 225). The spec's
+    // headline "215" under-counts one bonus; we expose the true achievable maximum.
+    return ['breakdown' => $breakdown, 'total' => $total, 'max' => $maxTotal];
+}
+
+/**
+ * Full dashboard points for one student: the 215 automatic breakdown + admin bonus.
+ * `total` (= automatic + bonus) is the number shown on the dashboard, used for the
+ * leaderboard, and fed into the judge final score.
+ */
+function new_school_dashboard_points(int $studentId, ?array $student = null): array
+{
+    if ($student === null) {
+        $student = new_school_fetch_student_by_id($studentId);
+    }
+    if (!$student) {
+        return ['breakdown' => [], 'automatic_total' => 0, 'admin_bonus' => 0, 'total' => 0, 'max' => 215];
+    }
+
+    $verified = 0;
+    try {
+        $vStmt = db()->prepare("SELECT COUNT(*) FROM new_school_business_interviews WHERE student_id = ? AND signature IS NOT NULL AND signature <> ''");
+        $vStmt->execute([$studentId]);
+        $verified = (int) $vStmt->fetchColumn();
+    } catch (\Throwable $e) { /* signature column may not exist pre-migration */ }
+
+    $mTypes = 0;
+    try {
+        $mStmt = db()->prepare('SELECT COUNT(DISTINCT material_type) FROM new_school_supporting_materials WHERE student_id = ?');
+        $mStmt->execute([$studentId]);
+        $mTypes = (int) $mStmt->fetchColumn();
+    } catch (\Throwable $e) { /* table may not exist pre-migration */ }
+
+    $sub = new_school_fetch_submission_by_student_id($studentId);
+    $parts = new_school_automatic_parts($student, $verified, $mTypes, $sub);
+    $bd = new_school_automatic_breakdown($parts);
+    $bonus = new_school_student_admin_bonus($studentId);
+
+    return [
+        'breakdown' => $bd['breakdown'],
+        'automatic_total' => $bd['total'],
+        'admin_bonus' => $bonus,
+        'total' => $bd['total'] + $bonus,
+        'max' => $bd['max'],
+    ];
+}
+
+/* ---------------- Judge scoring (multi-judge rubric) ---------------- */
+
+const NS_JUDGE_MAX_TOTAL = 135;
+
+/** Rubric categories => [label, max points]. Order defines display order. */
+function ns_judge_categories(): array
+{
+    return [
+        'problem'             => ['Problem Identification', 20],
+        'solution'            => ['Quality of Solution', 50],
+        'creativity'          => ['Creativity & Innovation', 20],
+        'supporting_evidence' => ['Supporting Evidence', 10],
+        'community_impact'    => ['Community Impact', 20],
+        'presentation'        => ['Presentation', 15],
+    ];
+}
+
+/** Self-healing schema for the judge tables (safe if the migration hasn't run). */
+function new_school_judge_ensure_schema(): void
+{
+    static $ready = false;
+    if ($ready) {
+        return;
+    }
+    $pdo = db();
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS new_school_judges (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT NOT NULL UNIQUE,
+            display_name VARCHAR(120) NOT NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS new_school_judge_scores (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            submission_id INT NOT NULL,
+            judge_user_id INT NOT NULL,
+            problem TINYINT UNSIGNED NOT NULL DEFAULT 0,
+            solution TINYINT UNSIGNED NOT NULL DEFAULT 0,
+            creativity TINYINT UNSIGNED NOT NULL DEFAULT 0,
+            supporting_evidence TINYINT UNSIGNED NOT NULL DEFAULT 0,
+            community_impact TINYINT UNSIGNED NOT NULL DEFAULT 0,
+            presentation TINYINT UNSIGNED NOT NULL DEFAULT 0,
+            total INT NOT NULL DEFAULT 0,
+            notes TEXT DEFAULT NULL,
+            status ENUM('draft','submitted') NOT NULL DEFAULT 'draft',
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uniq_judge_submission (submission_id, judge_user_id),
+            KEY idx_judge_scores_submission (submission_id, status),
+            KEY idx_judge_scores_judge (judge_user_id, status)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+    $ready = true;
+}
+
+/** Clamp raw category inputs to their maxima and return [values, total]. */
+function ns_judge_clamp_scores(array $scores): array
+{
+    $values = [];
+    $total = 0;
+    foreach (ns_judge_categories() as $key => [$label, $max]) {
+        $v = max(0, min((int) $max, (int) ($scores[$key] ?? 0)));
+        $values[$key] = $v;
+        $total += $v;
+    }
+    return [$values, $total];
+}
+
+/** Insert or update one judge's score row for a submission (idempotent). */
+function new_school_judge_score_upsert(int $submissionId, int $judgeUserId, array $scores, string $notes, string $status): array
+{
+    new_school_judge_ensure_schema();
+    [$values, $total] = ns_judge_clamp_scores($scores);
+    $status = $status === 'submitted' ? 'submitted' : 'draft';
+
+    $stmt = db()->prepare(
+        'INSERT INTO new_school_judge_scores
+            (submission_id, judge_user_id, problem, solution, creativity, supporting_evidence, community_impact, presentation, total, notes, status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE
+            problem = VALUES(problem), solution = VALUES(solution), creativity = VALUES(creativity),
+            supporting_evidence = VALUES(supporting_evidence), community_impact = VALUES(community_impact),
+            presentation = VALUES(presentation), total = VALUES(total), notes = VALUES(notes),
+            status = VALUES(status), updated_at = NOW()'
+    );
+    $stmt->execute([
+        $submissionId, $judgeUserId,
+        $values['problem'], $values['solution'], $values['creativity'],
+        $values['supporting_evidence'], $values['community_impact'], $values['presentation'],
+        $total, $notes !== '' ? $notes : null, $status,
+    ]);
+
+    return ['scores' => $values, 'total' => $total, 'status' => $status];
+}
+
+/** Average of submitted judge totals for a submission (null if none submitted). */
+function new_school_judge_average(int $submissionId): ?float
+{
+    new_school_judge_ensure_schema();
+    $stmt = db()->prepare(
+        "SELECT AVG(total) FROM new_school_judge_scores WHERE submission_id = ? AND status = 'submitted'"
+    );
+    $stmt->execute([$submissionId]);
+    $avg = $stmt->fetchColumn();
+    return ($avg === null || $avg === false) ? null : round((float) $avg, 2);
+}
+
+/**
+ * Final competition score for a submission.
+ * automatic  = current automatic dashboard points for the student (swappable later)
+ * judge_average = average of submitted judge totals (0-135), or null
+ * final = automatic + round(judge_average)
+ */
+function new_school_final_score(int $submissionId, ?int $studentId = null): array
+{
+    if ($studentId === null) {
+        $stmt = db()->prepare('SELECT student_id FROM new_school_submissions WHERE id = ? LIMIT 1');
+        $stmt->execute([$submissionId]);
+        $studentId = (int) $stmt->fetchColumn();
+    }
+    $automatic = $studentId > 0 ? new_school_dashboard_points($studentId)['total'] : 0;
+    $avg = new_school_judge_average($submissionId);
+    $final = $automatic + ($avg !== null ? (int) round($avg) : 0);
+    return ['automatic' => $automatic, 'judge_average' => $avg, 'final' => $final];
+}
+
+/** All judges' score rows for a submission (admin breakdown), newest first. */
+function new_school_judge_scores_for_submission(int $submissionId): array
+{
+    new_school_judge_ensure_schema();
+    $stmt = db()->prepare(
+        'SELECT js.*, u.full_name AS judge_name, u.email AS judge_email
+         FROM new_school_judge_scores js
+         JOIN users u ON u.id = js.judge_user_id
+         WHERE js.submission_id = ?
+         ORDER BY js.status DESC, js.updated_at DESC'
+    );
+    $stmt->execute([$submissionId]);
+    return $stmt->fetchAll() ?: [];
+}
+
 function new_school_student_performance_score(array $student): float
 {
     $interviewCount = min(10, max(0, (int) ($student['interview_count'] ?? 0)));
@@ -2276,16 +2572,79 @@ function new_school_student_performance_score(array $student): float
     return round($score, 2);
 }
 
+/**
+ * Per-request cached bulk maps for the 215-model ranking (one query each, reused
+ * across the many new_school_rank_students() calls in a single request — e.g.
+ * new_school_rank_teachers() ranks each teacher's students). Guarded so a
+ * pre-migration DB (missing columns/tables) degrades to 0 instead of erroring.
+ */
+function ns_verified_interview_map(): array
+{
+    static $m = null;
+    if ($m !== null) {
+        return $m;
+    }
+    $m = [];
+    try {
+        foreach (db()->query("SELECT student_id, COUNT(*) AS c FROM new_school_business_interviews WHERE signature IS NOT NULL AND signature <> '' GROUP BY student_id")->fetchAll() as $r) {
+            $m[(int) $r['student_id']] = (int) $r['c'];
+        }
+    } catch (\Throwable $e) { /* signature column may not exist pre-migration */ }
+    return $m;
+}
+function ns_material_type_map(): array
+{
+    static $m = null;
+    if ($m !== null) {
+        return $m;
+    }
+    $m = [];
+    try {
+        foreach (db()->query('SELECT student_id, COUNT(DISTINCT material_type) AS c FROM new_school_supporting_materials GROUP BY student_id')->fetchAll() as $r) {
+            $m[(int) $r['student_id']] = (int) $r['c'];
+        }
+    } catch (\Throwable $e) { /* table may not exist pre-migration */ }
+    return $m;
+}
+function ns_submission_flags_map(): array
+{
+    static $m = null;
+    if ($m !== null) {
+        return $m;
+    }
+    $m = [];
+    try {
+        foreach (db()->query('SELECT student_id, video_url, written_url, ai_note, ai_url, community_note, community_url FROM new_school_submissions')->fetchAll() as $r) {
+            $m[(int) $r['student_id']] = $r;
+        }
+    } catch (\Throwable $e) {
+        foreach (db()->query('SELECT student_id, video_url, written_url FROM new_school_submissions')->fetchAll() as $r) {
+            $m[(int) $r['student_id']] = $r;
+        }
+    }
+    return $m;
+}
+
 function new_school_rank_students(array $students): array
 {
-    $pointsMap = new_school_points_totals_map('student');
+    // Per-request cached bulk maps → the 215 total per student with no N+1 storm,
+    // and no repeated full-table scans across the many rank calls in one request.
+    $bonusMap = new_school_student_bonus_map();
+    $vMap = ns_verified_interview_map();
+    $mMap = ns_material_type_map();
+    $sMap = ns_submission_flags_map();
+
     $ranked = [];
     foreach ($students as $student) {
         if (!is_array($student)) {
             continue;
         }
+        $sid = (int) ($student['id'] ?? 0);
         $student['performance_score'] = new_school_student_performance_score($student);
-        $student['student_points'] = (int) ($pointsMap[(int) ($student['id'] ?? 0)] ?? ($student['student_points'] ?? 0));
+        $parts = new_school_automatic_parts($student, $vMap[$sid] ?? 0, $mMap[$sid] ?? 0, $sMap[$sid] ?? null);
+        $student['automatic_points'] = new_school_automatic_breakdown($parts)['total'];
+        // Primary ranking number: 215 automatic total + admin bonus.
+        $student['student_points'] = $student['automatic_points'] + (int) ($bonusMap[$sid] ?? 0);
         $ranked[] = $student;
     }
 

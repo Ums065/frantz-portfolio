@@ -378,6 +378,12 @@ export function AuthModal({
       window.location.assign('/admin')
       return
     }
+    // Judges (admin-created accounts) go straight to their scoring dashboard.
+    if (mode === 'login' && role === 'judge') {
+      onClose()
+      window.location.assign('/judge/dashboard')
+      return
+    }
 
     finishSuccess(result)
     setForm(createRegisterForm())

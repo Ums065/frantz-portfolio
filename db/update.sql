@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS users (
   email         VARCHAR(160) NOT NULL UNIQUE,
   password_hash VARCHAR(255) NOT NULL,
   avatar_url    VARCHAR(255) DEFAULT NULL,
-  role          ENUM('member','vip','editor','admin','super_admin','student','parent','school','teacher') NOT NULL DEFAULT 'member',
+  role          ENUM('member','vip','editor','admin','super_admin','student','parent','school','teacher','judge') NOT NULL DEFAULT 'member',
   email_verified_at TIMESTAMP NULL DEFAULT NULL,
   approval_status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending',
   approval_note TEXT DEFAULT NULL,
@@ -682,7 +682,7 @@ END$$
 DELIMITER ;
 
 ALTER TABLE users
-  MODIFY role ENUM('member','vip','editor','admin','super_admin','student','parent','school','teacher') NOT NULL DEFAULT 'member';
+  MODIFY role ENUM('member','vip','editor','admin','super_admin','student','parent','school','teacher','judge') NOT NULL DEFAULT 'member';
 
 CALL add_column_if_missing('users', 'avatar_url', 'VARCHAR(255) DEFAULT NULL', 'password_hash');
 CALL add_column_if_missing('users', 'email_verified_at', 'TIMESTAMP NULL DEFAULT NULL', 'role');
@@ -911,11 +911,68 @@ CREATE TABLE IF NOT EXISTS password_resets (
   INDEX idx_password_resets_user (user_id, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- ---------- Judge role: multi-judge submission scoring ----------
+-- Judges are admin-created accounts (role 'judge') who score submitted projects
+-- across six rubric categories. Final competition score = automatic dashboard
+-- points + AVERAGE of the judges' totals.
+CREATE TABLE IF NOT EXISTS new_school_judges (
+  id            INT AUTO_INCREMENT PRIMARY KEY,
+  user_id       INT NOT NULL UNIQUE,
+  display_name  VARCHAR(120) NOT NULL,
+  created_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_new_school_judges_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS new_school_judge_scores (
+  id                 INT AUTO_INCREMENT PRIMARY KEY,
+  submission_id      INT NOT NULL,
+  judge_user_id      INT NOT NULL,
+  problem            TINYINT UNSIGNED NOT NULL DEFAULT 0,  -- 0-20
+  solution           TINYINT UNSIGNED NOT NULL DEFAULT 0,  -- 0-50
+  creativity         TINYINT UNSIGNED NOT NULL DEFAULT 0,  -- 0-20
+  supporting_evidence TINYINT UNSIGNED NOT NULL DEFAULT 0, -- 0-10
+  community_impact   TINYINT UNSIGNED NOT NULL DEFAULT 0,  -- 0-20
+  presentation       TINYINT UNSIGNED NOT NULL DEFAULT 0,  -- 0-15
+  total              INT NOT NULL DEFAULT 0,               -- sum of the six (max 135)
+  notes              TEXT DEFAULT NULL,
+  status             ENUM('draft','submitted') NOT NULL DEFAULT 'draft',
+  created_at         TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at         TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_judge_submission (submission_id, judge_user_id),
+  KEY idx_judge_scores_submission (submission_id, status),
+  KEY idx_judge_scores_judge (judge_user_id, status),
+  CONSTRAINT fk_judge_scores_submission FOREIGN KEY (submission_id) REFERENCES new_school_submissions(id) ON DELETE CASCADE,
+  CONSTRAINT fk_judge_scores_judge FOREIGN KEY (judge_user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- ---------- HTML email + attachments: widen the mail outbox ----------
 -- The mail queue now carries a themed HTML body and (base64) attachments such as the
 -- daily analytics PDF, in addition to the plain-text body. Add the columns to any
 -- pre-existing mail_outbox table (fresh installs already have them from CREATE above).
 CALL add_column_if_missing('mail_outbox', 'body_html', 'LONGTEXT DEFAULT NULL', 'body_text');
 CALL add_column_if_missing('mail_outbox', 'attachments_json', 'LONGTEXT DEFAULT NULL', 'body_html');
+
+-- ---------- 215-point automatic model (Phase 2): interview signature, supporting materials, AI + community ----------
+-- A business interview counts toward points (10 each, max 100) once it carries a signature.
+CALL add_column_if_missing('new_school_business_interviews', 'signature', 'VARCHAR(255) DEFAULT NULL', 'student_notes');
+
+-- Supporting materials: 5 pts per distinct type (max 30). One row per (student, type).
+CREATE TABLE IF NOT EXISTS new_school_supporting_materials (
+  id            INT AUTO_INCREMENT PRIMARY KEY,
+  student_id    INT NOT NULL,
+  material_type ENUM('business_card','photo','storefront_photo','website_screenshot','social_media_screenshot','flyer') NOT NULL,
+  file_url      VARCHAR(255) NOT NULL,
+  original_name VARCHAR(255) DEFAULT NULL,
+  created_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_material_type (student_id, material_type),
+  CONSTRAINT fk_supporting_materials_student FOREIGN KEY (student_id) REFERENCES new_school_students(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- AI demonstration (10 bonus) + community service documentation (10 bonus) live on the submission.
+CALL add_column_if_missing('new_school_submissions', 'ai_note', 'TEXT DEFAULT NULL', 'written_url');
+CALL add_column_if_missing('new_school_submissions', 'ai_url', 'VARCHAR(255) DEFAULT NULL', 'ai_note');
+CALL add_column_if_missing('new_school_submissions', 'community_note', 'TEXT DEFAULT NULL', 'ai_url');
+CALL add_column_if_missing('new_school_submissions', 'community_url', 'VARCHAR(255) DEFAULT NULL', 'community_note');
 
 DROP PROCEDURE IF EXISTS add_column_if_missing;

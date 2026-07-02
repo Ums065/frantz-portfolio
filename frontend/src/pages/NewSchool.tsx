@@ -1174,6 +1174,7 @@ export default function NewSchool() {
         has_delivery_options: checked(fd, 'has_delivery_options'),
         main_challenge: value(fd, 'main_challenge'),
         student_notes: value(fd, 'student_notes'),
+        signature: value(fd, 'signature'),
       }
       const res = await api.post<any>('new-school/business', payload)
       showNotice('success', res.message || 'Business interview saved.')
@@ -1218,6 +1219,11 @@ export default function NewSchool() {
       }
       const videoUrl = await uploadIfPresent(videoFile)
       const writtenUrl = await uploadIfPresent(writtenFile)
+      // Optional bonus items (215-model): AI demonstration + community service.
+      const aiFile = fileValue(fd, 'ai_file')
+      const communityFile = fileValue(fd, 'community_file')
+      const aiUrl = await uploadIfPresent(aiFile)
+      const communityUrl = await uploadIfPresent(communityFile)
       const payload = {
         student_id: Number(value(fd, 'student_id') || dashboard?.student?.id || parentLink?.student?.id || 0) || undefined,
         source_business_id: Number(value(fd, 'source_business_id') || 0) || undefined,
@@ -1228,6 +1234,10 @@ export default function NewSchool() {
         expected_impact: value(fd, 'expected_impact'),
         video_url: videoUrl,
         written_url: writtenUrl,
+        ai_note: value(fd, 'ai_note'),
+        ai_url: aiUrl,
+        community_note: value(fd, 'community_note'),
+        community_url: communityUrl,
       }
       const res = await api.post<any>('new-school/submission', payload)
       showNotice('success', res.message || 'Submission saved.')
@@ -1237,6 +1247,46 @@ export default function NewSchool() {
       await reloadOverview()
     } catch (err) {
       handleError(err, 'Final submission failed.')
+    } finally {
+      setBusy('')
+    }
+  }
+
+  // Supporting materials (215-model): upload a file then attach it to a material type.
+  const submitMaterial = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setBusy('material')
+    try {
+      const form = event.currentTarget
+      const fd = new FormData(form)
+      const materialType = value(fd, 'material_type')
+      const file = fileValue(fd, 'material_file')
+      if (!materialType) throw new Error('Choose a material type.')
+      if (!file) throw new Error('Choose a file to upload.')
+      const okDoc = file.type.startsWith('image/') || file.type === 'application/pdf'
+      if (!okDoc) throw new Error('Upload an image or a PDF.')
+      if (file.size > MAX_DOC_BYTES) throw new Error('File must be 5 MB or smaller.')
+      const fileUrl = await uploadIfPresent(file)
+      const studentId = Number(dashboard?.student?.id || parentLink?.student?.id || 0) || undefined
+      await api.post('new-school/materials', { student_id: studentId, material_type: materialType, file_url: fileUrl, original_name: file.name })
+      showNotice('success', 'Supporting material saved.')
+      form.reset()
+      await reloadDashboard()
+    } catch (err) {
+      handleError(err, 'Could not save the material.')
+    } finally {
+      setBusy('')
+    }
+  }
+
+  const removeMaterial = async (id: number) => {
+    setBusy(`material-${id}`)
+    try {
+      await api.del(`new-school/materials/${id}`)
+      showNotice('success', 'Material removed.')
+      await reloadDashboard()
+    } catch (err) {
+      handleError(err, 'Could not remove the material.')
     } finally {
       setBusy('')
     }
@@ -2959,6 +3009,51 @@ export default function NewSchool() {
                 )}
               </article>
 
+              <article className="glass ns-dash-card ns-dash-card--wide reveal in" hidden={dashboardTab !== 'activity'}>
+                <div className="ns-dash-card__head">
+                  <span className="eyebrow">Dashboard Points</span>
+                  <span className="ns-board__badge">{studentDashboard.student_points || 0} pts</span>
+                </div>
+                <div className="ns-approval-stack">
+                  {((studentDashboard.automatic_breakdown as any[]) || []).map((b: any) => (
+                    <div className="ns-approval-row" key={b.key}><strong>{b.label}</strong><span>{b.points} / {b.max}</span></div>
+                  ))}
+                  {!!studentDashboard.admin_bonus && <div className="ns-approval-row"><strong>Admin Bonus</strong><span>+{studentDashboard.admin_bonus}</span></div>}
+                  <div className="ns-approval-row"><strong>Total</strong><span>{studentDashboard.student_points || 0}</span></div>
+                </div>
+                <p className="ns-muted">Points update automatically as you complete each step. Judge scores are added separately after judging.</p>
+              </article>
+
+              <article className="glass ns-dash-card ns-dash-card--wide reveal in" id="supporting-materials" hidden={dashboardTab !== 'activity' || !studentDashboard.scholarship?.completed}>
+                <div className="ns-dash-card__head">
+                  <span className="eyebrow">Supporting Materials</span>
+                  <span className="ns-board__badge">+5 each · max 30</span>
+                </div>
+                <div className="ns-approval-stack">
+                  {((studentDashboard.material_types as any[]) || []).map((mt: any) => {
+                    const existing = ((studentDashboard.supporting_materials as any[]) || []).find((m: any) => m.material_type === mt.key)
+                    return (
+                      <div className="ns-approval-row" key={mt.key}>
+                        <strong>{mt.label}</strong>
+                        {existing ? (
+                          <span><a href={existing.file_url} target="_blank" rel="noreferrer">View</a>{' · '}
+                            <button type="button" style={{ background: 'none', border: 0, color: '#e08a8a', cursor: 'pointer', font: 'inherit' }} disabled={busy === `material-${existing.id}`} onClick={() => removeMaterial(existing.id)}>Remove</button>
+                          </span>
+                        ) : <span className="ns-muted">Not uploaded</span>}
+                      </div>
+                    )
+                  })}
+                </div>
+                <form onSubmit={submitMaterial} style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 10 }}>
+                  <select name="material_type" required defaultValue="">
+                    <option value="" disabled>Select type…</option>
+                    {((studentDashboard.material_types as any[]) || []).map((mt: any) => <option key={mt.key} value={mt.key}>{mt.label}</option>)}
+                  </select>
+                  <input name="material_file" type="file" accept="image/*,application/pdf" required />
+                  <button className="btn btn--sm btn--solid" type="submit" disabled={busy === 'material'}>{busy === 'material' ? 'Uploading…' : 'Add Material'}</button>
+                </form>
+              </article>
+
               <form className="glass ns-form ns-form--compact reveal in" id="business-interviews" onSubmit={submitBusiness} hidden={dashboardTab !== 'activity' || !studentDashboard.scholarship?.completed}>
                 <div className="ns-form__head">
                   <span className="eyebrow">Business Entry</span>
@@ -2975,6 +3070,7 @@ export default function NewSchool() {
                   <label className="ns-field"><span>Date of Visit</span><input name="date_of_visit" type="date" required min={String(studentDashboard.student?.created_at || '').slice(0, 10) || undefined} max={todayInputDate()} /></label>
                   <label className="ns-field ns-field--full"><span>Main Challenge <small className="ns-field-hint">50–500 words</small></span><textarea name="main_challenge" rows={3} required placeholder="Describe the main challenge this business faces (50–500 words)." /></label>
                   <label className="ns-field ns-field--full"><span>Student Notes <small className="ns-field-hint">50–500 words</small></span><textarea name="student_notes" rows={3} required placeholder="Your observations and notes from the visit (50–500 words)." /></label>
+                  <label className="ns-field ns-field--full"><span>Signature <small className="ns-field-hint">Type the business owner / manager name to verify this visit — earns 10 points</small></span><input name="signature" placeholder="Owner / manager signature" /></label>
                 </div>
                 <p className="ns-check-hint">Tick every option this business already has — leave it unticked if they don’t:</p>
                 <div className="ns-check-grid">
@@ -3030,6 +3126,10 @@ export default function NewSchool() {
                       <label className="ns-field ns-field--full"><span>Expected Impact <small className="ns-field-hint">50–500 words</small></span><textarea name="expected_impact" rows={3} required placeholder="(50–500 words)" /></label>
                       <label className="ns-field ns-field--full"><span>Video Upload <small className="ns-field-hint">Video only · max 70 MB</small></span><input name="video_file" type="file" accept="video/mp4,video/webm,video/quicktime,video/x-matroska" required /></label>
                       <label className="ns-field ns-field--full"><span>Written Upload <small className="ns-field-hint">Image or PDF · max 5 MB</small></span><input name="written_file" type="file" accept="image/*,application/pdf" required /></label>
+                      <label className="ns-field ns-field--full"><span>AI Demonstration <small className="ns-field-hint">Optional · +10 bonus · show responsible AI use</small></span><textarea name="ai_note" rows={2} placeholder="Describe how you used AI responsibly (optional)." /></label>
+                      <label className="ns-field ns-field--full"><span>AI Upload <small className="ns-field-hint">Optional · image or PDF · max 5 MB</small></span><input name="ai_file" type="file" accept="image/*,application/pdf" /></label>
+                      <label className="ns-field ns-field--full"><span>Community Service <small className="ns-field-hint">Optional · +10 bonus · extra community work</small></span><textarea name="community_note" rows={2} placeholder="Describe additional community improvement work (optional)." /></label>
+                      <label className="ns-field ns-field--full"><span>Community Service Upload <small className="ns-field-hint">Optional · image or PDF · max 5 MB</small></span><input name="community_file" type="file" accept="image/*,application/pdf" /></label>
                     </div>
                     {!canStudentSubmit && <div className="ns-alert ns-alert--info">Final submission stays locked until parent consent, teacher approval, and 10 business interviews are complete.</div>}
                     <TermsAgreement kind="website" idPrefix="ns-submission" hideSignature signatureName="" onSignatureChange={() => {}} onAcceptedChange={setSubmissionTermsOk} />
