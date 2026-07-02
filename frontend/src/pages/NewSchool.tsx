@@ -1252,17 +1252,11 @@ export default function NewSchool() {
     }
   }
 
-  // Supporting materials (215-model): upload a file then attach it to a material type.
-  const submitMaterial = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    setBusy('material')
+  // Inline per-item upload: student picks a file directly on that material row.
+  const uploadMaterialType = async (materialType: string, file: File | null) => {
+    if (!file) return
+    setBusy(`material-${materialType}`)
     try {
-      const form = event.currentTarget
-      const fd = new FormData(form)
-      const materialType = value(fd, 'material_type')
-      const file = fileValue(fd, 'material_file')
-      if (!materialType) throw new Error('Choose a material type.')
-      if (!file) throw new Error('Choose a file to upload.')
       const okDoc = file.type.startsWith('image/') || file.type === 'application/pdf'
       if (!okDoc) throw new Error('Upload an image or a PDF.')
       if (file.size > MAX_DOC_BYTES) throw new Error('File must be 5 MB or smaller.')
@@ -1270,7 +1264,6 @@ export default function NewSchool() {
       const studentId = Number(dashboard?.student?.id || parentLink?.student?.id || 0) || undefined
       await api.post('new-school/materials', { student_id: studentId, material_type: materialType, file_url: fileUrl, original_name: file.name })
       showNotice('success', 'Supporting material saved.')
-      form.reset()
       await reloadDashboard()
     } catch (err) {
       handleError(err, 'Could not save the material.')
@@ -3024,14 +3017,31 @@ export default function NewSchool() {
                 <p className="ns-muted">Points update automatically as you complete each step. Judge scores are added separately after judging.</p>
               </article>
 
+              {studentDashboard.results_published && studentDashboard.judge_result && (
+                <article className="glass ns-dash-card ns-dash-card--wide reveal in" hidden={dashboardTab !== 'activity'}>
+                  <div className="ns-dash-card__head">
+                    <span className="eyebrow">Final Results</span>
+                    <span className="ns-board__badge">{studentDashboard.judge_result.final} pts</span>
+                  </div>
+                  <div className="ns-approval-stack">
+                    <div className="ns-approval-row"><strong>Automatic Dashboard Points</strong><span>{studentDashboard.judge_result.automatic}</span></div>
+                    <div className="ns-approval-row"><strong>Average Judge Score</strong><span>{studentDashboard.judge_result.judge_average ?? '—'} / 135</span></div>
+                    <div className="ns-approval-row"><strong>Final Competition Score</strong><span>{studentDashboard.judge_result.final}</span></div>
+                  </div>
+                  <p className="ns-muted">Judging is complete. Your final score = automatic points + average judge score.</p>
+                </article>
+              )}
+
               <article className="glass ns-dash-card ns-dash-card--wide reveal in" id="supporting-materials" hidden={dashboardTab !== 'activity' || !studentDashboard.scholarship?.completed}>
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">Supporting Materials</span>
                   <span className="ns-board__badge">+5 each · max 30</span>
                 </div>
+                <p className="ns-muted" style={{ margin: '0 0 10px' }}>Upload each item below (image or PDF, max 5 MB). These appear to the judges as evidence for your project.</p>
                 <div className="ns-approval-stack">
                   {((studentDashboard.material_types as any[]) || []).map((mt: any) => {
                     const existing = ((studentDashboard.supporting_materials as any[]) || []).find((m: any) => m.material_type === mt.key)
+                    const rowBusy = busy === `material-${mt.key}`
                     return (
                       <div className="ns-approval-row" key={mt.key}>
                         <strong>{mt.label}</strong>
@@ -3039,19 +3049,17 @@ export default function NewSchool() {
                           <span><a href={existing.file_url} target="_blank" rel="noreferrer">View</a>{' · '}
                             <button type="button" style={{ background: 'none', border: 0, color: '#e08a8a', cursor: 'pointer', font: 'inherit' }} disabled={busy === `material-${existing.id}`} onClick={() => removeMaterial(existing.id)}>Remove</button>
                           </span>
-                        ) : <span className="ns-muted">Not uploaded</span>}
+                        ) : (
+                          <label className="btn btn--sm btn--solid" style={{ cursor: rowBusy ? 'default' : 'pointer', opacity: rowBusy ? 0.6 : 1 }}>
+                            {rowBusy ? 'Uploading…' : 'Upload file'}
+                            <input type="file" accept="image/*,application/pdf" hidden disabled={rowBusy}
+                              onChange={(e) => { const f = e.target.files?.[0] || null; e.target.value = ''; uploadMaterialType(mt.key, f) }} />
+                          </label>
+                        )}
                       </div>
                     )
                   })}
                 </div>
-                <form onSubmit={submitMaterial} style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 10 }}>
-                  <select name="material_type" required defaultValue="">
-                    <option value="" disabled>Select type…</option>
-                    {((studentDashboard.material_types as any[]) || []).map((mt: any) => <option key={mt.key} value={mt.key}>{mt.label}</option>)}
-                  </select>
-                  <input name="material_file" type="file" accept="image/*,application/pdf" required />
-                  <button className="btn btn--sm btn--solid" type="submit" disabled={busy === 'material'}>{busy === 'material' ? 'Uploading…' : 'Add Material'}</button>
-                </form>
               </article>
 
               <form className="glass ns-form ns-form--compact reveal in" id="business-interviews" onSubmit={submitBusiness} hidden={dashboardTab !== 'activity' || !studentDashboard.scholarship?.completed}>
@@ -3187,7 +3195,7 @@ export default function NewSchool() {
               <article className="glass ns-dash-card reveal in" hidden={dashboardTab !== 'rankings'}>
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">Your Ranking</span>
-                  <span className="ns-board__badge">{parentDashboard.student_context?.performance_score || 0} pts</span>
+                  <span className="ns-board__badge">{parentDashboard.student_context?.student_points || 0} pts</span>
                 </div>
                 <div className="ns-approval-stack">
                   <div className="ns-approval-row"><strong>School Rank</strong><span>#{parentDashboard.student_context?.rankings?.school?.position || '-'}</span></div>

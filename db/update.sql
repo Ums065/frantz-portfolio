@@ -975,4 +975,54 @@ CALL add_column_if_missing('new_school_submissions', 'ai_url', 'VARCHAR(255) DEF
 CALL add_column_if_missing('new_school_submissions', 'community_note', 'TEXT DEFAULT NULL', 'ai_url');
 CALL add_column_if_missing('new_school_submissions', 'community_url', 'VARCHAR(255) DEFAULT NULL', 'community_note');
 
+-- ---------- Judge workflow: settings, assignments, audit, reports, certification ----------
+CREATE TABLE IF NOT EXISTS new_school_settings (
+  setting_key   VARCHAR(64) NOT NULL PRIMARY KEY,
+  setting_value VARCHAR(255) DEFAULT NULL,
+  updated_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS new_school_judge_assignments (
+  id            INT AUTO_INCREMENT PRIMARY KEY,
+  judge_user_id INT NOT NULL,
+  submission_id INT NOT NULL,
+  status        ENUM('assigned','recused') NOT NULL DEFAULT 'assigned',
+  recuse_reason VARCHAR(255) DEFAULT NULL,
+  assigned_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_judge_assignment (judge_user_id, submission_id),
+  KEY idx_assignment_judge (judge_user_id, status),
+  KEY idx_assignment_submission (submission_id),
+  CONSTRAINT fk_assignment_judge FOREIGN KEY (judge_user_id) REFERENCES users(id) ON DELETE CASCADE,
+  CONSTRAINT fk_assignment_submission FOREIGN KEY (submission_id) REFERENCES new_school_submissions(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS new_school_judge_score_audit (
+  id            BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  submission_id INT NOT NULL,
+  judge_user_id INT NOT NULL,
+  action        VARCHAR(20) NOT NULL DEFAULT 'update',
+  old_total     INT DEFAULT NULL,
+  new_total     INT DEFAULT NULL,
+  detail        TEXT DEFAULT NULL,
+  created_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_audit_submission (submission_id, created_at),
+  KEY idx_audit_judge (judge_user_id, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS new_school_reports (
+  id               INT AUTO_INCREMENT PRIMARY KEY,
+  submission_id    INT DEFAULT NULL,
+  reporter_user_id INT DEFAULT NULL,
+  reason           VARCHAR(80) NOT NULL,
+  notes            TEXT DEFAULT NULL,
+  status           ENUM('open','reviewed','dismissed') NOT NULL DEFAULT 'open',
+  created_at       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  KEY idx_reports_status (status, created_at),
+  KEY idx_reports_submission (submission_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CALL add_column_if_missing('new_school_judges', 'certified_at', 'DATETIME NULL', 'display_name');
+
 DROP PROCEDURE IF EXISTS add_column_if_missing;

@@ -294,6 +294,9 @@ function new_school_build_student_context(array $student): array
 
     // 215-point automatic model breakdown (+ admin bonus) for the dashboard.
     $dashPoints = new_school_dashboard_points($studentId, $student);
+    // Judge results are hidden from students until administration publishes results.
+    $resultsPublished = ns_results_published();
+    $judgeResult = ($resultsPublished && $submission) ? new_school_final_score((int) $submission['id'], $studentId) : null;
     $materialTypeMeta = [];
     foreach (ns_supporting_material_types() as $mtKey => $mtLabel) {
         $materialTypeMeta[] = ['key' => $mtKey, 'label' => $mtLabel];
@@ -330,6 +333,8 @@ function new_school_build_student_context(array $student): array
         'automatic_max' => $dashPoints['max'],
         'supporting_materials' => new_school_fetch_materials($studentId),
         'material_types' => $materialTypeMeta,
+        'results_published' => $resultsPublished,
+        'judge_result' => $judgeResult,
         'referral' => [
             'code' => (string) ($student['referral_code'] ?? ''),
             'count' => $referralCount,
@@ -782,7 +787,7 @@ function new_school_handle_route(string $method, string $route): bool
                 'parent' => $existingParent ? [
                     'id' => (int) $existingParent['id'],
                     'parent_full_name' => (string) ($existingParent['parent_full_name'] ?? ''),
-                    'relationship' => (string) ($existingParent['relationship'] ?? ''),
+                    'relationship_to_student' => (string) ($existingParent['relationship_to_student'] ?? ''),
                     'link_status' => (string) ($existingParent['link_status'] ?? ''),
                 ] : null,
                 'status_tracker' => new_school_status_tracker($student, new_school_student_interview_count((int) $student['id'])),
@@ -4057,24 +4062,66 @@ function new_school_handle_route(string $method, string $route): bool
             json(['categories' => $cats, 'max_total' => NS_JUDGE_MAX_TOTAL]);
         }
 
-        // Queue of submitted projects for this judge to review (no automatic points shown).
+        // Judge session status: certification + anonymity flag (drives the dashboard gate).
+        case $key === 'GET new-school/judge/status': {
+            $judge = require_judge();
+            new_school_workflow_ensure_schema();
+            $certifiedAt = null;
+            if ((string) $judge['role'] === 'judge') {
+                $st = db()->prepare('SELECT certified_at FROM new_school_judges WHERE user_id = ? LIMIT 1');
+                $st->execute([(int) $judge['id']]);
+                $certifiedAt = $st->fetchColumn() ?: null;
+            } else {
+                $certifiedAt = 'admin'; // admins previewing don't need to certify
+            }
+            json([
+                'name' => (string) $judge['full_name'],
+                'certified' => $certifiedAt !== null && $certifiedAt !== false,
+                'certified_at' => $certifiedAt === 'admin' ? null : $certifiedAt,
+                'anonymous' => ns_anonymous_judging(),
+            ]);
+        }
+
+        // Judge accepts the handbook / certifies before scoring.
+        case $key === 'POST new-school/judge/certify': {
+            $judge = require_judge();
+            new_school_workflow_ensure_schema();
+            if ((string) $judge['role'] === 'judge') {
+                db()->prepare('UPDATE new_school_judges SET certified_at = NOW() WHERE user_id = ?')->execute([(int) $judge['id']]);
+            }
+            json(['message' => 'Certification recorded.', 'certified' => true]);
+        }
+
+        // Queue: every submitted project appears for every judge automatically (minus self-recusals).
         case $key === 'GET new-school/judge/queue': {
             $judge = require_judge();
             new_school_judge_ensure_schema();
+            new_school_workflow_ensure_schema();
+            $anon = ns_anonymous_judging();
+
             $stmt = db()->prepare(
                 "SELECT sub.id AS submission_id, sub.status AS submission_status, sub.submission_date,
                         s.full_name AS student_name, s.school_name, s.grade_level, s.participant_id,
-                        t.teacher_full_name AS teacher_name,
-                        js.status AS my_status, js.total AS my_total
+                        t.teacher_full_name AS teacher_name, js.status AS my_status, js.total AS my_total
                  FROM new_school_submissions sub
                  INNER JOIN new_school_students s ON s.id = sub.student_id
                  LEFT JOIN new_school_teachers t ON t.id = s.teacher_id
                  LEFT JOIN new_school_judge_scores js ON js.submission_id = sub.id AND js.judge_user_id = ?
-                 WHERE sub.status <> 'draft'
+                 LEFT JOIN new_school_judge_assignments a ON a.submission_id = sub.id AND a.judge_user_id = ?
+                 WHERE sub.status <> 'draft' AND (a.status IS NULL OR a.status <> 'recused')
                  ORDER BY (js.status IS NULL) DESC, sub.submission_date DESC, sub.id DESC"
             );
-            $stmt->execute([(int) $judge['id']]);
-            json(['submissions' => $stmt->fetchAll() ?: []]);
+            $stmt->execute([(int) $judge['id'], (int) $judge['id']]);
+            $rows = $stmt->fetchAll() ?: [];
+            if ($anon) {
+                foreach ($rows as &$r) {
+                    $r['student_name'] = 'Participant ' . $r['participant_id'];
+                    $r['school_name'] = '—';
+                    $r['teacher_name'] = null;
+                }
+                unset($r);
+            }
+            json(['submissions' => $rows, 'anonymous' => $anon]);
         }
 
         // This judge's own review history.
@@ -4114,6 +4161,14 @@ function new_school_handle_route(string $method, string $route): bool
             $submission = $stmt->fetch();
             if (!$submission || (string) $submission['status'] === 'draft') {
                 json(['error' => 'Submission not available for judging.'], 404);
+            }
+            if (!new_school_judge_can_review((int) $judge['id'], $submissionId)) {
+                json(['error' => 'This submission is not assigned to you or you have recused yourself.'], 403);
+            }
+            if (ns_anonymous_judging()) {
+                $submission['student_name'] = 'Participant ' . $submission['participant_id'];
+                $submission['school_name'] = '—';
+                $submission['teacher_name'] = null;
             }
 
             // Full submitted evidence for review: interviews (with signature) + supporting materials.
@@ -4163,6 +4218,17 @@ function new_school_handle_route(string $method, string $route): bool
             if ((string) $subStatus === 'draft') {
                 json(['error' => 'This project has not been submitted yet.'], 409);
             }
+            if (!new_school_judge_can_review((int) $judge['id'], $submissionId)) {
+                json(['error' => 'This submission is not assigned to you or you have recused yourself.'], 403);
+            }
+            // Certification gate: a judge must accept the handbook before scoring (admins exempt).
+            if ((string) $judge['role'] === 'judge') {
+                $certStmt = db()->prepare('SELECT certified_at FROM new_school_judges WHERE user_id = ? LIMIT 1');
+                $certStmt->execute([(int) $judge['id']]);
+                if (!$certStmt->fetchColumn()) {
+                    json(['error' => 'Please accept the Judge Handbook certification before scoring.'], 403);
+                }
+            }
 
             $status = field($body, 'status') === 'submitted' ? 'submitted' : 'draft';
             $scores = [];
@@ -4176,6 +4242,37 @@ function new_school_handle_route(string $method, string $route): bool
                 'total' => $result['total'],
                 'status' => $result['status'],
             ]);
+        }
+
+        // Judge recuses from a submission (conflict of interest). Removes it from their queue.
+        case $method === 'POST' && preg_match('#^new-school/judge/submission/(\d+)/recuse$#', $route, $m) === 1: {
+            $judge = require_judge();
+            new_school_workflow_ensure_schema();
+            $submissionId = (int) $m[1];
+            $reason = trim((string) field($body, 'reason'));
+            db()->prepare(
+                "INSERT INTO new_school_judge_assignments (judge_user_id, submission_id, status, recuse_reason)
+                 VALUES (?, ?, 'recused', ?)
+                 ON DUPLICATE KEY UPDATE status = 'recused', recuse_reason = VALUES(recuse_reason), updated_at = NOW()"
+            )->execute([(int) $judge['id'], $submissionId, $reason !== '' ? $reason : null]);
+            notify('Judge recusal (conflict of interest)', 'A judge recused from submission #' . $submissionId . ($reason !== '' ? ("\nReason: " . $reason) : ''));
+            json(['message' => 'You have recused yourself from this submission.']);
+        }
+
+        // Judge reports a concern (missing docs, suspected fraud, etc.) to administration.
+        case $key === 'POST new-school/judge/report': {
+            $judge = require_judge();
+            new_school_workflow_ensure_schema();
+            $reason = trim((string) field($body, 'reason'));
+            $notes = trim((string) field($body, 'notes'));
+            $submissionId = (int) ($body['submission_id'] ?? 0);
+            if ($reason === '') {
+                json(['error' => 'Please choose a reason.'], 422);
+            }
+            db()->prepare('INSERT INTO new_school_reports (submission_id, reporter_user_id, reason, notes) VALUES (?, ?, ?, ?)')
+                ->execute([$submissionId > 0 ? $submissionId : null, (int) $judge['id'], substr($reason, 0, 80), $notes !== '' ? $notes : null]);
+            notify('Judge reported a concern', 'Reason: ' . $reason . "\nSubmission: #" . ($submissionId ?: '—') . "\n\n" . ($notes ?: '(no notes)'));
+            json(['message' => 'Your concern has been reported to administration.'], 201);
         }
 
         /* ============ ADMIN: judge management + score breakdown ============ */
@@ -4245,6 +4342,13 @@ function new_school_handle_route(string $method, string $route): bool
                 $cats[] = ['key' => $catKey, 'label' => $label, 'max' => $max];
             }
             $final = new_school_final_score($submissionId);
+            new_school_workflow_ensure_schema();
+            $auditStmt = db()->prepare(
+                'SELECT a.action, a.old_total, a.new_total, a.created_at, u.full_name AS judge_name
+                 FROM new_school_judge_score_audit a JOIN users u ON u.id = a.judge_user_id
+                 WHERE a.submission_id = ? ORDER BY a.created_at DESC LIMIT 100'
+            );
+            $auditStmt->execute([$submissionId]);
             json([
                 'categories' => $cats,
                 'max_total' => NS_JUDGE_MAX_TOTAL,
@@ -4252,7 +4356,153 @@ function new_school_handle_route(string $method, string $route): bool
                 'automatic' => $final['automatic'],
                 'judge_average' => $final['judge_average'],
                 'final' => $final['final'],
+                'audit' => $auditStmt->fetchAll() ?: [],
             ]);
+        }
+
+        // Challenge settings (anonymous judging, results publishing).
+        case $key === 'GET admin/new-school/settings': {
+            require_admin();
+            json(['settings' => [
+                'anonymous_judging' => ns_anonymous_judging(),
+                'results_published' => ns_results_published(),
+            ]]);
+        }
+        case $key === 'POST admin/new-school/settings': {
+            require_admin();
+            foreach (['anonymous_judging', 'results_published'] as $k) {
+                if (array_key_exists($k, $body)) {
+                    ns_setting_set($k, filter_var($body[$k], FILTER_VALIDATE_BOOLEAN) ? 'true' : 'false');
+                }
+            }
+            json(['message' => 'Settings updated.', 'settings' => [
+                'anonymous_judging' => ns_anonymous_judging(),
+                'results_published' => ns_results_published(),
+            ]]);
+        }
+
+        // Judge assignments: list all (grouped), assign, unassign.
+        case $key === 'GET admin/new-school/assignments': {
+            require_admin();
+            new_school_workflow_ensure_schema();
+            $rows = db()->query(
+                "SELECT a.id, a.judge_user_id, a.submission_id, a.status, a.recuse_reason, a.assigned_at,
+                        u.full_name AS judge_name, s.full_name AS student_name, s.participant_id
+                 FROM new_school_judge_assignments a
+                 JOIN users u ON u.id = a.judge_user_id
+                 JOIN new_school_submissions sub ON sub.id = a.submission_id
+                 JOIN new_school_students s ON s.id = sub.student_id
+                 ORDER BY a.assigned_at DESC"
+            )->fetchAll();
+            json(['assignments' => $rows ?: []]);
+        }
+        case $key === 'POST admin/new-school/assignments': {
+            require_admin();
+            new_school_workflow_ensure_schema();
+            $judgeUserId = (int) ($body['judge_user_id'] ?? 0);
+            $submissionIds = is_array($body['submission_ids'] ?? null) ? $body['submission_ids'] : [];
+            if ($judgeUserId <= 0 || $submissionIds === []) {
+                json(['error' => 'Judge and at least one submission are required.'], 422);
+            }
+            $ins = db()->prepare(
+                "INSERT INTO new_school_judge_assignments (judge_user_id, submission_id, status)
+                 VALUES (?, ?, 'assigned')
+                 ON DUPLICATE KEY UPDATE status = 'assigned', updated_at = NOW()"
+            );
+            $count = 0;
+            foreach ($submissionIds as $sidVal) {
+                $ins->execute([$judgeUserId, (int) $sidVal]);
+                $count++;
+            }
+            json(['message' => $count . ' assignment(s) saved.']);
+        }
+        case $method === 'DELETE' && preg_match('#^admin/new-school/assignments/(\d+)$#', $route, $m) === 1: {
+            require_admin();
+            db()->prepare('DELETE FROM new_school_judge_assignments WHERE id = ?')->execute([(int) $m[1]]);
+            json(['message' => 'Assignment removed.']);
+        }
+
+        // Reported concerns inbox.
+        case $key === 'GET admin/new-school/reports': {
+            require_admin();
+            new_school_workflow_ensure_schema();
+            $rows = db()->query(
+                "SELECT r.*, u.full_name AS reporter_name, s.full_name AS student_name, s.participant_id
+                 FROM new_school_reports r
+                 LEFT JOIN users u ON u.id = r.reporter_user_id
+                 LEFT JOIN new_school_submissions sub ON sub.id = r.submission_id
+                 LEFT JOIN new_school_students s ON s.id = sub.student_id
+                 ORDER BY (r.status='open') DESC, r.created_at DESC"
+            )->fetchAll();
+            json(['reports' => $rows ?: []]);
+        }
+        case $method === 'PUT' && preg_match('#^admin/new-school/reports/(\d+)$#', $route, $m) === 1: {
+            require_admin();
+            $status = field($body, 'status');
+            if (!in_array($status, ['open', 'reviewed', 'dismissed'], true)) {
+                json(['error' => 'Invalid status.'], 422);
+            }
+            db()->prepare('UPDATE new_school_reports SET status = ?, updated_at = NOW() WHERE id = ?')->execute([$status, (int) $m[1]]);
+            json(['message' => 'Report updated.']);
+        }
+
+        // Final competition results with official tie-breakers.
+        case $key === 'GET admin/new-school/results': {
+            require_admin();
+            json(['results' => new_school_final_results()]);
+        }
+
+        // Export a submission's score breakdown as CSV or PDF.
+        case $method === 'GET' && preg_match('#^admin/new-school/submission/(\d+)/scores/export$#', $route, $m) === 1: {
+            require_admin();
+            $submissionId = (int) $m[1];
+            $format = strtolower((string) ($_GET['format'] ?? 'csv'));
+            $scores = new_school_judge_scores_for_submission($submissionId);
+            $final = new_school_final_score($submissionId);
+            $cats = ns_judge_categories();
+
+            if ($format === 'pdf') {
+                require_once __DIR__ . '/simple_pdf.php';
+                $pdf = new SimplePdf();
+                $pdf->title('Score Report — Submission #' . $submissionId);
+                $pdf->line('Automatic: ' . $final['automatic'] . '   Judge average: ' . ($final['judge_average'] ?? '—') . '   Final: ' . $final['final'], true);
+                $pdf->spacer(4);
+                foreach ($scores as $sc) {
+                    $pdf->heading((string) $sc['judge_name'] . ' — total ' . (int) $sc['total'] . '/135 (' . (string) $sc['status'] . ')');
+                    foreach ($cats as $ck => [$label, $max]) {
+                        $pdf->line('  ' . $label . ': ' . (int) ($sc[$ck] ?? 0) . ' / ' . $max);
+                    }
+                    if (trim((string) ($sc['notes'] ?? '')) !== '') {
+                        $pdf->line('  Notes: ' . (string) $sc['notes']);
+                    }
+                }
+                $bytes = $pdf->output();
+                header('Content-Type: application/pdf');
+                header('Content-Disposition: attachment; filename="scores-submission-' . $submissionId . '.pdf"');
+                echo $bytes;
+                exit;
+            }
+
+            // CSV
+            $head = ['judge', 'status'];
+            foreach ($cats as $ck => [$label, $max]) { $head[] = $label; }
+            $head[] = 'total';
+            $lines = [implode(',', $head)];
+            foreach ($scores as $sc) {
+                $row = ['"' . str_replace('"', '""', (string) $sc['judge_name']) . '"', (string) $sc['status']];
+                foreach ($cats as $ck => $meta) { $row[] = (int) ($sc[$ck] ?? 0); }
+                $row[] = (int) $sc['total'];
+                $lines[] = implode(',', $row);
+            }
+            $lines[] = '';
+            $lines[] = 'Automatic,' . $final['automatic'];
+            $lines[] = 'Judge average,' . ($final['judge_average'] ?? '');
+            $lines[] = 'Final,' . $final['final'];
+            $csv = implode("\r\n", $lines);
+            header('Content-Type: text/csv');
+            header('Content-Disposition: attachment; filename="scores-submission-' . $submissionId . '.csv"');
+            echo $csv;
+            exit;
         }
 
         default:

@@ -2467,8 +2467,15 @@ function ns_judge_clamp_scores(array $scores): array
 function new_school_judge_score_upsert(int $submissionId, int $judgeUserId, array $scores, string $notes, string $status): array
 {
     new_school_judge_ensure_schema();
+    new_school_workflow_ensure_schema();
     [$values, $total] = ns_judge_clamp_scores($scores);
     $status = $status === 'submitted' ? 'submitted' : 'draft';
+
+    // Capture the prior total for the audit trail.
+    $prevStmt = db()->prepare('SELECT total FROM new_school_judge_scores WHERE submission_id = ? AND judge_user_id = ? LIMIT 1');
+    $prevStmt->execute([$submissionId, $judgeUserId]);
+    $prev = $prevStmt->fetchColumn();
+    $oldTotal = $prev === false ? null : (int) $prev;
 
     $stmt = db()->prepare(
         'INSERT INTO new_school_judge_scores
@@ -2486,6 +2493,15 @@ function new_school_judge_score_upsert(int $submissionId, int $judgeUserId, arra
         $values['supporting_evidence'], $values['community_impact'], $values['presentation'],
         $total, $notes !== '' ? $notes : null, $status,
     ]);
+
+    // Audit trail: log every create/update with the category detail.
+    try {
+        $detail = json_encode(['scores' => $values, 'status' => $status], JSON_UNESCAPED_SLASHES);
+        db()->prepare(
+            'INSERT INTO new_school_judge_score_audit (submission_id, judge_user_id, action, old_total, new_total, detail)
+             VALUES (?, ?, ?, ?, ?, ?)'
+        )->execute([$submissionId, $judgeUserId, $oldTotal === null ? 'create' : 'update', $oldTotal, $total, $detail]);
+    } catch (\Throwable $e) { /* audit is best-effort */ }
 
     return ['scores' => $values, 'total' => $total, 'status' => $status];
 }
@@ -2534,6 +2550,123 @@ function new_school_judge_scores_for_submission(int $submissionId): array
     );
     $stmt->execute([$submissionId]);
     return $stmt->fetchAll() ?: [];
+}
+
+/* ---------------- Judge workflow: settings, assignment, certification, reports ---------------- */
+
+/** Self-healing schema for the workflow tables. */
+function new_school_workflow_ensure_schema(): void
+{
+    static $ready = false;
+    if ($ready) {
+        return;
+    }
+    $pdo = db();
+    $pdo->exec("CREATE TABLE IF NOT EXISTS new_school_settings (setting_key VARCHAR(64) NOT NULL PRIMARY KEY, setting_value VARCHAR(255) DEFAULT NULL, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    $pdo->exec("CREATE TABLE IF NOT EXISTS new_school_judge_assignments (id INT AUTO_INCREMENT PRIMARY KEY, judge_user_id INT NOT NULL, submission_id INT NOT NULL, status ENUM('assigned','recused') NOT NULL DEFAULT 'assigned', recuse_reason VARCHAR(255) DEFAULT NULL, assigned_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, UNIQUE KEY uniq_judge_assignment (judge_user_id, submission_id), KEY idx_assignment_judge (judge_user_id, status), KEY idx_assignment_submission (submission_id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    $pdo->exec("CREATE TABLE IF NOT EXISTS new_school_judge_score_audit (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, submission_id INT NOT NULL, judge_user_id INT NOT NULL, action VARCHAR(20) NOT NULL DEFAULT 'update', old_total INT DEFAULT NULL, new_total INT DEFAULT NULL, detail TEXT DEFAULT NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, KEY idx_audit_submission (submission_id, created_at), KEY idx_audit_judge (judge_user_id, created_at)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    $pdo->exec("CREATE TABLE IF NOT EXISTS new_school_reports (id INT AUTO_INCREMENT PRIMARY KEY, submission_id INT DEFAULT NULL, reporter_user_id INT DEFAULT NULL, reason VARCHAR(80) NOT NULL, notes TEXT DEFAULT NULL, status ENUM('open','reviewed','dismissed') NOT NULL DEFAULT 'open', created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, KEY idx_reports_status (status, created_at), KEY idx_reports_submission (submission_id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    $ready = true;
+}
+
+/** Read a challenge setting (string) with a default. */
+function ns_setting_get(string $key, string $default = ''): string
+{
+    new_school_workflow_ensure_schema();
+    $stmt = db()->prepare('SELECT setting_value FROM new_school_settings WHERE setting_key = ? LIMIT 1');
+    $stmt->execute([$key]);
+    $v = $stmt->fetchColumn();
+    return $v === false || $v === null ? $default : (string) $v;
+}
+
+/** Write a challenge setting. */
+function ns_setting_set(string $key, string $value): void
+{
+    new_school_workflow_ensure_schema();
+    db()->prepare('INSERT INTO new_school_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_at = NOW()')
+        ->execute([$key, $value]);
+}
+
+function ns_anonymous_judging(): bool
+{
+    return filter_var(ns_setting_get('anonymous_judging', 'false'), FILTER_VALIDATE_BOOLEAN);
+}
+function ns_results_published(): bool
+{
+    return filter_var(ns_setting_get('results_published', 'false'), FILTER_VALIDATE_BOOLEAN);
+}
+
+/** True when this judge has any active (non-recused) assignments. */
+function new_school_judge_has_assignments(int $judgeUserId): bool
+{
+    new_school_workflow_ensure_schema();
+    $stmt = db()->prepare("SELECT 1 FROM new_school_judge_assignments WHERE judge_user_id = ? AND status = 'assigned' LIMIT 1");
+    $stmt->execute([$judgeUserId]);
+    return (bool) $stmt->fetchColumn();
+}
+
+/**
+ * Every judge can review every submitted project automatically — no assignment
+ * needed. The only thing that blocks a judge is an explicit self-recusal
+ * (conflict of interest) on that submission.
+ */
+function new_school_judge_can_review(int $judgeUserId, int $submissionId): bool
+{
+    new_school_workflow_ensure_schema();
+    $stmt = db()->prepare('SELECT status FROM new_school_judge_assignments WHERE judge_user_id = ? AND submission_id = ? LIMIT 1');
+    $stmt->execute([$judgeUserId, $submissionId]);
+    return $stmt->fetchColumn() !== 'recused';
+}
+
+/**
+ * Rank submissions by Final Competition Score with the official tie-breakers
+ * (Solution → Community → Creativity → Problem → Presentation, by average judge
+ * category score). Returns rows with final/automatic/judge_average + rank.
+ */
+function new_school_final_results(): array
+{
+    new_school_judge_ensure_schema();
+    $rows = db()->query(
+        "SELECT sub.id AS submission_id, sub.student_id, s.full_name AS student_name, s.participant_id, s.school_name,
+                AVG(CASE WHEN js.status='submitted' THEN js.total END) AS judge_avg,
+                AVG(CASE WHEN js.status='submitted' THEN js.solution END) AS avg_solution,
+                AVG(CASE WHEN js.status='submitted' THEN js.community_impact END) AS avg_community,
+                AVG(CASE WHEN js.status='submitted' THEN js.creativity END) AS avg_creativity,
+                AVG(CASE WHEN js.status='submitted' THEN js.problem END) AS avg_problem,
+                AVG(CASE WHEN js.status='submitted' THEN js.presentation END) AS avg_presentation
+         FROM new_school_submissions sub
+         INNER JOIN new_school_students s ON s.id = sub.student_id
+         LEFT JOIN new_school_judge_scores js ON js.submission_id = sub.id
+         WHERE sub.status <> 'draft'
+         GROUP BY sub.id, sub.student_id, s.full_name, s.participant_id, s.school_name"
+    )->fetchAll() ?: [];
+
+    foreach ($rows as &$r) {
+        $auto = new_school_dashboard_points((int) $r['student_id'])['total'];
+        $avg = $r['judge_avg'] !== null ? round((float) $r['judge_avg'], 2) : null;
+        $r['automatic'] = $auto;
+        $r['judge_average'] = $avg;
+        $r['final'] = $auto + ($avg !== null ? (int) round($avg) : 0);
+    }
+    unset($r);
+
+    usort($rows, static function (array $a, array $b): int {
+        if ($a['final'] !== $b['final']) return $b['final'] <=> $a['final'];
+        foreach (['avg_solution', 'avg_community', 'avg_creativity', 'avg_problem', 'avg_presentation'] as $k) {
+            $av = (float) ($a[$k] ?? 0);
+            $bv = (float) ($b[$k] ?? 0);
+            if ($av !== $bv) return $bv <=> $av;
+        }
+        return strcasecmp((string) ($a['student_name'] ?? ''), (string) ($b['student_name'] ?? ''));
+    });
+
+    $rank = 0;
+    foreach ($rows as $i => &$r) {
+        $r['rank_position'] = $i + 1;
+        $rank++;
+    }
+    unset($r);
+    return $rows;
 }
 
 function new_school_student_performance_score(array $student): float
@@ -3161,11 +3294,11 @@ const NS_SUBMISSION_SAFE_KEYS = [
 // Student fields visible to TEACHER only (PII dropped). School keeps the full roster row.
 const NS_STUDENT_SAFE_KEYS = [
     'id', 'full_name', 'participant_id', 'grade_level', 'school_id', 'teacher_id',
-    'school_name', 'teacher_full_name', 'teacher_status', 'school_status',
+    'school_name', 'teacher_full_name', 'teacher_status', 'school_status', 'avatar_url',
     'parent_consent_status', 'school_approval_status', 'teacher_approval_status',
     'submission_status', 'overall_status',
     'interview_count', 'has_submission', 'submission_score', 'submission_rank_position',
-    'performance_score', 'student_points', 'rank_position', 'created_at', 'updated_at',
+    'performance_score', 'student_points', 'automatic_points', 'rank_position', 'created_at', 'updated_at',
 ];
 
 // Approval workflow fields visible to teacher (student_email / reviewer_email / notes / signature dropped).
@@ -3180,7 +3313,7 @@ const NS_APPROVAL_SAFE_KEYS = [
 // the teacher only needs the name, relationship and link status to approve.
 const NS_PARENT_SAFE_KEYS = [
     'id', 'student_id', 'link_status', 'student_confirmed_at', 'approved_at',
-    'created_at', 'updated_at', 'parent_full_name', 'relationship',
+    'created_at', 'updated_at', 'parent_full_name', 'relationship_to_student',
     'student_name', 'participant_id', 'grade_level', 'school_name', 'parent_consent_status',
 ];
 
