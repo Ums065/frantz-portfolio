@@ -16,6 +16,13 @@ Options -Indexes
   # Serve build assets from frontend/dist.
   RewriteRule ^assets/(.*)$ frontend/dist/assets/$1 [L]
 
+  # Serve any real file that lives inside the build at the web root
+  # (sitemap.xml, robots.txt, favicon, manifest, docs/*, …) — otherwise
+  # the SPA fallback below would hand back index.html (HTML) for them,
+  # which is why Google Search Console said "Couldn't fetch" the sitemap.
+  RewriteCond %{DOCUMENT_ROOT}/frontend/dist%{REQUEST_URI} -f
+  RewriteRule ^(.*)$ frontend/dist/$1 [L]
+
   # Serve real files and folders as-is.
   RewriteCond %{REQUEST_FILENAME} -f [OR]
   RewriteCond %{REQUEST_FILENAME} -d
