@@ -8,6 +8,8 @@ Disallow: /profile
 Disallow: /demo-login
 Disallow: /new-school/dashboard
 Disallow: /new-school/parent/
+Disallow: /judge/dashboard
+Disallow: /reset-password
 Disallow: /api/
 
 Sitemap: https://frantzcoutard.com/sitemap.xml

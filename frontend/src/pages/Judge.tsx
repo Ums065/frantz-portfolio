@@ -122,7 +122,7 @@ const CATEGORY_HINTS: Record<string, string> = {
 export default function Judge() {
   const { user, loading, logout } = useAuth()
   const navigate = useNavigate()
-  useSeo({ title: 'Judge Dashboard', description: 'Score student competition submissions.' })
+  useSeo({ title: 'Judge Dashboard', description: 'Score student competition submissions.', noindex: true })
 
   type JudgeTab = 'queue' | 'reviews' | 'handbook' | 'faq' | 'chat'
   const [tab, setTab] = useState<JudgeTab>('queue')
