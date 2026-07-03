@@ -139,7 +139,20 @@ export default function Admin() {
   const { user, loading, logout, refresh: refreshAuth, impersonate } = useAuth()
   const navigate = useNavigate()
   const [data, setData] = useState<Submissions | null>(null)
-  const [tab, setTab] = useState<TabKey>('overview')
+  const [tab, setTab] = useState<TabKey>(() => {
+    // Restore the last-open tab from the URL (?tab=…) so a page refresh stays put.
+    const q = new URLSearchParams(window.location.search).get('tab') as TabKey | null
+    const valid = !!q && NAV_GROUPS.some((g) => g.items.some((i) => i.key === q))
+    return valid ? (q as TabKey) : 'overview'
+  })
+  // Keep the URL in sync with the active tab (replaceState → no history spam).
+  useEffect(() => {
+    const url = new URL(window.location.href)
+    if (url.searchParams.get('tab') !== tab) {
+      url.searchParams.set('tab', tab)
+      window.history.replaceState(window.history.state, '', url)
+    }
+  }, [tab])
   const [ovGroup, setOvGroup] = useState('People')
   const [viewBusyId, setViewBusyId] = useState<number | null>(null)
   const [email, setEmail] = useState('')
@@ -665,7 +678,7 @@ export default function Admin() {
           <span className={`ns-rankrow__rank${(p.rank_position ?? i + 1) <= 3 ? ' is-top' : ''}`}>#{p.rank_position ?? i + 1}</span>
           <span className="ns-rankrow__name">{kind === 'student' ? p.full_name : p.teacher_full_name}</span>
           <span className="ns-rankrow__meta">{kind === 'student' ? `${p.interview_count ?? 0}/10 · ${p.submission_status || '—'}` : `${p.students_total ?? 0} students`}</span>
-          <span className="ns-rankrow__pts">{(kind === 'student' ? p.student_points : p.teacher_points) ?? 0} pts</span>
+          <span className="ns-rankrow__pts">{(kind === 'student' ? (p.final_score ?? p.student_points) : p.teacher_points) ?? 0} pts</span>
           <span className="ns-rankrow__go" aria-hidden="true">?</span>
         </button>
       ))}
@@ -1222,7 +1235,7 @@ export default function Admin() {
                         <td>#{s.rank_position ?? '—'}</td>
                         <td>{s.full_name}</td>
                         <td className="admin-table__uid">{s.participant_id || '—'}</td>
-                        <td>{s.student_points ?? 0}</td>
+                        <td>{s.final_score ?? s.student_points ?? 0}</td>
                         <td>{s.interview_count ?? 0}/10</td>
                         <td>{s.submission_status || '—'}</td>
                         <td><span className="admin-linkcell">View ?</span></td>

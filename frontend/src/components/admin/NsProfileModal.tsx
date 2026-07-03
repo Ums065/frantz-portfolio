@@ -75,7 +75,7 @@ function StudentBody({ data, onClose }: { data: StudentProfile; onClose: () => v
         <section className="ns-detail__section">
           <h4>Progress &amp; grade</h4>
           <div className="ns-detail__facts">
-            <Fact label="Points" value={s.student_points ?? 0} />
+            <Fact label="Points" value={s.final_score ?? s.student_points ?? 0} />
             <Fact label="Rank" value={rank ? `#${rank}` : '—'} />
             <Fact label="Interviews" value={`${s.interview_count ?? 0} / 10`} />
             <Fact label="Submission" value={s.submission_status} />
@@ -189,7 +189,7 @@ function TeacherBody({ data, onClose, onOpenStudent }: { data: TeacherProfile; o
               >
                 <span className="ns-profile__rosterrank">#{st.rank_position ?? '—'}</span>
                 <span className="ns-profile__rostername">{st.full_name}</span>
-                <span className="ns-profile__rostermeta">{st.student_points ?? 0} pts · {st.interview_count ?? 0}/10</span>
+                <span className="ns-profile__rostermeta">{st.final_score ?? st.student_points ?? 0} pts · {st.interview_count ?? 0}/10</span>
                 <span aria-hidden="true">→</span>
               </button>
             ))}

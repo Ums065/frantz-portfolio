@@ -2757,6 +2757,27 @@ function ns_submission_flags_map(): array
     }
     return $m;
 }
+/** Bulk map student_id => average submitted judge score (for final-score ranking). */
+function ns_student_judge_average_map(): array
+{
+    static $m = null;
+    if ($m !== null) {
+        return $m;
+    }
+    $m = [];
+    try {
+        $rows = db()->query(
+            "SELECT sub.student_id, AVG(js.total) AS avg_total
+             FROM new_school_submissions sub
+             INNER JOIN new_school_judge_scores js ON js.submission_id = sub.id AND js.status = 'submitted'
+             GROUP BY sub.student_id"
+        )->fetchAll();
+        foreach ($rows as $r) {
+            $m[(int) $r['student_id']] = (float) $r['avg_total'];
+        }
+    } catch (\Throwable $e) { /* judge tables may not exist pre-migration */ }
+    return $m;
+}
 
 function new_school_rank_students(array $students): array
 {
@@ -2766,6 +2787,7 @@ function new_school_rank_students(array $students): array
     $vMap = ns_verified_interview_map();
     $mMap = ns_material_type_map();
     $sMap = ns_submission_flags_map();
+    $jMap = ns_student_judge_average_map();
 
     $ranked = [];
     foreach ($students as $student) {
@@ -2776,13 +2798,24 @@ function new_school_rank_students(array $students): array
         $student['performance_score'] = new_school_student_performance_score($student);
         $parts = new_school_automatic_parts($student, $vMap[$sid] ?? 0, $mMap[$sid] ?? 0, $sMap[$sid] ?? null);
         $student['automatic_points'] = new_school_automatic_breakdown($parts)['total'];
-        // Primary ranking number: 215 automatic total + admin bonus.
+        // Automatic component = 215 automatic total + admin bonus.
         $student['student_points'] = $student['automatic_points'] + (int) ($bonusMap[$sid] ?? 0);
+        // Judge component (average of submitted judge scores) + Final Competition Score.
+        $avg = $jMap[$sid] ?? null;
+        $student['judge_average'] = $avg !== null ? round($avg, 2) : null;
+        $student['final_score'] = $student['student_points'] + ($avg !== null ? (int) round($avg) : 0);
         $ranked[] = $student;
     }
 
     usort($ranked, static function (array $left, array $right): int {
-        // Primary: total points (auto + admin bonus). Falls back to the workflow score on ties.
+        // Primary: Final Competition Score (automatic + admin bonus + avg judge score).
+        $leftFinal = (int) ($left['final_score'] ?? 0);
+        $rightFinal = (int) ($right['final_score'] ?? 0);
+        if ($leftFinal !== $rightFinal) {
+            return $rightFinal <=> $leftFinal;
+        }
+
+        // Tie-break 1: automatic points (auto + admin bonus).
         $leftPoints = (int) ($left['student_points'] ?? 0);
         $rightPoints = (int) ($right['student_points'] ?? 0);
         if ($leftPoints !== $rightPoints) {
@@ -3298,7 +3331,7 @@ const NS_STUDENT_SAFE_KEYS = [
     'parent_consent_status', 'school_approval_status', 'teacher_approval_status',
     'submission_status', 'overall_status',
     'interview_count', 'has_submission', 'submission_score', 'submission_rank_position',
-    'performance_score', 'student_points', 'automatic_points', 'rank_position', 'created_at', 'updated_at',
+    'performance_score', 'student_points', 'automatic_points', 'judge_average', 'final_score', 'rank_position', 'created_at', 'updated_at',
 ];
 
 // Approval workflow fields visible to teacher (student_email / reviewer_email / notes / signature dropped).

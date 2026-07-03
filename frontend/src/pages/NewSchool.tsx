@@ -1678,7 +1678,7 @@ export default function NewSchool() {
         .map((r: any, i: number) => ({
           id: Number(r.id), type: 'student' as const, rank: i + 1,
           name: r.full_name, avatar: r.avatar_url, sub: r.school_name || (r.teacher_full_name ? `Mentor · ${r.teacher_full_name}` : '—'),
-          score: Number(r.student_points) || 0, tag: r.submission_status || '—', tagType: 'status' as const,
+          score: Number(r.final_score ?? r.student_points) || 0, tag: r.submission_status || '—', tagType: 'status' as const,
         }))
     : adminRankTeachersScoped.slice()
         .sort((a: any, b: any) => (a.rank_position || 9999) - (b.rank_position || 9999))
@@ -1702,7 +1702,7 @@ export default function NewSchool() {
       name: r.full_name,
       avatar: r.avatar_url,
       sub: `${r.interview_count || 0}/10 interviews`,
-      score: Number(r.student_points) || 0,
+      score: Number(r.final_score ?? r.student_points) || 0,
       tag: r.submission_status || '—',
       isMe: String(r.participant_id || '') === String(studentDashboard?.student?.participant_id || ''),
     }))
@@ -1742,7 +1742,7 @@ export default function NewSchool() {
     ? activeRankedStudents.map((r: any) => ({
         id: Number(r.id), type: 'student' as const, rank: Number(r.rank_position) || 0,
         name: r.full_name, avatar: r.avatar_url, sub: r.teacher_full_name ? `Mentor · ${r.teacher_full_name}` : r.school_name || '—',
-        score: Number(r.student_points) || 0, tag: r.submission_status || '—', tagType: 'status' as const,
+        score: Number(r.final_score ?? r.student_points) || 0, tag: r.submission_status || '—', tagType: 'status' as const,
       }))
     : activeRankedTeachers.map((r: any) => ({
         id: Number(r.id), type: 'teacher' as const, rank: Number(r.rank_position) || 0,
@@ -1950,7 +1950,7 @@ export default function NewSchool() {
         title: studentDashboard.student.full_name,
         lead: 'See how you are doing and jump straight to your next step.',
         stats: [
-          { label: 'Points', value: studentDashboard.student_points || 0, tab: 'rankings' as DashboardTabKey },
+          { label: 'Points', value: studentDashboard.final_score ?? studentDashboard.student_points ?? 0, tab: 'rankings' as DashboardTabKey },
           { label: 'Interviews', value: studentDashboard.interview_count || 0, tab: 'activity' as DashboardTabKey },
           { label: 'School Rank', value: `#${studentDashboard.rankings?.school?.position || '-'}`, tab: 'rankings' as DashboardTabKey },
           { label: 'Teacher Rank', value: `#${studentDashboard.rankings?.teacher?.position || '-'}`, tab: 'rankings' as DashboardTabKey },
@@ -2087,7 +2087,10 @@ export default function NewSchool() {
                 <button className="btn" type="button" data-auth="register" data-role="school">School</button>
                 <button className="btn" type="button" data-auth="register" data-role="teacher">Teacher</button>
               </div>
-              <a className="ns-hero__how" href="#workflow">See how it works ↓</a>
+              <div className="ns-hero__links">
+                <a className="ns-hero__how" href="#workflow">See how it works ↓</a>
+                <a className="btn btn--sm" href="/docs/leave_it_better_media_kit_2026.pdf" download>⬇ Download Media Kit 2026</a>
+              </div>
             </div>
             {notice && <div className={`ns-alert ns-alert--${notice.tone}`}>{notice.text}</div>}
             {token && parentLink?.student && (
@@ -3195,7 +3198,7 @@ export default function NewSchool() {
               <article className="glass ns-dash-card reveal in" hidden={dashboardTab !== 'rankings'}>
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">Your Ranking</span>
-                  <span className="ns-board__badge">{parentDashboard.student_context?.student_points || 0} pts</span>
+                  <span className="ns-board__badge">{parentDashboard.student_context?.final_score ?? parentDashboard.student_context?.student_points ?? 0} pts</span>
                 </div>
                 <div className="ns-approval-stack">
                   <div className="ns-approval-row"><strong>School Rank</strong><span>#{parentDashboard.student_context?.rankings?.school?.position || '-'}</span></div>

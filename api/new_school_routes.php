@@ -297,6 +297,9 @@ function new_school_build_student_context(array $student): array
     // Judge results are hidden from students until administration publishes results.
     $resultsPublished = ns_results_published();
     $judgeResult = ($resultsPublished && $submission) ? new_school_final_score((int) $submission['id'], $studentId) : null;
+    // Final Competition Score used for ranking = automatic (+ bonus) + avg judge score.
+    $judgeAvg = ns_student_judge_average_map()[$studentId] ?? null;
+    $finalScore = $dashPoints['total'] + ($judgeAvg !== null ? (int) round($judgeAvg) : 0);
     $materialTypeMeta = [];
     foreach (ns_supporting_material_types() as $mtKey => $mtLabel) {
         $materialTypeMeta[] = ['key' => $mtKey, 'label' => $mtLabel];
@@ -327,6 +330,8 @@ function new_school_build_student_context(array $student): array
             'has_submission' => $submission ? 1 : 0,
         ])),
         'student_points' => $dashPoints['total'],
+        'final_score' => $finalScore,
+        'judge_average' => $judgeAvg !== null ? round($judgeAvg, 2) : null,
         'automatic_points' => $dashPoints['automatic_total'],
         'admin_bonus' => $dashPoints['admin_bonus'],
         'automatic_breakdown' => $dashPoints['breakdown'],
@@ -4331,6 +4336,116 @@ function new_school_handle_route(string $method, string $route): bool
                  ORDER BY j.created_at DESC"
             )->fetchAll();
             json(['judges' => $rows ?: []]);
+        }
+
+        // Paginated list of submissions one judge has scored (admin only). 10 per page.
+        case $method === 'GET' && preg_match('#^admin/new-school/judges/(\d+)/reviews$#', $route, $m) === 1: {
+            require_admin();
+            new_school_judge_ensure_schema();
+            $judgeUserId = (int) $m[1];
+            $perPage = 10;
+            $page = max(1, (int) ($_GET['page'] ?? 1));
+            $offset = ($page - 1) * $perPage;
+
+            $info = db()->prepare('SELECT j.display_name, u.email, u.approval_status FROM new_school_judges j INNER JOIN users u ON u.id = j.user_id WHERE j.user_id = ? LIMIT 1');
+            $info->execute([$judgeUserId]);
+            $judge = $info->fetch() ?: null;
+            if (!$judge) {
+                json(['error' => 'Judge not found.'], 404);
+            }
+
+            $totalStmt = db()->prepare('SELECT COUNT(*) FROM new_school_judge_scores WHERE judge_user_id = ?');
+            $totalStmt->execute([$judgeUserId]);
+            $total = (int) $totalStmt->fetchColumn();
+
+            $stmt = db()->prepare(
+                "SELECT js.submission_id, js.total, js.status, js.updated_at,
+                        UNIX_TIMESTAMP(js.updated_at) AS updated_epoch,
+                        js.problem, js.solution, js.creativity, js.supporting_evidence, js.community_impact, js.presentation,
+                        s.full_name AS student_name, s.participant_id, s.school_name
+                 FROM new_school_judge_scores js
+                 INNER JOIN new_school_submissions sub ON sub.id = js.submission_id
+                 INNER JOIN new_school_students s ON s.id = sub.student_id
+                 WHERE js.judge_user_id = ?
+                 ORDER BY js.updated_at DESC
+                 LIMIT $perPage OFFSET $offset"
+            );
+            $stmt->execute([$judgeUserId]);
+
+            json([
+                'judge' => [
+                    'user_id' => $judgeUserId,
+                    'display_name' => (string) $judge['display_name'],
+                    'email' => (string) $judge['email'],
+                    'approval_status' => (string) $judge['approval_status'],
+                ],
+                'reviews' => $stmt->fetchAll() ?: [],
+                'max_total' => 135,
+                'page' => $page,
+                'per_page' => $perPage,
+                'total' => $total,
+                'total_pages' => (int) max(1, (int) ceil($total / $perPage)),
+            ]);
+        }
+
+        // Update a judge's name / email / (optional) password (admin only).
+        case $method === 'PUT' && preg_match('#^admin/new-school/judge/(\d+)$#', $route, $m) === 1: {
+            require_admin();
+            new_school_judge_ensure_schema();
+            $judgeUserId = (int) $m[1];
+            $exists = db()->prepare("SELECT u.id FROM users u INNER JOIN new_school_judges j ON j.user_id = u.id WHERE u.id = ? AND u.role = 'judge' LIMIT 1");
+            $exists->execute([$judgeUserId]);
+            if (!$exists->fetchColumn()) {
+                json(['error' => 'Judge not found.'], 404);
+            }
+            $fullName = trim((string) (field($body, 'full_name') ?: field($body, 'display_name')));
+            $email = require_email(field($body, 'email'));
+            $password = (string) field($body, 'password');
+            if (strlen($fullName) < 3) {
+                json(['error' => 'Judge full name is required.'], 422);
+            }
+            // Guard against colliding with another account's email.
+            $dup = db()->prepare('SELECT id FROM users WHERE email = ? AND id <> ? LIMIT 1');
+            $dup->execute([$email, $judgeUserId]);
+            if ($dup->fetchColumn()) {
+                json(['error' => 'That email is already used by another account.'], 409);
+            }
+            if ($password !== '' && strlen($password) < 6) {
+                json(['error' => 'Password must be at least 6 characters.'], 422);
+            }
+
+            if ($password !== '') {
+                db()->prepare('UPDATE users SET full_name = ?, email = ?, password_hash = ? WHERE id = ?')
+                    ->execute([$fullName, $email, password_hash($password, PASSWORD_DEFAULT), $judgeUserId]);
+            } else {
+                db()->prepare('UPDATE users SET full_name = ?, email = ? WHERE id = ?')
+                    ->execute([$fullName, $email, $judgeUserId]);
+            }
+            db()->prepare('UPDATE new_school_judges SET display_name = ? WHERE user_id = ?')
+                ->execute([$fullName, $judgeUserId]);
+
+            json(['message' => 'Judge updated.']);
+        }
+
+        // Delete a judge and all of their scores (admin only).
+        case $method === 'DELETE' && preg_match('#^admin/new-school/judge/(\d+)$#', $route, $m) === 1: {
+            require_admin();
+            new_school_judge_ensure_schema();
+            new_school_workflow_ensure_schema();
+            $judgeUserId = (int) $m[1];
+            $exists = db()->prepare("SELECT id FROM users WHERE id = ? AND role = 'judge' LIMIT 1");
+            $exists->execute([$judgeUserId]);
+            if (!$exists->fetchColumn()) {
+                json(['error' => 'Judge not found.'], 404);
+            }
+            // Remove their scoring footprint first so rankings recompute cleanly.
+            foreach (['new_school_judge_score_audit', 'new_school_judge_scores', 'new_school_judge_assignments'] as $tbl) {
+                try { db()->prepare("DELETE FROM $tbl WHERE judge_user_id = ?")->execute([$judgeUserId]); } catch (Throwable $e) { /* table may not exist yet */ }
+            }
+            db()->prepare('DELETE FROM new_school_judges WHERE user_id = ?')->execute([$judgeUserId]);
+            db()->prepare('DELETE FROM users WHERE id = ?')->execute([$judgeUserId]);
+
+            json(['message' => 'Judge removed.']);
         }
 
         // Per-judge scores + average + automatic + final for a submission (admin only).

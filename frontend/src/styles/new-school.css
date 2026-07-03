@@ -3776,6 +3776,8 @@
   letter-spacing: 0.04em;
 }
 .ns-hero__how:hover { color: var(--gold); }
+.ns-hero__links { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; margin-top: 4px; }
+.ns-hero__links .ns-hero__how { margin-top: 0; }
 .ns-hero__pillars {
   list-style: none;
   display: flex;
