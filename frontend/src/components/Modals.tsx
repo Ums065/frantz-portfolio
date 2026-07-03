@@ -600,7 +600,7 @@ export function AuthModal({
               </form>
             )}
             {!notice && (
-              <div className="switch">Remembered it? <a onClick={goLogin}>Sign in</a></div>
+              <div className="switch">Remembered it? <button type="button" className="linklike" onClick={goLogin}>Sign in</button></div>
             )}
           </div>
         ) : (
@@ -786,7 +786,7 @@ export function AuthModal({
                     <input type="password" required placeholder="Enter your password" autoComplete="current-password" value={form.password} onChange={(e) => updateField('password', e.target.value)} />
                   </div>
                   <div className="switch" style={{ textAlign: 'right', marginTop: 4 }}>
-                    <a onClick={goForgot}>Forgot password?</a>
+                    <button type="button" className="linklike" onClick={goForgot}>Forgot password?</button>
                   </div>
                 </>
               )}
@@ -796,9 +796,9 @@ export function AuthModal({
               </button>
             </form>
             {mode === 'login' ? (
-              <div className="switch">New here? <a onClick={() => onMode('register')}>Create an account</a></div>
+              <div className="switch">New here? <button type="button" className="linklike" onClick={() => onMode('register')}>Create an account</button></div>
             ) : (
-              <div className="switch">Already a member? <a onClick={() => onMode('login')}>Sign in</a></div>
+              <div className="switch">Already a member? <button type="button" className="linklike" onClick={() => onMode('login')}>Sign in</button></div>
             )}
           </div>
         )}
