@@ -589,11 +589,13 @@ try {
             // Fire-and-forget: record best-effort and never error out the visitor's page.
             $b = body();
             try {
+                $visitor = current_user();
                 site_visits_record(
                     (string) field($b, 'path'),
                     (string) field($b, 'visitor_token'),
                     field($b, 'referrer') !== '' ? (string) field($b, 'referrer') : null,
-                    $_SERVER['HTTP_USER_AGENT'] ?? null
+                    $_SERVER['HTTP_USER_AGENT'] ?? null,
+                    $visitor ? (int) $visitor['id'] : null
                 );
             } catch (\Throwable $e) {
                 // Tracking must never break navigation — swallow any failure.
@@ -1465,10 +1467,89 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
                     'unique_total' => $count('SELECT COUNT(DISTINCT visitor_token) FROM site_visits'),
                     'unique_today' => $count('SELECT COUNT(DISTINCT visitor_token) FROM site_visits WHERE DATE(created_at) = CURDATE()'),
                     'unique_30'    => $count('SELECT COUNT(DISTINCT visitor_token) FROM site_visits WHERE created_at >= (NOW() - INTERVAL 30 DAY)'),
+                    // Repeat vs new visitors: group by visitor, count how many came back more than once.
+                    'repeated_visitors' => $count('SELECT COUNT(*) FROM (SELECT visitor_token FROM site_visits GROUP BY visitor_token HAVING COUNT(*) > 1) t'),
+                    'new_visitors'      => $count('SELECT COUNT(*) FROM (SELECT visitor_token FROM site_visits GROUP BY visitor_token HAVING COUNT(*) = 1) t'),
                     'daily'        => $dailyTraffic,
                     'top_pages'    => $series('SELECT path AS label, COUNT(*) AS value FROM site_visits WHERE created_at >= (NOW() - INTERVAL 30 DAY) GROUP BY path ORDER BY value DESC, label ASC LIMIT 8'),
+                    'top_referrers' => $series("SELECT COALESCE(NULLIF(referrer,''),'(direct)') AS label, COUNT(*) AS value FROM site_visits WHERE created_at >= (NOW() - INTERVAL 30 DAY) GROUP BY label ORDER BY value DESC, label ASC LIMIT 8"),
                 ],
             ]);
+        }
+
+        // Drill-down: list individual visitors (grouped by their first-party token),
+        // with how many times each visited and when. Paginated, 10 per page.
+        case $key === 'GET admin/traffic/visitors': {
+            require_admin();
+            site_visits_ensure_schema();
+            $scope = (string) ($_GET['scope'] ?? 'all');
+            $having = $scope === 'repeat' ? 'HAVING COUNT(*) > 1' : ($scope === 'new' ? 'HAVING COUNT(*) = 1' : '');
+            $perPage = 10;
+            $page = max(1, (int) ($_GET['page'] ?? 1));
+            $offset = ($page - 1) * $perPage;
+            $total = (int) db()->query("SELECT COUNT(*) FROM (SELECT visitor_token FROM site_visits GROUP BY visitor_token $having) t")->fetchColumn();
+            $rows = db()->query(
+                "SELECT visitor_token AS token,
+                        COUNT(*) AS visits,
+                        MAX(user_id) AS user_id,
+                        UNIX_TIMESTAMP(MIN(created_at)) AS first_seen,
+                        UNIX_TIMESTAMP(MAX(created_at)) AS last_seen,
+                        SUBSTRING_INDEX(GROUP_CONCAT(path ORDER BY created_at DESC SEPARATOR '\\n'), '\\n', 1) AS last_path
+                 FROM site_visits
+                 GROUP BY visitor_token $having
+                 ORDER BY last_seen DESC
+                 LIMIT $perPage OFFSET $offset"
+            )->fetchAll();
+            // Attach the logged-in identity (name/email/role) for visitors who signed in.
+            $uids = array_values(array_unique(array_filter(array_map(static fn(array $r): int => (int) ($r['user_id'] ?? 0), $rows))));
+            $umap = [];
+            if ($uids) {
+                $in = implode(',', array_fill(0, count($uids), '?'));
+                $us = db()->prepare("SELECT id, full_name, email, role FROM users WHERE id IN ($in)");
+                $us->execute($uids);
+                foreach ($us->fetchAll() as $u) { $umap[(int) $u['id']] = $u; }
+            }
+            foreach ($rows as &$r) {
+                $u = $umap[(int) ($r['user_id'] ?? 0)] ?? null;
+                $r['user_name'] = $u['full_name'] ?? null;
+                $r['user_email'] = $u['email'] ?? null;
+                $r['user_role'] = $u['role'] ?? null;
+            }
+            unset($r);
+            json([
+                'visitors' => $rows ?: [],
+                'scope' => $scope,
+                'page' => $page,
+                'per_page' => $perPage,
+                'total' => $total,
+                'total_pages' => (int) max(1, (int) ceil($total / $perPage)),
+            ]);
+        }
+
+        // One visitor's full visit timeline (each page view: when, which page, referrer).
+        case $key === 'GET admin/traffic/visitor': {
+            require_admin();
+            site_visits_ensure_schema();
+            $token = (string) ($_GET['token'] ?? '');
+            if ($token === '') {
+                json(['error' => 'Missing visitor token.'], 422);
+            }
+            $stmt = db()->prepare(
+                "SELECT UNIX_TIMESTAMP(created_at) AS ts, path, referrer, user_agent
+                 FROM site_visits WHERE visitor_token = ? ORDER BY created_at DESC LIMIT 200"
+            );
+            $stmt->execute([$token]);
+            // If this visitor ever signed in, surface who they are.
+            $uidStmt = db()->prepare('SELECT MAX(user_id) FROM site_visits WHERE visitor_token = ?');
+            $uidStmt->execute([$token]);
+            $uid = (int) $uidStmt->fetchColumn();
+            $user = null;
+            if ($uid > 0) {
+                $us = db()->prepare('SELECT full_name, email, role FROM users WHERE id = ? LIMIT 1');
+                $us->execute([$uid]);
+                $user = $us->fetch() ?: null;
+            }
+            json(['token' => $token, 'user' => $user, 'visits' => $stmt->fetchAll() ?: []]);
         }
 
         case $method === 'PUT' && preg_match('#^admin/user/(\d+)/approval$#', $route, $m) === 1: {

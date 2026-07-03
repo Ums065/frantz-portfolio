@@ -553,19 +553,28 @@ function site_visits_ensure_schema(): void
         "CREATE TABLE IF NOT EXISTS site_visits (
             id BIGINT AUTO_INCREMENT PRIMARY KEY,
             visitor_token VARCHAR(64) NOT NULL,
+            user_id INT DEFAULT NULL,
             path VARCHAR(512) NOT NULL,
             referrer VARCHAR(512) DEFAULT NULL,
             user_agent VARCHAR(255) DEFAULT NULL,
             created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
             INDEX idx_visits_created (created_at),
-            INDEX idx_visits_visitor (visitor_token)
+            INDEX idx_visits_visitor (visitor_token),
+            INDEX idx_visits_user (user_id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
     );
+    // Self-heal: add user_id to older installs that predate the logged-in linkage.
+    try {
+        $has = (int) db()->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'site_visits' AND COLUMN_NAME = 'user_id'")->fetchColumn();
+        if ($has === 0) {
+            db()->exec("ALTER TABLE site_visits ADD COLUMN user_id INT DEFAULT NULL, ADD INDEX idx_visits_user (user_id)");
+        }
+    } catch (\Throwable $e) { /* best-effort */ }
     $ready = true;
 }
 
 /** Record one page view. Best-effort: callers swallow errors so tracking never breaks a page. */
-function site_visits_record(string $path, string $visitorToken, ?string $referrer, ?string $userAgent): void
+function site_visits_record(string $path, string $visitorToken, ?string $referrer, ?string $userAgent, ?int $userId = null): void
 {
     $path = trim($path);
     $visitorToken = trim($visitorToken);
@@ -573,9 +582,10 @@ function site_visits_record(string $path, string $visitorToken, ?string $referre
         return;
     }
     site_visits_ensure_schema();
-    $stmt = db()->prepare('INSERT INTO site_visits (visitor_token, path, referrer, user_agent) VALUES (?, ?, ?, ?)');
+    $stmt = db()->prepare('INSERT INTO site_visits (visitor_token, user_id, path, referrer, user_agent) VALUES (?, ?, ?, ?, ?)');
     $stmt->execute([
         substr($visitorToken, 0, 64),
+        $userId ?: null,
         substr($path, 0, 512),
         ($referrer !== null && $referrer !== '') ? substr($referrer, 0, 512) : null,
         ($userAgent !== null && $userAgent !== '') ? substr($userAgent, 0, 255) : null,

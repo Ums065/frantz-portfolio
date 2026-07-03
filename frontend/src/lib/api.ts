@@ -337,8 +337,11 @@ export interface AnalyticsPayload {
     unique_total: number
     unique_today: number
     unique_30: number
+    repeated_visitors?: number
+    new_visitors?: number
     daily: Array<{ label: string; value: number; unique: number }>
     top_pages: AnalyticsSeriesRow[]
+    top_referrers?: AnalyticsSeriesRow[]
   }
 }
 

@@ -16,7 +16,7 @@ import SubmissionScoresModal from '../components/admin/SubmissionScoresModal'
 const EDU_PEOPLE_PAGE_SIZE = 10
 
 type TabKey =
-  | 'overview' | 'analytics' | 'requests' | 'orders' | 'subscribers' | 'contacts'
+  | 'overview' | 'analytics' | 'traffic' | 'requests' | 'orders' | 'subscribers' | 'contacts'
   | 'members' | 'approvals' | 'sponsors' | 'awards' | 'events' | 'blog'
   | 'testimonials' | 'media' | 'gallery' | 'community' | 'rsvps' | 'inventory'
   | 'ns-schools' | 'ns-ranking' | 'ns-submissions' | 'ns-interviews' | 'ns-chat' | 'ns-trendcatch' | 'ns-judges'
@@ -26,6 +26,7 @@ const NAV_GROUPS: Array<{ group: string; items: NavItem[] }> = [
   { group: 'Overview', items: [
     { key: 'overview', label: 'Overview' },
     { key: 'analytics', label: 'Analytics' },
+    { key: 'traffic', label: 'Traffic' },
   ] },
   { group: 'People', items: [
     { key: 'members', label: 'User Accounts' },
@@ -875,6 +876,8 @@ export default function Admin() {
               <AnalyticsAdmin />
             </>
           )}
+
+          {tab === 'traffic' && <TrafficAdmin />}
 
         {tab === 'requests' && (
           <>
@@ -2291,6 +2294,168 @@ function AnalyticsAdmin() {
         </div>
         <SeriesBars rows={data?.content_mix || []} />
       </div>
+    </div>
+  )
+}
+
+/* ---------------- Traffic (dedicated tab) ---------------- */
+type LinkedUser = { full_name: string; email: string; role: string }
+type VisitorRow = { token: string; visits: number; first_seen: number; last_seen: number; last_path: string; user_name: string | null; user_email: string | null; user_role: string | null }
+type VisitorList = { visitors: VisitorRow[]; scope: string; page: number; per_page: number; total: number; total_pages: number }
+type VisitRow = { ts: number; path: string; referrer: string | null; user_agent: string | null }
+
+function TrafficAdmin() {
+  const [data, setData] = useState<AnalyticsPayload | null>(null)
+  const [error, setError] = useState('')
+  useEffect(() => {
+    api.get<AnalyticsPayload>('admin/analytics').then(setData).catch((err) => setError(err instanceof Error ? err.message : 'Could not load traffic.'))
+  }, [])
+
+  // Drill-down: click a tile → list visitors; click a visitor → their full visit timeline.
+  const [scope, setScope] = useState<null | 'all' | 'repeat' | 'new'>(null)
+  const [vd, setVd] = useState<VisitorList | null>(null)
+  const [vpage, setVpage] = useState(1)
+  const [selToken, setSelToken] = useState<string | null>(null)
+  const [visits, setVisits] = useState<VisitRow[] | null>(null)
+  const [selUser, setSelUser] = useState<LinkedUser | null>(null)
+
+  useEffect(() => {
+    if (!scope || selToken) return
+    setVd(null)
+    api.get<VisitorList>(`admin/traffic/visitors?scope=${scope}&page=${vpage}`).then(setVd).catch(() => setVd(null))
+  }, [scope, vpage, selToken])
+
+  useEffect(() => {
+    if (!selToken) { setVisits(null); setSelUser(null); return }
+    setVisits(null); setSelUser(null)
+    api.get<{ visits: VisitRow[]; user: LinkedUser | null }>(`admin/traffic/visitor?token=${encodeURIComponent(selToken)}`)
+      .then((d) => { setVisits(d.visits); setSelUser(d.user || null) })
+      .catch(() => setVisits([]))
+  }, [selToken])
+
+  const fmtTs = (s: number) => `${new Date(s * 1000).toLocaleString('en-US', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York' })} ET`
+  const openScope = (s: 'all' | 'repeat' | 'new') => { setScope(s); setVpage(1); setSelToken(null) }
+  const closeModal = () => { setScope(null); setSelToken(null); setVd(null); setVisits(null) }
+
+  const t = data?.traffic
+  if (error) return <p style={{ color: '#e08a8a', fontSize: 13 }}>{error}</p>
+  if (!t) return <p style={{ color: 'var(--muted)', fontSize: 13 }}>Loading traffic…</p>
+
+  const repeated = t.repeated_visitors ?? 0
+  const newV = t.new_visitors ?? 0
+  const returnRate = repeated + newV > 0 ? Math.round((repeated / (repeated + newV)) * 100) : 0
+  const avgPerVisitor = t.unique_total > 0 ? (t.total / t.unique_total).toFixed(1) : '0'
+
+  const tile = (label: string, value: string | number, hint?: string, onClick?: () => void) => (
+    <div key={label} onClick={onClick} role={onClick ? 'button' : undefined}
+      style={{ background: 'rgba(255,255,255,0.03)', border: `1px solid ${onClick ? 'rgba(201,168,76,0.35)' : 'rgba(255,255,255,0.06)'}`, padding: 16, borderRadius: 12, cursor: onClick ? 'pointer' : 'default' }}>
+      <div style={{ color: 'var(--muted)', fontSize: 11, letterSpacing: '.1em', textTransform: 'uppercase' }}>{label}</div>
+      <div className="gold-text" style={{ fontFamily: 'var(--f-serif)', fontSize: 26, marginTop: 6 }}>{typeof value === 'number' ? value.toLocaleString() : value}</div>
+      {hint && <div style={{ color: 'var(--muted)', fontSize: 11, marginTop: 4 }}>{hint}</div>}
+      {onClick && <div style={{ color: 'var(--gold)', fontSize: 11, marginTop: 6, fontWeight: 600 }}>View visitors →</div>}
+    </div>
+  )
+
+  return (
+    <div style={{ display: 'grid', gap: 18 }}>
+      <div className="glass" style={{ padding: 22, borderRadius: 14 }}>
+        <div className="dashboard-section-head" style={{ marginBottom: 18 }}>
+          <h3 className="gold-text">Website Traffic</h3>
+          <span style={{ color: 'var(--muted)', fontSize: 12 }}>First-party page views — who visits, how often, and where they land</span>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 14 }}>
+          {tile('Total visits', t.total, 'All page views ever')}
+          {tile('Visits today', t.today)}
+          {tile('Last 7 days', t.last_7)}
+          {tile('Last 30 days', t.last_30)}
+          {tile('Unique visitors', t.unique_total, 'Distinct people', () => openScope('all'))}
+          {tile('Repeat visitors', repeated, `${returnRate}% came back`, () => openScope('repeat'))}
+          {tile('New visitors', newV, 'Visited once', () => openScope('new'))}
+          {tile('Avg visits / person', avgPerVisitor)}
+        </div>
+      </div>
+
+      <div className="glass" style={{ padding: 22, borderRadius: 14 }}>
+        <div style={{ marginBottom: 12, fontSize: 12, color: '#e9e1d0', textTransform: 'uppercase', letterSpacing: '.08em' }}>Daily visits (last 30 days)</div>
+        <DailyTraffic rows={t.daily} />
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 18 }}>
+        <div className="glass" style={{ padding: 22, borderRadius: 14 }}>
+          <div style={{ marginBottom: 12, fontSize: 12, color: '#e9e1d0', textTransform: 'uppercase', letterSpacing: '.08em' }}>Top pages (30 days)</div>
+          <SeriesBars rows={t.top_pages || []} />
+        </div>
+        <div className="glass" style={{ padding: 22, borderRadius: 14 }}>
+          <div style={{ marginBottom: 12, fontSize: 12, color: '#e9e1d0', textTransform: 'uppercase', letterSpacing: '.08em' }}>Where visitors come from (30 days)</div>
+          <SeriesBars rows={t.top_referrers || []} />
+        </div>
+      </div>
+
+      {scope && (
+        <div className="modal-overlay open" onClick={(e) => e.target === e.currentTarget && closeModal()}>
+          <div className="modal" style={{ maxWidth: 760, width: '96vw', maxHeight: '90vh', overflowY: 'auto', textAlign: 'left', padding: 0, background: 'var(--bg-2, #14130d)' }}>
+            <div style={{ position: 'sticky', top: 0, zIndex: 2, background: 'linear-gradient(180deg,#1c1a12,#14130d)', borderBottom: '1px solid var(--line)', padding: '16px 22px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+              <div>
+                <div style={{ fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', color: 'var(--gold)' }}>Traffic detail</div>
+                <h3 className="gold-text" style={{ margin: '4px 0 0', fontFamily: 'var(--f-serif)', fontSize: 20 }}>
+                  {selToken ? 'Visitor activity' : scope === 'repeat' ? 'Repeat visitors' : scope === 'new' ? 'New visitors' : 'All visitors'}
+                </h3>
+              </div>
+              <button onClick={closeModal} aria-label="Close" title="Close"
+                style={{ flex: '0 0 auto', width: 34, height: 34, borderRadius: '50%', cursor: 'pointer', background: 'rgba(255,255,255,0.06)', border: '1px solid var(--line)', color: 'var(--ivory)', fontSize: 16, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+            </div>
+            <div style={{ padding: '18px 22px' }}>
+              {selToken ? (
+                <>
+                  <button className="btn btn--sm" onClick={() => setSelToken(null)} style={{ marginBottom: 14 }}>‹ Back to visitors</button>
+                  {selUser
+                    ? <p style={{ margin: '0 0 4px', color: 'var(--ivory)' }}>👤 <strong className="gold-text">{selUser.full_name}</strong> · {selUser.email} <span className="msub">({selUser.role})</span></p>
+                    : <p className="msub" style={{ margin: '0 0 4px' }}>👤 Anonymous visitor (never signed in)</p>}
+                  <p className="msub" style={{ fontSize: 12, marginTop: 0 }}>Visitor ID <code>{selToken.slice(0, 12)}…</code> · {visits?.length || 0} page views (latest 200)</p>
+                  {!visits ? <p className="msub">Loading…</p> : visits.length === 0 ? <p className="msub">No visits.</p> : (
+                    <div style={{ overflowX: 'auto' }}>
+                      <table className="admin-table">
+                        <thead><tr><th>When (ET)</th><th>Page</th><th>Came from</th></tr></thead>
+                        <tbody>{visits.map((v, i) => (
+                          <tr key={i}><td className="msub" style={{ fontSize: 12 }}>{fmtTs(v.ts)}</td><td>{v.path}</td><td className="msub" style={{ fontSize: 12 }}>{v.referrer || '(direct)'}</td></tr>
+                        ))}</tbody>
+                      </table>
+                    </div>
+                  )}
+                </>
+              ) : !vd ? <p className="msub">Loading…</p> : vd.visitors.length === 0 ? <p className="msub">No visitors yet.</p> : (
+                <>
+                  <p className="msub" style={{ fontSize: 12, marginTop: 0 }}>{vd.total} visitor{vd.total === 1 ? '' : 's'} — click one to see every visit. Visitors are anonymous first-party IDs.</p>
+                  <div style={{ overflowX: 'auto' }}>
+                    <table className="admin-table">
+                      <thead><tr><th>User</th><th>Visitor ID</th><th>Visits</th><th>First seen</th><th>Last seen</th><th>Last page</th></tr></thead>
+                      <tbody>{vd.visitors.map((v) => (
+                        <tr key={v.token} onClick={() => setSelToken(v.token)} style={{ cursor: 'pointer' }}>
+                          <td>{v.user_name
+                            ? <><strong>{v.user_name}</strong><div className="msub" style={{ fontSize: 12 }}>{v.user_email}{v.user_role ? ` · ${v.user_role}` : ''}</div></>
+                            : <span className="msub">Anonymous</span>}</td>
+                          <td><code style={{ fontSize: 12 }}>{v.token.slice(0, 10)}…</code></td>
+                          <td><strong className="gold-text">{v.visits}</strong></td>
+                          <td className="msub" style={{ fontSize: 12 }}>{fmtTs(v.first_seen)}</td>
+                          <td className="msub" style={{ fontSize: 12 }}>{fmtTs(v.last_seen)}</td>
+                          <td className="msub" style={{ fontSize: 12 }}>{v.last_path}</td>
+                        </tr>
+                      ))}</tbody>
+                    </table>
+                  </div>
+                  {vd.total_pages > 1 && (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, gap: 12 }}>
+                      <button className="btn btn--sm" disabled={vd.page <= 1} onClick={() => setVpage((p) => p - 1)}>‹ Prev</button>
+                      <span className="msub" style={{ fontSize: 13 }}>Page {vd.page} of {vd.total_pages}</span>
+                      <button className="btn btn--sm" disabled={vd.page >= vd.total_pages} onClick={() => setVpage((p) => p + 1)}>Next ›</button>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
