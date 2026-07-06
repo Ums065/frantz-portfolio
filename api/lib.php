@@ -2678,6 +2678,200 @@ function ns_award_ceremony_save(array $c): array
     return ns_award_ceremony();
 }
 
+/* ==================== Our Partners page (dynamic directory) ==================== */
+
+/** Self-healing schema for the partners directory + its editable page content. */
+function partners_ensure_schema(): void
+{
+    static $ready = false;
+    if ($ready) {
+        return;
+    }
+    $pdo = db();
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS partners (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(160) NOT NULL,
+            logo_url VARCHAR(400) DEFAULT NULL,
+            partner_type VARCHAR(60) DEFAULT NULL,
+            industry VARCHAR(60) DEFAULT NULL,
+            borough VARCHAR(60) DEFAULT NULL,
+            county VARCHAR(60) DEFAULT NULL,
+            location VARCHAR(120) DEFAULT NULL,
+            partner_since VARCHAR(12) DEFAULT NULL,
+            website VARCHAR(300) DEFAULT NULL,
+            blurb TEXT DEFAULT NULL,
+            is_featured TINYINT(1) NOT NULL DEFAULT 0,
+            is_media_partner TINYINT(1) NOT NULL DEFAULT 0,
+            status ENUM('draft','published') NOT NULL DEFAULT 'published',
+            sort_order INT NOT NULL DEFAULT 0,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_partners_status (status, sort_order)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS partner_settings (
+            setting_key VARCHAR(64) NOT NULL PRIMARY KEY,
+            setting_value TEXT DEFAULT NULL,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+    $ready = true;
+    partner_seed_defaults();
+}
+
+function partner_setting_get(string $key, string $default = ''): string
+{
+    $stmt = db()->prepare('SELECT setting_value FROM partner_settings WHERE setting_key = ? LIMIT 1');
+    $stmt->execute([$key]);
+    $v = $stmt->fetchColumn();
+    return $v === false || $v === null ? $default : (string) $v;
+}
+function partner_setting_set(string $key, string $value): void
+{
+    db()->prepare('INSERT INTO partner_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_at = NOW()')
+        ->execute([$key, $value]);
+}
+
+/** Seed the partner directory + page content once (no-op if data already present). */
+function partner_seed_defaults(): void
+{
+    $pdo = db();
+    if ((int) $pdo->query('SELECT COUNT(*) FROM partners')->fetchColumn() === 0) {
+        // Extracted from the Our Partners page. Logos are added later via the admin (uploads),
+        // so logo_url is left null and the UI shows an initials placeholder.
+        $seed = [
+            // name, type, industry, borough, county, location, since, media, featured
+            ['Barclays Center', 'Venue Partner', 'Sports & Entertainment', 'Brooklyn', '', 'Brooklyn, NY', '2021', 0, 1],
+            ['JPMorganChase', 'Founding Partner', 'Financial', 'Manhattan', '', 'New York, NY', '2021', 0, 1],
+            ['Wells Fargo', 'Corporate Partner', 'Financial', 'Manhattan', '', 'New York, NY', '2022', 0, 0],
+            ['EmblemHealth', 'Business Partner', 'Healthcare', 'Manhattan', '', 'New York, NY', '2022', 0, 0],
+            ['Montefiore', 'Business Partner', 'Healthcare', 'Bronx', '', 'Bronx, NY', '2022', 0, 0],
+            ['BronxNet', 'Media Partner', 'Television', 'Bronx', '', 'Bronx, NY', '2022', 1, 0],
+            ['Schneps Media', 'Media Partner', 'Media', 'Manhattan', '', 'New York, NY', '2023', 1, 0],
+            ['PIX11', 'Media Partner', 'Television', 'Manhattan', '', 'New York, NY', '2023', 1, 0],
+            ['1010 WINS', 'Media Partner', 'Radio & News', 'Manhattan', '', 'New York, NY', '2023', 1, 0],
+            ['NYC Public Schools', 'School Partner', 'Education', '', '', 'New York, NY', '2021', 0, 0],
+            ['Yonkers Public Schools', 'School Partner', 'Education', '', 'Westchester', 'Yonkers, NY', '2022', 0, 0],
+            ['Westchester County Government', 'Government Partner', 'Government', '', 'Westchester', 'White Plains, NY', '2021', 0, 0],
+        ];
+        $ins = $pdo->prepare(
+            'INSERT INTO partners (name, partner_type, industry, borough, county, location, partner_since, is_media_partner, is_featured, status, sort_order)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, "published", ?)'
+        );
+        foreach ($seed as $i => $r) {
+            $ins->execute([$r[0], $r[1], $r[2], $r[3] ?: null, $r[4] ?: null, $r[5], $r[6], $r[7], $r[8], $i]);
+        }
+    }
+    if ((int) $pdo->query('SELECT COUNT(*) FROM partner_settings')->fetchColumn() === 0) {
+        partner_setting_set('hero_title', 'Our Partners');
+        partner_setting_set('hero_subtitle', 'Building Stronger Communities Together');
+        partner_setting_set('hero_tagline', 'Building stronger futures and creating opportunity for all across New York.');
+        partner_setting_set('stats_json', json_encode([
+            ['label' => 'Partner Organizations', 'value' => '25+'],
+            ['label' => 'Students Engaged', 'value' => '3,500+'],
+            ['label' => 'Interviews Completed', 'value' => '1,200+'],
+            ['label' => 'Communities Served', 'value' => '40+'],
+        ]));
+        partner_setting_set('cta_title', 'Partner With Us');
+        partner_setting_set('cta_text', 'Join a statewide movement connecting students, schools, and businesses to solve real community problems.');
+        partner_setting_set('cta_button_label', 'Become a Partner');
+        partner_setting_set('cta_button_link', '/become-a-founding-sponsor');
+    }
+}
+
+/** Editable page content (hero + impact stats + CTA). */
+function partner_page_payload(): array
+{
+    $stats = json_decode(partner_setting_get('stats_json', '[]'), true);
+    return [
+        'hero' => [
+            'title' => partner_setting_get('hero_title', 'Our Partners'),
+            'subtitle' => partner_setting_get('hero_subtitle', 'Building Stronger Communities Together'),
+            'tagline' => partner_setting_get('hero_tagline', ''),
+            'image' => partner_setting_get('hero_image', ''),
+        ],
+        'stats' => is_array($stats) ? $stats : [],
+        'cta' => [
+            'title' => partner_setting_get('cta_title', 'Partner With Us'),
+            'text' => partner_setting_get('cta_text', ''),
+            'button_label' => partner_setting_get('cta_button_label', 'Become a Partner'),
+            'button_link' => partner_setting_get('cta_button_link', '/become-a-founding-sponsor'),
+        ],
+    ];
+}
+
+/** Persist page content from an admin payload; returns the fresh payload. */
+function partner_page_save(array $b): array
+{
+    partner_setting_set('hero_title', mb_substr(trim((string) ($b['hero']['title'] ?? '')), 0, 120));
+    partner_setting_set('hero_subtitle', mb_substr(trim((string) ($b['hero']['subtitle'] ?? '')), 0, 160));
+    partner_setting_set('hero_tagline', mb_substr(trim((string) ($b['hero']['tagline'] ?? '')), 0, 300));
+    partner_setting_set('hero_image', mb_substr(trim((string) ($b['hero']['image'] ?? '')), 0, 400));
+    $stats = [];
+    foreach ((array) ($b['stats'] ?? []) as $s) {
+        if (!is_array($s)) continue;
+        $label = mb_substr(trim((string) ($s['label'] ?? '')), 0, 60);
+        $value = mb_substr(trim((string) ($s['value'] ?? '')), 0, 40);
+        if ($label !== '' || $value !== '') $stats[] = ['label' => $label, 'value' => $value];
+        if (count($stats) >= 6) break;
+    }
+    partner_setting_set('stats_json', json_encode($stats));
+    partner_setting_set('cta_title', mb_substr(trim((string) ($b['cta']['title'] ?? '')), 0, 120));
+    partner_setting_set('cta_text', mb_substr(trim((string) ($b['cta']['text'] ?? '')), 0, 400));
+    partner_setting_set('cta_button_label', mb_substr(trim((string) ($b['cta']['button_label'] ?? '')), 0, 60));
+    partner_setting_set('cta_button_link', mb_substr(trim((string) ($b['cta']['button_link'] ?? '')), 0, 300));
+    return partner_page_payload();
+}
+
+/** Public payload: published partners + distinct filter values. */
+function partner_public_payload(): array
+{
+    $rows = db()->query(
+        "SELECT id, name, logo_url, partner_type, industry, borough, county, location, partner_since, website, blurb, is_featured, is_media_partner, sort_order
+         FROM partners WHERE status = 'published' ORDER BY is_featured DESC, sort_order ASC, name ASC"
+    )->fetchAll();
+    $uniq = static function (string $col) use ($rows): array {
+        $vals = array_values(array_unique(array_filter(array_map(static fn(array $r): string => trim((string) ($r[$col] ?? '')), $rows))));
+        sort($vals);
+        return $vals;
+    };
+    return [
+        'page' => partner_page_payload(),
+        'partners' => $rows,
+        'types' => $uniq('partner_type'),
+        'industries' => $uniq('industry'),
+        'boroughs' => $uniq('borough'),
+        'counties' => $uniq('county'),
+    ];
+}
+
+/** Normalize + bound a partner record from an admin request body. */
+function partner_values_from_body(array $b): array
+{
+    $link = trim((string) ($b['website'] ?? ''));
+    if ($link !== '' && !preg_match('#^https?://#i', $link)) {
+        $link = 'https://' . $link;
+    }
+    return [
+        'name' => mb_substr(trim((string) ($b['name'] ?? '')), 0, 160),
+        'logo_url' => mb_substr(trim((string) ($b['logo_url'] ?? '')), 0, 400) ?: null,
+        'partner_type' => mb_substr(trim((string) ($b['partner_type'] ?? '')), 0, 60) ?: null,
+        'industry' => mb_substr(trim((string) ($b['industry'] ?? '')), 0, 60) ?: null,
+        'borough' => mb_substr(trim((string) ($b['borough'] ?? '')), 0, 60) ?: null,
+        'county' => mb_substr(trim((string) ($b['county'] ?? '')), 0, 60) ?: null,
+        'location' => mb_substr(trim((string) ($b['location'] ?? '')), 0, 120) ?: null,
+        'partner_since' => mb_substr(trim((string) ($b['partner_since'] ?? '')), 0, 12) ?: null,
+        'website' => mb_substr($link, 0, 300) ?: null,
+        'blurb' => mb_substr(trim((string) ($b['blurb'] ?? '')), 0, 2000) ?: null,
+        'is_featured' => !empty($b['is_featured']) ? 1 : 0,
+        'is_media_partner' => !empty($b['is_media_partner']) ? 1 : 0,
+        'status' => (($b['status'] ?? 'published') === 'draft') ? 'draft' : 'published',
+        'sort_order' => (int) ($b['sort_order'] ?? 0),
+    ];
+}
+
 /**
  * Editable challenge timeline (milestones shown on the public New School page).
  * Stored as JSON in new_school_settings['challenge_timeline']; falls back to the

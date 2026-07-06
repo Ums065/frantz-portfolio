@@ -537,6 +537,11 @@ try {
             json(['awards' => $rows]);
         }
 
+        case $key === 'GET partners': {
+            partners_ensure_schema();
+            json(partner_public_payload());
+        }
+
         case $key === 'GET media': {
             $rows = db()->query(
                 'SELECT id, title, type, summary, body, image, link_url, published_at, is_featured, sort_order
@@ -2237,6 +2242,58 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             $stmt = db()->prepare('DELETE FROM awards WHERE id = ?');
             $stmt->execute([(int) $m[1]]);
             json(['message' => 'Award deleted.']);
+        }
+
+        /* ---------------- ADMIN: PARTNERS CRUD + page content ---------------- */
+        case $key === 'GET admin/partners': {
+            require_admin();
+            partners_ensure_schema();
+            $rows = db()->query('SELECT * FROM partners ORDER BY sort_order ASC, name ASC')->fetchAll();
+            json(['partners' => $rows]);
+        }
+
+        case $key === 'GET admin/partners/settings': {
+            require_admin();
+            partners_ensure_schema();
+            json(['page' => partner_page_payload()]);
+        }
+
+        case $key === 'PUT admin/partners/settings': {
+            require_admin();
+            partners_ensure_schema();
+            json(['message' => 'Page content saved.', 'page' => partner_page_save(body())]);
+        }
+
+        case $key === 'POST admin/partner': {
+            require_admin();
+            partners_ensure_schema();
+            $v = partner_values_from_body(body());
+            if ($v['name'] === '') json(['error' => 'Partner name is required.'], 422);
+            $stmt = db()->prepare(
+                'INSERT INTO partners (name, logo_url, partner_type, industry, borough, county, location, partner_since, website, blurb, is_featured, is_media_partner, status, sort_order)
+                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
+            );
+            $stmt->execute([$v['name'], $v['logo_url'], $v['partner_type'], $v['industry'], $v['borough'], $v['county'], $v['location'], $v['partner_since'], $v['website'], $v['blurb'], $v['is_featured'], $v['is_media_partner'], $v['status'], $v['sort_order']]);
+            json(['id' => (int) db()->lastInsertId(), 'message' => 'Partner created.'], 201);
+        }
+
+        case $method === 'PUT' && preg_match('#^admin/partner/(\d+)$#', $route, $m) === 1: {
+            require_admin();
+            partners_ensure_schema();
+            $v = partner_values_from_body(body());
+            if ($v['name'] === '') json(['error' => 'Partner name is required.'], 422);
+            $stmt = db()->prepare(
+                'UPDATE partners SET name=?, logo_url=?, partner_type=?, industry=?, borough=?, county=?, location=?, partner_since=?, website=?, blurb=?, is_featured=?, is_media_partner=?, status=?, sort_order=? WHERE id=?'
+            );
+            $stmt->execute([$v['name'], $v['logo_url'], $v['partner_type'], $v['industry'], $v['borough'], $v['county'], $v['location'], $v['partner_since'], $v['website'], $v['blurb'], $v['is_featured'], $v['is_media_partner'], $v['status'], $v['sort_order'], (int) $m[1]]);
+            json(['message' => 'Partner updated.']);
+        }
+
+        case $method === 'DELETE' && preg_match('#^admin/partner/(\d+)$#', $route, $m) === 1: {
+            require_admin();
+            partners_ensure_schema();
+            db()->prepare('DELETE FROM partners WHERE id = ?')->execute([(int) $m[1]]);
+            json(['message' => 'Partner deleted.']);
         }
 
         /* ---------------- ADMIN: TESTIMONIALS CRUD ---------------- */
