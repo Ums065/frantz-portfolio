@@ -13,6 +13,9 @@ Options -Indexes
   # Leave the API alone so api/.htaccess can route it to index.php.
   RewriteRule ^api(/.*)?$ - [L]
 
+  # Clean URL: /partner serves the static Our Partners page.
+  RewriteRule ^partner/?$ Our\ Partners.html [L]
+
   # Serve build assets from frontend/dist.
   RewriteRule ^assets/(.*)$ frontend/dist/assets/$1 [L]
 
