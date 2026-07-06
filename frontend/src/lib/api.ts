@@ -221,38 +221,6 @@ export interface AwardRow {
   sort_order: number
 }
 
-export interface PartnerRow {
-  id: number
-  name: string
-  logo_url: string | null
-  partner_type: string | null
-  industry: string | null
-  borough: string | null
-  county: string | null
-  location: string | null
-  partner_since: string | null
-  website: string | null
-  blurb: string | null
-  is_featured: number
-  is_media_partner: number
-  status?: string
-  sort_order: number
-}
-export interface PartnerStat { label: string; value: string }
-export interface PartnerPage {
-  hero: { title: string; subtitle: string; tagline: string; image?: string }
-  stats: PartnerStat[]
-  cta: { title: string; text: string; button_label: string; button_link: string }
-}
-export interface PartnersPayload {
-  page: PartnerPage
-  partners: PartnerRow[]
-  types: string[]
-  industries: string[]
-  boroughs: string[]
-  counties: string[]
-}
-
 export interface MediaRow {
   id: number
   title: string

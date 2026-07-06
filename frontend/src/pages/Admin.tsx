@@ -11,14 +11,13 @@ import NsRecordDetail from '../components/NsRecordDetail'
 import AdminNavIcon from '../components/admin/AdminNavIcon'
 import NsProfileModal, { type ProfileView } from '../components/admin/NsProfileModal'
 import JudgesAdminPanel from '../components/admin/JudgesAdminPanel'
-import PartnersAdminPanel from '../components/admin/PartnersAdminPanel'
 import SubmissionScoresModal from '../components/admin/SubmissionScoresModal'
 
 const EDU_PEOPLE_PAGE_SIZE = 10
 
 type TabKey =
   | 'overview' | 'analytics' | 'traffic' | 'requests' | 'orders' | 'subscribers' | 'contacts'
-  | 'members' | 'approvals' | 'sponsors' | 'partners' | 'awards' | 'events' | 'blog'
+  | 'members' | 'approvals' | 'sponsors' | 'awards' | 'events' | 'blog'
   | 'testimonials' | 'media' | 'gallery' | 'community' | 'rsvps' | 'inventory'
   | 'ns-schools' | 'ns-ranking' | 'ns-submissions' | 'ns-interviews' | 'ns-chat' | 'ns-trendcatch' | 'ns-judges' | 'ns-timeline'
 
@@ -62,7 +61,6 @@ const NAV_GROUPS: Array<{ group: string; items: NavItem[] }> = [
     { key: 'testimonials', label: 'Testimonials' },
     { key: 'media', label: 'Media Library' },
     { key: 'gallery', label: 'Gallery' },
-    { key: 'partners', label: 'Partners' },
   ] },
 ]
 
@@ -1711,7 +1709,6 @@ export default function Admin() {
 
         {tab === 'sponsors' && <SponsorsAdminPanel />}
 
-        {tab === 'partners' && <PartnersAdminPanel />}
         {tab === 'awards' && <AwardsAdmin />}
         {tab === 'events' && <EventsAdmin />}
         {tab === 'blog' && <PostsAdmin />}

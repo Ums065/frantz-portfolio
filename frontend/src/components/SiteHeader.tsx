@@ -10,6 +10,7 @@ const logo = BRAND_LOGO
 type NavItem =
   | { label: string; href: string; kind: 'route'; end?: boolean }
   | { label: string; href: string; kind: 'anchor' }
+  | { label: string; href: string; kind: 'external' }
 
 /* Shared top chrome: scroll progress bar, fixed nav, vertical social rail,
    and the mobile menu. Used on every page (Home, About, Awards).
@@ -36,7 +37,7 @@ export default function SiteHeader({ home = false }: { home?: boolean }) {
     { label: 'Events', href: '/events', kind: 'route' },
     { label: 'Media', href: '/media', kind: 'route' },
     { label: 'Challenge', href: '/new-school', kind: 'route' },
-    { label: 'Partners', href: '/partners', kind: 'route' },
+    { label: 'Partners', href: '/Our%20Partners.html', kind: 'external' },
     ...(user ? [{ label: 'Dashboard', href: dashboardHref, kind: 'route' as const }] : []),
     { label: 'Merch', href: '/store', kind: 'route' },
     { label: 'News', href: '/blog', kind: 'route' },
@@ -99,6 +100,8 @@ export default function SiteHeader({ home = false }: { home?: boolean }) {
                 >
                   {item.label}
                 </NavLink>
+              ) : item.kind === 'external' ? (
+                <a key={item.label} href={item.href}>{item.label}</a>
               ) : (
                 <a key={item.label} href={item.href} data-nav-section>{item.label}</a>
               ),
@@ -183,6 +186,8 @@ export default function SiteHeader({ home = false }: { home?: boolean }) {
               >
                 {item.label}
               </NavLink>
+            ) : item.kind === 'external' ? (
+              <a key={item.label} href={item.href}>{item.label}</a>
             ) : (
               <a key={item.label} href={item.href} data-nav-section>{item.label}</a>
             ),
