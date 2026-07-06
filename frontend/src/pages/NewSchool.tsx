@@ -881,6 +881,7 @@ export default function NewSchool() {
   const [adminRankingTab, setAdminRankingTab] = useState<'students' | 'teachers'>('students')
   const [adminRankSchoolId, setAdminRankSchoolId] = useState('')
   const [studentRankTab, setStudentRankTab] = useState<'school' | 'class'>('school')
+  const [resultsTab, setResultsTab] = useState<'students' | 'schools' | 'teachers'>('students')
   const [schoolRankings, setSchoolRankings] = useState<any[]>([])
   const [recordModal, setRecordModal] = useState<{ entity: RecordEntity; mode: 'view' | 'edit' | 'create'; id: number | null } | null>(null)
   const [recordForm, setRecordForm] = useState<Record<string, any>>({})
@@ -1541,6 +1542,32 @@ export default function NewSchool() {
   const leaderboardSchools = asArray<any>(leaderboards.schools)
   const leaderboardTeachers = asArray<any>(leaderboards.teachers)
   const leaderboardStudents = asArray<any>(leaderboards.students)
+  // Public ranked leaderboards (top 10) for the Results section — one unified row shape
+  // { id, rank, name, sub, right } so students / schools / teachers all render identically.
+  type BoardRow = { id: number; rank: number; name: string; sub: string; right: string }
+  const publicLeaderRows: BoardRow[] = leaderboardStudents
+    .map((r: any) => ({
+      id: Number(r.id),
+      rank: Number(r.rank_position) || 0,
+      name: r.label || r.full_name || 'Student',
+      sub: r.school_name || '—',
+      right: `${Number(r.final_score ?? r.student_points) || 0} pts`,
+    }))
+    .sort((a, b) => (a.rank || 999) - (b.rank || 999))
+  const publicSchoolRows: BoardRow[] = leaderboardSchools.map((r: any, i: number) => ({
+    id: Number(r.id) || i, rank: i + 1, name: r.label || 'School',
+    sub: `${r.principal_name ? `${r.principal_name} · ` : ''}${Number(r.students) || 0} students`,
+    right: `${Number(r.submissions) || 0} subs`,
+  }))
+  const publicTeacherRows: BoardRow[] = leaderboardTeachers.map((r: any, i: number) => ({
+    id: Number(r.id) || i, rank: i + 1, name: r.label || 'Teacher',
+    sub: r.school_name || '—',
+    right: `${Number(r.students) || 0} students`,
+  }))
+  const boardRows = resultsTab === 'students' ? publicLeaderRows : resultsTab === 'schools' ? publicSchoolRows : publicTeacherRows
+  const boardPodium = boardRows.length >= 3
+    ? [2, 1, 3].map((rk) => boardRows.find((r) => r.rank === rk)).filter(Boolean) as BoardRow[]
+    : boardRows.slice(0, 3)
   const latestWinner = winners[0] || null
   const topSchool = leaderboardSchools[0] || schools[0] || null
   const topTeacher = leaderboardTeachers[0] || teachers[0] || null
@@ -1579,13 +1606,15 @@ export default function NewSchool() {
     { amount: `Up to ${formatMoney(scholarshipMax)}`, label: 'Student Scholarships', detail: 'Investing in the next generation of leaders.' },
     { amount: educatorAwardLabel, label: 'Educator Award', detail: 'An all-inclusive vacation award for an outstanding educator.' },
   ]
-  const timelineMilestones = [
-    { phase: 'Registration Opens', when: registrationOpenLabel },
-    { phase: 'Community Challenge Period', when: 'July – 23 November 2026' },
-    { phase: 'Judging & Review', when: '24 November – 20 December 2026' },
-    { phase: 'Winners Announced', when: winnersAnnouncedLabel, highlight: true },
-    { phase: 'Award Ceremony', when: 'Early 2027' },
-  ]
+  const timelineMilestones = (Array.isArray(challenge.timeline) && challenge.timeline.length)
+    ? (challenge.timeline as Array<{ phase: string; when: string; highlight?: boolean }>)
+    : [
+        { phase: 'Registration Opens', when: registrationOpenLabel },
+        { phase: 'Community Challenge Period', when: 'July – 23 November 2026' },
+        { phase: 'Judging & Review', when: '24 November – 20 December 2026' },
+        { phase: 'Winners Announced', when: winnersAnnouncedLabel, highlight: true },
+        { phase: 'Award Ceremony', when: 'Early 2027' },
+      ]
   const featuredAwards = awards.filter((a) => a.featured)
   const heroFacts = [
     `${formatMoney(grantAmount)} School Impact Grant`,
@@ -2323,6 +2352,104 @@ export default function NewSchool() {
               </li>
             ))}
           </ol>
+        </div>
+      </section>
+
+      {/* Dynamic Results — phase-aware: challenge → judging → winners + award ceremony */}
+      <section className="block ns-section" id="results">
+        <div className="wrap">
+          <div className="ns-section__head reveal">
+            <span className="eyebrow">Results</span>
+            <h2>
+              {challenge.phase === 'results' ? 'Winners & Award Ceremony'
+                : challenge.phase === 'judging' ? 'Judging & Review'
+                : 'Challenge In Progress'}
+            </h2>
+            <p>
+              {challenge.phase === 'results' ? 'Congratulations to this year’s winners — see the results and ceremony details below.'
+                : challenge.phase === 'judging' ? `Submissions are closed and our judges are reviewing every project. Winners announced ${winnersAnnouncedLabel}.`
+                : `The community challenge is underway. Submissions close ${deadlineLabel}, then judging begins. Winners announced ${winnersAnnouncedLabel}.`}
+            </p>
+          </div>
+
+          {challenge.phase === 'results' && (
+            <article className="glass ns-dash-card ns-dash-card--wide reveal in ns-leaderboard-card">
+              <div className="ns-dash-card__head">
+                <span className="eyebrow">Final Leaderboard</span>
+              </div>
+              <div className="ns-record-tabs" role="tablist" aria-label="Leaderboard view">
+                <button type="button" role="tab" aria-selected={resultsTab === 'students'} className={`ns-record-tabs__btn ${resultsTab === 'students' ? 'is-active' : ''}`} onClick={() => setResultsTab('students')}>
+                  <strong>Students</strong><span>Top competitors</span><em>{publicLeaderRows.length}</em>
+                </button>
+                <button type="button" role="tab" aria-selected={resultsTab === 'schools'} className={`ns-record-tabs__btn ${resultsTab === 'schools' ? 'is-active' : ''}`} onClick={() => setResultsTab('schools')}>
+                  <strong>Schools</strong><span>By submissions</span><em>{publicSchoolRows.length}</em>
+                </button>
+                <button type="button" role="tab" aria-selected={resultsTab === 'teachers'} className={`ns-record-tabs__btn ${resultsTab === 'teachers' ? 'is-active' : ''}`} onClick={() => setResultsTab('teachers')}>
+                  <strong>Teachers</strong><span>By submissions</span><em>{publicTeacherRows.length}</em>
+                </button>
+              </div>
+
+              {boardRows.length === 0 ? (
+                <p className="ns-muted" style={{ marginTop: 16 }}>No standings yet — check back after judging.</p>
+              ) : (
+                <>
+                  {boardPodium.length > 0 && (
+                    <div className="ns-podium" aria-label="Top performers">
+                      {boardPodium.map((pdm) => (
+                        <div key={`rpodium-${pdm.id}`} className="ns-podium__place" data-rank={pdm.rank}>
+                          <span className="ns-podium__medal" aria-hidden="true">{['🥇', '🥈', '🥉'][pdm.rank - 1] || `#${pdm.rank}`}</span>
+                          <span className="ns-podium__avatar">{avatarInner(pdm.name, undefined)}</span>
+                          <strong className="ns-podium__name">{pdm.name}</strong>
+                          <span className="ns-podium__sub">{pdm.sub}</span>
+                          <span className="ns-podium__score">{pdm.right}</span>
+                          <span className="ns-podium__pedestal">{pdm.rank}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div style={{ display: 'grid', gap: 8, marginTop: 14 }}>
+                    {boardRows.map((r) => (
+                      <div key={`rrow-${r.id}`} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderRadius: 10, background: r.rank <= 3 ? 'rgba(201,168,76,0.08)' : 'rgba(255,255,255,0.03)', border: `1px solid ${r.rank <= 3 ? 'var(--gold)' : 'var(--line)'}` }}>
+                        <span style={{ flex: '0 0 auto', width: 30, textAlign: 'center', fontWeight: 800, fontSize: 15, color: r.rank <= 3 ? 'var(--gold-light)' : 'var(--muted)' }}>{r.rank <= 3 ? ['🥇', '🥈', '🥉'][r.rank - 1] : (r.rank || '—')}</span>
+                        <span className="ns-leader-avatar" aria-hidden="true">{avatarInner(r.name, undefined)}</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <strong style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</strong>
+                          <span className="msub" style={{ fontSize: 12 }}>{r.sub}</span>
+                        </div>
+                        <strong className="gold-text" style={{ flex: '0 0 auto', fontSize: 15, whiteSpace: 'nowrap' }}>{r.right}</strong>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </article>
+          )}
+
+          {challenge.phase === 'results' && (challenge.ceremony?.date || challenge.ceremony?.venue || challenge.ceremony?.description || challenge.ceremony?.link) && (
+            <div className="glass ns-dashboard-entry reveal in" style={{ marginTop: 18 }}>
+              <div>
+                <span className="eyebrow">🎟 Award Ceremony</span>
+                <h3>{challenge.ceremony.date || 'Date to be announced'}</h3>
+                {challenge.ceremony.venue && <p style={{ margin: '4px 0' }}>📍 {challenge.ceremony.venue}</p>}
+                {challenge.ceremony.description && <p style={{ margin: '4px 0' }}>{challenge.ceremony.description}</p>}
+              </div>
+              {challenge.ceremony.link && (
+                <div className="ns-hero__actions">
+                  <a className="btn btn--solid" href={challenge.ceremony.link} target="_blank" rel="noreferrer">Details &amp; RSVP</a>
+                </div>
+              )}
+            </div>
+          )}
+
+          {challenge.phase !== 'results' && (
+            <div className="glass ns-dashboard-entry reveal in">
+              <div>
+                <span className="eyebrow">{challenge.phase === 'judging' ? 'Judging In Progress' : 'Live Standings'}</span>
+                <h3>{liveStudents} students · {liveSchools} schools taking part</h3>
+                <p>{challenge.phase === 'judging' ? 'Results are being finalized. Check back after winners are announced.' : 'Register and start your project to join the movement.'}</p>
+              </div>
+            </div>
+          )}
         </div>
       </section>
 
@@ -3065,6 +3192,12 @@ export default function NewSchool() {
                 </div>
               </article>
 
+              {studentDashboard.submissions_open === false && dashboardTab === 'activity' && studentDashboard.scholarship?.completed && (
+                <div className="ns-alert ns-alert--info reveal in" hidden={dashboardTab !== 'activity'}>
+                  ⏳ The challenge deadline{studentDashboard.submission_deadline ? ` (${formatDateLabel(studentDashboard.submission_deadline)})` : ''} has passed. Your dashboard stays open, but <strong>new business interviews and project submissions are now closed</strong>.
+                </div>
+              )}
+
               <form className="glass ns-form ns-form--compact reveal in" id="business-interviews" onSubmit={submitBusiness} hidden={dashboardTab !== 'activity' || !studentDashboard.scholarship?.completed}>
                 <div className="ns-form__head">
                   <span className="eyebrow">Business Entry</span>
@@ -3101,7 +3234,7 @@ export default function NewSchool() {
                   ))}
                 </div>
                 <TermsAgreement kind="website" idPrefix="ns-business" hideSignature signatureName="" onSignatureChange={() => {}} onAcceptedChange={setBusinessTermsOk} />
-                <button className="btn btn--solid" type="submit" disabled={busy === 'business' || !businessTermsOk}>{busy === 'business' ? 'Saving...' : 'Save Business Interview'}</button>
+                <button className="btn btn--solid" type="submit" disabled={busy === 'business' || !businessTermsOk || studentDashboard.submissions_open === false}>{busy === 'business' ? 'Saving...' : studentDashboard.submissions_open === false ? 'Deadline passed' : 'Save Business Interview'}</button>
               </form>
 
               <form className="glass ns-form ns-form--compact reveal in" id="final-submission" onSubmit={submitSubmission} hidden={dashboardTab !== 'activity' || !studentDashboard.scholarship?.completed}>
@@ -3142,7 +3275,9 @@ export default function NewSchool() {
                       <label className="ns-field ns-field--full"><span>Community Service <small className="ns-field-hint">Optional · +10 bonus · extra community work</small></span><textarea name="community_note" rows={2} placeholder="Describe additional community improvement work (optional)." /></label>
                       <label className="ns-field ns-field--full"><span>Community Service Upload <small className="ns-field-hint">Optional · image or PDF · max 5 MB</small></span><input name="community_file" type="file" accept="image/*,application/pdf" /></label>
                     </div>
-                    {!canStudentSubmit && <div className="ns-alert ns-alert--info">Final submission stays locked until parent consent, teacher approval, and 10 business interviews are complete.</div>}
+                    {!canStudentSubmit && (studentDashboard.submissions_open === false
+                      ? <div className="ns-alert ns-alert--info">The challenge deadline has passed — final project submissions are closed.</div>
+                      : <div className="ns-alert ns-alert--info">Final submission stays locked until parent consent, teacher approval, and 10 business interviews are complete.</div>)}
                     <TermsAgreement kind="website" idPrefix="ns-submission" hideSignature signatureName="" onSignatureChange={() => {}} onAcceptedChange={setSubmissionTermsOk} />
                     <p className="ns-check-hint">Heads up — your final project can be submitted only once and can’t be edited afterward.</p>
                     <button className="btn btn--solid" type="submit" disabled={busy === 'submission' || !canStudentSubmit || !submissionTermsOk}>

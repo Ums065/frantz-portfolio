@@ -30,7 +30,7 @@ export default function JudgesAdminPanel() {
   const [judges, setJudges] = useState<JudgeRow[]>([])
   const [results, setResults] = useState<ResultRow[]>([])
   const [reports, setReports] = useState<ReportRow[]>([])
-  const [settings, setSettings] = useState<{ anonymous_judging: boolean; results_published: boolean }>({ anonymous_judging: false, results_published: false })
+  const [settings, setSettings] = useState<{ anonymous_judging: boolean; results_published: boolean; winners_published: boolean }>({ anonymous_judging: false, results_published: false, winners_published: false })
   const [name, setName] = useState(''); const [email, setEmail] = useState(''); const [password, setPassword] = useState('')
   const [saving, setSaving] = useState(false); const [msg, setMsg] = useState(''); const [err, setErr] = useState('')
   const [showAdd, setShowAdd] = useState(false)
@@ -110,7 +110,7 @@ export default function JudgesAdminPanel() {
     } catch (e2) { setDErr(e2 instanceof Error ? e2.message : 'Could not remove the judge.'); setDetailBusy(false) }
   }
 
-  const toggleSetting = async (key: 'anonymous_judging' | 'results_published') => {
+  const toggleSetting = async (key: 'anonymous_judging' | 'results_published' | 'winners_published') => {
     const next = { ...settings, [key]: !settings[key] }
     setSettings(next)
     try { await api.post('admin/new-school/settings', { [key]: next[key] }) } catch { loadAll() }

@@ -2606,6 +2606,131 @@ function ns_results_published(): bool
     return filter_var(ns_setting_get('results_published', 'false'), FILTER_VALIDATE_BOOLEAN);
 }
 
+/* ---------------- Submission window (admin-editable deadline) ----------------
+ * Registration and dashboards stay open always. This deadline only controls
+ * whether students can still ADD business interviews or SUBMIT their project.
+ */
+function ns_submission_open_date(): string
+{
+    return ns_setting_get('submission_open_date', '2026-06-27');
+}
+function ns_submission_deadline(): string
+{
+    return ns_setting_get('submission_deadline', '2026-08-25');
+}
+function ns_submission_mode(): string
+{
+    $m = ns_setting_get('submission_mode', 'auto');
+    return in_array($m, ['auto', 'open', 'closed'], true) ? $m : 'auto';
+}
+/** True when students can still submit interviews/projects (manual override wins over the date window). */
+function ns_submissions_open(): bool
+{
+    $mode = ns_submission_mode();
+    if ($mode === 'open') {
+        return true;
+    }
+    if ($mode === 'closed') {
+        return false;
+    }
+    // auto: today must fall within [open date, deadline] inclusive (YYYY-MM-DD compares lexically).
+    $today = date('Y-m-d');
+    return $today >= ns_submission_open_date() && $today <= ns_submission_deadline();
+}
+
+/* ---------------- Public results / winners / award ceremony ---------------- */
+/** Admin toggle: are the winners revealed on the public site yet? */
+function ns_winners_published(): bool
+{
+    return filter_var(ns_setting_get('winners_published', 'false'), FILTER_VALIDATE_BOOLEAN);
+}
+/** Which lifecycle phase the public Results section should show. */
+function ns_challenge_phase(): string
+{
+    if (ns_winners_published()) {
+        return 'results';
+    }
+    if (date('Y-m-d') > ns_submission_deadline()) {
+        return 'judging';
+    }
+    return 'challenge';
+}
+/** Admin-editable award ceremony details shown once winners are published. */
+function ns_award_ceremony(): array
+{
+    return [
+        'date' => ns_setting_get('ceremony_date', ''),
+        'venue' => ns_setting_get('ceremony_venue', ''),
+        'description' => ns_setting_get('ceremony_description', ''),
+        'link' => ns_setting_get('ceremony_link', ''),
+    ];
+}
+function ns_award_ceremony_save(array $c): array
+{
+    ns_setting_set('ceremony_date', mb_substr(trim((string) ($c['date'] ?? '')), 0, 120));
+    ns_setting_set('ceremony_venue', mb_substr(trim((string) ($c['venue'] ?? '')), 0, 200));
+    ns_setting_set('ceremony_description', mb_substr(trim((string) ($c['description'] ?? '')), 0, 600));
+    $link = trim((string) ($c['link'] ?? ''));
+    if ($link !== '' && !preg_match('#^https?://#i', $link)) {
+        $link = 'https://' . $link;
+    }
+    ns_setting_set('ceremony_link', mb_substr($link, 0, 300));
+    return ns_award_ceremony();
+}
+
+/**
+ * Editable challenge timeline (milestones shown on the public New School page).
+ * Stored as JSON in new_school_settings['challenge_timeline']; falls back to the
+ * default schedule when an admin hasn't customized it yet.
+ */
+function ns_challenge_timeline(): array
+{
+    $raw = ns_setting_get('challenge_timeline', '');
+    if ($raw !== '') {
+        $decoded = json_decode($raw, true);
+        if (is_array($decoded)) {
+            $out = [];
+            foreach ($decoded as $m) {
+                if (!is_array($m)) continue;
+                $phase = trim((string) ($m['phase'] ?? ''));
+                $when = trim((string) ($m['when'] ?? ''));
+                if ($phase === '' && $when === '') continue;
+                $out[] = ['phase' => $phase, 'when' => $when, 'highlight' => !empty($m['highlight'])];
+            }
+            if ($out) return $out;
+        }
+    }
+    return [
+        ['phase' => 'Registration Opens',        'when' => 'June 27, 2026',                 'highlight' => false],
+        ['phase' => 'Community Challenge Period', 'when' => 'July – 23 November 2026',        'highlight' => false],
+        ['phase' => 'Judging & Review',           'when' => '24 November – 20 December 2026', 'highlight' => false],
+        ['phase' => 'Winners Announced',          'when' => 'December 21, 2026',              'highlight' => true],
+        ['phase' => 'Award Ceremony',             'when' => 'Early 2027',                     'highlight' => false],
+    ];
+}
+
+/** Validate + persist a timeline (array of {phase, when, highlight}). Returns the saved list. */
+function ns_challenge_timeline_save(array $items): array
+{
+    $clean = [];
+    foreach ($items as $m) {
+        if (!is_array($m)) continue;
+        $phase = trim((string) ($m['phase'] ?? ''));
+        $when = trim((string) ($m['when'] ?? ''));
+        if ($phase === '' && $when === '') continue;
+        $clean[] = ['phase' => mb_substr($phase, 0, 120), 'when' => mb_substr($when, 0, 120), 'highlight' => !empty($m['highlight'])];
+        if (count($clean) >= 20) break;
+    }
+    // JSON_INVALID_UTF8_SUBSTITUTE: never fail (and silently wipe the setting) on a
+    // stray byte; JSON_UNESCAPED_UNICODE keeps en-dashes/emoji readable in storage.
+    $json = json_encode($clean, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
+    if ($json === false) {
+        $json = json_encode($clean); // last-resort fallback
+    }
+    ns_setting_set('challenge_timeline', $json !== false ? $json : '[]');
+    return ns_challenge_timeline();
+}
+
 /** True when this judge has any active (non-recused) assignments. */
 function new_school_judge_has_assignments(int $judgeUserId): bool
 {
@@ -3761,6 +3886,7 @@ function new_school_public_leaderboards(): array
     $students = db()->query(
         'SELECT s.id, s.full_name AS label, s.grade_level, s.teacher_id, s.school_id, s.parent_consent_status, s.school_approval_status,
                 s.teacher_approval_status, s.submission_status,
+                (SELECT sc.school_name FROM new_school_schools sc WHERE sc.id = s.school_id) AS school_name,
                 (SELECT COUNT(*) FROM new_school_business_interviews bi WHERE bi.student_id = s.id) AS interview_count,
                 (SELECT COUNT(*) FROM new_school_submissions sub WHERE sub.student_id = s.id) AS has_submission,
                 (SELECT sub.score FROM new_school_submissions sub WHERE sub.student_id = s.id LIMIT 1) AS submission_score,
@@ -3773,7 +3899,7 @@ function new_school_public_leaderboards(): array
 
     return [
         'schools' => db()->query(
-            'SELECT sc.id, sc.school_name AS label,
+            'SELECT sc.id, sc.school_name AS label, sc.principal_name,
                     COUNT(DISTINCT st.id) AS students,
                     SUM(CASE WHEN st.parent_consent_status = "approved" THEN 1 ELSE 0 END) AS parent_approved,
                     SUM(CASE WHEN st.school_approval_status = "approved" THEN 1 ELSE 0 END) AS school_approved,
@@ -3782,12 +3908,13 @@ function new_school_public_leaderboards(): array
              FROM new_school_schools sc
              LEFT JOIN new_school_students st ON st.school_id = sc.id
              LEFT JOIN new_school_submissions sub ON sub.student_id = st.id
-             GROUP BY sc.id, sc.school_name
+             GROUP BY sc.id, sc.school_name, sc.principal_name
              ORDER BY submissions DESC, teacher_approved DESC, students DESC
              LIMIT 10'
         )->fetchAll(),
         'teachers' => db()->query(
             'SELECT t.id, t.teacher_full_name AS label,
+                    (SELECT sc.school_name FROM new_school_schools sc WHERE sc.id = t.school_id) AS school_name,
                     COUNT(DISTINCT st.id) AS students,
                     SUM(CASE WHEN st.parent_consent_status = "approved" THEN 1 ELSE 0 END) AS parent_approved,
                     SUM(CASE WHEN st.school_approval_status = "approved" THEN 1 ELSE 0 END) AS school_approved,

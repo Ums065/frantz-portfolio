@@ -19,7 +19,7 @@ type TabKey =
   | 'overview' | 'analytics' | 'traffic' | 'requests' | 'orders' | 'subscribers' | 'contacts'
   | 'members' | 'approvals' | 'sponsors' | 'awards' | 'events' | 'blog'
   | 'testimonials' | 'media' | 'gallery' | 'community' | 'rsvps' | 'inventory'
-  | 'ns-schools' | 'ns-ranking' | 'ns-submissions' | 'ns-interviews' | 'ns-chat' | 'ns-trendcatch' | 'ns-judges'
+  | 'ns-schools' | 'ns-ranking' | 'ns-submissions' | 'ns-interviews' | 'ns-chat' | 'ns-trendcatch' | 'ns-judges' | 'ns-timeline'
 
 interface NavItem { key: TabKey; label: string }
 const NAV_GROUPS: Array<{ group: string; items: NavItem[] }> = [
@@ -39,6 +39,7 @@ const NAV_GROUPS: Array<{ group: string; items: NavItem[] }> = [
     { key: 'ns-ranking', label: 'Ranking' },
     { key: 'ns-submissions', label: 'Student Submissions' },
     { key: 'ns-judges', label: 'Judges & Scoring' },
+    { key: 'ns-timeline', label: 'Challenge Timeline' },
     { key: 'ns-interviews', label: 'Business Interviews' },
     { key: 'ns-chat', label: 'Messages' },
     { key: 'ns-trendcatch', label: 'TrendCatch EDU' },
@@ -1411,6 +1412,8 @@ export default function Admin() {
 
         {tab === 'ns-judges' && <JudgesAdminPanel />}
 
+        {tab === 'ns-timeline' && <TimelineAdmin />}
+
         {tab === 'ns-interviews' && (
           <>
             <StatChips items={[{ label: 'Business Interviews', value: nsInterviews.length, tone: 'gold' }]} />
@@ -2452,6 +2455,237 @@ function TrafficAdmin() {
                   )}
                 </>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ---------------- Challenge Timeline (admin-editable) ---------------- */
+type Milestone = { phase: string; when: string; highlight?: boolean }
+type SubmissionWindow = { open_date: string; deadline: string; mode: string; is_open: boolean }
+type Ceremony = { date: string; venue: string; description: string; link: string }
+function TimelineAdmin() {
+  const [rows, setRows] = useState<Milestone[]>([])
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState(''); const [err, setErr] = useState('')
+  const [reg, setReg] = useState<SubmissionWindow>({ open_date: '', deadline: '', mode: 'auto', is_open: true })
+  const [regBusy, setRegBusy] = useState(false); const [regMsg, setRegMsg] = useState(''); const [regErr, setRegErr] = useState('')
+  const [cer, setCer] = useState<Ceremony>({ date: '', venue: '', description: '', link: '' })
+  const [cerBusy, setCerBusy] = useState(false); const [cerMsg, setCerMsg] = useState(''); const [cerErr, setCerErr] = useState('')
+  const [winnersPub, setWinnersPub] = useState(false)
+  const [sub, setSub] = useState<'deadline' | 'winners' | 'ceremony' | 'timeline'>('deadline')
+  useEffect(() => {
+    api.get<{ timeline: Milestone[] }>('admin/new-school/timeline').then((d) => setRows(d.timeline || [])).catch(() => {})
+    api.get<{ submission_window: SubmissionWindow }>('admin/new-school/submission-window').then((d) => setReg(d.submission_window)).catch(() => {})
+    api.get<{ ceremony: Ceremony }>('admin/new-school/ceremony').then((d) => setCer(d.ceremony)).catch(() => {})
+    api.get<{ settings: { winners_published: boolean } }>('admin/new-school/settings').then((d) => setWinnersPub(!!d.settings.winners_published)).catch(() => {})
+  }, [])
+  const [pendingPublish, setPendingPublish] = useState<boolean | null>(null)
+  const [pubBusy, setPubBusy] = useState(false)
+  const applyPublish = async () => {
+    if (pendingPublish === null) return
+    const next = pendingPublish
+    setPubBusy(true)
+    try {
+      await api.post('admin/new-school/settings', { winners_published: next })
+      setWinnersPub(next); setPendingPublish(null)
+    } catch { /* keep modal open on failure */ } finally { setPubBusy(false) }
+  }
+  const saveCer = async () => {
+    setCerBusy(true); setCerMsg(''); setCerErr('')
+    try {
+      const d = await api.put<{ ceremony: Ceremony }>('admin/new-school/ceremony', cer)
+      setCer(d.ceremony); setCerMsg('Award ceremony saved.')
+    } catch (e) { setCerErr(e instanceof Error ? e.message : 'Could not save the ceremony.') } finally { setCerBusy(false) }
+  }
+  const saveReg = async () => {
+    setRegBusy(true); setRegMsg(''); setRegErr('')
+    try {
+      const d = await api.put<{ submission_window: SubmissionWindow }>('admin/new-school/submission-window', { open_date: reg.open_date, deadline: reg.deadline, mode: reg.mode })
+      setReg(d.submission_window); setRegMsg('Submission deadline saved — live for students now.')
+    } catch (e) { setRegErr(e instanceof Error ? e.message : 'Could not save the submission deadline.') } finally { setRegBusy(false) }
+  }
+  const update = (i: number, patch: Partial<Milestone>) => setRows((r) => r.map((row, idx) => idx === i ? { ...row, ...patch } : row))
+  const remove = (i: number) => setRows((r) => r.filter((_, idx) => idx !== i))
+  const add = () => setRows((r) => [...r, { phase: '', when: '', highlight: false }])
+  const move = (i: number, dir: number) => setRows((r) => { const n = [...r]; const j = i + dir; if (j < 0 || j >= n.length) return n;[n[i], n[j]] = [n[j], n[i]]; return n })
+  const save = async () => {
+    setBusy(true); setMsg(''); setErr('')
+    try {
+      const d = await api.put<{ timeline: Milestone[] }>('admin/new-school/timeline', { timeline: rows.filter((r) => r.phase.trim() || r.when.trim()) })
+      setRows(d.timeline || []); setMsg('Timeline saved — it is now live on the New School page.')
+    } catch (e) { setErr(e instanceof Error ? e.message : 'Could not save the timeline.') } finally { setBusy(false) }
+  }
+  const inp = { padding: '9px 11px', borderRadius: 8, border: '1px solid var(--line)', background: 'rgba(255,255,255,0.04)', color: 'var(--ivory)', fontSize: 13, width: '100%' }
+  const optStyle = { background: '#181509', color: 'var(--ivory)' }
+  const fieldLabel = { display: 'grid', gap: 5, fontSize: 11, fontWeight: 600 as const, letterSpacing: '.04em', textTransform: 'uppercase' as const, color: 'var(--muted)' }
+  const pill = (label: string, ok: boolean) => (
+    <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', padding: '4px 11px', borderRadius: 999, whiteSpace: 'nowrap', color: '#14110a', background: ok ? 'var(--green-bright, #7bd88f)' : '#e0a15a' }}>{label}</span>
+  )
+  const cardHead = (n: number, title: string, sub: string, right?: React.ReactNode) => (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+      <span style={{ flex: '0 0 auto', width: 28, height: 28, borderRadius: '50%', background: 'rgba(201,168,76,0.14)', border: '1px solid var(--gold)', color: 'var(--gold-light)', fontWeight: 800, fontSize: 13, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{n}</span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <h3 className="gold-text" style={{ margin: 0, fontSize: 16 }}>{title}</h3>
+        <p className="msub" style={{ margin: '2px 0 0', fontSize: 12 }}>{sub}</p>
+      </div>
+      {right}
+    </div>
+  )
+  const cardStyle = { padding: '18px 20px' }
+  const subTabs: Array<{ key: typeof sub; label: string; right?: React.ReactNode }> = [
+    { key: 'deadline', label: 'Submission Deadline', right: pill(reg.is_open ? 'Open' : 'Closed', reg.is_open) },
+    { key: 'winners', label: 'Publish Winners', right: pill(winnersPub ? 'Live' : 'Hidden', winnersPub) },
+    { key: 'ceremony', label: 'Award Ceremony' },
+    { key: 'timeline', label: `Timeline (${rows.length})` },
+  ]
+  const tabBtn = (active: boolean): React.CSSProperties => ({
+    display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer', whiteSpace: 'nowrap',
+    padding: '9px 14px', borderRadius: '10px 10px 0 0', fontSize: 13, fontWeight: 600,
+    border: '1px solid var(--line)', borderBottom: 'none',
+    background: active ? 'var(--bg-2, #14130d)' : 'transparent', color: active ? 'var(--gold-light)' : 'var(--muted)',
+  })
+  return (
+    <div style={{ display: 'grid', gap: 16, maxWidth: 820 }}>
+      {/* Sub-tab bar */}
+      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', borderBottom: '1px solid var(--line)' }}>
+        {subTabs.map((t) => (
+          <button key={t.key} type="button" onClick={() => setSub(t.key)} style={tabBtn(sub === t.key)}>
+            {t.label}{t.right}
+          </button>
+        ))}
+      </div>
+
+      {/* 1 — Submission deadline */}
+      {sub === 'deadline' && (
+      <div className="glass" style={cardStyle}>
+        {cardHead(1, 'Submission Deadline', 'Gate for business interviews & project submissions', pill(reg.is_open ? 'Open' : 'Closed', reg.is_open))}
+        <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: 0 }}>Registration &amp; dashboards always stay open — this only controls whether students can still submit. <strong>Auto</strong> = open between the dates, closes after the deadline. <strong>Force open / closed</strong> overrides the dates.</p>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 12 }}>
+          <label style={fieldLabel}>Submissions open
+            <input type="date" value={reg.open_date} onChange={(e) => setReg((r) => ({ ...r, open_date: e.target.value }))} style={inp} /></label>
+          <label style={fieldLabel}>Submission deadline
+            <input type="date" value={reg.deadline} onChange={(e) => setReg((r) => ({ ...r, deadline: e.target.value }))} style={inp} /></label>
+          <label style={fieldLabel}>Mode
+            <select value={reg.mode} onChange={(e) => setReg((r) => ({ ...r, mode: e.target.value }))} style={inp}>
+              <option style={optStyle} value="auto">Auto (by dates)</option>
+              <option style={optStyle} value="open">Force open</option>
+              <option style={optStyle} value="closed">Force closed</option>
+            </select></label>
+        </div>
+        <div style={{ display: 'flex', gap: 10, marginTop: 14, alignItems: 'center', flexWrap: 'wrap' }}>
+          <button className="btn btn--solid btn--sm" type="button" onClick={saveReg} disabled={regBusy}>{regBusy ? 'Saving…' : 'Save Deadline'}</button>
+          {regErr && <span className="msub" style={{ color: '#e08a8a' }}>{regErr}</span>}
+          {regMsg && <span className="msub" style={{ color: 'var(--green-bright)' }}>{regMsg}</span>}
+        </div>
+      </div>
+      )}
+
+      {/* 2 — Publish winners */}
+      {sub === 'winners' && (
+      <div className="glass" style={cardStyle}>
+        {cardHead(2, 'Publish Winners', 'Reveal the winners board & ceremony on the public site', pill(winnersPub ? 'Live' : 'Hidden', winnersPub))}
+        <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: 0 }}>Publishing reveals the winners board &amp; award ceremony on the public New School page and <strong>locks all judge scoring &amp; points</strong>. You'll be asked to confirm first.</p>
+        <button
+          type="button"
+          className={winnersPub ? 'btn btn--sm' : 'btn btn--solid btn--sm'}
+          onClick={() => setPendingPublish(!winnersPub)}
+          style={winnersPub ? { color: '#e08a8a', borderColor: '#e08a8a' } : undefined}
+        >
+          {winnersPub ? 'Unpublish results' : 'Publish winners & lock scoring'}
+        </button>
+        <p className="msub" style={{ marginTop: 10, marginBottom: 0 }}>Status: <strong style={{ color: winnersPub ? 'var(--green-bright)' : '#e08a8a' }}>{winnersPub ? 'LIVE — winners visible to everyone' : 'Hidden — winners not shown publicly'}</strong></p>
+      </div>
+      )}
+
+      {/* 3 — Award ceremony */}
+      {sub === 'ceremony' && (
+      <div className="glass" style={cardStyle}>
+        {cardHead(3, 'Award Ceremony', 'Details shown in the public Results section after winners are published')}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 12 }}>
+          <label style={fieldLabel}>Date <span style={{ textTransform: 'none', fontWeight: 400 }}>(free text)</span>
+            <input value={cer.date} onChange={(e) => setCer((c) => ({ ...c, date: e.target.value }))} placeholder="e.g. Early 2027" style={inp} /></label>
+          <label style={fieldLabel}>Venue / location
+            <input value={cer.venue} onChange={(e) => setCer((c) => ({ ...c, venue: e.target.value }))} placeholder="e.g. City Hall, Yonkers NY" style={inp} /></label>
+          <label style={{ ...fieldLabel, gridColumn: '1 / -1' }}>Description
+            <textarea value={cer.description} onChange={(e) => setCer((c) => ({ ...c, description: e.target.value }))} placeholder="Short details about the ceremony…" rows={2} style={{ ...inp, resize: 'vertical' }} /></label>
+          <label style={{ ...fieldLabel, gridColumn: '1 / -1' }}>RSVP / details link
+            <input value={cer.link} onChange={(e) => setCer((c) => ({ ...c, link: e.target.value }))} placeholder="https://…" style={inp} /></label>
+        </div>
+        <div style={{ display: 'flex', gap: 10, marginTop: 14, alignItems: 'center', flexWrap: 'wrap' }}>
+          <button className="btn btn--solid btn--sm" type="button" onClick={saveCer} disabled={cerBusy}>{cerBusy ? 'Saving…' : 'Save Ceremony'}</button>
+          {cerErr && <span className="msub" style={{ color: '#e08a8a' }}>{cerErr}</span>}
+          {cerMsg && <span className="msub" style={{ color: 'var(--green-bright)' }}>{cerMsg}</span>}
+        </div>
+      </div>
+      )}
+
+      {/* 4 — Timeline milestones */}
+      {sub === 'timeline' && (
+      <div className="glass" style={cardStyle}>
+        {cardHead(4, 'Timeline Milestones', 'The dated steps shown on the public New School page', <span className="msub" style={{ fontSize: 12 }}>{rows.length} step{rows.length === 1 ? '' : 's'}</span>)}
+        <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: 0 }}>Reorder with ↑ ↓ · tick ★ to gold-highlight a step (e.g. Winners Announced) · ✕ to remove.</p>
+        <div style={{ display: 'grid', gap: 8 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '26px 1fr 1fr 128px', gap: 8, padding: '0 12px', fontSize: 10, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--muted)' }}>
+            <span>#</span><span>Milestone</span><span>When</span><span style={{ textAlign: 'right' }}>Actions</span>
+          </div>
+          {rows.map((row, i) => (
+            <div key={i} style={{ display: 'grid', gridTemplateColumns: '26px 1fr 1fr 128px', gap: 8, alignItems: 'center', background: row.highlight ? 'rgba(201,168,76,0.08)' : 'rgba(255,255,255,0.03)', border: `1px solid ${row.highlight ? 'var(--gold)' : 'var(--line)'}`, borderRadius: 10, padding: '9px 12px' }}>
+              <span className="msub" style={{ fontSize: 13, fontWeight: 700, textAlign: 'center' }}>{i + 1}</span>
+              <input value={row.phase} onChange={(e) => update(i, { phase: e.target.value })} placeholder="Milestone name" style={inp} />
+              <input value={row.when} onChange={(e) => update(i, { when: e.target.value })} placeholder="e.g. June 27, 2026" style={inp} />
+              <div style={{ display: 'flex', gap: 4, alignItems: 'center', justifyContent: 'flex-end' }}>
+                <button type="button" title="Highlight" onClick={() => update(i, { highlight: !row.highlight })} style={{ cursor: 'pointer', background: 'none', border: 0, fontSize: 16, color: row.highlight ? 'var(--gold)' : 'var(--muted)', padding: 2 }}>★</button>
+                <button className="btn btn--sm" type="button" title="Move up" onClick={() => move(i, -1)} disabled={i === 0} style={{ padding: '4px 8px' }}>↑</button>
+                <button className="btn btn--sm" type="button" title="Move down" onClick={() => move(i, 1)} disabled={i === rows.length - 1} style={{ padding: '4px 8px' }}>↓</button>
+                <button className="btn btn--sm" type="button" title="Remove" style={{ color: '#e08a8a', borderColor: '#e08a8a', padding: '4px 8px' }} onClick={() => remove(i)}>✕</button>
+              </div>
+            </div>
+          ))}
+          {rows.length === 0 && <p className="msub">No milestones yet — add the first one.</p>}
+        </div>
+        <div style={{ display: 'flex', gap: 10, marginTop: 14, alignItems: 'center', flexWrap: 'wrap' }}>
+          <button className="btn btn--sm" type="button" onClick={add}>+ Add milestone</button>
+          <button className="btn btn--solid btn--sm" type="button" onClick={save} disabled={busy}>{busy ? 'Saving…' : 'Save Timeline'}</button>
+          {err && <span className="msub" style={{ color: '#e08a8a' }}>{err}</span>}
+          {msg && <span className="msub" style={{ color: 'var(--green-bright)' }}>{msg}</span>}
+        </div>
+      </div>
+      )}
+
+      {/* Publish/unpublish confirmation */}
+      {pendingPublish !== null && (
+        <div className="modal-overlay open" onClick={(e) => e.target === e.currentTarget && !pubBusy && setPendingPublish(null)}>
+          <div className="modal" style={{ maxWidth: 460, width: '94vw', textAlign: 'left', padding: 0, background: 'var(--bg-2, #14130d)' }}>
+            <div style={{ borderBottom: '1px solid var(--line)', padding: '16px 22px' }}>
+              <h3 className="gold-text" style={{ margin: 0, fontFamily: 'var(--f-serif)' }}>{pendingPublish ? 'Publish results?' : 'Unpublish results?'}</h3>
+            </div>
+            <div style={{ padding: '18px 22px' }}>
+              {pendingPublish ? (
+                <p style={{ margin: '0 0 12px', color: 'var(--ivory)', lineHeight: 1.6 }}>
+                  This reveals the <strong>winners board &amp; award ceremony publicly</strong> on the New School page and <strong>locks the competition</strong>:
+                </p>
+              ) : (
+                <p style={{ margin: '0 0 12px', color: 'var(--ivory)', lineHeight: 1.6 }}>
+                  This <strong>hides the winners</strong> from the public site again and <strong>re-opens</strong> judge scoring &amp; points. Use only if you published by mistake.
+                </p>
+              )}
+              {pendingPublish && (
+                <ul style={{ margin: '0 0 14px', paddingLeft: 20, color: 'var(--muted)', fontSize: 13, lineHeight: 1.7 }}>
+                  <li>Judges can no longer score or edit any scores.</li>
+                  <li>No more bonus points can be awarded.</li>
+                  <li>Projects stay viewable, but nothing can be changed.</li>
+                </ul>
+              )}
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                <button className="btn btn--sm" type="button" onClick={() => setPendingPublish(null)} disabled={pubBusy}>Cancel</button>
+                <button className="btn btn--solid btn--sm" type="button" onClick={applyPublish} disabled={pubBusy}>
+                  {pubBusy ? 'Working…' : pendingPublish ? 'Yes, publish & lock' : 'Yes, unpublish'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

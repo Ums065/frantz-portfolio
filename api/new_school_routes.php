@@ -322,8 +322,10 @@ function new_school_build_student_context(array $student): array
         ],
         'notifications' => new_school_fetch_notifications_for_scope([$studentId], ['student', 'parent'], 12),
         'status_tracker' => new_school_status_tracker($student, $interviewCount),
-        'submission_locked' => new_school_submission_is_locked($student, $interviewCount),
-        'can_submit' => !new_school_submission_is_locked($student, $interviewCount),
+        'submission_locked' => new_school_submission_is_locked($student, $interviewCount) || !ns_submissions_open(),
+        'can_submit' => !new_school_submission_is_locked($student, $interviewCount) && ns_submissions_open(),
+        'submissions_open' => ns_submissions_open(),
+        'submission_deadline' => ns_submission_deadline(),
         'performance_score' => new_school_student_performance_score(array_merge($student, [
             'interview_count' => $interviewCount,
             'submission_score' => $submission['score'] ?? null,
@@ -512,15 +514,21 @@ function new_school_handle_route(string $method, string $route): bool
                     'title' => 'WHAT PROBLEM WILL YOU SOLVE?',
                     'subtitle' => 'Join New York\'s Largest Student Problem-Solving Movement',
                     'lead' => 'Students interview 10 local businesses, identify a community problem, develop a solution, and compete for scholarships, school grants, and statewide recognition.',
-                    'registration_open' => '2026-06-27',
+                    'registration_open' => ns_submission_open_date(),
                     'winners_announced' => '2026-12-21',
                     'school_grant_amount' => 25000,
                     'student_scholarship_max_amount' => 10000,
                     'educator_award_label' => 'Educator Recognition Award',
                     'age_range' => '11-19',
                     'grade_range' => '6-12',
-                    'deadline' => '2026-08-25',
+                    'deadline' => ns_submission_deadline(),
                     'website' => 'FrantzCoutard.com',
+                    'timeline' => ns_challenge_timeline(),
+                    'submissions_open' => ns_submissions_open(),
+                    'submission_mode' => ns_submission_mode(),
+                    'phase' => ns_challenge_phase(),
+                    'winners_published' => ns_winners_published(),
+                    'ceremony' => ns_award_ceremony(),
                 ],
                 'summary' => [
                     'students' => 0,
@@ -590,15 +598,18 @@ function new_school_handle_route(string $method, string $route): bool
                     new_school_fetch_all_teachers(true)
                 );
 
-                $payload['winners'] = db()->query(
-                    'SELECT w.id, w.place, w.scholarship_amount, w.announced_at, w.published_at,
-                            s.full_name AS student_name, s.grade_level, sc.school_name, sub.score, sub.rank_position
-                     FROM new_school_winners w
-                     INNER JOIN new_school_students s ON s.id = w.student_id
-                     INNER JOIN new_school_submissions sub ON sub.id = w.submission_id
-                     LEFT JOIN new_school_schools sc ON sc.id = s.school_id
-                     ORDER BY w.created_at DESC'
-                )->fetchAll();
+                // Winners are only exposed publicly once an admin flips the "Publish winners" toggle.
+                $payload['winners'] = ns_winners_published()
+                    ? db()->query(
+                        'SELECT w.id, w.place, w.scholarship_amount, w.announced_at, w.published_at,
+                                s.full_name AS student_name, s.grade_level, sc.school_name, sub.score, sub.rank_position
+                         FROM new_school_winners w
+                         INNER JOIN new_school_students s ON s.id = w.student_id
+                         INNER JOIN new_school_submissions sub ON sub.id = w.submission_id
+                         LEFT JOIN new_school_schools sc ON sc.id = s.school_id
+                         ORDER BY w.place ASC, w.created_at DESC'
+                    )->fetchAll()
+                    : [];
 
                 $payload['summary'] = new_school_public_summary();
                 $payload['leaderboards'] = new_school_public_leaderboards();
@@ -2309,6 +2320,10 @@ function new_school_handle_route(string $method, string $route): bool
             if (in_array($user['role'], ['teacher', 'school'], true)) {
                 json(['error' => 'Interviews are entered by students; your role is read-only for interview content.'], 403);
             }
+            // Challenge deadline: students/parents can no longer add interviews once closed.
+            if (in_array($user['role'], ['student', 'parent'], true) && !ns_submissions_open()) {
+                json(['error' => 'The challenge deadline has passed — you can no longer add business interviews.'], 403);
+            }
             $student = null;
             $studentId = (int) ($body['student_id'] ?? 0);
 
@@ -2518,6 +2533,10 @@ function new_school_handle_route(string $method, string $route): bool
 
         case $key === 'POST new-school/submission': {
             $user = require_login();
+            // Challenge deadline: students/parents can no longer submit the project once closed.
+            if (in_array($user['role'], ['student', 'parent'], true) && !ns_submissions_open()) {
+                json(['error' => 'The challenge deadline has passed — project submissions are closed.'], 403);
+            }
             $student = null;
 
             if ($user['role'] === 'student') {
@@ -3325,6 +3344,10 @@ function new_school_handle_route(string $method, string $route): bool
             // Admin bonus points on approval (student up to 15, teacher up to 8, default 3).
             // Idempotent: re-submitting REPLACES the bonus for this interview/project.
             $reviewer = require_admin();
+            // Locked once results are published — no more points can be awarded.
+            if (ns_winners_published()) {
+                json(['error' => 'Results have been published — awarding points is now locked.'], 423);
+            }
             $sourceType = field($body, 'source_type');
             $sourceId = (int) ($body['source_id'] ?? 0);
             if (!in_array($sourceType, ['interview', 'project'], true) || $sourceId <= 0) {
@@ -4084,6 +4107,7 @@ function new_school_handle_route(string $method, string $route): bool
                 'certified' => $certifiedAt !== null && $certifiedAt !== false,
                 'certified_at' => $certifiedAt === 'admin' ? null : $certifiedAt,
                 'anonymous' => ns_anonymous_judging(),
+                'scoring_locked' => ns_winners_published(),
             ]);
         }
 
@@ -4206,6 +4230,7 @@ function new_school_handle_route(string $method, string $route): bool
                 'categories' => $cats,
                 'max_total' => NS_JUDGE_MAX_TOTAL,
                 'my_score' => $myStmt->fetch() ?: null,
+                'scoring_locked' => ns_winners_published(),
             ]);
         }
 
@@ -4213,6 +4238,11 @@ function new_school_handle_route(string $method, string $route): bool
         case $method === 'POST' && preg_match('#^new-school/judge/submission/(\d+)/score$#', $route, $m) === 1: {
             $judge = require_judge();
             $submissionId = (int) $m[1];
+
+            // Once results are published the competition is locked: no new scores, no edits.
+            if (ns_winners_published()) {
+                json(['error' => 'Results have been published — scoring is now locked and cannot be changed.'], 423);
+            }
 
             $check = db()->prepare('SELECT status FROM new_school_submissions WHERE id = ? LIMIT 1');
             $check->execute([$submissionId]);
@@ -4321,6 +4351,57 @@ function new_school_handle_route(string $method, string $route): bool
                     'email' => (string) $u['email'],
                 ],
             ], 201);
+        }
+
+        // Challenge timeline (admin-editable milestones on the public page).
+        case $key === 'GET admin/new-school/timeline': {
+            require_admin();
+            json(['timeline' => ns_challenge_timeline()]);
+        }
+        case $key === 'PUT admin/new-school/timeline': {
+            require_admin();
+            $items = $body['timeline'] ?? null;
+            if (!is_array($items)) {
+                json(['error' => 'timeline must be a list of milestones.'], 422);
+            }
+            json(['message' => 'Timeline saved.', 'timeline' => ns_challenge_timeline_save($items)]);
+        }
+
+        // Submission window (admin-editable open date, deadline, and open/close mode).
+        // Gates business-interview + project submissions (NOT registration/dashboards).
+        case $key === 'GET admin/new-school/submission-window': {
+            require_admin();
+            json(['submission_window' => [
+                'open_date' => ns_submission_open_date(),
+                'deadline' => ns_submission_deadline(),
+                'mode' => ns_submission_mode(),
+                'is_open' => ns_submissions_open(),
+            ]]);
+        }
+        case $key === 'PUT admin/new-school/submission-window': {
+            require_admin();
+            $openDate = trim((string) field($body, 'open_date'));
+            $deadline = trim((string) field($body, 'deadline'));
+            $mode = trim((string) field($body, 'mode'));
+            $dateOk = static fn(string $d): bool => preg_match('/^\d{4}-\d{2}-\d{2}$/', $d) === 1 && strtotime($d) !== false;
+            if (!$dateOk($openDate) || !$dateOk($deadline)) {
+                json(['error' => 'Dates must be valid (YYYY-MM-DD).'], 422);
+            }
+            if (!in_array($mode, ['auto', 'open', 'closed'], true)) {
+                json(['error' => 'Mode must be auto, open, or closed.'], 422);
+            }
+            if ($openDate > $deadline) {
+                json(['error' => 'The deadline must be on or after the open date.'], 422);
+            }
+            ns_setting_set('submission_open_date', $openDate);
+            ns_setting_set('submission_deadline', $deadline);
+            ns_setting_set('submission_mode', $mode);
+            json(['message' => 'Submission deadline saved.', 'submission_window' => [
+                'open_date' => ns_submission_open_date(),
+                'deadline' => ns_submission_deadline(),
+                'mode' => ns_submission_mode(),
+                'is_open' => ns_submissions_open(),
+            ]]);
         }
 
         // List judges with review counts (admin only).
@@ -4481,11 +4562,12 @@ function new_school_handle_route(string $method, string $route): bool
             json(['settings' => [
                 'anonymous_judging' => ns_anonymous_judging(),
                 'results_published' => ns_results_published(),
+                'winners_published' => ns_winners_published(),
             ]]);
         }
         case $key === 'POST admin/new-school/settings': {
             require_admin();
-            foreach (['anonymous_judging', 'results_published'] as $k) {
+            foreach (['anonymous_judging', 'results_published', 'winners_published'] as $k) {
                 if (array_key_exists($k, $body)) {
                     ns_setting_set($k, filter_var($body[$k], FILTER_VALIDATE_BOOLEAN) ? 'true' : 'false');
                 }
@@ -4493,7 +4575,23 @@ function new_school_handle_route(string $method, string $route): bool
             json(['message' => 'Settings updated.', 'settings' => [
                 'anonymous_judging' => ns_anonymous_judging(),
                 'results_published' => ns_results_published(),
+                'winners_published' => ns_winners_published(),
             ]]);
+        }
+
+        // Award ceremony details (admin-editable; shown in the public Results section).
+        case $key === 'GET admin/new-school/ceremony': {
+            require_admin();
+            json(['ceremony' => ns_award_ceremony()]);
+        }
+        case $key === 'PUT admin/new-school/ceremony': {
+            require_admin();
+            json(['message' => 'Award ceremony saved.', 'ceremony' => ns_award_ceremony_save([
+                'date' => field($body, 'date'),
+                'venue' => field($body, 'venue'),
+                'description' => field($body, 'description'),
+                'link' => field($body, 'link'),
+            ])]);
         }
 
         // Judge assignments: list all (grouped), assign, unassign.

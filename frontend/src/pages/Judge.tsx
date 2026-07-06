@@ -144,14 +144,15 @@ export default function Judge() {
   const [certified, setCertified] = useState<boolean | null>(null)
   const [certBusy, setCertBusy] = useState(false)
   const [certAgree, setCertAgree] = useState(false)
+  const [scoringLocked, setScoringLocked] = useState(false)
 
   const role = (user?.role || '').toLowerCase()
   const allowed = !!user && ['judge', 'admin', 'super_admin'].includes(role)
 
   useEffect(() => {
     if (!allowed) return
-    api.get<{ certified: boolean }>('new-school/judge/status')
-      .then((d) => setCertified(Boolean(d.certified)))
+    api.get<{ certified: boolean; scoring_locked?: boolean }>('new-school/judge/status')
+      .then((d) => { setCertified(Boolean(d.certified)); setScoringLocked(Boolean(d.scoring_locked)) })
       .catch(() => setCertified(true))
   }, [allowed])
 
@@ -647,7 +648,13 @@ export default function Judge() {
                   {/* SECTION 4 — scoring */}
                   <section style={{ background: 'rgba(201,168,76,0.06)', border: '1px solid var(--gold)', borderRadius: 14, padding: '18px 20px' }}>
                     <div style={{ ...secHead, borderColor: 'transparent', marginBottom: 4 }}>④ Your Score</div>
-                    <p style={{ color: 'var(--muted)', fontSize: 12.5, margin: '0 0 16px' }}>Drag each slider. The number on the right is your points for that category out of its maximum.</p>
+                    {scoringLocked ? (
+                      <div style={{ background: 'rgba(224,138,138,0.12)', border: '1px solid #e08a8a', borderRadius: 8, padding: '10px 14px', margin: '0 0 16px', color: 'var(--ivory)', fontSize: 13.5, lineHeight: 1.5 }}>
+                        🔒 <strong>Results have been published.</strong> Scoring is now locked — you can view this project and its evidence, but scores can no longer be changed.
+                      </div>
+                    ) : (
+                      <p style={{ color: 'var(--muted)', fontSize: 12.5, margin: '0 0 16px' }}>Drag each slider. The number on the right is your points for that category out of its maximum.</p>
+                    )}
                     <div style={{ display: 'grid', gap: 18 }}>
                       {detail.categories.map((c) => (
                         <div key={c.key}>
@@ -664,8 +671,9 @@ export default function Judge() {
                           <input
                             type="range" min={0} max={c.max} step={1}
                             value={scores[c.key] ?? 0}
+                            disabled={scoringLocked}
                             onChange={(e) => setScore(c.key, Number(e.target.value), c.max)}
-                            style={{ width: '100%', marginTop: 8, accentColor: '#C9A84C' }}
+                            style={{ width: '100%', marginTop: 8, accentColor: '#C9A84C', opacity: scoringLocked ? 0.5 : 1 }}
                           />
                         </div>
                       ))}
@@ -685,8 +693,8 @@ export default function Judge() {
                       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                         <button className="btn btn--sm" disabled={saveBusy} onClick={reportConcern} title="Report a concern to administration">⚑ Report</button>
                         <button className="btn btn--sm" disabled={saveBusy} onClick={recuse} title="Recuse for conflict of interest">Recuse</button>
-                        <button className="btn btn--sm" disabled={saveBusy} onClick={() => save('draft')}>Save Draft</button>
-                        <button className="btn btn--solid" disabled={saveBusy} onClick={() => save('submitted')}>Submit Score</button>
+                        <button className="btn btn--sm" disabled={saveBusy || scoringLocked} onClick={() => save('draft')}>Save Draft</button>
+                        <button className="btn btn--solid" disabled={saveBusy || scoringLocked} onClick={() => save('submitted')}>Submit Score</button>
                       </div>
                     </div>
                     {msg && <p style={{ marginTop: 10, marginBottom: 0, fontSize: 13, color: msg.includes('✓') ? 'var(--green-bright)' : '#e08a8a' }}>{msg}</p>}
