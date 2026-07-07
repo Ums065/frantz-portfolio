@@ -27,6 +27,7 @@ const Contact = lazy(() => import('./pages/Contact'))
 const NotFound = lazy(() => import('./pages/NotFound'))
 const Judge = lazy(() => import('./pages/Judge'))
 const Business = lazy(() => import('./pages/Business'))
+const PartnersPage = lazy(() => import('./pages/Partners'))
 const Sponsor = lazy(() => import('./pages/Sponsor'))
 const Partner = lazy(() => import('./pages/Partner'))
 const MediaPortal = lazy(() => import('./pages/MediaPortal'))
@@ -106,6 +107,7 @@ export default function App() {
           <Route path="/" element={<SiteLayout key="home" home><Home /></SiteLayout>} />
           <Route path="/about" element={<RoutedPage pageKey="about"><About /></RoutedPage>} />
           <Route path="/awards" element={<RoutedPage pageKey="awards"><Awards /></RoutedPage>} />
+          <Route path="/partner" element={<RoutedPage pageKey="partner"><PartnersPage /></RoutedPage>} />
           <Route path="/projects" element={<RoutedPage pageKey="projects"><Projects /></RoutedPage>} />
           <Route path="/blog" element={<RoutedPage pageKey="blog"><Blog /></RoutedPage>} />
           <Route path="/blog/:id" element={<RoutedPage pageKey="blogpost"><BlogPost /></RoutedPage>} />

@@ -13,9 +13,8 @@ Options -Indexes
   # Leave the API alone so api/.htaccess can route it to index.php.
   RewriteRule ^api(/.*)?$ - [L]
 
-  # Clean URLs: /partner and /player both serve the static Our Partners page
-  # (it ships inside the build at frontend/dist/partner.html).
-  RewriteRule ^partner/?$ frontend/dist/partner.html [L]
+  # /partner is now the dynamic React page (falls through to the SPA below).
+  # /player keeps serving the static Our Partners snapshot from the build.
   RewriteRule ^player/?$ frontend/dist/partner.html [L]
 
   # Serve build assets from frontend/dist.
