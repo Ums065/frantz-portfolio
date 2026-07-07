@@ -27,6 +27,10 @@ const Contact = lazy(() => import('./pages/Contact'))
 const NotFound = lazy(() => import('./pages/NotFound'))
 const Judge = lazy(() => import('./pages/Judge'))
 const Business = lazy(() => import('./pages/Business'))
+const Sponsor = lazy(() => import('./pages/Sponsor'))
+const Partner = lazy(() => import('./pages/Partner'))
+const MediaPortal = lazy(() => import('./pages/MediaPortal'))
+const Volunteer = lazy(() => import('./pages/Volunteer'))
 
 function RouteLoading() {
   return (
@@ -125,6 +129,10 @@ export default function App() {
           <Route path="/admin" element={<Suspense fallback={<RouteLoading />}><Admin /></Suspense>} />
           <Route path="/judge/dashboard" element={<Suspense fallback={<RouteLoading />}><Judge /></Suspense>} />
           <Route path="/business" element={<Suspense fallback={<RouteLoading />}><Business /></Suspense>} />
+          <Route path="/sponsor" element={<Suspense fallback={<RouteLoading />}><Sponsor /></Suspense>} />
+          <Route path="/partner-portal" element={<Suspense fallback={<RouteLoading />}><Partner /></Suspense>} />
+          <Route path="/media-portal" element={<Suspense fallback={<RouteLoading />}><MediaPortal /></Suspense>} />
+          <Route path="/volunteer" element={<Suspense fallback={<RouteLoading />}><Volunteer /></Suspense>} />
           <Route path="*" element={<RoutedPage pageKey="notfound"><NotFound /></RoutedPage>} />
         </Routes>
       </BrowserRouter>

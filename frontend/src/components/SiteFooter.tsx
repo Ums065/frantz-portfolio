@@ -44,14 +44,13 @@ export default function SiteFooter() {
           </div>
 
           <div>
-            <h5>Get Involved</h5>
+            <h5>Portals</h5>
             <ul>
-              <li><a href="/#broker">Broker Academy</a></li>
-              <li><a href="/#mentorship">Mentorship</a></li>
-              <li><a href="/#engage">Sponsor</a></li>
-              <li><a href="/#engage">Invite Frantz</a></li>
-              <li><a href="/#partners">Partners</a></li>
-              <li><a href="/#press">Press &amp; Media</a></li>
+              <li><Link to="/business">Business</Link></li>
+              <li><Link to="/sponsor">Sponsor</Link></li>
+              <li><Link to="/partner-portal">Partner</Link></li>
+              <li><Link to="/media-portal">Media</Link></li>
+              <li><Link to="/volunteer">Volunteer</Link></li>
             </ul>
           </div>
 

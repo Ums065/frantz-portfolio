@@ -1330,6 +1330,25 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             json(['ratings' => business_rate_submission($u, (int) $m[1], body())]);
         }
 
+        /* ---------------- ECOSYSTEM DASHBOARDS (sponsor / partner / media / volunteer) ---------------- */
+        case $method === 'POST' && preg_match('#^ecosystem/(sponsor|partner|media|volunteer)/register$#', $route, $m) === 1: {
+            json([
+                'message' => ucfirst($m[1]) . ' account submitted for admin approval.',
+                'user' => ecosystem_register($m[1], body()),
+            ], 201);
+        }
+
+        case $method === 'GET' && preg_match('#^ecosystem/(sponsor|partner|media|volunteer)/dashboard$#', $route, $m) === 1: {
+            $u = require_ecosystem($m[1]);
+            json(ecosystem_dashboard_payload($m[1], $u));
+        }
+
+        case $method === 'POST' && preg_match('#^ecosystem/(sponsor|partner|media|volunteer)/profile$#', $route, $m) === 1: {
+            $u = require_ecosystem($m[1]);
+            ecosystem_profile_save($u, $m[1], body());
+            json(ecosystem_dashboard_payload($m[1], $u));
+        }
+
         /* ---------------- ADMIN ---------------- */
         case $key === 'GET admin/submissions': {
             require_admin();
@@ -1498,6 +1517,12 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
                     'members'      => $count("SELECT COUNT(*) FROM users WHERE role = 'member' AND approval_status = 'approved'"),
                     'vip'          => $count("SELECT COUNT(*) FROM users WHERE role = 'vip'"),
                     'admin'        => $count("SELECT COUNT(*) FROM users WHERE role IN ('admin','super_admin','editor')"),
+                    // Ecosystem roles (mission control) — one count each.
+                    'businesses'   => $count("SELECT COUNT(*) FROM users WHERE role = 'business'"),
+                    'sponsors'     => $count("SELECT COUNT(*) FROM users WHERE role = 'sponsor'"),
+                    'partners'     => $count("SELECT COUNT(*) FROM users WHERE role = 'partner'"),
+                    'media_accounts' => $count("SELECT COUNT(*) FROM users WHERE role = 'media'"),
+                    'volunteers'   => $count("SELECT COUNT(*) FROM users WHERE role = 'volunteer'"),
                     'pending_accounts' => $count("SELECT COUNT(*) FROM users WHERE approval_status = 'pending'"),
                     'approved_accounts' => $count("SELECT COUNT(*) FROM users WHERE approval_status = 'approved'"),
                     'rejected_accounts' => $count("SELECT COUNT(*) FROM users WHERE approval_status = 'rejected'"),

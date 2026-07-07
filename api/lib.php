@@ -2934,6 +2934,197 @@ function business_rate_submission(array $user, int $submissionId, array $b): arr
     return business_ratings_map((int) $user['id']);
 }
 
+/* ==================== Ecosystem accounts (sponsor / partner / media / volunteer) ==================== */
+
+/** Live challenge impact counters shared by sponsor + media dashboards. */
+function challenge_impact_stats(): array
+{
+    $pdo = db();
+    $c = static fn(string $sql): int => (int) $pdo->query($sql)->fetchColumn();
+    return [
+        'students' => $c('SELECT COUNT(*) FROM new_school_students'),
+        'schools' => $c('SELECT COUNT(*) FROM new_school_schools'),
+        'teachers' => $c('SELECT COUNT(*) FROM new_school_teachers'),
+        'businesses' => $c("SELECT COUNT(DISTINCT LOWER(TRIM(business_name))) FROM new_school_business_interviews WHERE business_name <> ''"),
+        'interviews' => $c('SELECT COUNT(*) FROM new_school_business_interviews'),
+        'solutions' => $c("SELECT COUNT(*) FROM new_school_submissions WHERE status IN ('submitted','approved','winner')"),
+    ];
+}
+
+/** The ecosystem roles that share the generic account model. */
+function ecosystem_roles(): array { return ['sponsor', 'partner', 'media', 'volunteer']; }
+
+/** Self-healing schema for the shared ecosystem_accounts table. */
+function ecosystem_ensure_schema(): void
+{
+    static $ready = false;
+    if ($ready) return;
+    db()->exec(
+        "CREATE TABLE IF NOT EXISTS ecosystem_accounts (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT NOT NULL UNIQUE,
+            role VARCHAR(20) NOT NULL,
+            org_name VARCHAR(160) NOT NULL,
+            contact_name VARCHAR(120) DEFAULT NULL,
+            contact_phone VARCHAR(40) DEFAULT NULL,
+            website VARCHAR(255) DEFAULT NULL,
+            about TEXT DEFAULT NULL,
+            details TEXT DEFAULT NULL,
+            referral_code VARCHAR(24) DEFAULT NULL,
+            referred_by_code VARCHAR(24) DEFAULT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_eco_role (role),
+            INDEX idx_eco_refby (referred_by_code)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+    );
+    $ready = true;
+}
+
+/** Require a signed-in account of the given ecosystem role (admins allowed). */
+function require_ecosystem(string $role): array
+{
+    $u = require_login();
+    if ((string) $u['role'] !== $role && !in_array((string) $u['role'], ['admin', 'super_admin'], true)) {
+        json(['error' => ucfirst($role) . ' account required.'], 403);
+    }
+    return $u;
+}
+
+/** Ecosystem account row for a user id, with details decoded (or null). */
+function ecosystem_account_for_user(int $userId): ?array
+{
+    ecosystem_ensure_schema();
+    $stmt = db()->prepare('SELECT * FROM ecosystem_accounts WHERE user_id = ? LIMIT 1');
+    $stmt->execute([$userId]);
+    $row = $stmt->fetch();
+    if (!$row) return null;
+    $row['details'] = !empty($row['details']) ? (json_decode((string) $row['details'], true) ?: []) : [];
+    return $row;
+}
+
+function ecosystem_generate_ref_code(): string
+{
+    return strtoupper(substr(bin2hex(random_bytes(6)), 0, 8));
+}
+
+/** Extract the role-specific detail fields from a request body. */
+function ecosystem_details_from_body(string $role, array $b): array
+{
+    $s = static fn(string $k, int $max = 120): string => mb_substr(trim((string) field($b, $k)), 0, $max);
+    switch ($role) {
+        case 'sponsor':   return ['tier' => $s('tier', 60), 'recognition_level' => $s('recognition_level', 60), 'logo_url' => $s('logo_url', 400)];
+        case 'partner':   return ['partner_type' => $s('partner_type', 60), 'logo_url' => $s('logo_url', 400)];
+        case 'media':     return ['outlet' => $s('outlet', 120), 'beat' => $s('beat', 120)];
+        case 'volunteer': return ['volunteer_type' => $s('volunteer_type', 60), 'areas' => $s('areas', 200), 'availability' => $s('availability', 120)];
+    }
+    return [];
+}
+
+/** Self-register (or re-register) an ecosystem account; returns the sanitized user. */
+function ecosystem_register(string $role, array $b): array
+{
+    if (!in_array($role, ecosystem_roles(), true)) json(['error' => 'Unknown account type.'], 404);
+    roles_ensure_enum();
+    ecosystem_ensure_schema();
+
+    $fullName = trim((string) (field($b, 'full_name') ?: field($b, 'contact_name')));
+    $email = require_email(field($b, 'email'));
+    $pass = (string) field($b, 'password');
+    $org = trim((string) (field($b, 'org_name') ?: field($b, 'organization')));
+    if ($org === '') $org = $fullName; // volunteers may register as individuals
+    if (mb_strlen($fullName) < 3) json(['error' => 'Your name is required (at least 3 characters).'], 422);
+    if ($role !== 'volunteer' && trim((string) field($b, 'org_name')) === '') json(['error' => 'Organization name is required.'], 422);
+    if (strlen($pass) < 6) json(['error' => 'Password must be at least 6 characters.'], 422);
+
+    $user = new_school_upsert_user_account($fullName, $email, $pass, $role);
+    $details = ecosystem_details_from_body($role, $b);
+    $existing = ecosystem_account_for_user((int) $user['id']);
+    $code = $existing['referral_code'] ?? ecosystem_generate_ref_code();
+    $refBy = mb_substr(trim((string) field($b, 'ref')), 0, 24) ?: null;
+
+    db()->prepare(
+        'INSERT INTO ecosystem_accounts (user_id, role, org_name, contact_name, contact_phone, website, about, details, referral_code, referred_by_code)
+         VALUES (?,?,?,?,?,?,?,?,?,?)
+         ON DUPLICATE KEY UPDATE role=VALUES(role), org_name=VALUES(org_name), contact_name=VALUES(contact_name),
+             contact_phone=VALUES(contact_phone), website=VALUES(website), about=VALUES(about),
+             details=VALUES(details), updated_at=NOW()'
+    )->execute([
+        (int) $user['id'], $role, mb_substr($org, 0, 160), mb_substr($fullName, 0, 120),
+        mb_substr(trim((string) field($b, 'contact_phone')), 0, 40) ?: null,
+        mb_substr(trim((string) field($b, 'website')), 0, 255) ?: null,
+        mb_substr(trim((string) field($b, 'about')), 0, 2000) ?: null,
+        json_encode($details), $code, $refBy,
+    ]);
+    return login_user($user);
+}
+
+/** Update the signed-in ecosystem account's editable profile. */
+function ecosystem_profile_save(array $user, string $role, array $b): void
+{
+    ecosystem_ensure_schema();
+    $org = trim((string) field($b, 'org_name')) ?: (string) $user['full_name'];
+    db()->prepare(
+        'UPDATE ecosystem_accounts SET org_name=?, contact_name=?, contact_phone=?, website=?, about=?, details=?, updated_at=NOW() WHERE user_id=?'
+    )->execute([
+        mb_substr($org, 0, 160),
+        mb_substr(trim((string) field($b, 'contact_name')), 0, 120) ?: null,
+        mb_substr(trim((string) field($b, 'contact_phone')), 0, 40) ?: null,
+        mb_substr(trim((string) field($b, 'website')), 0, 255) ?: null,
+        mb_substr(trim((string) field($b, 'about')), 0, 2000) ?: null,
+        json_encode(ecosystem_details_from_body($role, $b)),
+        (int) $user['id'],
+    ]);
+}
+
+/** Role-specific dashboard payload for an ecosystem account. */
+function ecosystem_dashboard_payload(string $role, array $user): array
+{
+    $acc = ecosystem_account_for_user((int) $user['id']);
+    $profile = $acc ? [
+        'org_name' => $acc['org_name'],
+        'contact_name' => $acc['contact_name'],
+        'contact_phone' => $acc['contact_phone'],
+        'website' => $acc['website'],
+        'about' => $acc['about'],
+        'details' => $acc['details'] ?: (object) [],
+    ] : null;
+    $out = ['role' => $role, 'profile' => $profile, 'status' => (string) ($user['approval_status'] ?? 'pending')];
+
+    if ($role === 'sponsor' || $role === 'media') {
+        $out['impact'] = challenge_impact_stats();
+    }
+    if ($role === 'sponsor') {
+        $out['ceremony'] = ns_award_ceremony();
+        $out['reports'] = [
+            ['label' => 'Founding Sponsor Kit (PDF)', 'url' => '/docs/founding_sponsor_kit.pdf'],
+            ['label' => 'Sponsor Media Kit (PDF)', 'url' => '/docs/founding_sponsor_media_kit.pdf'],
+        ];
+    }
+    if ($role === 'media') {
+        $out['presskit'] = [
+            ['label' => 'Media Kit 2026 (PDF)', 'url' => '/docs/leave_it_better_media_kit_2026.pdf'],
+            ['label' => 'General Media Kit (PDF)', 'url' => '/docs/media_kit.pdf'],
+            ['label' => 'Program One-Pager (PDF)', 'url' => '/docs/new_school_functionality.pdf'],
+        ];
+    }
+    if ($role === 'partner') {
+        $code = (string) ($acc['referral_code'] ?? '');
+        $count = 0;
+        if ($code !== '') {
+            $s = db()->prepare('SELECT COUNT(*) FROM ecosystem_accounts WHERE referred_by_code = ?');
+            $s->execute([$code]);
+            $count = (int) $s->fetchColumn();
+        }
+        $out['referral'] = ['code' => $code, 'count' => $count];
+        $out['toolkit'] = [
+            ['label' => 'Partnership Kit (PDF)', 'url' => '/docs/partnership_kit.pdf'],
+            ['label' => 'Program One-Pager (PDF)', 'url' => '/docs/new_school_functionality.pdf'],
+        ];
+    }
+    return $out;
+}
+
 /**
  * Editable challenge timeline (milestones shown on the public New School page).
  * Stored as JSON in new_school_settings['challenge_timeline']; falls back to the
