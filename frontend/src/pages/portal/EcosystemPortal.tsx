@@ -147,7 +147,7 @@ export default function EcosystemPortal({ config }: { config: PortalConfig }) {
             <form onSubmit={doRegister} style={{ padding: '18px 30px 30px', display: 'grid', gap: 14 }}>
               {orgLabel && <div><label style={S.label}>{orgLabel} *</label><input style={S.input} required value={f.org_name || ''} onChange={(e) => set('org_name', e.target.value)} /></div>}
               {extraFields.length > 0 && (
-                <div style={{ display: 'grid', gridTemplateColumns: extraFields.length > 1 ? '1fr 1fr' : '1fr', gap: 12 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: extraFields.length > 1 ? 'repeat(auto-fit, minmax(150px, 1fr))' : '1fr', gap: 12 }}>
                   {extraFields.map((x) => (
                     <div key={x.key} style={x.full ? { gridColumn: '1 / -1' } : undefined}>
                       <label style={S.label}>{x.label}</label>
@@ -166,11 +166,11 @@ export default function EcosystemPortal({ config }: { config: PortalConfig }) {
                 </div>
               )}
               <div><label style={S.label}>Your name (contact) *</label><input style={S.input} required value={f.full_name || ''} onChange={(e) => set('full_name', e.target.value)} /></div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12 }}>
                 <div><label style={S.label}>Email *</label><input style={S.input} type="email" required value={f.email || ''} onChange={(e) => set('email', e.target.value)} /></div>
                 <div><label style={S.label}>Phone</label><input style={S.input} value={f.contact_phone || ''} onChange={(e) => set('contact_phone', e.target.value)} /></div>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12 }}>
                 <div><label style={S.label}>Website</label><input style={S.input} value={f.website || ''} onChange={(e) => set('website', e.target.value)} placeholder="https://…" /></div>
                 <div><label style={S.label}>Password *</label><input style={S.input} type="password" required value={f.password || ''} onChange={(e) => set('password', e.target.value)} placeholder="6+ characters" /></div>
               </div>

@@ -159,16 +159,16 @@ export default function Business() {
           ) : (
             <form onSubmit={doRegister} style={{ padding: '18px 30px 30px', display: 'grid', gap: 14 }}>
               <div><label style={labelS}>Business name *</label><input style={inputS} required value={f.business_name} onChange={(e) => setF({ ...f, business_name: e.target.value })} placeholder="e.g. Barclays Center" /></div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12 }}>
                 <div><label style={labelS}>Category</label><input style={inputS} value={f.category} onChange={(e) => setF({ ...f, category: e.target.value })} placeholder="Retail, Food, Healthcare…" /></div>
                 <div><label style={labelS}>Borough / County</label><input style={inputS} value={f.borough} onChange={(e) => setF({ ...f, borough: e.target.value })} placeholder="Bronx, Brooklyn…" /></div>
               </div>
               <div><label style={labelS}>Your name (contact) *</label><input style={inputS} required value={f.full_name} onChange={(e) => setF({ ...f, full_name: e.target.value })} /></div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12 }}>
                 <div><label style={labelS}>Email *</label><input style={inputS} type="email" required value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} /></div>
                 <div><label style={labelS}>Phone</label><input style={inputS} value={f.contact_phone} onChange={(e) => setF({ ...f, contact_phone: e.target.value })} /></div>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12 }}>
                 <div><label style={labelS}>Website</label><input style={inputS} value={f.website} onChange={(e) => setF({ ...f, website: e.target.value })} placeholder="https://…" /></div>
                 <div><label style={labelS}>Password *</label><input style={inputS} type="password" required value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} placeholder="6+ characters" /></div>
               </div>

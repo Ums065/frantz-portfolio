@@ -23,7 +23,7 @@ function InterviewRequest({ org }: { org: string }) {
   if (done) return <p style={{ color: 'var(--gold-light)', margin: 0 }}>Request received — the team will be in touch shortly.</p>
   return (
     <form onSubmit={submit} style={{ display: 'grid', gap: 12 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12 }}>
         <div><label style={S.label}>Your name *</label><input style={S.input} required value={name} onChange={(e) => setName(e.target.value)} /></div>
         <div><label style={S.label}>Email *</label><input style={S.input} type="email" required value={email} onChange={(e) => setEmail(e.target.value)} /></div>
       </div>
