@@ -1260,6 +1260,76 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             }
         }
 
+        /* ---------------- BUSINESS DASHBOARD (ecosystem role) ---------------- */
+        // Public self-registration: creates a pending 'business' user + account.
+        case $key === 'POST business/register': {
+            roles_ensure_enum();
+            business_ensure_schema();
+            $b = body();
+            $fullName = trim((string) (field($b, 'full_name') ?: field($b, 'contact_name')));
+            $email = require_email(field($b, 'email'));
+            $pass = (string) field($b, 'password');
+            $bizName = trim((string) field($b, 'business_name'));
+            if (mb_strlen($fullName) < 3) json(['error' => 'Contact name is required (at least 3 characters).'], 422);
+            if ($bizName === '') json(['error' => 'Business name is required.'], 422);
+            if (strlen($pass) < 6) json(['error' => 'Password must be at least 6 characters.'], 422);
+
+            $user = new_school_upsert_user_account($fullName, $email, $pass, 'business');
+            db()->prepare(
+                'INSERT INTO business_accounts (user_id, business_name, category, borough, contact_name, contact_phone, website, about)
+                 VALUES (?,?,?,?,?,?,?,?)
+                 ON DUPLICATE KEY UPDATE business_name=VALUES(business_name), category=VALUES(category),
+                     borough=VALUES(borough), contact_name=VALUES(contact_name), contact_phone=VALUES(contact_phone),
+                     website=VALUES(website), about=VALUES(about), updated_at=NOW()'
+            )->execute([
+                (int) $user['id'], mb_substr($bizName, 0, 160),
+                mb_substr(trim((string) field($b, 'category')), 0, 80) ?: null,
+                mb_substr(trim((string) field($b, 'borough')), 0, 60) ?: null,
+                mb_substr($fullName, 0, 120),
+                mb_substr(trim((string) field($b, 'contact_phone')), 0, 40) ?: null,
+                mb_substr(trim((string) field($b, 'website')), 0, 255) ?: null,
+                mb_substr(trim((string) field($b, 'about')), 0, 2000) ?: null,
+            ]);
+            json([
+                'message' => 'Business account submitted for admin approval.',
+                'user' => login_user($user),
+            ], 201);
+        }
+
+        case $key === 'GET business/dashboard': {
+            $u = require_business();
+            json(business_dashboard_payload($u));
+        }
+
+        case $key === 'PUT business/profile': {
+            $u = require_business();
+            business_ensure_schema();
+            $b = body();
+            $bizName = trim((string) field($b, 'business_name'));
+            if ($bizName === '') json(['error' => 'Business name is required.'], 422);
+            db()->prepare(
+                'INSERT INTO business_accounts (user_id, business_name, category, borough, contact_name, contact_phone, website, about)
+                 VALUES (?,?,?,?,?,?,?,?)
+                 ON DUPLICATE KEY UPDATE business_name=VALUES(business_name), category=VALUES(category),
+                     borough=VALUES(borough), contact_name=VALUES(contact_name), contact_phone=VALUES(contact_phone),
+                     website=VALUES(website), about=VALUES(about), updated_at=NOW()'
+            )->execute([
+                (int) $u['id'], mb_substr($bizName, 0, 160),
+                mb_substr(trim((string) field($b, 'category')), 0, 80) ?: null,
+                mb_substr(trim((string) field($b, 'borough')), 0, 60) ?: null,
+                mb_substr(trim((string) field($b, 'contact_name')), 0, 120) ?: null,
+                mb_substr(trim((string) field($b, 'contact_phone')), 0, 40) ?: null,
+                mb_substr(trim((string) field($b, 'website')), 0, 255) ?: null,
+                mb_substr(trim((string) field($b, 'about')), 0, 2000) ?: null,
+            ]);
+            json(business_dashboard_payload($u));
+        }
+
+        case $method === 'POST' && preg_match('#^business/rate/(\d+)$#', $route, $m) === 1: {
+            $u = require_business();
+            json(['ratings' => business_rate_submission($u, (int) $m[1], body())]);
+        }
+
         /* ---------------- ADMIN ---------------- */
         case $key === 'GET admin/submissions': {
             require_admin();

@@ -2678,6 +2678,262 @@ function ns_award_ceremony_save(array $c): array
     return ns_award_ceremony();
 }
 
+/* ==================== Business dashboard (ecosystem role) ==================== */
+
+/**
+ * Widen the users.role ENUM so the ecosystem roles (business, sponsor, partner,
+ * media, volunteer) can be stored. Self-healing + guarded so the ALTER runs at
+ * most once per request and is skipped entirely once the column already lists
+ * the new values.
+ */
+function roles_ensure_enum(): void
+{
+    static $ready = false;
+    if ($ready) return;
+    try {
+        $col = db()->query(
+            "SELECT COLUMN_TYPE FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'role' LIMIT 1"
+        )->fetchColumn();
+        if (is_string($col) && stripos($col, "'business'") === false) {
+            db()->exec(
+                "ALTER TABLE users MODIFY role
+                 ENUM('member','vip','editor','admin','super_admin','student','parent','school','teacher','judge','business','sponsor','partner','media','volunteer')
+                 NOT NULL DEFAULT 'member'"
+            );
+        }
+        $ready = true;
+    } catch (Throwable $e) {
+        if (app_debug()) error_log('roles_ensure_enum failed: ' . $e->getMessage());
+    }
+}
+
+/** Require a signed-in business account (admins allowed for support). */
+function require_business(): array
+{
+    $u = require_login();
+    if (!in_array($u['role'], ['business', 'admin', 'super_admin'], true)) {
+        json(['error' => 'Business account required.'], 403);
+    }
+    return $u;
+}
+
+/** Self-healing schema for business accounts, their ratings, and the interview link column. */
+function business_ensure_schema(): void
+{
+    static $ready = false;
+    if ($ready) return;
+    $pdo = db();
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS business_accounts (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT NOT NULL UNIQUE,
+            business_name VARCHAR(160) NOT NULL,
+            category VARCHAR(80) DEFAULT NULL,
+            borough VARCHAR(60) DEFAULT NULL,
+            contact_name VARCHAR(120) DEFAULT NULL,
+            contact_phone VARCHAR(40) DEFAULT NULL,
+            website VARCHAR(255) DEFAULT NULL,
+            about TEXT DEFAULT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_business_name (business_name)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+    );
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS business_ratings (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            business_user_id INT NOT NULL,
+            submission_id INT NOT NULL,
+            rating TINYINT NOT NULL DEFAULT 0,
+            would_implement TINYINT(1) NOT NULL DEFAULT 0,
+            already_implemented TINYINT(1) NOT NULL DEFAULT 0,
+            need_more_info TINYINT(1) NOT NULL DEFAULT 0,
+            note TEXT DEFAULT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uniq_business_submission (business_user_id, submission_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+    );
+    // Nullable explicit link so an admin can later bind interview rows to a business
+    // account; until then the dashboard matches interviews by normalized name.
+    try {
+        $has = $pdo->query(
+            "SELECT COUNT(*) FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'new_school_business_interviews'
+               AND COLUMN_NAME = 'business_user_id'"
+        )->fetchColumn();
+        if ((int) $has === 0) {
+            $pdo->exec("ALTER TABLE new_school_business_interviews ADD COLUMN business_user_id INT DEFAULT NULL");
+        }
+    } catch (Throwable $e) {
+        if (app_debug()) error_log('business interview link column: ' . $e->getMessage());
+    }
+    $ready = true;
+}
+
+/** Business account row for a user id (or null). */
+function business_account_for_user(int $userId): ?array
+{
+    business_ensure_schema();
+    $stmt = db()->prepare('SELECT * FROM business_accounts WHERE user_id = ? LIMIT 1');
+    $stmt->execute([$userId]);
+    $row = $stmt->fetch();
+    return $row ?: null;
+}
+
+/** Normalized business-name key for matching (lowercased, trimmed, collapsed spaces). */
+function business_name_key(string $name): string
+{
+    return preg_replace('/\s+/u', ' ', mb_strtolower(trim($name)));
+}
+
+/**
+ * The interviews that belong to a business account: explicitly linked rows OR
+ * (unlinked rows whose business_name matches by normalized name). Each row is
+ * enriched with the student + school and — when the student has SUBMITTED a
+ * solution — the solution fields. Draft solutions stay hidden.
+ */
+function business_matched_interviews(array $account): array
+{
+    business_ensure_schema();
+    $uid = (int) $account['user_id'];
+    $key = business_name_key((string) $account['business_name']);
+    $stmt = db()->prepare(
+        "SELECT bi.id, bi.visit_number, bi.business_name, bi.owner_name, bi.business_category,
+                bi.business_address, bi.date_of_visit, bi.main_challenge, bi.student_notes,
+                (bi.signature IS NOT NULL AND bi.signature <> '') AS verified,
+                s.id AS student_id, s.full_name AS student_name, s.school_name, s.grade_level,
+                sub.id AS submission_id, sub.status AS submission_status,
+                sub.problem_identified, sub.proposed_solution, sub.how_it_helps,
+                sub.expected_impact, sub.video_url, sub.written_url
+         FROM new_school_business_interviews bi
+         JOIN new_school_students s ON s.id = bi.student_id
+         LEFT JOIN new_school_submissions sub ON sub.student_id = bi.student_id
+         WHERE bi.business_user_id = ?
+            OR (bi.business_user_id IS NULL AND LOWER(TRIM(bi.business_name)) = ?)
+         ORDER BY bi.date_of_visit DESC, bi.id DESC"
+    );
+    $stmt->execute([$uid, $key]);
+
+    $submitted = ['submitted', 'approved', 'winner'];
+    $out = [];
+    foreach ($stmt->fetchAll() as $r) {
+        $hasSolution = $r['submission_id'] && in_array((string) $r['submission_status'], $submitted, true);
+        $out[] = [
+            'id' => (int) $r['id'],
+            'visit_number' => (int) $r['visit_number'],
+            'business_name' => $r['business_name'],
+            'owner_name' => $r['owner_name'],
+            'business_category' => $r['business_category'],
+            'business_address' => $r['business_address'],
+            'date_of_visit' => $r['date_of_visit'],
+            'main_challenge' => $r['main_challenge'],
+            'verified' => (bool) $r['verified'],
+            'student_name' => $r['student_name'],
+            'school_name' => $r['school_name'],
+            'grade_level' => $r['grade_level'],
+            'solution' => $hasSolution ? [
+                'submission_id' => (int) $r['submission_id'],
+                'status' => $r['submission_status'],
+                'problem_identified' => $r['problem_identified'],
+                'proposed_solution' => $r['proposed_solution'],
+                'how_it_helps' => $r['how_it_helps'],
+                'expected_impact' => $r['expected_impact'],
+                'video_url' => $r['video_url'],
+                'written_url' => $r['written_url'],
+            ] : null,
+            'solution_pending' => (bool) ($r['submission_id'] && !$hasSolution),
+        ];
+    }
+    return $out;
+}
+
+/** The business's own ratings keyed by submission id. */
+function business_ratings_map(int $userId): array
+{
+    business_ensure_schema();
+    $stmt = db()->prepare('SELECT * FROM business_ratings WHERE business_user_id = ?');
+    $stmt->execute([$userId]);
+    $map = [];
+    foreach ($stmt->fetchAll() as $r) {
+        $map[(string) (int) $r['submission_id']] = [
+            'rating' => (int) $r['rating'],
+            'would_implement' => (bool) $r['would_implement'],
+            'already_implemented' => (bool) $r['already_implemented'],
+            'need_more_info' => (bool) $r['need_more_info'],
+            'note' => (string) ($r['note'] ?? ''),
+        ];
+    }
+    return $map;
+}
+
+/** Full dashboard payload for a signed-in business user. */
+function business_dashboard_payload(array $user): array
+{
+    $userId = (int) $user['id'];
+    $account = business_account_for_user($userId);
+    if (!$account) {
+        return ['profile' => null, 'interviews' => [], 'impact' => ['interviews' => 0, 'students' => 0, 'solutions' => 0], 'ratings' => (object) []];
+    }
+    $interviews = business_matched_interviews($account);
+    $students = [];
+    $solutions = 0;
+    foreach ($interviews as $i) {
+        $students[$i['student_name'] . '|' . $i['school_name']] = true;
+        if ($i['solution']) $solutions++;
+    }
+    $ratings = business_ratings_map($userId);
+    return [
+        'profile' => [
+            'business_name' => $account['business_name'],
+            'category' => $account['category'],
+            'borough' => $account['borough'],
+            'contact_name' => $account['contact_name'],
+            'contact_phone' => $account['contact_phone'],
+            'website' => $account['website'],
+            'about' => $account['about'],
+        ],
+        'interviews' => $interviews,
+        'impact' => [
+            'interviews' => count($interviews),
+            'students' => count($students),
+            'solutions' => $solutions,
+        ],
+        'ratings' => $ratings ?: (object) [],
+    ];
+}
+
+/** Validate a submission belongs to the account, then upsert this business's rating. */
+function business_rate_submission(array $user, int $submissionId, array $b): array
+{
+    business_ensure_schema();
+    $account = business_account_for_user((int) $user['id']);
+    if (!$account) json(['error' => 'Complete your business profile first.'], 400);
+
+    $allowed = false;
+    foreach (business_matched_interviews($account) as $i) {
+        if ($i['solution'] && (int) $i['solution']['submission_id'] === $submissionId) { $allowed = true; break; }
+    }
+    if (!$allowed) json(['error' => 'That solution is not linked to your business.'], 403);
+
+    $rating = max(0, min(5, (int) ($b['rating'] ?? 0)));
+    db()->prepare(
+        'INSERT INTO business_ratings (business_user_id, submission_id, rating, would_implement, already_implemented, need_more_info, note)
+         VALUES (?,?,?,?,?,?,?)
+         ON DUPLICATE KEY UPDATE rating=VALUES(rating), would_implement=VALUES(would_implement),
+             already_implemented=VALUES(already_implemented), need_more_info=VALUES(need_more_info),
+             note=VALUES(note), updated_at=NOW()'
+    )->execute([
+        (int) $user['id'], $submissionId, $rating,
+        !empty($b['would_implement']) ? 1 : 0,
+        !empty($b['already_implemented']) ? 1 : 0,
+        !empty($b['need_more_info']) ? 1 : 0,
+        mb_substr(trim((string) ($b['note'] ?? '')), 0, 1000),
+    ]);
+    return business_ratings_map((int) $user['id']);
+}
+
 /**
  * Editable challenge timeline (milestones shown on the public New School page).
  * Stored as JSON in new_school_settings['challenge_timeline']; falls back to the
