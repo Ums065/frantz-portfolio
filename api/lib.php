@@ -3125,6 +3125,192 @@ function ecosystem_dashboard_payload(string $role, array $user): array
     return $out;
 }
 
+/* ==================== Demo one-click login (presentations) ==================== */
+
+/**
+ * Demo mode lets anyone sign in as a ready-made account for any role from the
+ * /demo page — for live presentations. Set DEMO_MODE=off in api/.env to disable
+ * it in production (the endpoints then 404). Default: on.
+ */
+function demo_mode_enabled(): bool
+{
+    $v = strtolower((string) env('DEMO_MODE', 'on'));
+    return !in_array($v, ['off', '0', 'false', 'no'], true);
+}
+
+/** Ordered role => label list for the demo page. */
+function demo_roles(): array
+{
+    return [
+        'admin' => 'Admin — Mission Control',
+        'school' => 'School / Principal',
+        'teacher' => 'Teacher',
+        'student' => 'Student',
+        'parent' => 'Parent',
+        'judge' => 'Judge',
+        'business' => 'Business',
+        'sponsor' => 'Sponsor',
+        'partner' => 'Partner',
+        'media' => 'Media',
+        'volunteer' => 'Volunteer',
+        'member' => 'Community Member',
+    ];
+}
+
+function demo_email(string $role): string { return 'demo.' . $role . '@frantzcoutard.demo'; }
+
+/** Ensure an approved demo user for a role exists; returns the full user row. */
+function demo_user(string $role, string $name): array
+{
+    $pdo = db();
+    $email = demo_email($role);
+    $hash = password_hash('demo1234', PASSWORD_DEFAULT);
+    $find = $pdo->prepare('SELECT * FROM users WHERE email = ? LIMIT 1');
+    $find->execute([$email]);
+    if ($find->fetch()) {
+        $pdo->prepare("UPDATE users SET full_name=?, role=?, password_hash=?, approval_status='approved', email_verified_at=COALESCE(email_verified_at, NOW()) WHERE email=?")
+            ->execute([$name, $role, $hash, $email]);
+    } else {
+        $pdo->prepare("INSERT INTO users (full_name, email, password_hash, role, approval_status, email_verified_at) VALUES (?,?,?,?,'approved',NOW())")
+            ->execute([$name, $email, $hash, $role]);
+    }
+    $find->execute([$email]);
+    return $find->fetch();
+}
+
+/** Create/ensure every demo account + supporting entities (idempotent, once per request). */
+function demo_ensure_accounts(): void
+{
+    static $ready = false;
+    if ($ready) return;
+    roles_ensure_enum();
+    $pdo = db();
+
+    demo_user('admin', 'Demo Admin');
+    demo_user('member', 'Demo Member');
+
+    // Business
+    business_ensure_schema();
+    $biz = demo_user('business', 'Demo Business Owner');
+    $pdo->prepare(
+        "INSERT INTO business_accounts (user_id, business_name, category, borough, contact_name, contact_phone, website, about)
+         VALUES (?, 'Demo Cafe', 'Food & Beverage', 'Brooklyn', 'Demo Business Owner', '718-555-0100', 'https://example.com', 'A demo business account for presentations.')
+         ON DUPLICATE KEY UPDATE business_name=VALUES(business_name)"
+    )->execute([(int) $biz['id']]);
+
+    // Ecosystem roles
+    ecosystem_ensure_schema();
+    $eco = [
+        'sponsor' => ['Demo Sponsor Fund', ['tier' => 'Founding', 'recognition_level' => 'Gold', 'logo_url' => '']],
+        'partner' => ['Demo Chamber of Commerce', ['partner_type' => 'Chamber of Commerce', 'logo_url' => '']],
+        'media' => ['Demo News Network', ['outlet' => 'Demo News', 'beat' => 'Education']],
+        'volunteer' => ['Demo Volunteer', ['volunteer_type' => 'Mentor', 'areas' => 'Business, Marketing', 'availability' => 'Weekends']],
+    ];
+    foreach ($eco as $role => $cfg) {
+        $u = demo_user($role, 'Demo ' . ucfirst($role));
+        $pdo->prepare(
+            "INSERT INTO ecosystem_accounts (user_id, role, org_name, contact_name, website, details, referral_code)
+             VALUES (?,?,?,?, 'https://example.com', ?, ?)
+             ON DUPLICATE KEY UPDATE org_name=VALUES(org_name), details=VALUES(details)"
+        )->execute([(int) $u['id'], $role, $cfg[0], 'Demo ' . ucfirst($role), json_encode($cfg[1]), ecosystem_generate_ref_code()]);
+    }
+
+    // Judge
+    new_school_judge_ensure_schema();
+    $judge = demo_user('judge', 'Demo Judge');
+    $pdo->prepare("INSERT INTO new_school_judges (user_id, display_name) VALUES (?, 'Demo Judge') ON DUPLICATE KEY UPDATE display_name=VALUES(display_name)")
+        ->execute([(int) $judge['id']]);
+
+    // School → Teacher → Student → Parent chain (all fully approved)
+    $school = demo_user('school', 'Demo Principal');
+    $sid = (int) ($pdo->query('SELECT id FROM new_school_schools WHERE user_id = ' . (int) $school['id'])->fetchColumn() ?: 0);
+    if ($sid === 0) {
+        $pdo->prepare(
+            "INSERT INTO new_school_schools (user_id, school_name, school_address, school_district, main_phone, principal_name, administrator_name, administrator_email, administrator_phone, status, origin, claim_status)
+             VALUES (?, 'Demo Academy', '1 Demo Street, New York, NY', 'Demo District', '212-555-0000', 'Demo Principal', 'Demo Principal', ?, '212-555-0000', 'approved', 'principal', 'claimed')"
+        )->execute([(int) $school['id'], demo_email('school')]);
+        $sid = (int) $pdo->lastInsertId();
+    } else {
+        $pdo->prepare("UPDATE new_school_schools SET status='approved' WHERE id=?")->execute([$sid]);
+    }
+
+    $teacher = demo_user('teacher', 'Demo Teacher');
+    $tid = (int) ($pdo->query('SELECT id FROM new_school_teachers WHERE user_id = ' . (int) $teacher['id'])->fetchColumn() ?: 0);
+    if ($tid === 0) {
+        $pdo->prepare(
+            "INSERT INTO new_school_teachers (user_id, school_id, teacher_full_name, school_email, phone_number, role_department, grade_level_supported, status)
+             VALUES (?,?, 'Demo Teacher', ?, '212-555-0001', 'STEM', '9-12', 'approved')"
+        )->execute([(int) $teacher['id'], $sid, demo_email('teacher')]);
+        $tid = (int) $pdo->lastInsertId();
+    } else {
+        $pdo->prepare("UPDATE new_school_teachers SET school_id=?, status='approved' WHERE id=?")->execute([$sid, $tid]);
+    }
+
+    $student = demo_user('student', 'Demo Student');
+    $stid = (int) ($pdo->query('SELECT id FROM new_school_students WHERE user_id = ' . (int) $student['id'])->fetchColumn() ?: 0);
+    if ($stid === 0) {
+        $pdo->prepare(
+            "INSERT INTO new_school_students
+                (user_id, school_id, teacher_id, participant_id, qr_token, qr_url, referral_code, full_name, student_username, age, date_of_birth, email, phone_number, home_address, school_name, grade_level, parent_name, parent_phone, parent_email, parent_consent_status, school_approval_status, teacher_approval_status, submission_status, overall_status)
+             VALUES (?,?,?,?,?,?,?, 'Demo Student', 'demo_student', 16, '2009-01-01', ?, '212-555-0002', '1 Demo Street, New York, NY', 'Demo Academy', '11th Grade', 'Demo Parent', '212-555-0003', ?, 'approved','approved','approved','eligible','eligible_to_submit')"
+        )->execute([
+            (int) $student['id'], $sid, $tid,
+            new_school_generate_participant_id(), new_school_generate_qr_token(), new_school_qr_url(new_school_generate_qr_token()),
+            new_school_generate_referral_code(), demo_email('student'), demo_email('parent'),
+        ]);
+        $stid = (int) $pdo->lastInsertId();
+    } else {
+        $pdo->prepare("UPDATE new_school_students SET school_id=?, teacher_id=?, parent_consent_status='approved', school_approval_status='approved', teacher_approval_status='approved', overall_status='eligible_to_submit' WHERE id=?")
+            ->execute([$sid, $tid, $stid]);
+    }
+
+    $parent = demo_user('parent', 'Demo Parent');
+    $hasParent = (int) ($pdo->query('SELECT COUNT(*) FROM new_school_parents WHERE user_id = ' . (int) $parent['id'])->fetchColumn());
+    if ($hasParent === 0) {
+        // Guard the UNIQUE student_id: only link if this student has no parent yet.
+        $studentTaken = (int) $pdo->query('SELECT COUNT(*) FROM new_school_parents WHERE student_id = ' . $stid)->fetchColumn();
+        if ($studentTaken === 0) {
+            $linkCol = (bool) $pdo->query("SHOW COLUMNS FROM new_school_parents LIKE 'link_status'")->fetchColumn();
+            if ($linkCol) {
+                $pdo->prepare(
+                    "INSERT INTO new_school_parents (user_id, student_id, parent_full_name, relationship_to_student, phone_number, email, home_address, consent_checked, digital_signature, link_status, approved_at)
+                     VALUES (?,?, 'Demo Parent', 'Parent', '212-555-0003', ?, '1 Demo Street, New York, NY', 1, 'Demo Parent', 'approved', NOW())"
+                )->execute([(int) $parent['id'], $stid, demo_email('parent')]);
+            } else {
+                $pdo->prepare(
+                    "INSERT INTO new_school_parents (user_id, student_id, parent_full_name, relationship_to_student, phone_number, email, home_address, consent_checked, digital_signature, approved_at)
+                     VALUES (?,?, 'Demo Parent', 'Parent', '212-555-0003', ?, '1 Demo Street, New York, NY', 1, 'Demo Parent', NOW())"
+                )->execute([(int) $parent['id'], $stid, demo_email('parent')]);
+            }
+        }
+    }
+
+    $ready = true;
+}
+
+/** Public list of demo accounts for the /demo page. */
+function demo_accounts_list(): array
+{
+    demo_ensure_accounts();
+    $out = [];
+    foreach (demo_roles() as $role => $label) {
+        $out[] = ['role' => $role, 'label' => $label, 'email' => demo_email($role)];
+    }
+    return $out;
+}
+
+/** Log in as the demo account for a role; returns the sanitized user. */
+function demo_login(string $role): array
+{
+    if (!array_key_exists($role, demo_roles())) json(['error' => 'Unknown demo role.'], 404);
+    demo_ensure_accounts();
+    $stmt = db()->prepare('SELECT * FROM users WHERE email = ? LIMIT 1');
+    $stmt->execute([demo_email($role)]);
+    $user = $stmt->fetch();
+    if (!$user) json(['error' => 'Demo account unavailable.'], 500);
+    return login_user($user);
+}
+
 /**
  * Editable challenge timeline (milestones shown on the public New School page).
  * Stored as JSON in new_school_settings['challenge_timeline']; falls back to the

@@ -125,6 +125,7 @@ export default function SiteHeader({ home = false }: { home?: boolean }) {
             <span className="nav__indicator" aria-hidden="true" />
           </nav>
           <div className="nav__cta">
+            <Link to="/demo" className="btn btn--sm" style={{ borderColor: 'var(--gold)', color: 'var(--gold-light)' }}>Demo</Link>
             {user ? (
               <div className="profile-menu" ref={menuRef}>
                 <button
@@ -208,6 +209,7 @@ export default function SiteHeader({ home = false }: { home?: boolean }) {
             </div>
           </div>
           <div className="mcta">
+            <Link className="btn btn--sm" to="/demo" onClick={closeMenu} style={{ borderColor: 'var(--gold)', color: 'var(--gold-light)' }}>Demo Login</Link>
             {user ? (
               <>
                 <Link className="btn btn--sm btn--solid" to={dashboardHref}>Dashboard</Link>

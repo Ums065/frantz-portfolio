@@ -1330,6 +1330,18 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             json(['ratings' => business_rate_submission($u, (int) $m[1], body())]);
         }
 
+        /* ---------------- DEMO ONE-CLICK LOGIN (presentations; DEMO_MODE=off to disable) ---------------- */
+        case $key === 'GET demo/accounts': {
+            if (!demo_mode_enabled()) json(['error' => 'Not found.'], 404);
+            json(['accounts' => demo_accounts_list()]);
+        }
+
+        case $key === 'POST demo/login': {
+            if (!demo_mode_enabled()) json(['error' => 'Not found.'], 404);
+            $role = (string) field(body(), 'role');
+            json(['message' => 'Signed in as demo ' . $role . '.', 'user' => demo_login($role)]);
+        }
+
         /* ---------------- ECOSYSTEM DASHBOARDS (sponsor / partner / media / volunteer) ---------------- */
         case $method === 'POST' && preg_match('#^ecosystem/(sponsor|partner|media|volunteer)/register$#', $route, $m) === 1: {
             json([
