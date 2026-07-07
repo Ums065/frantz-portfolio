@@ -76,6 +76,7 @@ export default function Business() {
   const [data, setData] = useState<BizDashboard | null>(null)
   const [err, setErr] = useState('')
   const [tab, setTab] = useState<Tab>('interviews')
+  const [navOpen, setNavOpen] = useState(false)
 
   // auth panel
   const [mode, setMode] = useState<'login' | 'register'>('register')
@@ -231,13 +232,17 @@ export default function Business() {
 
   return (
     <div className="admin-page" style={WRAP_S}>
-      <div className="admin-layout">
+      <div className={`admin-layout${navOpen ? '' : ' is-nav-collapsed'}`}>
+        <button type="button" className="admin-mobilebar" onClick={() => setNavOpen((o) => !o)} aria-expanded={navOpen}>
+          <span>☰&nbsp; Menu</span>
+          <span className="admin-mobilebar__hint">{navOpen ? 'Tap to close' : (NAV.find((n) => n.key === tab)?.label.replace(/\s*\(.*\)/, '') || 'Menu')}</span>
+        </button>
         <aside className="admin-sidebar glass">
           <div className="admin-sidebar__brand">
             <span className="admin-kicker">Business</span>
             <strong className="gold-text">{data?.profile?.business_name || 'Your Business'}</strong>
           </div>
-          <nav className="admin-nav">
+          <nav className="admin-nav" onClick={() => setNavOpen(false)}>
             <div className="admin-nav__group">
               <span className="admin-nav__group-label">Dashboard</span>
               <div className="admin-nav__items">

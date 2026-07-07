@@ -3413,6 +3413,21 @@ section#challenge .challenge-features .ns-gain p {
   .admin-nav__items { grid-template-columns: 1fr; }
 }
 
+/* Mobile: collapse the dashboard sidebar behind a toggle so the content
+   (not a 30-item nav) is what greets you. Desktop is unaffected — the
+   collapse rule lives only inside the mobile breakpoint. */
+.admin-mobilebar { display: none; }
+@media (max-width: 900px) {
+  .admin-mobilebar {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    width: 100%; padding: 13px 16px; border-radius: 14px; cursor: pointer;
+    color: var(--ivory); font-family: inherit; font-size: 15px; font-weight: 700;
+    border: 1px solid var(--line); background: rgba(255,255,255,0.05);
+  }
+  .admin-mobilebar__hint { color: var(--gold-light); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; }
+  .admin-layout.is-nav-collapsed .admin-sidebar { display: none; }
+}
+
 /* === Footer: clean responsive column progression (single source of truth) === */
 @media (max-width: 1100px) {
   .footer__top { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; }

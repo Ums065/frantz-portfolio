@@ -126,6 +126,7 @@ export default function Judge() {
 
   type JudgeTab = 'queue' | 'reviews' | 'handbook' | 'faq' | 'chat'
   const [tab, setTab] = useState<JudgeTab>('queue')
+  const [navOpen, setNavOpen] = useState(false)
   const [queue, setQueue] = useState<QueueRow[]>([])
   const [reviews, setReviews] = useState<ReviewRow[]>([])
   const [chat, setChat] = useState<Array<{ id: number; sender: string; body: string; created_at: string }>>([])
@@ -335,13 +336,17 @@ export default function Judge() {
   return (
     <>
     <div className="admin-page" style={WRAP_S}>
-      <div className="admin-layout">
+      <div className={`admin-layout${navOpen ? '' : ' is-nav-collapsed'}`}>
+        <button type="button" className="admin-mobilebar" onClick={() => setNavOpen((o) => !o)} aria-expanded={navOpen}>
+          <span>☰&nbsp; Menu</span>
+          <span className="admin-mobilebar__hint">{navOpen ? 'Tap to close' : activeLabel}</span>
+        </button>
         <aside className="admin-sidebar glass">
           <div className="admin-sidebar__brand">
             <span className="admin-kicker">Judge</span>
             <strong className="gold-text">Scoring Center</strong>
           </div>
-          <nav className="admin-nav">
+          <nav className="admin-nav" onClick={() => setNavOpen(false)}>
             <div className="admin-nav__group">
               <span className="admin-nav__group-label">Judging</span>
               <div className="admin-nav__items">

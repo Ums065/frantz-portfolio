@@ -147,6 +147,8 @@ export default function Admin() {
     const valid = !!q && NAV_GROUPS.some((g) => g.items.some((i) => i.key === q))
     return valid ? (q as TabKey) : 'overview'
   })
+  // Mobile: sidebar starts collapsed (content-first); toggled by the mobile bar.
+  const [navOpen, setNavOpen] = useState(false)
   // Keep the URL in sync with the active tab (replaceState → no history spam).
   useEffect(() => {
     const url = new URL(window.location.href)
@@ -782,13 +784,17 @@ export default function Admin() {
 
   return (
     <div className="admin-page" style={wrapS}>
-      <div className="admin-layout">
+      <div className={`admin-layout${navOpen ? '' : ' is-nav-collapsed'}`}>
+        <button type="button" className="admin-mobilebar" onClick={() => setNavOpen((o) => !o)} aria-expanded={navOpen}>
+          <span>☰&nbsp; Menu</span>
+          <span className="admin-mobilebar__hint">{navOpen ? 'Tap to close' : activeLabel}</span>
+        </button>
         <aside className="admin-sidebar glass">
           <div className="admin-sidebar__brand">
             <span className="admin-kicker">Admin</span>
             <strong className="gold-text">Command Center</strong>
           </div>
-          <nav className="admin-nav">
+          <nav className="admin-nav" onClick={() => setNavOpen(false)}>
             {NAV_GROUPS.map((group) => (
               <div key={group.group} className="admin-nav__group">
                 <span className="admin-nav__group-label">{group.group}</span>
