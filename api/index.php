@@ -1325,9 +1325,23 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             json(business_dashboard_payload($u));
         }
 
-        case $method === 'POST' && preg_match('#^business/rate/(\d+)$#', $route, $m) === 1: {
+        // Opportunity requests (implementation / contact_school / internship / volunteer)
+        // — reviewed by the admin; the business cannot rate or score students.
+        case $key === 'POST business/request': {
             $u = require_business();
-            json(['ratings' => business_rate_submission($u, (int) $m[1], body())]);
+            json(business_create_request($u, body()), 201);
+        }
+
+        case $key === 'GET admin/business-requests': {
+            require_admin();
+            json(['requests' => business_requests_all()]);
+        }
+
+        case $method === 'PUT' && preg_match('#^admin/business-request/(\d+)$#', $route, $m) === 1: {
+            $admin = require_admin();
+            $b = body();
+            business_request_update((int) $m[1], (string) field($b, 'status'), (string) field($b, 'admin_note'), (int) $admin['id']);
+            json(['message' => 'Request updated.', 'requests' => business_requests_all()]);
         }
 
         /* ---------------- DEMO ONE-CLICK LOGIN (presentations; DEMO_MODE=off to disable) ---------------- */

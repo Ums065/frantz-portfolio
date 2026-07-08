@@ -2917,7 +2917,7 @@ function require_business(): array
     return $u;
 }
 
-/** Self-healing schema for business accounts, their ratings, and the interview link column. */
+/** Self-healing schema for business accounts, their opportunity requests, and the interview link column. */
 function business_ensure_schema(): void
 {
     static $ready = false;
@@ -2939,19 +2939,27 @@ function business_ensure_schema(): void
             INDEX idx_business_name (business_name)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
     );
+    // Opportunity requests a business raises (implementation help / contact school /
+    // internship-hiring / volunteer). They are NOT ratings — the business cannot score
+    // students. Every request goes to the Admin for review + consent handling.
     $pdo->exec(
-        "CREATE TABLE IF NOT EXISTS business_ratings (
+        "CREATE TABLE IF NOT EXISTS business_requests (
             id INT AUTO_INCREMENT PRIMARY KEY,
             business_user_id INT NOT NULL,
-            submission_id INT NOT NULL,
-            rating TINYINT NOT NULL DEFAULT 0,
-            would_implement TINYINT(1) NOT NULL DEFAULT 0,
-            already_implemented TINYINT(1) NOT NULL DEFAULT 0,
-            need_more_info TINYINT(1) NOT NULL DEFAULT 0,
-            note TEXT DEFAULT NULL,
+            request_type VARCHAR(24) NOT NULL,
+            submission_id INT DEFAULT NULL,
+            student_id INT DEFAULT NULL,
+            student_name VARCHAR(120) DEFAULT NULL,
+            school_name VARCHAR(180) DEFAULT NULL,
+            message TEXT DEFAULT NULL,
+            status VARCHAR(16) NOT NULL DEFAULT 'pending',
+            admin_note TEXT DEFAULT NULL,
+            reviewed_by_user_id INT DEFAULT NULL,
+            reviewed_at TIMESTAMP NULL DEFAULT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            UNIQUE KEY uniq_business_submission (business_user_id, submission_id)
+            INDEX idx_breq_biz (business_user_id),
+            INDEX idx_breq_status (status)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
     );
     // Nullable explicit link so an admin can later bind interview rows to a business
@@ -3002,7 +3010,7 @@ function business_matched_interviews(array $account): array
         "SELECT bi.id, bi.visit_number, bi.business_name, bi.owner_name, bi.business_category,
                 bi.business_address, bi.date_of_visit, bi.main_challenge, bi.student_notes,
                 (bi.signature IS NOT NULL AND bi.signature <> '') AS verified,
-                s.id AS student_id, s.full_name AS student_name, s.school_name, s.grade_level,
+                s.id AS student_id, s.full_name AS student_name, s.school_name, s.grade_level, s.age,
                 sub.id AS submission_id, sub.status AS submission_status,
                 sub.problem_identified, sub.proposed_solution, sub.how_it_helps,
                 sub.expected_impact, sub.video_url, sub.written_url
@@ -3019,6 +3027,16 @@ function business_matched_interviews(array $account): array
     $out = [];
     foreach ($stmt->fetchAll() as $r) {
         $hasSolution = $r['submission_id'] && in_array((string) $r['submission_status'], $submitted, true);
+        $age = (int) $r['age'];
+        $materials = [];
+        if ($hasSolution && function_exists('new_school_fetch_materials')) {
+            foreach (new_school_fetch_materials((int) $r['student_id']) as $mat) {
+                $materials[] = [
+                    'label' => ucwords(str_replace('_', ' ', (string) ($mat['material_type'] ?? 'File'))),
+                    'url' => (string) ($mat['file_url'] ?? ''),
+                ];
+            }
+        }
         $out[] = [
             'id' => (int) $r['id'],
             'visit_number' => (int) $r['visit_number'],
@@ -3029,9 +3047,13 @@ function business_matched_interviews(array $account): array
             'date_of_visit' => $r['date_of_visit'],
             'main_challenge' => $r['main_challenge'],
             'verified' => (bool) $r['verified'],
+            'student_id' => (int) $r['student_id'],
             'student_name' => $r['student_name'],
             'school_name' => $r['school_name'],
             'grade_level' => $r['grade_level'],
+            'student_age' => $age,
+            // Internship/hiring may only be requested for students aged 16-19 (spec rule).
+            'internship_eligible' => $age >= 16 && $age <= 19,
             'solution' => $hasSolution ? [
                 'submission_id' => (int) $r['submission_id'],
                 'status' => $r['submission_status'],
@@ -3041,6 +3063,7 @@ function business_matched_interviews(array $account): array
                 'expected_impact' => $r['expected_impact'],
                 'video_url' => $r['video_url'],
                 'written_url' => $r['written_url'],
+                'materials' => $materials,
             ] : null,
             'solution_pending' => (bool) ($r['submission_id'] && !$hasSolution),
         ];
@@ -3048,32 +3071,91 @@ function business_matched_interviews(array $account): array
     return $out;
 }
 
-/** The business's own ratings keyed by submission id. */
-function business_ratings_map(int $userId): array
+/** The four opportunity-request types a business can raise. */
+function business_request_types(): array { return ['implementation', 'contact_school', 'internship', 'volunteer']; }
+
+/** This business's own requests, newest first. */
+function business_requests_for_user(int $userId): array
 {
     business_ensure_schema();
-    $stmt = db()->prepare('SELECT * FROM business_ratings WHERE business_user_id = ?');
+    $stmt = db()->prepare('SELECT id, request_type, submission_id, student_id, student_name, school_name, message, status, admin_note, UNIX_TIMESTAMP(created_at) AS created_ts FROM business_requests WHERE business_user_id = ? ORDER BY created_at DESC');
     $stmt->execute([$userId]);
-    $map = [];
-    foreach ($stmt->fetchAll() as $r) {
-        $map[(string) (int) $r['submission_id']] = [
-            'rating' => (int) $r['rating'],
-            'would_implement' => (bool) $r['would_implement'],
-            'already_implemented' => (bool) $r['already_implemented'],
-            'need_more_info' => (bool) $r['need_more_info'],
-            'note' => (string) ($r['note'] ?? ''),
-        ];
-    }
-    return $map;
+    return array_map(static fn(array $r): array => [
+        'id' => (int) $r['id'],
+        'request_type' => $r['request_type'],
+        'submission_id' => $r['submission_id'] !== null ? (int) $r['submission_id'] : null,
+        'student_id' => $r['student_id'] !== null ? (int) $r['student_id'] : null,
+        'student_name' => $r['student_name'],
+        'school_name' => $r['school_name'],
+        'message' => (string) ($r['message'] ?? ''),
+        'status' => $r['status'],
+        'admin_note' => (string) ($r['admin_note'] ?? ''),
+        'created_ts' => (int) $r['created_ts'],
+    ], $stmt->fetchAll());
 }
 
-/** Full dashboard payload for a signed-in business user. */
+/**
+ * Create an opportunity request. Solution/student-targeted requests must point at
+ * one of THIS business's matched interviews; internship/hiring is restricted to
+ * students aged 16-19. Nothing is granted here — the request goes to the Admin.
+ */
+function business_create_request(array $user, array $b): array
+{
+    business_ensure_schema();
+    $account = business_account_for_user((int) $user['id']);
+    if (!$account) json(['error' => 'Complete your business profile first.'], 400);
+    $type = (string) field($b, 'request_type');
+    if (!in_array($type, business_request_types(), true)) json(['error' => 'Unknown request type.'], 422);
+
+    $subId = isset($b['submission_id']) ? (int) $b['submission_id'] : 0;
+    $studentId = isset($b['student_id']) ? (int) $b['student_id'] : 0;
+    $studentName = null;
+    $schoolName = null;
+
+    if (in_array($type, ['implementation', 'internship'], true)) {
+        $match = null;
+        foreach (business_matched_interviews($account) as $i) {
+            if ($type === 'implementation' && $i['solution'] && (int) $i['solution']['submission_id'] === $subId) { $match = $i; break; }
+            if ($type === 'internship' && (int) $i['student_id'] === $studentId) { $match = $i; break; }
+        }
+        if (!$match) json(['error' => 'That student or solution is not linked to your business.'], 403);
+        if ($type === 'internship' && empty($match['internship_eligible'])) {
+            json(['error' => 'Internship/hiring can only be requested for students aged 16-19.'], 422);
+        }
+        $studentId = (int) $match['student_id'];
+        $subId = $type === 'implementation' ? (int) $match['solution']['submission_id'] : 0;
+        $studentName = $match['student_name'];
+        $schoolName = $match['school_name'];
+    } elseif ($type === 'contact_school') {
+        $schoolName = mb_substr(trim((string) field($b, 'school_name')), 0, 180) ?: null;
+        if (!$schoolName && $studentId) {
+            foreach (business_matched_interviews($account) as $i) {
+                if ((int) $i['student_id'] === $studentId) { $schoolName = $i['school_name']; $studentName = $i['student_name']; break; }
+            }
+        }
+    }
+    // 'volunteer' needs no target.
+
+    db()->prepare(
+        'INSERT INTO business_requests (business_user_id, request_type, submission_id, student_id, student_name, school_name, message, status)
+         VALUES (?,?,?,?,?,?,?, "pending")'
+    )->execute([
+        (int) $user['id'], $type, $subId ?: null, $studentId ?: null, $studentName, $schoolName,
+        mb_substr(trim((string) field($b, 'message')), 0, 2000) ?: null,
+    ]);
+    if (function_exists('notify')) {
+        notify('New business request: ' . $type, $account['business_name'] . ' submitted a "' . $type . '" request for admin review.');
+    }
+    return ['id' => (int) db()->lastInsertId(), 'requests' => business_requests_for_user((int) $user['id'])];
+}
+
+/** Full dashboard payload for a signed-in business user (access + review + requests; NO rating). */
 function business_dashboard_payload(array $user): array
 {
     $userId = (int) $user['id'];
     $account = business_account_for_user($userId);
     if (!$account) {
-        return ['profile' => null, 'interviews' => [], 'impact' => ['interviews' => 0, 'students' => 0, 'solutions' => 0], 'ratings' => (object) []];
+        return ['profile' => null, 'interviews' => [], 'impact' => ['interviews' => 0, 'students' => 0, 'solutions' => 0], 'requests' => []];
     }
     $interviews = business_matched_interviews($account);
     $students = [];
@@ -3082,7 +3164,6 @@ function business_dashboard_payload(array $user): array
         $students[$i['student_name'] . '|' . $i['school_name']] = true;
         if ($i['solution']) $solutions++;
     }
-    $ratings = business_ratings_map($userId);
     return [
         'profile' => [
             'business_name' => $account['business_name'],
@@ -3099,38 +3180,41 @@ function business_dashboard_payload(array $user): array
             'students' => count($students),
             'solutions' => $solutions,
         ],
-        'ratings' => $ratings ?: (object) [],
+        'requests' => business_requests_for_user($userId),
     ];
 }
 
-/** Validate a submission belongs to the account, then upsert this business's rating. */
-function business_rate_submission(array $user, int $submissionId, array $b): array
+/** Admin: all business requests (pending first), with the business name joined in. */
+function business_requests_all(): array
 {
     business_ensure_schema();
-    $account = business_account_for_user((int) $user['id']);
-    if (!$account) json(['error' => 'Complete your business profile first.'], 400);
+    $rows = db()->query(
+        "SELECT r.*, UNIX_TIMESTAMP(r.created_at) AS created_ts, ba.business_name
+         FROM business_requests r
+         LEFT JOIN business_accounts ba ON ba.user_id = r.business_user_id
+         ORDER BY (r.status = 'pending') DESC, r.created_at DESC"
+    )->fetchAll();
+    return array_map(static fn(array $r): array => [
+        'id' => (int) $r['id'],
+        'business_name' => (string) ($r['business_name'] ?? ('Business #' . $r['business_user_id'])),
+        'request_type' => $r['request_type'],
+        'student_name' => $r['student_name'],
+        'school_name' => $r['school_name'],
+        'submission_id' => $r['submission_id'] !== null ? (int) $r['submission_id'] : null,
+        'message' => (string) ($r['message'] ?? ''),
+        'status' => $r['status'],
+        'admin_note' => (string) ($r['admin_note'] ?? ''),
+        'created_ts' => (int) $r['created_ts'],
+    ], $rows);
+}
 
-    $allowed = false;
-    foreach (business_matched_interviews($account) as $i) {
-        if ($i['solution'] && (int) $i['solution']['submission_id'] === $submissionId) { $allowed = true; break; }
-    }
-    if (!$allowed) json(['error' => 'That solution is not linked to your business.'], 403);
-
-    $rating = max(0, min(5, (int) ($b['rating'] ?? 0)));
-    db()->prepare(
-        'INSERT INTO business_ratings (business_user_id, submission_id, rating, would_implement, already_implemented, need_more_info, note)
-         VALUES (?,?,?,?,?,?,?)
-         ON DUPLICATE KEY UPDATE rating=VALUES(rating), would_implement=VALUES(would_implement),
-             already_implemented=VALUES(already_implemented), need_more_info=VALUES(need_more_info),
-             note=VALUES(note), updated_at=NOW()'
-    )->execute([
-        (int) $user['id'], $submissionId, $rating,
-        !empty($b['would_implement']) ? 1 : 0,
-        !empty($b['already_implemented']) ? 1 : 0,
-        !empty($b['need_more_info']) ? 1 : 0,
-        mb_substr(trim((string) ($b['note'] ?? '')), 0, 1000),
-    ]);
-    return business_ratings_map((int) $user['id']);
+/** Admin: set a request's status + note. */
+function business_request_update(int $id, string $status, string $note, int $adminId): void
+{
+    business_ensure_schema();
+    if (!in_array($status, ['pending', 'approved', 'declined', 'info_needed'], true)) json(['error' => 'Invalid status.'], 422);
+    db()->prepare('UPDATE business_requests SET status=?, admin_note=?, reviewed_by_user_id=?, reviewed_at=NOW() WHERE id=?')
+        ->execute([$status, mb_substr($note, 0, 2000) ?: null, $adminId, $id]);
 }
 
 /* ==================== Ecosystem accounts (sponsor / partner / media / volunteer) ==================== */

@@ -5,11 +5,11 @@ import { useAuth } from '../context/AuthContext'
 import { useSeo } from '../hooks/useSeo'
 import { resolveDashboardRoute } from '../lib/dashboardRoute'
 
-/* Business Portal — the "receive solutions & interact" dashboard for a local
-   business owner. Self-contained: it owns the login / register / pending /
-   dashboard states so a business can go from signup to reviewing student ideas
-   without leaving the page. Reads the existing student→business interview and
-   solution data (matched to the account by business name). */
+/* Business Portal — access, review & opportunity requests for a verified business.
+   The business is NOT a judge: it cannot rate, score or rank students, and cannot
+   contact students directly. It can view who interviewed it + their submitted
+   solutions, and raise requests (implementation help / contact school /
+   internship-hiring / volunteer) that all go to the Admin for review + consent. */
 
 const WRAP_S: React.CSSProperties = { minHeight: '100vh', color: 'var(--white)', padding: '0 24px 60px', fontFamily: 'var(--f-body)' }
 const cardS: React.CSSProperties = { background: 'rgba(255,255,255,0.04)', border: '1px solid var(--line)', borderRadius: 14, padding: 20 }
@@ -19,6 +19,7 @@ const eyebrow: React.CSSProperties = { fontSize: 11, fontWeight: 700, letterSpac
 const thS: React.CSSProperties = { textAlign: 'left', padding: '12px 14px', color: 'var(--gold-light)', fontWeight: 600, borderBottom: '1px solid var(--line)', textTransform: 'uppercase', fontSize: 11, letterSpacing: '.06em' }
 const tdS: React.CSSProperties = { padding: '12px 14px', verticalAlign: 'top', color: '#d8d3c6', borderBottom: '1px solid rgba(201,168,76,0.08)' }
 
+interface BizMaterial { label: string; url: string }
 interface BizSolution {
   submission_id: number
   status: string
@@ -28,6 +29,7 @@ interface BizSolution {
   expected_impact: string
   video_url: string | null
   written_url: string | null
+  materials: BizMaterial[]
 }
 interface BizInterview {
   id: number
@@ -39,34 +41,59 @@ interface BizInterview {
   date_of_visit: string | null
   main_challenge: string | null
   verified: boolean
+  student_id: number
   student_name: string
   school_name: string
   grade_level: string | null
+  student_age: number
+  internship_eligible: boolean
   solution: BizSolution | null
   solution_pending: boolean
 }
-interface BizRating {
-  rating: number
-  would_implement: boolean
-  already_implemented: boolean
-  need_more_info: boolean
-  note: string
+type ReqType = 'implementation' | 'contact_school' | 'internship' | 'volunteer'
+interface BizRequest {
+  id: number
+  request_type: ReqType
+  submission_id: number | null
+  student_id: number | null
+  student_name: string | null
+  school_name: string | null
+  message: string
+  status: string
+  admin_note: string
+  created_ts: number
 }
+interface BizProfile { business_name: string; category: string | null; borough: string | null; contact_name: string | null; contact_phone: string | null; website: string | null; about: string | null }
 interface BizDashboard {
-  profile: { business_name: string; category: string | null; borough: string | null; contact_name: string | null; contact_phone: string | null; website: string | null; about: string | null } | null
+  profile: BizProfile | null
   interviews: BizInterview[]
   impact: { interviews: number; students: number; solutions: number }
-  ratings: Record<string, BizRating>
+  requests: BizRequest[]
 }
 
-type Tab = 'interviews' | 'solutions' | 'impact'
+type Tab = 'interviews' | 'solutions' | 'requests' | 'profile'
+
+const REQ_LABEL: Record<ReqType, string> = {
+  implementation: 'Implementation Help',
+  contact_school: 'Contact School',
+  internship: 'Internship / Hiring',
+  volunteer: 'Volunteer Support',
+}
+const statusStyle = (s: string): React.CSSProperties => {
+  const map: Record<string, string> = { approved: 'var(--gold-light)', declined: '#ff9a9a', info_needed: 'var(--gold)', pending: 'var(--muted)' }
+  return { color: map[s] || 'var(--muted)', fontWeight: 700, fontSize: 11.5, textTransform: 'uppercase', letterSpacing: '.05em' }
+}
+const fmtDate = (ts: number) => { try { return new Date(ts * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) } catch { return '' } }
 
 const ADMIN_ROLES = ['admin', 'super_admin', 'editor']
+
+// A pending request the modal is collecting a message for.
+interface ReqDraft { type: ReqType; title: string; note: string; submission_id?: number; student_id?: number; school_name?: string }
 
 export default function Business() {
   const { user, loading, login, refresh, logout } = useAuth()
   const navigate = useNavigate()
-  useSeo({ title: 'Business Portal', description: 'Receive student solutions to your business challenges and rate their ideas.', noindex: true })
+  useSeo({ title: 'Business Portal', description: 'See who interviewed your business, review student solutions, and request help implementing, hiring, or contacting the school.', noindex: true })
 
   const role = (user?.role || '').toLowerCase()
   const isBusiness = role === 'business'
@@ -77,6 +104,11 @@ export default function Business() {
   const [err, setErr] = useState('')
   const [tab, setTab] = useState<Tab>('interviews')
   const [navOpen, setNavOpen] = useState(false)
+
+  // request modal
+  const [draft, setDraft] = useState<ReqDraft | null>(null)
+  const [reqBusy, setReqBusy] = useState(false)
+  const [reqErr, setReqErr] = useState('')
 
   // auth panel
   const [mode, setMode] = useState<'login' | 'register'>('register')
@@ -96,6 +128,23 @@ export default function Business() {
   }, [user, isBusiness, isAdmin, approved])
 
   useEffect(() => { void loadDashboard() }, [loadDashboard])
+
+  const submitRequest = async () => {
+    if (!draft) return
+    setReqBusy(true); setReqErr('')
+    try {
+      const r = await api.post<{ requests: BizRequest[] }>('business/request', {
+        request_type: draft.type,
+        submission_id: draft.submission_id,
+        student_id: draft.student_id,
+        school_name: draft.school_name,
+        message: draft.note,
+      })
+      setData((d) => d ? { ...d, requests: r.requests || d.requests } : d)
+      setDraft(null); setTab('requests')
+    } catch (e) { setReqErr(e instanceof Error ? e.message : 'Could not send your request.') }
+    finally { setReqBusy(false) }
+  }
 
   const doLogin = async (e: FormEvent) => {
     e.preventDefault(); setBusy('login'); setErr('')
@@ -141,7 +190,7 @@ export default function Business() {
             <span style={eyebrow}>Business Portal</span>
             <h1 className="gold-text" style={{ fontFamily: 'var(--f-serif)', fontSize: 30, margin: '6px 0 6px' }}>Partner With Young Innovators</h1>
             <p style={{ color: 'var(--muted)', fontSize: 14, lineHeight: 1.65 }}>
-              Students across New York interviewed local businesses and built solutions to real challenges. Register your business to see who interviewed you, review their ideas, and rate them.
+              Students across New York interviewed local businesses and built solutions to real challenges. Register your business to see who interviewed you, review their ideas, and request help implementing, hiring, or contacting the school.
             </p>
             <div style={{ display: 'flex', gap: 8, margin: '18px 0 0' }}>
               <button className={`btn btn--sm${mode === 'register' ? ' btn--solid' : ''}`} onClick={() => { setMode('register'); setErr('') }}>Register</button>
@@ -223,12 +272,15 @@ export default function Business() {
   // ---- approved dashboard ----
   const impact = data?.impact ?? { interviews: 0, students: 0, solutions: 0 }
   const interviews = data?.interviews ?? []
+  const requests = data?.requests ?? []
   const solutionInterviews = interviews.filter((i) => i.solution)
   const NAV: Array<{ key: Tab; label: string }> = [
     { key: 'interviews', label: `Interviews (${interviews.length})` },
     { key: 'solutions', label: `Student Solutions (${solutionInterviews.length})` },
-    { key: 'impact', label: 'My Impact' },
+    { key: 'requests', label: `My Requests (${requests.length})` },
+    { key: 'profile', label: 'Business Profile' },
   ]
+  const openReq = (d: ReqDraft) => { setReqErr(''); setDraft(d) }
 
   return (
     <div className="admin-page" style={WRAP_S}>
@@ -277,16 +329,17 @@ export default function Business() {
               ? <Empty text="No student interviews are linked to your business yet. Once students who interviewed your business are approved, they'll appear here (matched by business name)." />
               : (
                 <div style={{ ...cardS, padding: 0, overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 620 }}>
-                    <thead><tr><th style={thS}>Student</th><th style={thS}>School</th><th style={thS}>Visited</th><th style={thS}>Challenge they logged</th><th style={thS}>Solution</th></tr></thead>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 680 }}>
+                    <thead><tr><th style={thS}>Student</th><th style={thS}>School</th><th style={thS}>Visited</th><th style={thS}>Challenge they logged</th><th style={thS}>Solution</th><th style={thS}></th></tr></thead>
                     <tbody>
                       {interviews.map((i) => (
                         <tr key={i.id}>
                           <td style={tdS}>{i.student_name}{i.verified && <span title="Signed / verified visit" style={{ color: 'var(--gold)', marginLeft: 6 }}>✓</span>}</td>
                           <td style={tdS}>{i.school_name}{i.grade_level ? ` · ${i.grade_level}` : ''}</td>
                           <td style={tdS}>{i.date_of_visit || '—'}</td>
-                          <td style={{ ...tdS, maxWidth: 300 }}>{i.main_challenge || '—'}</td>
+                          <td style={{ ...tdS, maxWidth: 280 }}>{i.main_challenge || '—'}</td>
                           <td style={tdS}>{i.solution ? <span style={{ color: 'var(--gold-light)' }}>Submitted</span> : i.solution_pending ? <span style={{ color: 'var(--muted)' }}>In progress</span> : <span style={{ color: 'var(--muted)' }}>—</span>}</td>
+                          <td style={tdS}><button className="btn btn--sm" onClick={() => openReq({ type: 'contact_school', title: `Contact ${i.school_name}`, student_id: i.student_id, school_name: i.school_name, note: '' })}>Contact School</button></td>
                         </tr>
                       ))}
                     </tbody>
@@ -297,27 +350,65 @@ export default function Business() {
 
           {tab === 'solutions' && (
             solutionInterviews.length === 0
-              ? <Empty text="No submitted student solutions yet. When a student who interviewed you submits their solution, it will appear here for you to review and rate." />
+              ? <Empty text="No submitted student solutions yet. When a student who interviewed you submits their solution, it will appear here to review and to request implementation help, hiring, or a school contact." />
               : (
                 <div style={{ display: 'grid', gap: 16 }}>
-                  {solutionInterviews.map((i) => (
-                    <SolutionCard key={i.solution!.submission_id} interview={i} rating={data?.ratings?.[String(i.solution!.submission_id)]} onSaved={(map) => setData((d) => d ? { ...d, ratings: map } : d)} />
-                  ))}
+                  {solutionInterviews.map((i) => <SolutionCard key={i.solution!.submission_id} interview={i} onReq={openReq} />)}
                 </div>
               )
           )}
 
-          {tab === 'impact' && (
-            <div style={{ ...cardS }}>
-              <p style={{ color: '#d8d3c6', lineHeight: 1.7, marginTop: 0 }}>
-                <strong className="gold-text">{data?.profile?.business_name}</strong> has been part of <strong>{impact.interviews}</strong> student interview{impact.interviews === 1 ? '' : 's'},
-                engaging <strong>{impact.students}</strong> student{impact.students === 1 ? '' : 's'} and receiving <strong>{impact.solutions}</strong> solution{impact.solutions === 1 ? '' : 's'} to your real-world challenges.
-              </p>
-              <p style={{ color: 'var(--muted)', fontSize: 13, marginBottom: 0 }}>Every rating you give helps students learn what real businesses value. Thank you for being part of the movement.</p>
+          {tab === 'requests' && (
+            <div style={{ display: 'grid', gap: 16 }}>
+              <div style={{ ...cardS, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+                <div>
+                  <div className="gold-text" style={{ fontFamily: 'var(--f-serif)', fontSize: 18 }}>Need volunteer support?</div>
+                  <div style={{ color: 'var(--muted)', fontSize: 13 }}>Ask the program for mentors, speakers, or event help.</div>
+                </div>
+                <button className="btn btn--solid btn--sm" onClick={() => openReq({ type: 'volunteer', title: 'Request Volunteer Support', note: '' })}>Request Volunteer Support</button>
+              </div>
+              {requests.length === 0
+                ? <Empty text="You haven't made any requests yet. From a student's solution you can request implementation help, an internship/hire, or a school contact — every request is reviewed by the admin." />
+                : requests.map((r) => (
+                  <div key={r.id} style={cardS}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+                      <div className="gold-text" style={{ fontWeight: 800, fontSize: 15 }}>{REQ_LABEL[r.request_type]}</div>
+                      <span style={statusStyle(r.status)}>{r.status.replace('_', ' ')}</span>
+                    </div>
+                    <div style={{ color: 'var(--muted)', fontSize: 12.5, marginTop: 3 }}>
+                      {[r.student_name, r.school_name].filter(Boolean).join(' · ') || 'General'} · {fmtDate(r.created_ts)}
+                    </div>
+                    {r.message && <p style={{ color: '#d8d3c6', margin: '8px 0 0', lineHeight: 1.55, fontSize: 13.5 }}>{r.message}</p>}
+                    {r.admin_note && <p style={{ color: 'var(--gold-light)', margin: '8px 0 0', fontSize: 13 }}><strong>Admin:</strong> {r.admin_note}</p>}
+                  </div>
+                ))}
             </div>
+          )}
+
+          {tab === 'profile' && data?.profile && (
+            <ProfileEditor profile={data.profile} onSaved={(p) => setData((d) => d ? { ...d, profile: p } : d)} />
           )}
         </main>
       </div>
+
+      {draft && (
+        <div onClick={() => !reqBusy && setDraft(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'grid', placeItems: 'center', padding: 20, zIndex: 60 }}>
+          <div onClick={(e) => e.stopPropagation()} className="glass" style={{ maxWidth: 480, width: '100%', padding: 26, borderRadius: 16 }}>
+            <span style={eyebrow}>{REQ_LABEL[draft.type]}</span>
+            <h3 className="gold-text" style={{ fontFamily: 'var(--f-serif)', fontSize: 21, margin: '4px 0 8px' }}>{draft.title}</h3>
+            <p style={{ color: 'var(--muted)', fontSize: 13, lineHeight: 1.6, marginTop: 0 }}>
+              This request goes to the program admin for review. No student is contacted and nothing is implemented without the required student, parent/guardian, and school consent.
+            </p>
+            <label style={labelS}>Message (optional)</label>
+            <textarea autoFocus style={{ ...inputS, minHeight: 90, resize: 'vertical' }} value={draft.note} onChange={(e) => setDraft({ ...draft, note: e.target.value })} placeholder="Add any details for the admin…" />
+            {reqErr && <p style={{ color: '#ff9a9a', fontSize: 13, margin: '10px 0 0' }}>{reqErr}</p>}
+            <div style={{ display: 'flex', gap: 10, marginTop: 16, justifyContent: 'flex-end' }}>
+              <button className="btn btn--sm" disabled={reqBusy} onClick={() => setDraft(null)}>Cancel</button>
+              <button className="btn btn--solid btn--sm" disabled={reqBusy} onClick={submitRequest}>{reqBusy ? 'Sending…' : 'Send Request'}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -335,28 +426,8 @@ function Empty({ text }: { text: string }) {
   return <div style={{ ...cardS, color: 'var(--muted)', fontSize: 14, lineHeight: 1.65 }}>{text}</div>
 }
 
-function SolutionCard({ interview, rating, onSaved }: { interview: BizInterview; rating?: BizRating; onSaved: (map: Record<string, BizRating>) => void }) {
+function SolutionCard({ interview, onReq }: { interview: BizInterview; onReq: (d: ReqDraft) => void }) {
   const s = interview.solution!
-  const [stars, setStars] = useState(rating?.rating ?? 0)
-  const [wi, setWi] = useState(!!rating?.would_implement)
-  const [ai, setAi] = useState(!!rating?.already_implemented)
-  const [nmi, setNmi] = useState(!!rating?.need_more_info)
-  const [note, setNote] = useState(rating?.note ?? '')
-  const [busy, setBusy] = useState(false)
-  const [saved, setSaved] = useState(false)
-  const [err, setErr] = useState('')
-
-  const save = async () => {
-    setBusy(true); setErr(''); setSaved(false)
-    try {
-      const r = await api.post<{ ratings: Record<string, BizRating> }>(`business/rate/${s.submission_id}`, {
-        rating: stars, would_implement: wi, already_implemented: ai, need_more_info: nmi, note,
-      })
-      onSaved(r.ratings || {}); setSaved(true)
-    } catch (e) { setErr(e instanceof Error ? e.message : 'Could not save your rating.') }
-    finally { setBusy(false) }
-  }
-
   const field = (label: string, text: string) => text
     ? <div style={{ marginTop: 10 }}><div style={{ ...eyebrow, color: 'var(--gold-light)' }}>{label}</div><p style={{ color: '#d8d3c6', margin: '3px 0 0', lineHeight: 1.6 }}>{text}</p></div>
     : null
@@ -366,11 +437,12 @@ function SolutionCard({ interview, rating, onSaved }: { interview: BizInterview;
       <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
         <div>
           <div className="gold-text" style={{ fontFamily: 'var(--f-serif)', fontSize: 19 }}>{interview.student_name}</div>
-          <div style={{ color: 'var(--muted)', fontSize: 12.5 }}>{interview.school_name}{interview.grade_level ? ` · ${interview.grade_level}` : ''}</div>
+          <div style={{ color: 'var(--muted)', fontSize: 12.5 }}>{interview.school_name}{interview.grade_level ? ` · ${interview.grade_level}` : ''}{interview.student_age ? ` · Age ${interview.student_age}` : ''}</div>
         </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', flexWrap: 'wrap' }}>
           {s.video_url && <a className="btn btn--sm" href={s.video_url} target="_blank" rel="noreferrer">▶ Video</a>}
           {s.written_url && <a className="btn btn--sm" href={s.written_url} target="_blank" rel="noreferrer">📄 Document</a>}
+          {s.materials.map((m) => <a key={m.url} className="btn btn--sm" href={m.url} target="_blank" rel="noreferrer">📎 {m.label}</a>)}
         </div>
       </div>
 
@@ -379,27 +451,55 @@ function SolutionCard({ interview, rating, onSaved }: { interview: BizInterview;
       {field('How it helps', s.how_it_helps)}
       {field('Expected impact', s.expected_impact)}
 
-      {/* rating */}
-      <div style={{ borderTop: '1px solid var(--line)', marginTop: 14, paddingTop: 14 }}>
-        <div style={{ ...eyebrow, marginBottom: 8 }}>Rate this idea</div>
-        <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
-          {[1, 2, 3, 4, 5].map((n) => (
-            <button key={n} type="button" onClick={() => setStars(n)} aria-label={`${n} stars`}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 26, lineHeight: 1, color: n <= stars ? 'var(--gold)' : 'rgba(255,255,255,0.25)' }}>★</button>
-          ))}
-        </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginBottom: 10 }}>
-          <label style={{ display: 'flex', gap: 7, alignItems: 'center', color: 'var(--ivory)', fontSize: 13 }}><input type="checkbox" checked={wi} onChange={(e) => setWi(e.target.checked)} /> Would implement</label>
-          <label style={{ display: 'flex', gap: 7, alignItems: 'center', color: 'var(--ivory)', fontSize: 13 }}><input type="checkbox" checked={ai} onChange={(e) => setAi(e.target.checked)} /> Already implemented</label>
-          <label style={{ display: 'flex', gap: 7, alignItems: 'center', color: 'var(--ivory)', fontSize: 13 }}><input type="checkbox" checked={nmi} onChange={(e) => setNmi(e.target.checked)} /> Need more info</label>
-        </div>
-        <textarea style={{ ...inputS, minHeight: 60, resize: 'vertical' }} placeholder="Optional note to the student…" value={note} onChange={(e) => setNote(e.target.value)} />
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 10 }}>
-          <button className="btn btn--solid btn--sm" disabled={busy} onClick={save}>{busy ? 'Saving…' : 'Save Rating'}</button>
-          {saved && <span style={{ color: 'var(--gold-light)', fontSize: 13 }}>Saved ✓</span>}
-          {err && <span style={{ color: '#ff9a9a', fontSize: 13 }}>{err}</span>}
-        </div>
+      {/* opportunity requests (no rating) */}
+      <div style={{ borderTop: '1px solid var(--line)', marginTop: 14, paddingTop: 14, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+        <button className="btn btn--solid btn--sm" onClick={() => onReq({ type: 'implementation', title: `Implement: ${interview.student_name}'s solution`, submission_id: s.submission_id, note: '' })}>Request Help Implementing This Solution</button>
+        {interview.internship_eligible && (
+          <button className="btn btn--sm" onClick={() => onReq({ type: 'internship', title: `Internship / Hiring: ${interview.student_name}`, student_id: interview.student_id, note: '' })}>Request Internship / Hiring</button>
+        )}
+        <button className="btn btn--sm" onClick={() => onReq({ type: 'contact_school', title: `Contact ${interview.school_name}`, student_id: interview.student_id, school_name: interview.school_name, note: '' })}>Contact School</button>
       </div>
     </div>
+  )
+}
+
+function ProfileEditor({ profile, onSaved }: { profile: BizProfile; onSaved: (p: BizProfile) => void }) {
+  const [p, setP] = useState<BizProfile>(profile)
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState('')
+  const [err, setErr] = useState('')
+  const set = (k: keyof BizProfile, v: string) => setP((prev) => ({ ...prev, [k]: v }))
+
+  const save = async (e: FormEvent) => {
+    e.preventDefault(); setBusy(true); setMsg(''); setErr('')
+    try {
+      const d = await api.put<BizDashboard>('business/profile', {
+        business_name: p.business_name, category: p.category, borough: p.borough,
+        contact_name: p.contact_name, contact_phone: p.contact_phone, website: p.website, about: p.about,
+      })
+      onSaved(d.profile || p); setMsg('Saved ✓')
+    } catch (e) { setErr(e instanceof Error ? e.message : 'Could not save.') }
+    finally { setBusy(false) }
+  }
+
+  return (
+    <form onSubmit={save} style={{ ...cardS, display: 'grid', gap: 14, maxWidth: 620 }}>
+      <div><label style={labelS}>Business name *</label><input style={inputS} required value={p.business_name} onChange={(e) => set('business_name', e.target.value)} /></div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12 }}>
+        <div><label style={labelS}>Category</label><input style={inputS} value={p.category || ''} onChange={(e) => set('category', e.target.value)} /></div>
+        <div><label style={labelS}>Borough / County</label><input style={inputS} value={p.borough || ''} onChange={(e) => set('borough', e.target.value)} /></div>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12 }}>
+        <div><label style={labelS}>Contact name</label><input style={inputS} value={p.contact_name || ''} onChange={(e) => set('contact_name', e.target.value)} /></div>
+        <div><label style={labelS}>Phone</label><input style={inputS} value={p.contact_phone || ''} onChange={(e) => set('contact_phone', e.target.value)} /></div>
+      </div>
+      <div><label style={labelS}>Website</label><input style={inputS} value={p.website || ''} onChange={(e) => set('website', e.target.value)} placeholder="https://…" /></div>
+      <div><label style={labelS}>About your business</label><textarea style={{ ...inputS, minHeight: 90, resize: 'vertical' }} value={p.about || ''} onChange={(e) => set('about', e.target.value)} /></div>
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+        <button className="btn btn--solid btn--sm" disabled={busy}>{busy ? 'Saving…' : 'Save Profile'}</button>
+        {msg && <span style={{ color: 'var(--gold-light)', fontSize: 13 }}>{msg}</span>}
+        {err && <span style={{ color: '#ff9a9a', fontSize: 13 }}>{err}</span>}
+      </div>
+    </form>
   )
 }
