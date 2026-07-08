@@ -119,6 +119,16 @@ const CATEGORY_HINTS: Record<string, string> = {
   presentation: 'Confidence, organization, professionalism, communication.',
 }
 
+// Conflict of Interest checklist — a "Yes" to ANY question blocks scoring and
+// returns the submission to the admin for reassignment.
+const COI_QUESTIONS = [
+  'Do I personally know this student?',
+  'Do I know the student’s family?',
+  'Do I work for this school?',
+  'Do I have a relationship with this business?',
+  'Do I have any financial or personal interest that could influence my decision?',
+]
+
 export default function Judge() {
   const { user, loading, logout } = useAuth()
   const navigate = useNavigate()
@@ -144,8 +154,12 @@ export default function Judge() {
   const [msg, setMsg] = useState('')
   const [certified, setCertified] = useState<boolean | null>(null)
   const [certBusy, setCertBusy] = useState(false)
-  const [certAgree, setCertAgree] = useState(false)
+  const [certAgree, setCertAgree] = useState(false)   // Code of Ethics
+  const [coiSignAgree, setCoiSignAgree] = useState(false) // Conflict of Interest Agreement
   const [scoringLocked, setScoringLocked] = useState(false)
+  // Per-submission Conflict of Interest gate (must clear before the scorecard unlocks).
+  const [coiCleared, setCoiCleared] = useState(false)
+  const [coiAns, setCoiAns] = useState<Record<number, 'yes' | 'no' | ''>>({})
 
   const role = (user?.role || '').toLowerCase()
   const allowed = !!user && ['judge', 'admin', 'super_admin'].includes(role)
@@ -239,12 +253,27 @@ export default function Judge() {
         d.categories.forEach((c) => { init[c.key] = Number((d.my_score as any)?.[c.key] ?? 0) })
         setScores(init)
         setNotes(((d.my_score as any)?.notes as string) || '')
+        // Already-submitted reviews skip the COI gate (read-only); otherwise the
+        // judge must clear the Conflict of Interest checklist before scoring.
+        setCoiCleared((d.my_score as any)?.status === 'submitted')
+        setCoiAns({})
       })
       .catch((e) => setMsg(e instanceof Error ? e.message : 'Could not load submission.'))
       .finally(() => setDetailBusy(false))
   }
 
-  const closeDetail = () => { setDetail(null); setScores({}); setNotes(''); setMsg('') }
+  const closeDetail = () => { setDetail(null); setScores({}); setNotes(''); setMsg(''); setCoiCleared(false); setCoiAns({}) }
+
+  const coiRecuse = async () => {
+    if (!detail) return
+    setSaveBusy(true)
+    try {
+      await api.post(`new-school/judge/submission/${detail.submission.id}/recuse`, { reason: 'Conflict of interest declared on the pre-scoring checklist.' })
+      setMsg('Conflict declared — this submission has been returned to the admin for reassignment.')
+      loadQueue()
+      setTimeout(closeDetail, 1200)
+    } catch (e) { setMsg(e instanceof Error ? e.message : 'Could not recuse.') } finally { setSaveBusy(false) }
+  }
 
   const total = useMemo(
     () => (detail ? detail.categories.reduce((sum, c) => sum + (Number(scores[c.key]) || 0), 0) : 0),
@@ -309,15 +338,18 @@ export default function Judge() {
           <span className="admin-kicker">Judge Certification</span>
           <h2 className="gold-text" style={{ fontFamily: 'var(--f-serif)', margin: '6px 0 12px' }}>Before You Begin</h2>
           <p style={{ color: 'var(--muted)', fontSize: 14, lineHeight: 1.7 }}>
-            By continuing you certify that you have read the Official Judge's Handbook and agree to: evaluate every
-            submission fairly and independently using the Official Scoring Rubric, maintain confidentiality, disclose
-            any conflict of interest and recuse yourself when needed, and score without outside influence or bias.
+            Judges are completely independent. To begin, please read the Official Judge's Handbook and sign both
+            agreements below. You will also confirm you have no conflict of interest before scoring each submission.
           </p>
-          <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', margin: '14px 0 18px', color: 'var(--ivory)', fontSize: 14 }}>
+          <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', margin: '16px 0 12px', color: 'var(--ivory)', fontSize: 14 }}>
             <input type="checkbox" checked={certAgree} onChange={(e) => setCertAgree(e.target.checked)} style={{ marginTop: 3 }} />
-            <span>I have read the Judge's Handbook and agree to the Judge Code of Ethics and Confidentiality requirements.</span>
+            <span><strong className="gold-text">Judge Code of Ethics.</strong> I will evaluate every submission fairly, independently and confidentially using the Official Scoring Rubric, without outside influence or bias.</span>
           </label>
-          <button className="btn btn--solid" disabled={!certAgree || certBusy} onClick={certify}>{certBusy ? 'Saving…' : 'I Certify — Continue'}</button>
+          <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', margin: '0 0 18px', color: 'var(--ivory)', fontSize: 14 }}>
+            <input type="checkbox" checked={coiSignAgree} onChange={(e) => setCoiSignAgree(e.target.checked)} style={{ marginTop: 3 }} />
+            <span><strong className="gold-text">Conflict of Interest Agreement.</strong> I will disclose any conflict of interest and recuse myself from any submission where I have a personal, professional, or financial relationship.</span>
+          </label>
+          <button className="btn btn--solid" disabled={!certAgree || !coiSignAgree || certBusy} onClick={certify}>{certBusy ? 'Saving…' : 'Sign & Continue'}</button>
         </div>
       </div>
     )
@@ -410,21 +442,34 @@ export default function Judge() {
             reviews.length === 0 ? (
               <div className="glass" style={{ padding: 22 }}><p style={{ color: 'var(--muted)', margin: 0 }}>You haven't scored any submissions yet.</p></div>
             ) : (
-              <div className="glass" style={{ padding: 6, overflowX: 'auto' }}>
-                <table className="admin-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
-                  <thead><tr><th style={thS}>Student</th><th style={thS}>School</th><th style={thS}>Status</th><th style={thS}>Total</th><th style={thS} /></tr></thead>
-                  <tbody>
-                    {reviews.map((r) => (
-                      <tr key={r.submission_id} style={rowS}>
-                        <td style={tdS}><strong>{r.student_name}</strong><br /><span style={{ color: 'var(--muted)', fontSize: 12 }}>{r.participant_id}</span></td>
-                        <td style={tdS}>{r.school_name}</td>
-                        <td style={tdS}>{pill(r.status)}</td>
-                        <td style={tdS}>{r.total}/135</td>
-                        <td style={tdS}><button className="btn btn--sm btn--solid" onClick={() => openSubmission(r.submission_id)}>Open</button></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div style={{ display: 'grid', gap: 18 }}>
+                {([['draft', 'Draft Evaluations'], ['submitted', 'Completed Evaluations']] as const).map(([st, title]) => {
+                  const group = reviews.filter((r) => r.status === st)
+                  return (
+                    <div key={st}>
+                      <div style={{ ...secHead, marginBottom: 10 }}>{title} ({group.length})</div>
+                      {group.length === 0 ? (
+                        <p className="msub" style={{ margin: 0 }}>{st === 'draft' ? 'No drafts in progress.' : 'No completed evaluations yet.'}</p>
+                      ) : (
+                        <div className="glass" style={{ padding: 6, overflowX: 'auto' }}>
+                          <table className="admin-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+                            <thead><tr><th style={thS}>Student</th><th style={thS}>School</th><th style={thS}>Total</th><th style={thS} /></tr></thead>
+                            <tbody>
+                              {group.map((r) => (
+                                <tr key={r.submission_id} style={rowS}>
+                                  <td style={tdS}><strong>{r.student_name}</strong><br /><span style={{ color: 'var(--muted)', fontSize: 12 }}>{r.participant_id}</span></td>
+                                  <td style={tdS}>{r.school_name}</td>
+                                  <td style={tdS}>{r.total}/135</td>
+                                  <td style={tdS}><button className="btn btn--sm btn--solid" onClick={() => openSubmission(r.submission_id)}>{st === 'draft' ? 'Continue' : 'View'}</button></td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             )
           )}
@@ -653,6 +698,9 @@ export default function Judge() {
                   {/* SECTION 4 — scoring */}
                   <section style={{ background: 'rgba(201,168,76,0.06)', border: '1px solid var(--gold)', borderRadius: 14, padding: '18px 20px' }}>
                     <div style={{ ...secHead, borderColor: 'transparent', marginBottom: 4 }}>④ Your Score</div>
+                    {!scoringLocked && !coiCleared ? (
+                      <ConflictOfInterestGate ans={coiAns} setAns={setCoiAns} onClear={() => setCoiCleared(true)} onRecuse={coiRecuse} busy={saveBusy} msg={msg} />
+                    ) : (<>
                     {scoringLocked ? (
                       <div style={{ background: 'rgba(224,138,138,0.12)', border: '1px solid #e08a8a', borderRadius: 8, padding: '10px 14px', margin: '0 0 16px', color: 'var(--ivory)', fontSize: 13.5, lineHeight: 1.5 }}>
                         🔒 <strong>Results have been published.</strong> Scoring is now locked — you can view this project and its evidence, but scores can no longer be changed.
@@ -703,6 +751,7 @@ export default function Judge() {
                       </div>
                     </div>
                     {msg && <p style={{ marginTop: 10, marginBottom: 0, fontSize: 13, color: msg.includes('✓') ? 'var(--green-bright)' : '#e08a8a' }}>{msg}</p>}
+                    </>)}
                   </section>
                 </div>
               </div>
@@ -711,5 +760,51 @@ export default function Judge() {
         </div>
       )}
     </>
+  )
+}
+
+/* Pre-scoring Conflict of Interest checklist. A "Yes" to any question blocks
+   scoring and returns the submission to the admin (recuse) for reassignment. */
+function ConflictOfInterestGate({ ans, setAns, onClear, onRecuse, busy, msg }: {
+  ans: Record<number, 'yes' | 'no' | ''>
+  setAns: (a: Record<number, 'yes' | 'no' | ''>) => void
+  onClear: () => void
+  onRecuse: () => void
+  busy: boolean
+  msg: string
+}) {
+  const anyYes = COI_QUESTIONS.some((_, i) => ans[i] === 'yes')
+  const allAnswered = COI_QUESTIONS.every((_, i) => ans[i] === 'yes' || ans[i] === 'no')
+  return (
+    <div>
+      <p style={{ color: 'var(--muted)', fontSize: 12.5, margin: '0 0 14px' }}>
+        Before scoring, confirm you have no conflict of interest with this submission. A “Yes” to any question means you cannot score it — it will be returned to the admin for reassignment.
+      </p>
+      <div style={{ display: 'grid', gap: 10 }}>
+        {COI_QUESTIONS.map((q, i) => (
+          <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, background: 'rgba(0,0,0,0.18)', border: '1px solid var(--line)', borderRadius: 10, padding: '10px 14px' }}>
+            <span style={{ color: 'var(--ivory)', fontSize: 13.5 }}>{q}</span>
+            <div style={{ display: 'flex', gap: 6, flex: '0 0 auto' }}>
+              {(['no', 'yes'] as const).map((v) => (
+                <button key={v} type="button" onClick={() => setAns({ ...ans, [i]: v })}
+                  className={`btn btn--sm${ans[i] === v ? ' btn--solid' : ''}`}
+                  style={ans[i] === v && v === 'yes' ? { borderColor: '#e08a8a', color: '#3a1414', background: '#e08a8a' } : undefined}>
+                  {v === 'no' ? 'No' : 'Yes'}
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+      {anyYes ? (
+        <div style={{ marginTop: 14 }}>
+          <p style={{ color: '#e08a8a', fontSize: 13, margin: '0 0 10px', lineHeight: 1.5 }}>You’ve declared a conflict of interest — you cannot score this submission. Return it to the admin for reassignment.</p>
+          <button className="btn btn--solid" disabled={busy} onClick={onRecuse}>Recuse &amp; Return to Admin</button>
+        </div>
+      ) : (
+        <button className="btn btn--solid" style={{ marginTop: 14 }} disabled={!allAnswered} onClick={onClear}>Confirm — No Conflict, Continue to Scorecard</button>
+      )}
+      {msg && <p style={{ marginTop: 10, marginBottom: 0, fontSize: 13, color: (msg.includes('returned') || msg.includes('✓')) ? 'var(--green-bright)' : '#e08a8a' }}>{msg}</p>}
+    </div>
   )
 }
