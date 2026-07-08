@@ -1344,6 +1344,56 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             json(['message' => 'Request updated.', 'requests' => business_requests_all()]);
         }
 
+        /* ---------------- ADMIN: ecosystem documents / requests / announcements ---------------- */
+        case $key === 'GET admin/ecosystem/accounts': {
+            require_admin();
+            json(['accounts' => ecosystem_accounts_list()]);
+        }
+        case $method === 'GET' && preg_match('#^admin/ecosystem/documents/(\d+)$#', $route, $m) === 1: {
+            require_admin();
+            json(['documents' => ecosystem_documents_for_user((int) $m[1])]);
+        }
+        case $key === 'POST admin/ecosystem/document': {
+            require_admin();
+            $b = body();
+            $uid = (int) field($b, 'user_id');
+            $role = (string) field($b, 'role');
+            if ($uid <= 0) json(['error' => 'Pick an account.'], 422);
+            ecosystem_document_add($uid, $role, (string) field($b, 'doc_type'), (string) field($b, 'label'), (string) field($b, 'file_url'));
+            json(['message' => 'Document added.', 'documents' => ecosystem_documents_for_user($uid)], 201);
+        }
+        case $method === 'DELETE' && preg_match('#^admin/ecosystem/document/(\d+)$#', $route, $m) === 1: {
+            require_admin();
+            ecosystem_document_delete((int) $m[1]);
+            json(['message' => 'Document removed.']);
+        }
+        case $key === 'GET admin/ecosystem/requests': {
+            require_admin();
+            json(['requests' => ecosystem_requests_all()]);
+        }
+        case $method === 'PUT' && preg_match('#^admin/ecosystem/request/(\d+)$#', $route, $m) === 1: {
+            $admin = require_admin();
+            $b = body();
+            ecosystem_request_update((int) $m[1], (string) field($b, 'status'), (string) field($b, 'admin_note'), (int) $admin['id']);
+            json(['message' => 'Request updated.', 'requests' => ecosystem_requests_all()]);
+        }
+        case $key === 'GET admin/ecosystem/announcements': {
+            require_admin();
+            json(['announcements' => ecosystem_announcements_all()]);
+        }
+        case $key === 'POST admin/ecosystem/announcement': {
+            require_admin();
+            $b = body();
+            if (trim((string) field($b, 'title')) === '') json(['error' => 'Title is required.'], 422);
+            ecosystem_announcement_add((string) field($b, 'audience'), (string) field($b, 'title'), (string) field($b, 'body'));
+            json(['message' => 'Announcement posted.', 'announcements' => ecosystem_announcements_all()], 201);
+        }
+        case $method === 'DELETE' && preg_match('#^admin/ecosystem/announcement/(\d+)$#', $route, $m) === 1: {
+            require_admin();
+            ecosystem_announcement_delete((int) $m[1]);
+            json(['message' => 'Announcement removed.']);
+        }
+
         /* ---------------- DEMO ONE-CLICK LOGIN (presentations; DEMO_MODE=off to disable) ---------------- */
         case $key === 'GET demo/accounts': {
             if (!demo_mode_enabled()) json(['error' => 'Not found.'], 404);
@@ -1373,6 +1423,19 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             $u = require_ecosystem($m[1]);
             ecosystem_profile_save($u, $m[1], body());
             json(ecosystem_dashboard_payload($m[1], $u));
+        }
+
+        // Ecosystem account uploads its logo/branding image.
+        case $method === 'POST' && preg_match('#^ecosystem/(sponsor|partner|media|volunteer)/logo$#', $route, $m) === 1: {
+            $u = require_ecosystem($m[1]);
+            $url = media_store_uploaded_file('file', false);
+            json(ecosystem_set_logo($u, $url));
+        }
+
+        // Ecosystem account raises a request (meeting/renewal/interview/opportunity/event…) for admin review.
+        case $method === 'POST' && preg_match('#^ecosystem/(sponsor|partner|media|volunteer)/request$#', $route, $m) === 1: {
+            $u = require_ecosystem($m[1]);
+            json(ecosystem_create_request($u, $m[1], body()), 201);
         }
 
         /* ---------------- OUR PARTNERS (dynamic content directory) ---------------- */
@@ -2655,25 +2718,8 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
         /* ---------------- ADMIN: IMAGE UPLOAD ---------------- */
         case $key === 'POST admin/upload': {
             require_admin();
-            if (empty($_FILES['file']) || ($_FILES['file']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
-                json(['error' => 'No file uploaded.'], 422);
-            }
-            $f = $_FILES['file'];
-            if ($f['size'] > 6 * 1024 * 1024) json(['error' => 'Image must be 6MB or smaller.'], 422);
-
-            $allowed = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp'];
-            $mime = function_exists('mime_content_type') ? mime_content_type($f['tmp_name']) : ($f['type'] ?? '');
-            if (!isset($allowed[$mime])) json(['error' => 'Only JPG, PNG or WebP images are allowed.'], 422);
-
-            $dir = __DIR__ . '/uploads/media';
-            if (!is_dir($dir) && !mkdir($dir, 0775, true) && !is_dir($dir)) {
-                json(['error' => 'Could not create upload directory.'], 500);
-            }
-            $name = 'media-' . bin2hex(random_bytes(8)) . '.' . $allowed[$mime];
-            if (!move_uploaded_file($f['tmp_name'], $dir . '/' . $name)) {
-                json(['error' => 'Failed to save the uploaded file.'], 500);
-            }
-            json(['url' => '/api/uploads/media/' . $name, 'message' => 'Uploaded.'], 201);
+            // Admin uploads allow documents (PDF) too — used by content panels + ecosystem docs.
+            json(['url' => media_store_uploaded_file('file', true), 'message' => 'Uploaded.'], 201);
         }
 
         /* ---------------- FALLBACK ---------------- */

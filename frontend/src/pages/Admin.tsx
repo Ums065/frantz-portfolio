@@ -13,13 +13,14 @@ import NsProfileModal, { type ProfileView } from '../components/admin/NsProfileM
 import JudgesAdminPanel from '../components/admin/JudgesAdminPanel'
 import PartnersAdminPanel from '../components/admin/PartnersAdminPanel'
 import BusinessRequestsAdminPanel from '../components/admin/BusinessRequestsAdminPanel'
+import EcosystemAdminPanel from '../components/admin/EcosystemAdminPanel'
 import SubmissionScoresModal from '../components/admin/SubmissionScoresModal'
 
 const EDU_PEOPLE_PAGE_SIZE = 10
 
 type TabKey =
   | 'overview' | 'analytics' | 'traffic' | 'requests' | 'orders' | 'subscribers' | 'contacts'
-  | 'members' | 'approvals' | 'business-requests' | 'sponsors' | 'partners' | 'awards' | 'events' | 'blog'
+  | 'members' | 'approvals' | 'business-requests' | 'ecosystem' | 'sponsors' | 'partners' | 'awards' | 'events' | 'blog'
   | 'testimonials' | 'media' | 'gallery' | 'community' | 'rsvps' | 'inventory'
   | 'ns-schools' | 'ns-ranking' | 'ns-submissions' | 'ns-interviews' | 'ns-chat' | 'ns-trendcatch' | 'ns-judges' | 'ns-timeline'
 
@@ -34,6 +35,7 @@ const NAV_GROUPS: Array<{ group: string; items: NavItem[] }> = [
     { key: 'members', label: 'User Accounts' },
     { key: 'approvals', label: 'Account Approvals' },
     { key: 'business-requests', label: 'Business Requests' },
+    { key: 'ecosystem', label: 'Ecosystem (Sponsor/Partner/Media/Volunteer)' },
     { key: 'contacts', label: 'Contact Messages' },
     { key: 'subscribers', label: 'Newsletter' },
   ] },
@@ -1721,6 +1723,7 @@ export default function Admin() {
 
         {tab === 'partners' && <PartnersAdminPanel />}
         {tab === 'business-requests' && <BusinessRequestsAdminPanel />}
+        {tab === 'ecosystem' && <EcosystemAdminPanel />}
         {tab === 'awards' && <AwardsAdmin />}
         {tab === 'events' && <EventsAdmin />}
         {tab === 'blog' && <PostsAdmin />}

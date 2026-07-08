@@ -28,15 +28,106 @@ export function StatTile({ label, value }: { label: string; value: number | stri
   )
 }
 
-export function DownloadList({ items }: { items: Array<{ label: string; url: string }> }) {
-  if (!items?.length) return null
+export function DownloadList({ items }: { items?: Array<{ label: string; url: string }> }) {
+  if (!items?.length) return <p style={{ color: 'var(--muted)', fontSize: 13, margin: 0 }}>Nothing here yet.</p>
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
       {items.map((r) => (
-        <a key={r.url} className="btn btn--sm" href={r.url} target="_blank" rel="noreferrer">⬇ {r.label}</a>
+        <a key={r.url + r.label} className="btn btn--sm" href={r.url} target="_blank" rel="noreferrer">⬇ {r.label}</a>
       ))}
     </div>
   )
+}
+
+const ecoDate = (ts: number) => { try { return new Date(ts * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) } catch { return '' } }
+const ecoStatus = (s: string): React.CSSProperties => {
+  const m: Record<string, string> = { approved: 'var(--gold-light)', declined: '#ff9a9a', info_needed: 'var(--gold)', pending: 'var(--muted)' }
+  return { color: m[s] || 'var(--muted)', fontWeight: 700, fontSize: 11, textTransform: 'uppercase', letterSpacing: '.05em', flex: '0 0 auto' }
+}
+
+export interface EcoDoc { id: number; doc_type: string; label: string; url: string; created_ts: number }
+export interface EcoReq { id: number; req_type: string; message: string; status: string; admin_note: string; created_ts: number }
+export interface EcoAnn { id: number; title: string; body: string; created_ts: number }
+
+/** A titled card section with an optional action on the right. */
+export function Section({ title, children, right }: { title: string; children: React.ReactNode; right?: React.ReactNode }) {
+  return (
+    <section style={S.card}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
+        <div style={S.eyebrow}>{title}</div>{right}
+      </div>
+      {children}
+    </section>
+  )
+}
+
+export function EcoDocuments({ docs }: { docs?: EcoDoc[] }) {
+  if (!docs?.length) return <p style={{ color: 'var(--muted)', fontSize: 13, margin: 0 }}>No documents have been issued to your account yet.</p>
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+      {docs.map((d) => <a key={d.id} className="btn btn--sm" href={d.url} target="_blank" rel="noreferrer">⬇ {d.label}{d.doc_type && d.doc_type !== 'document' ? ` · ${d.doc_type}` : ''}</a>)}
+    </div>
+  )
+}
+
+export function EcoAnnouncements({ items }: { items?: EcoAnn[] }) {
+  if (!items?.length) return <p style={{ color: 'var(--muted)', fontSize: 13, margin: 0 }}>No announcements yet.</p>
+  return (
+    <div style={{ display: 'grid', gap: 12 }}>
+      {items.map((a) => (
+        <div key={a.id} style={{ borderLeft: '2px solid var(--gold)', paddingLeft: 12 }}>
+          <div style={{ color: 'var(--ivory)', fontWeight: 700, fontSize: 14 }}>{a.title}</div>
+          {a.body && <div style={{ color: '#d8d3c6', fontSize: 13, marginTop: 2, lineHeight: 1.55 }}>{a.body}</div>}
+          <div style={{ color: 'var(--muted)', fontSize: 11, marginTop: 3 }}>{ecoDate(a.created_ts)}</div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+export function EcoRequests({ items }: { items?: EcoReq[] }) {
+  if (!items?.length) return <p style={{ color: 'var(--muted)', fontSize: 13, margin: 0 }}>No requests yet.</p>
+  return (
+    <div style={{ display: 'grid', gap: 10 }}>
+      {items.map((r) => (
+        <div key={r.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', borderBottom: '1px solid var(--line)', paddingBottom: 8 }}>
+          <div>
+            <span style={{ color: 'var(--ivory)', fontWeight: 700, textTransform: 'capitalize' }}>{r.req_type}</span>
+            {r.message && <div style={{ color: 'var(--muted)', fontSize: 12.5 }}>{r.message}</div>}
+            {r.admin_note && <div style={{ color: 'var(--gold-light)', fontSize: 12.5 }}>Admin: {r.admin_note}</div>}
+            <div style={{ color: 'var(--muted)', fontSize: 11, marginTop: 2 }}>{ecoDate(r.created_ts)}</div>
+          </div>
+          <span style={ecoStatus(r.status)}>{r.status.replace('_', ' ')}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/** Logo/branding uploader — posts to ecosystem/{role}/logo then reloads. */
+export function LogoUploader({ role, current, reload }: { role: string; current?: string; reload: () => void }) {
+  const [busy, setBusy] = useState(false)
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+      <div style={{ width: 60, height: 60, borderRadius: 12, background: 'rgba(255,255,255,0.06)', border: '1px solid var(--line)', display: 'grid', placeItems: 'center', overflow: 'hidden' }}>
+        {current ? <img src={current} alt="logo" style={{ maxWidth: '90%', maxHeight: '90%', objectFit: 'contain' }} /> : <span style={{ color: 'var(--muted)', fontSize: 10 }}>No logo</span>}
+      </div>
+      <label className="btn btn--sm" style={{ cursor: 'pointer' }}>{busy ? 'Uploading…' : (current ? 'Replace logo' : 'Upload logo')}
+        <input type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={async (e) => { const f = e.target.files?.[0] || null; e.target.value = ''; if (!f) return; setBusy(true); try { await api.upload(`ecosystem/${role}/logo`, f); reload() } catch { /* ignore */ } finally { setBusy(false) } }} />
+      </label>
+    </div>
+  )
+}
+
+/** A button that raises an ecosystem request (with an optional note) then reloads. */
+export function RequestButton({ role, reqType, label, reload, solid }: { role: string; reqType: string; label: string; reload: () => void; solid?: boolean }) {
+  const [busy, setBusy] = useState(false)
+  const go = async () => {
+    const msg = window.prompt(`${label} — add a note for the admin (optional):`) ?? ''
+    setBusy(true)
+    try { await api.post(`ecosystem/${role}/request`, { req_type: reqType, message: msg }); reload() } catch { /* ignore */ } finally { setBusy(false) }
+  }
+  return <button className={`btn btn--sm${solid ? ' btn--solid' : ''}`} disabled={busy} onClick={go}>{busy ? 'Sending…' : label}</button>
 }
 
 export interface PortalField { key: string; label: string; kind?: 'text' | 'select' | 'textarea'; options?: string[]; placeholder?: string; full?: boolean }

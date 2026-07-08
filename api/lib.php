@@ -3231,6 +3231,8 @@ function challenge_impact_stats(): array
         'businesses' => $c("SELECT COUNT(DISTINCT LOWER(TRIM(business_name))) FROM new_school_business_interviews WHERE business_name <> ''"),
         'interviews' => $c('SELECT COUNT(*) FROM new_school_business_interviews'),
         'solutions' => $c("SELECT COUNT(*) FROM new_school_submissions WHERE status IN ('submitted','approved','winner')"),
+        'problems' => $c("SELECT COUNT(DISTINCT LOWER(TRIM(main_challenge))) FROM new_school_business_interviews WHERE main_challenge <> ''"),
+        'scholarships' => (function () { try { return (int) db()->query('SELECT COUNT(DISTINCT student_id) FROM new_school_scholarship_answers WHERE completed_at IS NOT NULL')->fetchColumn(); } catch (\Throwable $e) { return 0; } })(),
     ];
 }
 
@@ -3393,20 +3395,178 @@ function ecosystem_dashboard_payload(string $role, array $user): array
     }
     if ($role === 'partner') {
         $code = (string) ($acc['referral_code'] ?? '');
-        $count = 0;
-        if ($code !== '') {
-            $s = db()->prepare('SELECT COUNT(*) FROM ecosystem_accounts WHERE referred_by_code = ?');
-            $s->execute([$code]);
-            $count = (int) $s->fetchColumn();
-        }
-        $out['referral'] = ['code' => $code, 'count' => $count];
+        $bd = ecosystem_referral_breakdown($code);
+        $out['referral'] = ['code' => $code, 'count' => $bd['total'], 'by_role' => $bd['by_role']];
         $out['toolkit'] = [
             ['label' => 'Partnership Kit (PDF)', 'url' => '/docs/partnership_kit.pdf'],
             ['label' => 'Program One-Pager (PDF)', 'url' => '/docs/new_school_functionality.pdf'],
         ];
+        $out['marketing'] = [
+            ['label' => 'Program Logo Pack', 'url' => '/docs/founding_sponsor_kit.pdf'],
+            ['label' => 'Social Media Kit', 'url' => '/docs/founding_sponsor_media_kit.pdf'],
+        ];
     }
+    // Shared ecosystem features (all roles): admin-issued documents, the account's
+    // own requests, and announcements targeted to this role.
+    $out['documents'] = ecosystem_documents_for_user((int) $user['id']);
+    $out['requests'] = ecosystem_requests_for_user((int) $user['id']);
+    $out['announcements'] = ecosystem_announcements_for_role($role);
     return $out;
 }
+
+/* ---- Shared ecosystem features: uploads, documents, requests, announcements ---- */
+
+/** Store an uploaded file (images always; PDFs when $allowDocs). Returns its URL or sends a 422/500. */
+function media_store_uploaded_file(string $fieldName = 'file', bool $allowDocs = false): string
+{
+    if (empty($_FILES[$fieldName]) || ($_FILES[$fieldName]['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+        json(['error' => 'No file uploaded.'], 422);
+    }
+    $f = $_FILES[$fieldName];
+    if ($f['size'] > 12 * 1024 * 1024) json(['error' => 'File must be 12MB or smaller.'], 422);
+    $allowed = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp'];
+    if ($allowDocs) $allowed['application/pdf'] = 'pdf';
+    $mime = function_exists('mime_content_type') ? mime_content_type($f['tmp_name']) : ($f['type'] ?? '');
+    if (!isset($allowed[$mime])) json(['error' => $allowDocs ? 'Only PDF, JPG, PNG or WebP files are allowed.' : 'Only JPG, PNG or WebP images are allowed.'], 422);
+    $dir = __DIR__ . '/uploads/media';
+    if (!is_dir($dir) && !mkdir($dir, 0775, true) && !is_dir($dir)) json(['error' => 'Could not create upload directory.'], 500);
+    $name = 'media-' . bin2hex(random_bytes(8)) . '.' . $allowed[$mime];
+    if (!move_uploaded_file($f['tmp_name'], $dir . '/' . $name)) json(['error' => 'Failed to save the uploaded file.'], 500);
+    return '/api/uploads/media/' . $name;
+}
+
+function ecosystem_shared_ensure_schema(): void
+{
+    static $ready = false;
+    if ($ready) return;
+    $pdo = db();
+    $pdo->exec("CREATE TABLE IF NOT EXISTS ecosystem_documents (
+        id INT AUTO_INCREMENT PRIMARY KEY, user_id INT NOT NULL, role VARCHAR(20) NOT NULL,
+        doc_type VARCHAR(40) NOT NULL DEFAULT 'document', label VARCHAR(160) NOT NULL, file_url VARCHAR(400) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, INDEX idx_ecodoc_user (user_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $pdo->exec("CREATE TABLE IF NOT EXISTS ecosystem_requests (
+        id INT AUTO_INCREMENT PRIMARY KEY, user_id INT NOT NULL, role VARCHAR(20) NOT NULL, req_type VARCHAR(30) NOT NULL,
+        message TEXT DEFAULT NULL, status VARCHAR(16) NOT NULL DEFAULT 'pending', admin_note TEXT DEFAULT NULL,
+        reviewed_by_user_id INT DEFAULT NULL, reviewed_at TIMESTAMP NULL DEFAULT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_ecoreq_user (user_id), INDEX idx_ecoreq_status (status)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $pdo->exec("CREATE TABLE IF NOT EXISTS ecosystem_announcements (
+        id INT AUTO_INCREMENT PRIMARY KEY, audience VARCHAR(20) NOT NULL DEFAULT 'all', title VARCHAR(180) NOT NULL,
+        body TEXT DEFAULT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, INDEX idx_ecoann_aud (audience)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $ready = true;
+}
+
+function ecosystem_documents_for_user(int $userId): array
+{
+    ecosystem_shared_ensure_schema();
+    $s = db()->prepare('SELECT id, doc_type, label, file_url, UNIX_TIMESTAMP(created_at) AS created_ts FROM ecosystem_documents WHERE user_id = ? ORDER BY created_at DESC');
+    $s->execute([$userId]);
+    return array_map(static fn(array $r): array => ['id' => (int) $r['id'], 'doc_type' => $r['doc_type'], 'label' => $r['label'], 'url' => $r['file_url'], 'created_ts' => (int) $r['created_ts']], $s->fetchAll());
+}
+
+function ecosystem_requests_for_user(int $userId): array
+{
+    ecosystem_shared_ensure_schema();
+    $s = db()->prepare('SELECT id, req_type, message, status, admin_note, UNIX_TIMESTAMP(created_at) AS created_ts FROM ecosystem_requests WHERE user_id = ? ORDER BY created_at DESC');
+    $s->execute([$userId]);
+    return array_map(static fn(array $r): array => ['id' => (int) $r['id'], 'req_type' => $r['req_type'], 'message' => (string) ($r['message'] ?? ''), 'status' => $r['status'], 'admin_note' => (string) ($r['admin_note'] ?? ''), 'created_ts' => (int) $r['created_ts']], $s->fetchAll());
+}
+
+/** Which request types each ecosystem role may raise. */
+function ecosystem_request_type_allowed(string $role, string $type): bool
+{
+    $map = [
+        'sponsor' => ['meeting', 'renewal', 'event'],
+        'partner' => ['event', 'toolkit', 'refer'],
+        'media' => ['interview', 'event', 'credentials'],
+        'volunteer' => ['opportunity', 'event', 'availability'],
+    ];
+    return in_array($type, $map[$role] ?? [], true);
+}
+
+function ecosystem_create_request(array $user, string $role, array $b): array
+{
+    ecosystem_shared_ensure_schema();
+    $type = (string) field($b, 'req_type');
+    if (!ecosystem_request_type_allowed($role, $type)) json(['error' => 'Unknown request type.'], 422);
+    db()->prepare('INSERT INTO ecosystem_requests (user_id, role, req_type, message) VALUES (?,?,?,?)')
+        ->execute([(int) $user['id'], $role, $type, mb_substr(trim((string) field($b, 'message')), 0, 2000) ?: null]);
+    if (function_exists('notify')) {
+        $acc = ecosystem_account_for_user((int) $user['id']);
+        notify('Ecosystem request: ' . $role . ' / ' . $type, (($acc['org_name'] ?? $user['full_name'])) . ' submitted a "' . $type . '" request for admin review.');
+    }
+    return ['requests' => ecosystem_requests_for_user((int) $user['id'])];
+}
+
+function ecosystem_announcements_for_role(string $role): array
+{
+    ecosystem_shared_ensure_schema();
+    $s = db()->prepare("SELECT id, title, body, UNIX_TIMESTAMP(created_at) AS created_ts FROM ecosystem_announcements WHERE audience = 'all' OR audience = ? ORDER BY created_at DESC LIMIT 30");
+    $s->execute([$role]);
+    return array_map(static fn(array $r): array => ['id' => (int) $r['id'], 'title' => $r['title'], 'body' => (string) ($r['body'] ?? ''), 'created_ts' => (int) $r['created_ts']], $s->fetchAll());
+}
+
+function ecosystem_set_logo(array $user, string $url): array
+{
+    ecosystem_shared_ensure_schema();
+    $acc = ecosystem_account_for_user((int) $user['id']);
+    if (!$acc) json(['error' => 'Account not found.'], 404);
+    $details = is_array($acc['details']) ? $acc['details'] : [];
+    $details['logo_url'] = $url;
+    db()->prepare('UPDATE ecosystem_accounts SET details = ?, updated_at = NOW() WHERE user_id = ?')->execute([json_encode($details), (int) $user['id']]);
+    return ['logo_url' => $url];
+}
+
+/** Partner referral totals broken down by the role of each referred account. */
+function ecosystem_referral_breakdown(string $code): array
+{
+    if ($code === '') return ['total' => 0, 'by_role' => (object) []];
+    $s = db()->prepare('SELECT role, COUNT(*) c FROM ecosystem_accounts WHERE referred_by_code = ? GROUP BY role');
+    $s->execute([$code]);
+    $by = []; $total = 0;
+    foreach ($s->fetchAll() as $r) { $by[(string) $r['role']] = (int) $r['c']; $total += (int) $r['c']; }
+    return ['total' => $total, 'by_role' => $by ?: (object) []];
+}
+
+/* ---- Admin side of the shared ecosystem features ---- */
+function ecosystem_accounts_list(): array
+{
+    ecosystem_shared_ensure_schema();
+    return db()->query("SELECT ea.user_id, ea.role, ea.org_name, u.email, u.approval_status FROM ecosystem_accounts ea JOIN users u ON u.id = ea.user_id ORDER BY ea.role, ea.org_name")->fetchAll() ?: [];
+}
+function ecosystem_requests_all(): array
+{
+    ecosystem_shared_ensure_schema();
+    $rows = db()->query("SELECT r.*, UNIX_TIMESTAMP(r.created_at) AS created_ts, ea.org_name FROM ecosystem_requests r LEFT JOIN ecosystem_accounts ea ON ea.user_id = r.user_id ORDER BY (r.status = 'pending') DESC, r.created_at DESC")->fetchAll() ?: [];
+    return array_map(static fn(array $r): array => ['id' => (int) $r['id'], 'org_name' => (string) ($r['org_name'] ?? ('User #' . $r['user_id'])), 'role' => $r['role'], 'req_type' => $r['req_type'], 'message' => (string) ($r['message'] ?? ''), 'status' => $r['status'], 'admin_note' => (string) ($r['admin_note'] ?? ''), 'created_ts' => (int) $r['created_ts']], $rows);
+}
+function ecosystem_request_update(int $id, string $status, string $note, int $adminId): void
+{
+    ecosystem_shared_ensure_schema();
+    if (!in_array($status, ['pending', 'approved', 'declined', 'info_needed'], true)) json(['error' => 'Invalid status.'], 422);
+    db()->prepare('UPDATE ecosystem_requests SET status = ?, admin_note = ?, reviewed_by_user_id = ?, reviewed_at = NOW() WHERE id = ?')->execute([$status, mb_substr($note, 0, 2000) ?: null, $adminId, $id]);
+}
+function ecosystem_document_add(int $userId, string $role, string $docType, string $label, string $url): void
+{
+    ecosystem_shared_ensure_schema();
+    db()->prepare('INSERT INTO ecosystem_documents (user_id, role, doc_type, label, file_url) VALUES (?,?,?,?,?)')
+        ->execute([$userId, $role, mb_substr($docType, 0, 40) ?: 'document', mb_substr($label, 0, 160) ?: 'Document', mb_substr($url, 0, 400)]);
+}
+function ecosystem_document_delete(int $id): void { ecosystem_shared_ensure_schema(); db()->prepare('DELETE FROM ecosystem_documents WHERE id = ?')->execute([$id]); }
+function ecosystem_announcement_add(string $audience, string $title, string $body): void
+{
+    ecosystem_shared_ensure_schema();
+    $audience = in_array($audience, ['all', 'sponsor', 'partner', 'media', 'volunteer'], true) ? $audience : 'all';
+    db()->prepare('INSERT INTO ecosystem_announcements (audience, title, body) VALUES (?,?,?)')->execute([$audience, mb_substr($title, 0, 180), mb_substr($body, 0, 4000) ?: null]);
+}
+function ecosystem_announcements_all(): array
+{
+    ecosystem_shared_ensure_schema();
+    return array_map(static fn(array $r): array => ['id' => (int) $r['id'], 'audience' => $r['audience'], 'title' => $r['title'], 'body' => (string) ($r['body'] ?? ''), 'created_ts' => (int) $r['created_ts']], db()->query('SELECT *, UNIX_TIMESTAMP(created_at) AS created_ts FROM ecosystem_announcements ORDER BY created_at DESC')->fetchAll() ?: []);
+}
+function ecosystem_announcement_delete(int $id): void { ecosystem_shared_ensure_schema(); db()->prepare('DELETE FROM ecosystem_announcements WHERE id = ?')->execute([$id]); }
 
 /* ==================== Demo one-click login (presentations) ==================== */
 
