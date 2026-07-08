@@ -48,6 +48,11 @@ function storeCsrfToken(data: unknown) {
   }
 }
 
+/** A CSRF token failure: legacy 419, or 403 carrying the server's `csrf` marker. */
+function isCsrfFailure(status: number, data: unknown): boolean {
+  return status === 419 || (status === 403 && !!data && typeof data === 'object' && (data as { csrf?: boolean }).csrf === true)
+}
+
 async function bootstrapCsrfToken(): Promise<void> {
   if (!csrfBootstrap) {
     csrfBootstrap = (async () => {
@@ -77,7 +82,7 @@ async function request<T>(path: string, options: RequestInit = {}, retry = true)
   const raw = await res.text()
   const data = parseResponseBody(raw)
   storeCsrfToken(data)
-  if (res.status === 419 && retry && path !== 'auth/me') {
+  if (isCsrfFailure(res.status, data) && retry && path !== 'auth/me') {
     await bootstrapCsrfToken()
     return request<T>(path, options, false)
   }
@@ -103,7 +108,7 @@ async function postForm<T>(path: string, form: FormData, retry = true): Promise<
   const raw = await res.text()
   const data = parseResponseBody(raw)
   storeCsrfToken(data)
-  if (res.status === 419 && retry) {
+  if (isCsrfFailure(res.status, data) && retry) {
     await bootstrapCsrfToken()
     return postForm<T>(path, form, false)
   }

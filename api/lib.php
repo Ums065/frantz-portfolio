@@ -536,9 +536,21 @@ function require_csrf(): void
         return;
     }
 
+    // First-party page-view telemetry is a fire-and-forget beacon (fires on every
+    // route change, sometimes before the CSRF token is bootstrapped). It records
+    // nothing of consequence and already swallows its own errors — exempt it from
+    // CSRF so it never 500s a normal page load.
+    $route = trim((string) ($_GET['r'] ?? ''), '/');
+    if ($route === 'analytics/track') {
+        return;
+    }
+
     $token = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
     if ($token === '' || !hash_equals(csrf_token(), $token)) {
-        json(['error' => 'Invalid CSRF token.'], 419);
+        // 403 (not 419): Apache rewrites the non-standard 419 status to 500, which
+        // defeats the client's CSRF-refresh retry. The `csrf` marker lets the client
+        // recognise this as a token failure and re-bootstrap + retry.
+        json(['error' => 'Invalid CSRF token.', 'csrf' => true], 403);
     }
 }
 
