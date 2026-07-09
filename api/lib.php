@@ -1178,7 +1178,7 @@ function storefront_stripe_checkout_session(array $items, array $order, array $c
         $price = (float) ($catalogItem['price'] ?? 0);
 
         $payload["line_items[$index][quantity]"] = $qty;
-        $payload["line_items[$index][price_data][currency]"] = 'usd';
+        $payload["line_items[$index][price_data][currency]"] = storefront_currency();
         $payload["line_items[$index][price_data][unit_amount]"] = (int) round($price * 100);
         $payload["line_items[$index][price_data][product_data][name]"] = $itemName;
         if ($itemDesc !== '') {
@@ -1205,6 +1205,129 @@ function storefront_stripe_checkout_session(array $items, array $order, array $c
 function storefront_stripe_checkout_session_detail(string $sessionId): array
 {
     return storefront_stripe_api_request('GET', '/v1/checkout/sessions/' . rawurlencode($sessionId) . '?expand[]=payment_intent');
+}
+
+/* ==================== Razorpay ==================== */
+function storefront_razorpay_key_id(): string { return trim((string) env('RAZORPAY_KEY_ID', '')); }
+function storefront_razorpay_secret(): string { return trim((string) env('RAZORPAY_KEY_SECRET', '')); }
+function storefront_razorpay_enabled(): bool { return storefront_razorpay_key_id() !== '' && storefront_razorpay_secret() !== ''; }
+
+/** Create a Razorpay Order (amount in minor units, e.g. paise/cents). */
+function storefront_razorpay_create_order(int $amountMinor, string $currency, string $orderNo): array
+{
+    if (!storefront_razorpay_enabled()) return ['ok' => false, 'error' => 'Razorpay is not configured.'];
+    $auth = base64_encode(storefront_razorpay_key_id() . ':' . storefront_razorpay_secret());
+    $body = json_encode(['amount' => $amountMinor, 'currency' => strtoupper($currency), 'receipt' => $orderNo, 'notes' => ['order_no' => $orderNo]]);
+    $res = mail_http_request('https://api.razorpay.com/v1/orders', 'POST', $body, ['Authorization: Basic ' . $auth, 'Content-Type: application/json', 'Accept: application/json']);
+    $data = json_decode($res['body'], true);
+    if (!$res['ok'] || !is_array($data) || empty($data['id'])) {
+        $msg = is_array($data) && isset($data['error']['description']) ? (string) $data['error']['description'] : 'Razorpay order could not be created.';
+        return ['ok' => false, 'error' => $msg];
+    }
+    return ['ok' => true, 'order' => $data];
+}
+
+/** Verify a Razorpay payment signature: HMAC_SHA256(order_id|payment_id, secret). */
+function storefront_razorpay_verify_signature(string $rzpOrderId, string $paymentId, string $signature): bool
+{
+    if (!storefront_razorpay_enabled() || $signature === '') return false;
+    $expected = hash_hmac('sha256', $rzpOrderId . '|' . $paymentId, storefront_razorpay_secret());
+    return hash_equals($expected, $signature);
+}
+
+/* ==================== PayPal (Orders v2, approve+capture) ==================== */
+function storefront_paypal_client_id(): string { return trim((string) env('PAYPAL_CLIENT_ID', '')); }
+function storefront_paypal_secret(): string { return trim((string) env('PAYPAL_SECRET', '')); }
+function storefront_paypal_enabled(): bool { return storefront_paypal_client_id() !== '' && storefront_paypal_secret() !== ''; }
+function storefront_paypal_base(): string { return strtolower((string) env('PAYPAL_ENV', 'sandbox')) === 'live' ? 'https://api-m.paypal.com' : 'https://api-m.sandbox.paypal.com'; }
+
+function storefront_paypal_access_token(): array
+{
+    if (!storefront_paypal_enabled()) return ['ok' => false, 'error' => 'PayPal is not configured.'];
+    $auth = base64_encode(storefront_paypal_client_id() . ':' . storefront_paypal_secret());
+    $res = mail_http_request(storefront_paypal_base() . '/v1/oauth2/token', 'POST', 'grant_type=client_credentials', ['Authorization: Basic ' . $auth, 'Content-Type: application/x-www-form-urlencoded', 'Accept: application/json']);
+    $data = json_decode($res['body'], true);
+    if (!$res['ok'] || empty($data['access_token'])) return ['ok' => false, 'error' => 'Could not authenticate with PayPal.'];
+    return ['ok' => true, 'token' => (string) $data['access_token']];
+}
+
+/** Create a PayPal order; returns its id + the buyer approval redirect URL. */
+function storefront_paypal_create_order(float $amount, string $currency, string $orderNo): array
+{
+    $tok = storefront_paypal_access_token();
+    if (!$tok['ok']) return ['ok' => false, 'error' => $tok['error']];
+    $return = storefront_public_base_url() . '/store?checkout=paypal&order=' . rawurlencode($orderNo);
+    $cancel = storefront_public_base_url() . '/store?checkout=cancelled&order=' . rawurlencode($orderNo);
+    $body = json_encode([
+        'intent' => 'CAPTURE',
+        'purchase_units' => [['reference_id' => $orderNo, 'custom_id' => $orderNo, 'amount' => ['currency_code' => strtoupper($currency), 'value' => number_format($amount, 2, '.', '')]]],
+        'application_context' => ['brand_name' => 'Frantz Coutard Store', 'user_action' => 'PAY_NOW', 'return_url' => $return, 'cancel_url' => $cancel],
+    ]);
+    $res = mail_http_request(storefront_paypal_base() . '/v2/checkout/orders', 'POST', $body, ['Authorization: Bearer ' . $tok['token'], 'Content-Type: application/json', 'Accept: application/json']);
+    $data = json_decode($res['body'], true);
+    if (!$res['ok'] || empty($data['id'])) return ['ok' => false, 'error' => 'PayPal order could not be created.'];
+    $approve = '';
+    foreach (($data['links'] ?? []) as $l) { if (($l['rel'] ?? '') === 'approve') $approve = (string) $l['href']; }
+    return ['ok' => true, 'id' => (string) $data['id'], 'approve_url' => $approve];
+}
+
+/** Capture an approved PayPal order. */
+function storefront_paypal_capture_order(string $paypalOrderId): array
+{
+    $tok = storefront_paypal_access_token();
+    if (!$tok['ok']) return ['ok' => false, 'error' => $tok['error']];
+    $res = mail_http_request(storefront_paypal_base() . '/v2/checkout/orders/' . rawurlencode($paypalOrderId) . '/capture', 'POST', '{}', ['Authorization: Bearer ' . $tok['token'], 'Content-Type: application/json', 'Accept: application/json']);
+    $data = json_decode($res['body'], true);
+    if (!$res['ok'] || !is_array($data)) return ['ok' => false, 'error' => 'PayPal capture failed.'];
+    return ['ok' => true, 'data' => $data, 'status' => (string) ($data['status'] ?? '')];
+}
+
+/* ==================== Payment provider registry ==================== */
+function storefront_currency(): string { return strtolower((string) env('STORE_CURRENCY', 'usd')); }
+
+/** Enabled providers, in display order. */
+function storefront_payment_methods(): array
+{
+    $m = [];
+    if (storefront_stripe_enabled()) $m[] = 'stripe';
+    if (storefront_razorpay_enabled()) $m[] = 'razorpay';
+    if (storefront_paypal_enabled()) $m[] = 'paypal';
+    return $m;
+}
+
+/** Public payment config for the storefront (enabled methods + public keys). */
+function storefront_payment_config(): array
+{
+    return [
+        'methods' => storefront_payment_methods(),
+        'currency' => storefront_currency(),
+        'razorpay_key_id' => storefront_razorpay_enabled() ? storefront_razorpay_key_id() : '',
+        'paypal_client_id' => storefront_paypal_enabled() ? storefront_paypal_client_id() : '',
+    ];
+}
+
+/** Idempotently mark an order paid (used by razorpay-verify + paypal-capture). */
+function storefront_mark_order_paid(string $orderNo, string $provider, string $method, string $intentId, string $sessionId = ''): void
+{
+    $pdo = db();
+    $pdo->beginTransaction();
+    try {
+        $lk = $pdo->prepare('SELECT payment_status FROM orders WHERE order_no = ? LIMIT 1 FOR UPDATE');
+        $lk->execute([$orderNo]);
+        $cur = $lk->fetchColumn();
+        if ($cur === false) { $pdo->rollBack(); json(['error' => 'Order not found.'], 404); }
+        if ((string) $cur === 'paid') { $pdo->commit(); return; }
+        $pdo->prepare(
+            'UPDATE orders SET status = ?, payment_status = ?, payment_provider = ?, payment_method = ?,
+                    payment_intent_id = ?, payment_session_id = COALESCE(NULLIF(?, ""), payment_session_id),
+                    payment_confirmed_at = NOW(), updated_at = NOW()
+             WHERE order_no = ?'
+        )->execute(['paid', 'paid', $provider, $method, $intentId !== '' ? $intentId : null, $sessionId, $orderNo]);
+        $pdo->commit();
+    } catch (\Throwable $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        throw $e;
+    }
 }
 
 function inventory_status_label(int $stock, int $threshold): string

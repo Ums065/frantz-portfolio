@@ -963,6 +963,10 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
         }
 
         /* ---------------- STORE / CHECKOUT ---------------- */
+        case $key === 'GET store/payment-methods': {
+            json(storefront_payment_config());
+        }
+
         case $key === 'POST store/checkout': {
             $b = body();
             $name = field($b, 'customer_name') ?: field($b, 'name');
@@ -970,11 +974,12 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             $address = field($b, 'address');
             $items = $b['items'] ?? [];
 
+            $provider = field($b, 'provider') ?: 'stripe';
             if ($name === '') json(['error' => 'Customer name is required.'], 422);
             if ($address === '') json(['error' => 'Shipping address is required.'], 422);
             if (!is_array($items) || count($items) === 0) json(['error' => 'Cart is empty.'], 422);
-            if (!storefront_stripe_enabled()) {
-                json(['error' => 'Secure checkout is not configured yet.'], 503);
+            if (!in_array($provider, storefront_payment_methods(), true)) {
+                json(['error' => 'That payment method is not available.'], 503);
             }
 
             $normalizedItems = normalized_order_items($items);
@@ -1034,8 +1039,8 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
                     $totals['shipping'],
                     $totals['tax'],
                     $totals['total'],
-                    'stripe_checkout',
-                    'stripe',
+                    $provider,
+                    $provider,
                     'pending',
                     'pending',
                 ]);
@@ -1047,39 +1052,49 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
                     $decrement->execute([(int) $qty, $productId]);
                 }
 
-                $checkout = storefront_stripe_checkout_session(
-                    $normalizedItems,
-                    ['order_no' => $orderNo],
-                    $catalog,
-                    ['name' => $name, 'email' => $email]
-                );
-                if (!$checkout['ok']) {
-                    $pdo->rollBack();
-                    json(['error' => (string) ($checkout['error'] ?? 'Could not create checkout session.')], 502);
+                $currency = storefront_currency();
+                $response = ['order_no' => $orderNo, 'payment_provider' => $provider];
+                $sessionId = '';
+                $sessionUrl = '';
+
+                if ($provider === 'stripe') {
+                    $checkout = storefront_stripe_checkout_session($normalizedItems, ['order_no' => $orderNo], $catalog, ['name' => $name, 'email' => $email]);
+                    if (!$checkout['ok']) { $pdo->rollBack(); json(['error' => (string) ($checkout['error'] ?? 'Could not create checkout session.')], 502); }
+                    $sessionId = (string) ($checkout['session']['id'] ?? '');
+                    $sessionUrl = (string) ($checkout['session']['url'] ?? '');
+                    if ($sessionId === '' || $sessionUrl === '') { $pdo->rollBack(); json(['error' => 'Stripe checkout session is missing a redirect URL.'], 502); }
+                    $response['mode'] = 'redirect';
+                    $response['checkout_url'] = $sessionUrl;
+                    $response['message'] = 'Redirecting to secure checkout.';
+                } elseif ($provider === 'paypal') {
+                    $pp = storefront_paypal_create_order((float) $totals['total'], $currency, $orderNo);
+                    if (!$pp['ok'] || $pp['approve_url'] === '') { $pdo->rollBack(); json(['error' => (string) ($pp['error'] ?? 'PayPal order could not be created.')], 502); }
+                    $sessionId = $pp['id'];
+                    $sessionUrl = $pp['approve_url'];
+                    $response['mode'] = 'redirect';
+                    $response['checkout_url'] = $sessionUrl;
+                    $response['message'] = 'Redirecting to PayPal.';
+                } elseif ($provider === 'razorpay') {
+                    $amountMinor = (int) round(((float) $totals['total']) * 100);
+                    $rz = storefront_razorpay_create_order($amountMinor, $currency, $orderNo);
+                    if (!$rz['ok']) { $pdo->rollBack(); json(['error' => (string) ($rz['error'] ?? 'Razorpay order could not be created.')], 502); }
+                    $sessionId = (string) ($rz['order']['id'] ?? '');
+                    if ($sessionId === '') { $pdo->rollBack(); json(['error' => 'Razorpay order id missing.'], 502); }
+                    $response['mode'] = 'razorpay';
+                    $response['razorpay_order_id'] = $sessionId;
+                    $response['razorpay_key_id'] = storefront_razorpay_key_id();
+                    $response['amount'] = $amountMinor;
+                    $response['currency'] = strtoupper($currency);
+                    $response['customer_name'] = $name;
+                    $response['customer_email'] = $email;
+                    $response['message'] = 'Complete payment with Razorpay.';
                 }
 
-                $session = $checkout['session'];
-                $sessionId = (string) ($session['id'] ?? '');
-                $sessionUrl = (string) ($session['url'] ?? '');
-                if ($sessionId === '' || $sessionUrl === '') {
-                    $pdo->rollBack();
-                    json(['error' => 'Stripe checkout session is missing a redirect URL.'], 502);
-                }
-
-                $update = $pdo->prepare(
-                    'UPDATE orders
-                     SET payment_session_id = ?, payment_url = ?, payment_status = ?, updated_at = NOW()
-                     WHERE id = ?'
-                );
+                $update = $pdo->prepare('UPDATE orders SET payment_session_id = ?, payment_url = ?, payment_status = ?, updated_at = NOW() WHERE id = ?');
                 $update->execute([$sessionId, $sessionUrl, 'pending', $orderId]);
 
                 $pdo->commit();
-                json([
-                    'order_no' => $orderNo,
-                    'checkout_url' => $sessionUrl,
-                    'payment_provider' => 'stripe',
-                    'message' => 'Redirecting to secure checkout.',
-                ], 201);
+                json($response, 201);
             } catch (Throwable $e) {
                 if ($pdo->inTransaction()) {
                     $pdo->rollBack();
@@ -1176,6 +1191,40 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
                 }
                 throw $e;
             }
+        }
+
+        // Razorpay: verify the payment signature client-side handshake returned, then mark paid.
+        case $key === 'POST store/checkout/razorpay-verify': {
+            $b = body();
+            $orderNo = field($b, 'order_no');
+            $rzpOrderId = field($b, 'razorpay_order_id');
+            $paymentId = field($b, 'razorpay_payment_id');
+            $signature = field($b, 'razorpay_signature');
+            if ($orderNo === '' || $rzpOrderId === '' || $paymentId === '' || $signature === '') {
+                json(['error' => 'Missing payment verification fields.'], 422);
+            }
+            if (!storefront_razorpay_verify_signature($rzpOrderId, $paymentId, $signature)) {
+                json(['error' => 'Payment could not be verified.'], 400);
+            }
+            storefront_ensure_orders_payment_schema();
+            storefront_mark_order_paid($orderNo, 'razorpay', 'razorpay', $paymentId, $rzpOrderId);
+            json(['message' => 'Payment confirmed.', 'order_no' => $orderNo, 'payment_status' => 'paid']);
+        }
+
+        // PayPal: capture the approved order on return, then mark paid.
+        case $key === 'POST store/checkout/paypal-capture': {
+            $b = body();
+            $orderNo = field($b, 'order_no');
+            $paypalOrderId = field($b, 'paypal_order_id');
+            if ($orderNo === '' || $paypalOrderId === '') json(['error' => 'Missing PayPal order reference.'], 422);
+            if (!storefront_paypal_enabled()) json(['error' => 'PayPal is not configured.'], 503);
+            $cap = storefront_paypal_capture_order($paypalOrderId);
+            if (!$cap['ok'] || $cap['status'] !== 'COMPLETED') {
+                json(['error' => 'Payment has not been completed.', 'status' => $cap['status'] ?? ''], 409);
+            }
+            storefront_ensure_orders_payment_schema();
+            storefront_mark_order_paid($orderNo, 'paypal', 'paypal', $paypalOrderId, $paypalOrderId);
+            json(['message' => 'Payment confirmed.', 'order_no' => $orderNo, 'payment_status' => 'paid']);
         }
 
         case $key === 'POST order': {
