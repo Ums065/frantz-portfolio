@@ -514,20 +514,22 @@ export default function ChallengeRegistration({ tag, onTagChange, token, showCom
 
   return (
     <>
-      <div className="ns-role-switch reveal in" role="tablist" aria-label="Registration user tags">
-        {options.map((option) => (
-          <button
-            key={option.key}
-            className={`ns-role-switch__btn ${tag === option.key ? 'is-active' : ''}`}
-            type="button"
-            role="tab"
-            aria-selected={tag === option.key}
-            onClick={() => onTagChange(option.key)}
+      <div className="ns-role-select reveal in" style={{ maxWidth: 460, margin: '0 auto 4px' }}>
+        <label className="ns-field ns-field--full">
+          <span>I am registering as…</span>
+          <select
+            value={tag}
+            onChange={(e) => onTagChange(e.target.value as RegistrationTag)}
+            aria-label="Choose your registration role"
           >
-            <strong>{option.title}</strong>
-            <span>{option.detail}</span>
-          </button>
-        ))}
+            {options.map((option) => (
+              <option key={option.key} value={option.key}>{option.title}</option>
+            ))}
+          </select>
+        </label>
+        <p className="ns-role-select__hint" style={{ color: 'var(--muted)', fontSize: 13, margin: '6px 2px 0', textAlign: 'center' }}>
+          {options.find((o) => o.key === tag)?.detail}
+        </p>
       </div>
       <p className="ns-registration-note">
         Admin accounts stay private. Public registration is available for students, parents through student ID or QR consent, schools, and teachers. Approved schools and teachers appear in the searchable dropdowns.
