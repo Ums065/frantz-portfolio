@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../../lib/api'
 import { useAuth } from '../../context/AuthContext'
@@ -119,15 +120,38 @@ export function LogoUploader({ role, current, reload }: { role: string; current?
   )
 }
 
-/** A button that raises an ecosystem request (with an optional note) then reloads. */
+/** A button that opens a small modal to raise an ecosystem request (with an
+    optional note), then reloads. Consistent, mobile-friendly (no browser prompt). */
 export function RequestButton({ role, reqType, label, reload, solid }: { role: string; reqType: string; label: string; reload: () => void; solid?: boolean }) {
+  const [open, setOpen] = useState(false)
+  const [msg, setMsg] = useState('')
   const [busy, setBusy] = useState(false)
-  const go = async () => {
-    const msg = window.prompt(`${label} — add a note for the admin (optional):`) ?? ''
+  const [done, setDone] = useState(false)
+  const submit = async () => {
     setBusy(true)
-    try { await api.post(`ecosystem/${role}/request`, { req_type: reqType, message: msg }); reload() } catch { /* ignore */ } finally { setBusy(false) }
+    try {
+      await api.post(`ecosystem/${role}/request`, { req_type: reqType, message: msg })
+      setDone(true); reload()
+      setTimeout(() => { setOpen(false); setDone(false); setMsg('') }, 900)
+    } catch { /* ignore */ } finally { setBusy(false) }
   }
-  return <button className={`btn btn--sm${solid ? ' btn--solid' : ''}`} disabled={busy} onClick={go}>{busy ? 'Sending…' : label}</button>
+  return (
+    <>
+      <button className={`btn btn--sm${solid ? ' btn--solid' : ''}`} onClick={() => setOpen(true)}>{label}</button>
+      {open && createPortal(
+        <div className="modal-overlay open" onClick={(e) => { if (e.target === e.currentTarget && !busy) setOpen(false) }}>
+          <div className="glass" style={{ maxWidth: 440, width: '92%', margin: '14vh auto', padding: 24, borderRadius: 16 }}>
+            <div style={S.eyebrow}>{label}</div>
+            <p style={{ color: 'var(--muted)', fontSize: 13, margin: '6px 0 12px', lineHeight: 1.5 }}>Add an optional note for the program team, then send. They'll review and follow up.</p>
+            <textarea style={{ ...S.input, minHeight: 84, resize: 'vertical' }} value={msg} onChange={(e) => setMsg(e.target.value)} placeholder="Optional note…" autoFocus />
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 14 }}>
+              <button className="btn btn--sm" onClick={() => setOpen(false)} disabled={busy}>Cancel</button>
+              <button className="btn btn--sm btn--solid" onClick={submit} disabled={busy || done}>{done ? 'Sent ✓' : busy ? 'Sending…' : 'Send Request'}</button>
+            </div>
+          </div>
+        </div>, document.body)}
+    </>
+  )
 }
 
 export interface PortalField { key: string; label: string; kind?: 'text' | 'select' | 'textarea'; options?: string[]; placeholder?: string; full?: boolean }

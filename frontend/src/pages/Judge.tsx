@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import { useAuth } from '../context/AuthContext'
@@ -160,6 +161,7 @@ export default function Judge() {
   // Per-submission Conflict of Interest gate (must clear before the scorecard unlocks).
   const [coiCleared, setCoiCleared] = useState(false)
   const [coiAns, setCoiAns] = useState<Record<number, 'yes' | 'no' | ''>>({})
+  const [reasonModal, setReasonModal] = useState<'recuse' | 'report' | null>(null)
 
   const role = (user?.role || '').toLowerCase()
   const allowed = !!user && ['judge', 'admin', 'super_admin'].includes(role)
@@ -179,27 +181,28 @@ export default function Judge() {
     } catch { /* ignore */ } finally { setCertBusy(false) }
   }
 
-  const recuse = async () => {
+  // recuse / report open a small inline modal (no browser prompt) to collect the reason.
+  const recuse = () => setReasonModal('recuse')
+  const reportConcern = () => setReasonModal('report')
+
+  const doRecuse = async (reason: string) => {
     if (!detail) return
-    const reason = window.prompt('Recuse from this submission (conflict of interest). Optional reason:') ?? ''
     setSaveBusy(true)
     try {
       await api.post(`new-school/judge/submission/${detail.submission.id}/recuse`, { reason })
-      setMsg('You have recused from this submission.')
+      setReasonModal(null); setMsg('You have recused from this submission.')
       loadQueue()
       setTimeout(closeDetail, 700)
     } catch (e) { setMsg(e instanceof Error ? e.message : 'Could not recuse.') } finally { setSaveBusy(false) }
   }
 
-  const reportConcern = async () => {
-    if (!detail) return
-    const reason = window.prompt('Report a concern — reason (e.g. missing documentation, suspected fraud):') ?? ''
-    if (!reason.trim()) return
-    const notesText = window.prompt('Additional notes (optional):') ?? ''
+  const doReport = async (reason: string, notesText: string) => {
+    if (!detail || !reason.trim()) return
+    setSaveBusy(true)
     try {
       await api.post('new-school/judge/report', { submission_id: detail.submission.id, reason, notes: notesText })
-      setMsg('Concern reported to administration.')
-    } catch (e) { setMsg(e instanceof Error ? e.message : 'Could not report.') }
+      setReasonModal(null); setMsg('Concern reported to administration.')
+    } catch (e) { setMsg(e instanceof Error ? e.message : 'Could not report.') } finally { setSaveBusy(false) }
   }
 
   const loadQueue = useCallback(() => {
@@ -759,7 +762,65 @@ export default function Judge() {
           </div>
         </div>
       )}
+      {reasonModal && (
+        <ReasonModal
+          kind={reasonModal}
+          busy={saveBusy}
+          onCancel={() => setReasonModal(null)}
+          onRecuse={doRecuse}
+          onReport={doReport}
+        />
+      )}
     </>
+  )
+}
+
+/* Inline modal to collect a reason (recuse) or reason + notes (report),
+   replacing the old browser window.prompt() dialogs. */
+function ReasonModal({ kind, busy, onCancel, onRecuse, onReport }: {
+  kind: 'recuse' | 'report'
+  busy: boolean
+  onCancel: () => void
+  onRecuse: (reason: string) => void
+  onReport: (reason: string, notes: string) => void
+}) {
+  const [reason, setReason] = useState('')
+  const [notes, setNotes] = useState('')
+  const isReport = kind === 'report'
+  const canSubmit = isReport ? reason.trim().length > 0 : true
+  return createPortal(
+    <div className="modal-overlay open" onClick={onCancel}>
+      <div className="glass" style={{ maxWidth: 460, width: '100%', padding: 22 }} onClick={e => e.stopPropagation()}>
+        <h3 style={{ marginTop: 0, marginBottom: 6 }}>{isReport ? '⚑ Report a Concern' : 'Recuse from Submission'}</h3>
+        <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: 0 }}>
+          {isReport
+            ? 'Describe the concern (e.g. missing documentation, suspected fraud). This is sent to administration.'
+            : 'You may add an optional reason for recusing (conflict of interest). The submission returns to admin for reassignment.'}
+        </p>
+        <label style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--muted)' }}>
+          {isReport ? 'Reason' : 'Reason (optional)'}
+        </label>
+        <textarea
+          autoFocus rows={3} value={reason} onChange={e => setReason(e.target.value)}
+          style={{ width: '100%', marginTop: 4, marginBottom: 12 }}
+          placeholder={isReport ? 'Reason…' : 'Optional reason…'}
+        />
+        {isReport && (
+          <>
+            <label style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--muted)' }}>Additional notes (optional)</label>
+            <textarea rows={2} value={notes} onChange={e => setNotes(e.target.value)} style={{ width: '100%', marginTop: 4, marginBottom: 12 }} placeholder="Notes…" />
+          </>
+        )}
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <button className="btn btn--sm" disabled={busy} onClick={onCancel}>Cancel</button>
+          <button
+            className="btn btn--solid btn--sm" disabled={busy || !canSubmit}
+            onClick={() => (isReport ? onReport(reason, notes) : onRecuse(reason))}
+          >{busy ? 'Working…' : isReport ? 'Send Report' : 'Confirm Recuse'}</button>
+        </div>
+      </div>
+    </div>,
+    document.body,
   )
 }
 
