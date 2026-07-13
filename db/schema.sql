@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS users (
   email         VARCHAR(160) NOT NULL UNIQUE,
   password_hash VARCHAR(255) NOT NULL,
   avatar_url    VARCHAR(255) DEFAULT NULL,
-  role          ENUM('member','vip','editor','admin','super_admin') NOT NULL DEFAULT 'member',
+  role          ENUM('member','vip','editor','admin','super_admin','student','parent','school','teacher','judge','business','sponsor','partner','media','volunteer') NOT NULL DEFAULT 'member',
   email_verified_at TIMESTAMP NULL DEFAULT NULL,
   approval_status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending',
   approval_note TEXT DEFAULT NULL,
@@ -350,6 +350,132 @@ CREATE TABLE IF NOT EXISTS terms_acceptances (
   CONSTRAINT fk_terms_acceptances_user
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
+
+-- ---------- Ecosystem role portals (Sponsor / Partner / Media / Volunteer) ----------
+-- Self-registering ecosystem accounts + shared admin-issued documents, opportunity
+-- requests, and role-targeted announcements. Also created self-healing by
+-- ecosystem_ensure_schema() / ecosystem_shared_ensure_schema() in api/lib.php.
+CREATE TABLE IF NOT EXISTS ecosystem_accounts (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL UNIQUE,
+  role VARCHAR(20) NOT NULL,
+  org_name VARCHAR(160) NOT NULL,
+  contact_name VARCHAR(120) DEFAULT NULL,
+  contact_phone VARCHAR(40) DEFAULT NULL,
+  website VARCHAR(255) DEFAULT NULL,
+  about TEXT DEFAULT NULL,
+  details TEXT DEFAULT NULL,
+  referral_code VARCHAR(24) DEFAULT NULL,
+  referred_by_code VARCHAR(24) DEFAULT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_eco_role (role),
+  INDEX idx_eco_refby (referred_by_code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS ecosystem_documents (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
+  role VARCHAR(20) NOT NULL,
+  doc_type VARCHAR(40) NOT NULL DEFAULT 'document',
+  label VARCHAR(160) NOT NULL,
+  file_url VARCHAR(400) NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_ecodoc_user (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS ecosystem_requests (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
+  role VARCHAR(20) NOT NULL,
+  req_type VARCHAR(30) NOT NULL,
+  message TEXT DEFAULT NULL,
+  status VARCHAR(16) NOT NULL DEFAULT 'pending',
+  admin_note TEXT DEFAULT NULL,
+  reviewed_by_user_id INT DEFAULT NULL,
+  reviewed_at TIMESTAMP NULL DEFAULT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_ecoreq_user (user_id),
+  INDEX idx_ecoreq_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS ecosystem_announcements (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  audience VARCHAR(20) NOT NULL DEFAULT 'all',
+  title VARCHAR(180) NOT NULL,
+  body TEXT DEFAULT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_ecoann_aud (audience)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---------- Business dashboard ----------
+-- Self-registering business accounts + the opportunity requests they raise.
+-- Businesses cannot score students. Created self-healing by business_ensure_schema()
+-- in api/lib.php, which also adds the business_user_id / business_website link columns
+-- to new_school_business_interviews (see db/new_school.sql + db/update.sql).
+CREATE TABLE IF NOT EXISTS business_accounts (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL UNIQUE,
+  business_name VARCHAR(160) NOT NULL,
+  category VARCHAR(80) DEFAULT NULL,
+  borough VARCHAR(60) DEFAULT NULL,
+  contact_name VARCHAR(120) DEFAULT NULL,
+  contact_phone VARCHAR(40) DEFAULT NULL,
+  website VARCHAR(255) DEFAULT NULL,
+  about TEXT DEFAULT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_business_name (business_name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS business_requests (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  business_user_id INT NOT NULL,
+  request_type VARCHAR(24) NOT NULL,
+  submission_id INT DEFAULT NULL,
+  student_id INT DEFAULT NULL,
+  student_name VARCHAR(120) DEFAULT NULL,
+  school_name VARCHAR(180) DEFAULT NULL,
+  message TEXT DEFAULT NULL,
+  status VARCHAR(16) NOT NULL DEFAULT 'pending',
+  admin_note TEXT DEFAULT NULL,
+  reviewed_by_user_id INT DEFAULT NULL,
+  reviewed_at TIMESTAMP NULL DEFAULT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_breq_biz (business_user_id),
+  INDEX idx_breq_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---------- Our Partners content page (dynamic, admin-editable) ----------
+-- Distinct from the ecosystem Partner login dashboard. Created self-healing by
+-- partners_ensure_schema() in api/lib.php; seeded on first /api/partners hit.
+CREATE TABLE IF NOT EXISTS partners (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(160) NOT NULL,
+  logo_url VARCHAR(400) DEFAULT NULL,
+  partner_type VARCHAR(60) DEFAULT NULL,
+  industry VARCHAR(60) DEFAULT NULL,
+  borough VARCHAR(60) DEFAULT NULL,
+  county VARCHAR(60) DEFAULT NULL,
+  location VARCHAR(120) DEFAULT NULL,
+  partner_since VARCHAR(12) DEFAULT NULL,
+  website VARCHAR(300) DEFAULT NULL,
+  blurb TEXT DEFAULT NULL,
+  is_featured TINYINT(1) NOT NULL DEFAULT 0,
+  is_media_partner TINYINT(1) NOT NULL DEFAULT 0,
+  status ENUM('draft','published') NOT NULL DEFAULT 'published',
+  sort_order INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_partners_status (status, sort_order)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS partner_settings (
+  setting_key VARCHAR(64) NOT NULL PRIMARY KEY,
+  setting_value TEXT DEFAULT NULL,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================================
 -- SEED DATA (matches the design content)
