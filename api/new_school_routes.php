@@ -2351,6 +2351,7 @@ function new_school_handle_route(string $method, string $route): bool
             $businessPhone = field($body, 'business_phone');
             $businessAddress = field($body, 'business_address');
             $businessCategory = field($body, 'business_category');
+            $businessWebsite = mb_substr(trim((string) field($body, 'business_website')), 0, 255) ?: null;
             $dateOfVisit = field($body, 'date_of_visit');
             $mainChallenge = field($body, 'main_challenge');
             $studentNotes = field($body, 'student_notes');
@@ -2412,6 +2413,7 @@ function new_school_handle_route(string $method, string $route): bool
                 $mainChallenge,
                 $studentNotes,
                 $signature !== '' ? $signature : null,
+                $businessWebsite,
             ];
 
             $pdo = db();
@@ -2421,7 +2423,7 @@ function new_school_handle_route(string $method, string $route): bool
                      SET business_name = ?, owner_name = ?, business_phone = ?, business_address = ?, business_category = ?,
                          date_of_visit = ?, has_website = ?, has_google_profile = ?, uses_social_media = ?, uses_digital_signage = ?,
                          offers_rewards = ?, has_online_ordering = ?, has_delivery_options = ?, main_challenge = ?, student_notes = ?,
-                         signature = COALESCE(?, signature),
+                         signature = COALESCE(?, signature), business_website = ?,
                          updated_at = NOW()
                      WHERE id = ?'
                 );
@@ -2442,6 +2444,7 @@ function new_school_handle_route(string $method, string $route): bool
                     $mainChallenge,
                     $studentNotes,
                     $signature !== '' ? $signature : null,
+                    $businessWebsite,
                     (int) $interviewRow['id'],
                 ]);
                 $interviewId = (int) $interviewRow['id'];
@@ -2450,8 +2453,8 @@ function new_school_handle_route(string $method, string $route): bool
                     'INSERT INTO new_school_business_interviews (
                         student_id, visit_number, business_name, owner_name, business_phone, business_address, business_category,
                         date_of_visit, has_website, has_google_profile, uses_social_media, uses_digital_signage, offers_rewards,
-                        has_online_ordering, has_delivery_options, main_challenge, student_notes, signature
-                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                        has_online_ordering, has_delivery_options, main_challenge, student_notes, signature, business_website
+                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
                 );
                 $insert->execute($values);
                 $interviewId = (int) $pdo->lastInsertId();
@@ -3753,12 +3756,12 @@ function new_school_handle_route(string $method, string $route): bool
                 json(['error' => 'A visit with this number already exists for the student.'], 409);
             }
             $insert = $pdo->prepare(
-                'INSERT INTO new_school_business_interviews (student_id, visit_number, business_name, owner_name, business_phone, business_address, business_category, date_of_visit, has_website, has_google_profile, uses_social_media, uses_digital_signage, offers_rewards, has_online_ordering, has_delivery_options, main_challenge, student_notes)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                'INSERT INTO new_school_business_interviews (student_id, visit_number, business_name, owner_name, business_phone, business_address, business_category, business_website, date_of_visit, has_website, has_google_profile, uses_social_media, uses_digital_signage, offers_rewards, has_online_ordering, has_delivery_options, main_challenge, student_notes)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
             );
             $insert->execute([
                 $studentId, $visit, field($body, 'business_name'), field($body, 'owner_name'), field($body, 'business_phone'),
-                field($body, 'business_address'), field($body, 'business_category'), field($body, 'date_of_visit') ?: date('Y-m-d'),
+                field($body, 'business_address'), field($body, 'business_category'), mb_substr(trim((string) field($body, 'business_website')), 0, 255) ?: null, field($body, 'date_of_visit') ?: date('Y-m-d'),
                 ns_manage_bool($body, 'has_website'), ns_manage_bool($body, 'has_google_profile'), ns_manage_bool($body, 'uses_social_media'),
                 ns_manage_bool($body, 'uses_digital_signage'), ns_manage_bool($body, 'offers_rewards'), ns_manage_bool($body, 'has_online_ordering'),
                 ns_manage_bool($body, 'has_delivery_options'), field($body, 'main_challenge'), field($body, 'student_notes'),
@@ -3786,7 +3789,7 @@ function new_school_handle_route(string $method, string $route): bool
             if ($student) { ns_manage_assert_student($student, $scope); }
             $fields = [];
             $values = [];
-            $map = ['business_name' => 'business_name', 'owner_name' => 'owner_name', 'business_phone' => 'business_phone', 'business_address' => 'business_address', 'business_category' => 'business_category', 'main_challenge' => 'main_challenge', 'student_notes' => 'student_notes'];
+            $map = ['business_name' => 'business_name', 'owner_name' => 'owner_name', 'business_phone' => 'business_phone', 'business_address' => 'business_address', 'business_category' => 'business_category', 'business_website' => 'business_website', 'main_challenge' => 'main_challenge', 'student_notes' => 'student_notes'];
             foreach ($map as $bk => $col) {
                 if (array_key_exists($bk, $body)) { $fields[] = "$col = ?"; $values[] = field($body, $bk); }
             }

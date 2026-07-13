@@ -3097,20 +3097,25 @@ function business_ensure_schema(): void
             INDEX idx_breq_status (status)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
     );
-    // Nullable explicit link so an admin can later bind interview rows to a business
-    // account; until then the dashboard matches interviews by normalized name.
-    try {
-        $has = $pdo->query(
-            "SELECT COUNT(*) FROM information_schema.COLUMNS
-             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'new_school_business_interviews'
-               AND COLUMN_NAME = 'business_user_id'"
-        )->fetchColumn();
-        if ((int) $has === 0) {
-            $pdo->exec("ALTER TABLE new_school_business_interviews ADD COLUMN business_user_id INT DEFAULT NULL");
+    // Self-heal extra columns on the interview table:
+    //  - business_user_id : explicit admin link (name/phone/website mismatch fallback)
+    //  - business_website : the business URL the student recorded (used for matching)
+    $addCol = static function (string $col, string $def) use ($pdo): void {
+        try {
+            $has = $pdo->query(
+                "SELECT COUNT(*) FROM information_schema.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'new_school_business_interviews'
+                   AND COLUMN_NAME = " . $pdo->quote($col)
+            )->fetchColumn();
+            if ((int) $has === 0) {
+                $pdo->exec("ALTER TABLE new_school_business_interviews ADD COLUMN $col $def");
+            }
+        } catch (Throwable $e) {
+            if (app_debug()) error_log("business interview column $col: " . $e->getMessage());
         }
-    } catch (Throwable $e) {
-        if (app_debug()) error_log('business interview link column: ' . $e->getMessage());
-    }
+    };
+    $addCol('business_user_id', 'INT DEFAULT NULL');
+    $addCol('business_website', 'VARCHAR(255) DEFAULT NULL');
     $ready = true;
 }
 
@@ -3130,6 +3135,21 @@ function business_name_key(string $name): string
     return preg_replace('/\s+/u', ' ', mb_strtolower(trim($name)));
 }
 
+/** Digits-only phone key (drops spaces, dashes, brackets, +) for matching. */
+function business_phone_key(string $phone): string
+{
+    return preg_replace('/\D+/', '', $phone);
+}
+
+/** Normalized website key: lowercased host+path without scheme / www / trailing slash. */
+function business_url_key(string $url): string
+{
+    $u = strtolower(trim($url));
+    $u = preg_replace('#^https?://#', '', $u);
+    $u = preg_replace('#^www\.#', '', $u);
+    return rtrim($u, '/');
+}
+
 /**
  * The interviews that belong to a business account: explicitly linked rows OR
  * (unlinked rows whose business_name matches by normalized name). Each row is
@@ -3140,10 +3160,16 @@ function business_matched_interviews(array $account): array
 {
     business_ensure_schema();
     $uid = (int) $account['user_id'];
+    // An interview belongs to this business if it is explicitly linked (business_user_id),
+    // OR — for unlinked interviews — the student-entered name, phone, or website matches
+    // this account (all normalized: case/space-insensitive name, digits-only phone,
+    // scheme/www/slash-insensitive website). Any one match is enough.
     $key = business_name_key((string) $account['business_name']);
+    $phoneKey = business_phone_key((string) ($account['contact_phone'] ?? ''));
+    $webKey = business_url_key((string) ($account['website'] ?? ''));
     $stmt = db()->prepare(
         "SELECT bi.id, bi.visit_number, bi.business_name, bi.owner_name, bi.business_category,
-                bi.business_address, bi.date_of_visit, bi.main_challenge, bi.student_notes,
+                bi.business_address, bi.business_phone, bi.business_website, bi.date_of_visit, bi.main_challenge, bi.student_notes,
                 (bi.signature IS NOT NULL AND bi.signature <> '') AS verified,
                 s.id AS student_id, s.full_name AS student_name, s.school_name, s.grade_level, s.age,
                 sub.id AS submission_id, sub.status AS submission_status,
@@ -3153,10 +3179,14 @@ function business_matched_interviews(array $account): array
          JOIN new_school_students s ON s.id = bi.student_id
          LEFT JOIN new_school_submissions sub ON sub.student_id = bi.student_id
          WHERE bi.business_user_id = ?
-            OR (bi.business_user_id IS NULL AND LOWER(TRIM(bi.business_name)) = ?)
+            OR (bi.business_user_id IS NULL AND (
+                  LOWER(TRIM(bi.business_name)) = ?
+               OR (? <> '' AND REGEXP_REPLACE(COALESCE(bi.business_phone, ''), '[^0-9]', '') = ?)
+               OR (? <> '' AND TRIM(TRAILING '/' FROM REGEXP_REPLACE(LOWER(TRIM(COALESCE(bi.business_website, ''))), '^(https?://)?(www[.])?', '')) = ?)
+            ))
          ORDER BY bi.date_of_visit DESC, bi.id DESC"
     );
-    $stmt->execute([$uid, $key]);
+    $stmt->execute([$uid, $key, $phoneKey, $phoneKey, $webKey, $webKey]);
 
     $submitted = ['submitted', 'approved', 'winner'];
     $out = [];
@@ -3179,6 +3209,8 @@ function business_matched_interviews(array $account): array
             'owner_name' => $r['owner_name'],
             'business_category' => $r['business_category'],
             'business_address' => $r['business_address'],
+            'business_phone' => $r['business_phone'],
+            'business_website' => $r['business_website'],
             'date_of_visit' => $r['date_of_visit'],
             'main_challenge' => $r['main_challenge'],
             'verified' => (bool) $r['verified'],

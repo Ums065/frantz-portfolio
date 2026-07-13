@@ -573,6 +573,7 @@ const RECORD_DEFS: Record<RecordEntity, RecordDef> = {
       { key: 'owner_name', label: 'Owner', type: 'text' },
       { key: 'business_phone', label: 'Business phone', type: 'text' },
       { key: 'business_address', label: 'Business address', type: 'text', full: true },
+      { key: 'business_website', label: 'Business website', type: 'text' },
       { key: 'date_of_visit', label: 'Date of visit', type: 'date' },
       { key: 'main_challenge', label: 'Main challenge', type: 'textarea', full: true },
       { key: 'student_notes', label: 'Notes', type: 'textarea', full: true },
@@ -1165,6 +1166,7 @@ export default function NewSchool() {
         business_phone: value(fd, 'business_phone'),
         business_address: value(fd, 'business_address'),
         business_category: value(fd, 'business_category'),
+        business_website: value(fd, 'business_website'),
         date_of_visit: value(fd, 'date_of_visit'),
         has_website: checked(fd, 'has_website'),
         has_google_profile: checked(fd, 'has_google_profile'),
@@ -3211,6 +3213,7 @@ export default function NewSchool() {
                   <label className="ns-field"><span>Phone Number</span><input name="business_phone" type="tel" inputMode="numeric" required minLength={7} /></label>
                   <label className="ns-field"><span>Business Address</span><input name="business_address" required minLength={3} /></label>
                   <label className="ns-field"><span>Category</span><input name="business_category" required minLength={3} /></label>
+                  <label className="ns-field"><span>Business Website <small className="ns-field-hint">(optional — helps the business find your visit)</small></span><input name="business_website" type="url" placeholder="https://…" /></label>
                   <label className="ns-field"><span>Date of Visit</span><input name="date_of_visit" type="date" required min={String(studentDashboard.student?.created_at || '').slice(0, 10) || undefined} max={todayInputDate()} /></label>
                   <label className="ns-field ns-field--full"><span>Main Challenge <small className="ns-field-hint">50–500 words</small></span><textarea name="main_challenge" rows={3} required placeholder="Describe the main challenge this business faces (50–500 words)." /></label>
                   <label className="ns-field ns-field--full"><span>Student Notes <small className="ns-field-hint">50–500 words</small></span><textarea name="student_notes" rows={3} required placeholder="Your observations and notes from the visit (50–500 words)." /></label>
