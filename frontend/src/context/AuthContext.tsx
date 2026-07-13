@@ -50,6 +50,8 @@ export interface RegistrationInput {
   volunteerType?: string
   areas?: string
   availability?: string
+  // Partner referral code entered at registration (attributes the signup to a partner)
+  ref?: string
 }
 
 interface AuthState {
@@ -232,6 +234,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           contact_phone: input.phoneNumber ?? '',
           website: input.website ?? '',
           about: input.about ?? '',
+          ref: input.ref ?? '',
         })
         break
       case 'sponsor':
@@ -255,6 +258,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           volunteer_type: input.volunteerType ?? '',
           areas: input.areas ?? '',
           availability: input.availability ?? '',
+          ref: input.ref ?? '',
         })
         break
       case 'community':
@@ -263,6 +267,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           full_name: input.fullName,
           email: input.email,
           password: input.password,
+          ref: input.ref ?? '',
         })
         break
     }

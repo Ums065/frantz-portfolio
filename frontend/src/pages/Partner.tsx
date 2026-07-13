@@ -39,6 +39,8 @@ const config: PortalConfig = {
             <StatTile label="Partners" value={by.partner ?? 0} />
             <StatTile label="Media" value={by.media ?? 0} />
             <StatTile label="Volunteers" value={by.volunteer ?? 0} />
+            <StatTile label="Businesses" value={by.business ?? 0} />
+            <StatTile label="Members" value={by.member ?? 0} />
           </div>
         </Section>
 

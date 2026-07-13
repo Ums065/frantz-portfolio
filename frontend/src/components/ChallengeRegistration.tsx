@@ -188,6 +188,7 @@ export default function ChallengeRegistration({ tag, onTagChange, token, showCom
         email: value(fd, 'email'),
         password: value(fd, 'password'),
         phoneNumber: value(fd, 'phone_number'),
+        ref: value(fd, 'ref') || referralCode,
       })
       window.fcToast?.(res.message || 'Welcome! Your account is ready.')
       form.reset()
@@ -495,6 +496,7 @@ export default function ChallengeRegistration({ tag, onTagChange, token, showCom
         volunteerType: value(fd, 'volunteerType'),
         areas: value(fd, 'areas'),
         availability: value(fd, 'availability'),
+        ref: value(fd, 'ref') || referralCode,
       })
       window.fcToast?.(res.message || 'Account submitted for admin approval.')
       form.reset(); setEcoErr({}); setEcoTermsOk(false)
@@ -548,6 +550,7 @@ export default function ChallengeRegistration({ tag, onTagChange, token, showCom
               <label className="ns-field"><span>Email</span><input name="email" type="email" /><FieldError msg={communityErr.email} /></label>
               <label className="ns-field"><span>Phone Number <span className="ns-field-hint">(optional)</span></span><input type="tel" name="phone_number" /><FieldError msg={communityErr.phone_number} /></label>
               <label className="ns-field ns-field--full"><span>Create a Password</span><PasswordField name="password" /><FieldError msg={communityErr.password} /></label>
+              <label className="ns-field ns-field--full"><span>Referral Code <span className="ns-field-hint">(optional — if a partner invited you)</span></span><input name="ref" defaultValue={referralCode} placeholder="e.g. A1B2C3D4" style={{ textTransform: 'uppercase' }} /></label>
               <label className="ns-check ns-field--full">
                 <input type="checkbox" checked={communityTermsOk} onChange={(e) => setCommunityTermsOk(e.target.checked)} />
                 <span>I agree to the Terms &amp; Conditions and Privacy Policy.</span>
@@ -903,6 +906,7 @@ export default function ChallengeRegistration({ tag, onTagChange, token, showCom
             <label className="ns-field"><span>Website <span className="ns-field-hint">(optional)</span></span><input name="website" placeholder="https://…" /><FieldError msg={ecoErr.website} /></label>
             <label className="ns-field"><span>Create a Password</span><PasswordField name="password" /><FieldError msg={ecoErr.password} /></label>
             <label className="ns-field ns-field--full"><span>About <span className="ns-field-hint">(optional)</span></span><textarea name="about" rows={2} /></label>
+            <label className="ns-field ns-field--full"><span>Referral Code <span className="ns-field-hint">(optional — if a partner invited you)</span></span><input name="ref" defaultValue={referralCode} placeholder="e.g. A1B2C3D4" style={{ textTransform: 'uppercase' }} /></label>
             <label className="ns-check ns-field--full">
               <input type="checkbox" checked={ecoTermsOk} onChange={(e) => setEcoTermsOk(e.target.checked)} />
               <span>I agree to the Terms &amp; Conditions and Privacy Policy, and confirm I represent this organization.</span>

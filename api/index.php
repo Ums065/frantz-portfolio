@@ -102,6 +102,7 @@ try {
                 }
 
                 $pdo->commit();
+                attribute_referral($userId, field($b, 'ref')); // partner-referral attribution
                 $registeredUser = login_user($registeredUser);
                 $approvalMessage = (string) ($registeredUser['approval_status'] ?? 'pending') === 'approved'
                     ? 'Account created successfully.'
@@ -1339,6 +1340,7 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
                 mb_substr(trim((string) field($b, 'website')), 0, 255) ?: null,
                 mb_substr(trim((string) field($b, 'about')), 0, 2000) ?: null,
             ]);
+            attribute_referral((int) $user['id'], field($b, 'ref')); // partner-referral attribution
             json([
                 'message' => 'Business account submitted for admin approval.',
                 'user' => login_user($user),

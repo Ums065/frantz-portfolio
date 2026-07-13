@@ -3508,6 +3508,7 @@ function ecosystem_register(string $role, array $b): array
         mb_substr(trim((string) field($b, 'about')), 0, 2000) ?: null,
         json_encode($details), $code, $refBy,
     ]);
+    attribute_referral((int) $user['id'], $refBy); // partner-referral attribution (users.referred_by_code)
     return login_user($user);
 }
 
@@ -3687,10 +3688,56 @@ function ecosystem_set_logo(array $user, string $url): array
 }
 
 /** Partner referral totals broken down by the role of each referred account. */
+/** Ensure users.referred_by_code exists — the single source of truth for partner-referral
+ *  attribution across every role (ecosystem, business, community, …). Self-healing. */
+function referral_ensure_schema(): void
+{
+    static $ready = false;
+    if ($ready) return;
+    try {
+        $has = db()->query(
+            "SELECT COUNT(*) FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'referred_by_code'"
+        )->fetchColumn();
+        if ((int) $has === 0) {
+            db()->exec("ALTER TABLE users ADD COLUMN referred_by_code VARCHAR(24) DEFAULT NULL AFTER role");
+            db()->exec("CREATE INDEX idx_users_refby ON users (referred_by_code)");
+        }
+    } catch (Throwable $e) {
+        if (app_debug()) error_log('referral_ensure_schema: ' . $e->getMessage());
+    }
+    $ready = true;
+}
+
+/** Attribute a newly-registered user to a referrer's code (partner referral).
+ *  First non-empty code wins; a user is never attributed to their own code. Codes are
+ *  normalized to upper-case to match the generated ecosystem/partner codes. */
+function attribute_referral(int $userId, ?string $code): void
+{
+    $code = strtoupper(trim((string) $code));
+    if ($code === '' || $userId <= 0) return;
+    referral_ensure_schema();
+    try {
+        // Ignore self-referral (the code belongs to this same user's ecosystem account).
+        $own = db()->prepare('SELECT 1 FROM ecosystem_accounts WHERE user_id = ? AND UPPER(referral_code) = ? LIMIT 1');
+        $own->execute([$userId, $code]);
+        if ($own->fetchColumn()) return;
+        db()->prepare(
+            "UPDATE users SET referred_by_code = ?
+             WHERE id = ? AND (referred_by_code IS NULL OR referred_by_code = '')"
+        )->execute([mb_substr($code, 0, 24), $userId]);
+    } catch (Throwable $e) {
+        if (app_debug()) error_log('attribute_referral: ' . $e->getMessage());
+    }
+}
+
+/** Count everyone a partner code referred, grouped by role — powers the Partner dashboard. */
 function ecosystem_referral_breakdown(string $code): array
 {
+    $code = strtoupper(trim($code));
     if ($code === '') return ['total' => 0, 'by_role' => (object) []];
-    $s = db()->prepare('SELECT role, COUNT(*) c FROM ecosystem_accounts WHERE referred_by_code = ? GROUP BY role');
+    referral_ensure_schema();
+    $s = db()->prepare('SELECT role, COUNT(*) c FROM users WHERE UPPER(referred_by_code) = ? GROUP BY role');
     $s->execute([$code]);
     $by = []; $total = 0;
     foreach ($s->fetchAll() as $r) { $by[(string) $r['role']] = (int) $r['c']; $total += (int) $r['c']; }

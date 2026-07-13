@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash VARCHAR(255) NOT NULL,
   avatar_url    VARCHAR(255) DEFAULT NULL,
   role          ENUM('member','vip','editor','admin','super_admin','student','parent','school','teacher','judge','business','sponsor','partner','media','volunteer') NOT NULL DEFAULT 'member',
+  referred_by_code VARCHAR(24) DEFAULT NULL,
   email_verified_at TIMESTAMP NULL DEFAULT NULL,
   approval_status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending',
   approval_note TEXT DEFAULT NULL,
