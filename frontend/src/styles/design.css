@@ -2150,7 +2150,9 @@ section.block {
   .building-grid { grid-template-columns: 1fr; }
   .venture-grid { grid-template-columns: 1fr; }
   .venture-grid--editorial { grid-template-columns: 1fr; }
-  .venture-card--editorial .proj__media { height: 240px; }
+  /* Phone: show the full image (natural aspect) so nothing is cropped. */
+  .venture-card--editorial .proj__media { height: auto; }
+  .venture-card--editorial .proj__media img { height: auto; object-fit: contain; }
   .venture-card__body { padding: 18px 16px 18px; }
   .venture-card__chips { gap: 8px; }
   .venture-vision { margin-top: 20px; min-height: 0; }
