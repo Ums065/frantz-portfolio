@@ -14,7 +14,9 @@ import {
 /** Optional email: valid format only if the user actually typed something. */
 const optionalEmail = (v: string) => (v.trim() ? vEmail(v) : '')
 
-export type RegistrationTag = 'community' | 'student' | 'parent' | 'school' | 'teacher'
+export type RegistrationTag = 'community' | 'student' | 'parent' | 'school' | 'teacher' | 'business' | 'sponsor' | 'partner' | 'media' | 'volunteer'
+
+const ECO_TAGS: RegistrationTag[] = ['business', 'sponsor', 'partner', 'media', 'volunteer']
 
 const REGISTRATION_OPTIONS: Array<{ key: RegistrationTag; title: string; detail: string }> = [
   { key: 'community', title: 'Community', detail: 'Join as a general member and supporter.' },
@@ -22,7 +24,21 @@ const REGISTRATION_OPTIONS: Array<{ key: RegistrationTag; title: string; detail:
   { key: 'parent', title: 'Parent', detail: 'Use the QR consent flow to approve participation.' },
   { key: 'school', title: 'School', detail: 'Register the school account and approval workspace.' },
   { key: 'teacher', title: 'Teacher', detail: 'Register the teacher dashboard and tracking view.' },
+  { key: 'business', title: 'Business', detail: 'Receive student solutions and hiring opportunities.' },
+  { key: 'sponsor', title: 'Sponsor', detail: 'Fund the challenge and track your impact.' },
+  { key: 'partner', title: 'Partner', detail: 'Help grow the movement and refer others.' },
+  { key: 'media', title: 'Media', detail: 'Access the press kit and request interviews.' },
+  { key: 'volunteer', title: 'Volunteer', detail: 'Give your time as a mentor, coach, or speaker.' },
 ]
+
+// Per-role config for the shared ecosystem registration form.
+const ECO_CONFIG: Record<string, { orgLabel: string | null; extras: Array<{ key: string; label: string; type?: 'select'; options?: string[] }> }> = {
+  business: { orgLabel: 'Business Name', extras: [{ key: 'category', label: 'Category (e.g. Retail, Food)' }, { key: 'borough', label: 'Borough / County' }] },
+  sponsor: { orgLabel: 'Organization Name', extras: [{ key: 'tier', label: 'Sponsorship Tier', type: 'select', options: ['Founding', 'Presenting', 'Supporting', 'Community'] }, { key: 'recognitionLevel', label: 'Recognition Level (e.g. Gold)' }] },
+  partner: { orgLabel: 'Organization Name', extras: [{ key: 'partnerType', label: 'Partner Type', type: 'select', options: ['School', 'College / University', 'Chamber of Commerce', 'Bank', 'Community Org', 'Nonprofit', 'Government Agency', 'Technology Company', 'Workforce Development', 'Youth Organization', 'Faith-Based', 'Educational Association'] }] },
+  media: { orgLabel: 'Outlet / Publication', extras: [{ key: 'outlet', label: 'Outlet' }, { key: 'beat', label: 'Beat / Coverage Area' }] },
+  volunteer: { orgLabel: null, extras: [{ key: 'volunteerType', label: 'How you’d like to help', type: 'select', options: ['Mentor', 'Interview Coach', 'Career Speaker', 'Business Advisor', 'Event Volunteer', 'Award Ceremony Volunteer'] }, { key: 'areas', label: 'Areas of Expertise' }, { key: 'availability', label: 'Availability' }] },
+}
 
 type Props = {
   tag: RegistrationTag
@@ -75,6 +91,8 @@ export default function ChallengeRegistration({ tag, onTagChange, token, showCom
   const [schoolErr, setSchoolErr] = useState<FieldErrors>({})
   const [teacherErr, setTeacherErr] = useState<FieldErrors>({})
   const [communityErr, setCommunityErr] = useState<FieldErrors>({})
+  const [ecoTermsOk, setEcoTermsOk] = useState(false)
+  const [ecoErr, setEcoErr] = useState<FieldErrors>({})
 
   const loadOverview = async () => {
     try {
@@ -439,7 +457,60 @@ export default function ChallengeRegistration({ tag, onTagChange, token, showCom
     }
   }
 
+  const submitEcosystem = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const form = event.currentTarget
+    const fd = new FormData(form)
+    const cfg = ECO_CONFIG[tag]
+    const errs: FieldErrors = {
+      full_name: vMinChars(value(fd, 'full_name'), 3, 'Your name'),
+      email: vEmail(value(fd, 'email')),
+      password: vPassword(value(fd, 'password')),
+      phone_number: vPhone(value(fd, 'phone_number'), false),
+      website: value(fd, 'website') ? vUrl(value(fd, 'website')) : '',
+    }
+    if (cfg?.orgLabel) errs.org_name = vMinChars(value(fd, 'org_name'), 2, cfg.orgLabel)
+    const clean = pruneErrors(errs)
+    if (Object.keys(clean).length) { setEcoErr(clean); focusFirstError(form, clean); return }
+    if (!ecoTermsOk) { window.fcToast?.('Please accept the terms to continue.'); return }
+    setEcoErr({})
+    setBusy(tag)
+    try {
+      const res = await register({
+        role: tag as RegistrationTag,
+        fullName: value(fd, 'full_name'),
+        email: value(fd, 'email'),
+        password: value(fd, 'password'),
+        phoneNumber: value(fd, 'phone_number'),
+        orgName: value(fd, 'org_name'),
+        website: value(fd, 'website'),
+        about: value(fd, 'about'),
+        category: value(fd, 'category'),
+        borough: value(fd, 'borough'),
+        tier: value(fd, 'tier'),
+        recognitionLevel: value(fd, 'recognitionLevel'),
+        partnerType: value(fd, 'partnerType'),
+        outlet: value(fd, 'outlet'),
+        beat: value(fd, 'beat'),
+        volunteerType: value(fd, 'volunteerType'),
+        areas: value(fd, 'areas'),
+        availability: value(fd, 'availability'),
+      })
+      window.fcToast?.(res.message || 'Account submitted for admin approval.')
+      form.reset(); setEcoErr({}); setEcoTermsOk(false)
+      await refresh()
+      onSuccess?.()
+    } catch (err) {
+      const mapped = mapRegisterError(err, 'email')
+      if (mapped) { setEcoErr(mapped); focusFirstError(form, mapped) }
+      fail(err, 'Registration failed.')
+    } finally {
+      setBusy('')
+    }
+  }
+
   const options = showCommunity ? REGISTRATION_OPTIONS : REGISTRATION_OPTIONS.filter((o) => o.key !== 'community')
+  const ecoCfg = ECO_CONFIG[tag]
 
   return (
     <>
@@ -805,6 +876,38 @@ export default function ChallengeRegistration({ tag, onTagChange, token, showCom
           <button className="btn btn--solid" type="submit" disabled={busy === 'teacher' || !teacherTermsOk || (!teacherEduMode && !approvedSchool(teacherSchoolSearch))}>
             {busy === 'teacher' ? 'Saving...' : 'Register Teacher'}
           </button>
+        </form>
+
+        <form className="glass ns-form reveal in" id="ecosystem-registration" onSubmit={submitEcosystem} onChange={clearFieldErr(setEcoErr)} hidden={!ECO_TAGS.includes(tag)} noValidate>
+          <div className="ns-form__head">
+            <span className="eyebrow">{REGISTRATION_OPTIONS.find((o) => o.key === tag)?.title} account</span>
+            <h3>{REGISTRATION_OPTIONS.find((o) => o.key === tag)?.title} Registration</h3>
+            <p>{REGISTRATION_OPTIONS.find((o) => o.key === tag)?.detail}</p>
+          </div>
+          <div className="ns-field-grid">
+            {ecoCfg?.orgLabel && (
+              <label className="ns-field ns-field--full"><span>{ecoCfg.orgLabel}</span><input name="org_name" /><FieldError msg={ecoErr.org_name} /></label>
+            )}
+            {(ecoCfg?.extras ?? []).map((x) => (
+              <label className="ns-field" key={x.key}><span>{x.label}</span>
+                {x.type === 'select'
+                  ? <select name={x.key} defaultValue=""><option value="">Select…</option>{(x.options ?? []).map((o) => <option key={o} value={o}>{o}</option>)}</select>
+                  : <input name={x.key} />}
+              </label>
+            ))}
+            <label className="ns-field ns-field--full"><span>Your Name (Contact)</span><input name="full_name" /><FieldError msg={ecoErr.full_name} /></label>
+            <label className="ns-field"><span>Email</span><input name="email" type="email" /><FieldError msg={ecoErr.email} /></label>
+            <label className="ns-field"><span>Phone <span className="ns-field-hint">(optional)</span></span><input name="phone_number" type="tel" /><FieldError msg={ecoErr.phone_number} /></label>
+            <label className="ns-field"><span>Website <span className="ns-field-hint">(optional)</span></span><input name="website" placeholder="https://…" /><FieldError msg={ecoErr.website} /></label>
+            <label className="ns-field"><span>Create a Password</span><PasswordField name="password" /><FieldError msg={ecoErr.password} /></label>
+            <label className="ns-field ns-field--full"><span>About <span className="ns-field-hint">(optional)</span></span><textarea name="about" rows={2} /></label>
+            <label className="ns-check ns-field--full">
+              <input type="checkbox" checked={ecoTermsOk} onChange={(e) => setEcoTermsOk(e.target.checked)} />
+              <span>I agree to the Terms &amp; Conditions and Privacy Policy, and confirm I represent this organization.</span>
+            </label>
+          </div>
+          <button className="btn btn--solid" type="submit" disabled={busy === tag || !ecoTermsOk}>{busy === tag ? 'Submitting…' : 'Create Account'}</button>
+          <p className="ns-registration-note">New accounts are reviewed by an admin before your dashboard unlocks.</p>
         </form>
       </div>
     </>

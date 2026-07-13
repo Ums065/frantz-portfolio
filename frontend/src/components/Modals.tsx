@@ -36,7 +36,7 @@ const registerRoleOptions: Array<{
   { value: 'teacher', label: 'Teacher', description: 'Teacher dashboard access' },
 ]
 
-const registerRoleMeta: Record<RegistrationRole, { title: string; subtitle: string; helper: string; button: string }> = {
+const registerRoleMeta: Partial<Record<RegistrationRole, { title: string; subtitle: string; helper: string; button: string }>> = {
   community: {
     title: 'Join the Community',
     subtitle: 'Create a standard site account to stay connected.',
@@ -469,7 +469,7 @@ export function AuthModal({
     </div>
   )
 
-  const roleMeta = registerRoleMeta[form.role]
+  const roleMeta = registerRoleMeta[form.role] ?? registerRoleMeta.community!
   const title = mode === 'login' ? 'Welcome Back' : roleMeta.title
   const subtitle = mode === 'login' ? 'Sign in to your community account.' : roleMeta.subtitle
   const submitLabel = mode === 'login' ? 'Login' : roleMeta.button
@@ -767,7 +767,7 @@ export function AuthModal({
                     )}
                   </div>
                   <TermsAgreement
-                    kind={form.role === 'community' ? 'website' : form.role}
+                    kind={(['student', 'parent', 'teacher', 'school'] as const).includes(form.role as 'student') ? (form.role as 'student' | 'parent' | 'teacher' | 'school') : 'website'}
                     idPrefix="auth"
                     hideSignature={form.role === 'parent'}
                     signatureName={termsSig}

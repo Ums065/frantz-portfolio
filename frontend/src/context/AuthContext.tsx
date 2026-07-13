@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { api, type AuthPayload, type Impersonator, type User } from '../lib/api'
 
-export type RegistrationRole = 'community' | 'student' | 'parent' | 'school' | 'teacher'
+export type RegistrationRole = 'community' | 'student' | 'parent' | 'school' | 'teacher' | 'business' | 'sponsor' | 'partner' | 'media' | 'volunteer'
 
 export interface RegistrationInput {
   role: RegistrationRole
@@ -36,6 +36,20 @@ export interface RegistrationInput {
   registerMode?: string
   eduSchoolEmail?: string
   schoolWebsite?: string
+  // Ecosystem roles (business / sponsor / partner / media / volunteer)
+  orgName?: string
+  website?: string
+  about?: string
+  category?: string
+  borough?: string
+  tier?: string
+  recognitionLevel?: string
+  partnerType?: string
+  outlet?: string
+  beat?: string
+  volunteerType?: string
+  areas?: string
+  availability?: string
 }
 
 interface AuthState {
@@ -205,6 +219,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           role_department: input.roleDepartment ?? '',
           grade_level_supported: input.gradeLevelSupported ?? '',
           password: input.password,
+        })
+        break
+      case 'business':
+        payload = await api.post<AuthResponseLike>('business/register', {
+          full_name: input.fullName,
+          email: input.email,
+          password: input.password,
+          business_name: input.orgName ?? '',
+          category: input.category ?? '',
+          borough: input.borough ?? '',
+          contact_phone: input.phoneNumber ?? '',
+          website: input.website ?? '',
+          about: input.about ?? '',
+        })
+        break
+      case 'sponsor':
+      case 'partner':
+      case 'media':
+      case 'volunteer':
+        payload = await api.post<AuthResponseLike>(`ecosystem/${role}/register`, {
+          full_name: input.fullName,
+          email: input.email,
+          password: input.password,
+          org_name: input.orgName ?? '',
+          contact_phone: input.phoneNumber ?? '',
+          website: input.website ?? '',
+          about: input.about ?? '',
+          // role-specific extras (the backend reads only what each role needs)
+          tier: input.tier ?? '',
+          recognition_level: input.recognitionLevel ?? '',
+          partner_type: input.partnerType ?? '',
+          outlet: input.outlet ?? '',
+          beat: input.beat ?? '',
+          volunteer_type: input.volunteerType ?? '',
+          areas: input.areas ?? '',
+          availability: input.availability ?? '',
         })
         break
       case 'community':

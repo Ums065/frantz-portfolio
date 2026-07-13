@@ -505,7 +505,7 @@ function SchoolRankBoard({ schools, mySchoolId, hidden }: { schools: any[]; mySc
   )
 }
 
-type RegistrationTag = 'community' | 'student' | 'parent' | 'school' | 'teacher'
+type RegistrationTag = 'community' | 'student' | 'parent' | 'school' | 'teacher' | 'business' | 'sponsor' | 'partner' | 'media' | 'volunteer'
 type DashboardTabKey = 'overview' | 'profile' | 'activity' | 'rankings' | 'records' | 'approvals' | 'reviews' | 'notifications' | 'data' | 'chat' | 'faq'
 type SchoolRecordsTabKey = 'students' | 'teachers' | 'interviews' | 'approvals' | 'projects'
 type DashboardTabConfig = { key: DashboardTabKey; label: string; hint: string; badge?: string }
@@ -2499,7 +2499,7 @@ export default function NewSchool() {
             <p>Choose a user tag first — the matching registration fields appear so each account type only sees the inputs it needs. Sponsors use the founding sponsor page.</p>
           </div>
 
-          <ChallengeRegistration tag={registrationTag} onTagChange={setRegistrationTag} token={token} />
+          <ChallengeRegistration tag={registrationTag} onTagChange={(t) => setRegistrationTag(t)} token={token} />
         </div>
       </section>
 
