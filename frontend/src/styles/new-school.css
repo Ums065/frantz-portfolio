@@ -899,6 +899,42 @@
   box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.12);
 }
 
+/* Register role selector — premium gold-tinted dropdown */
+.ns-role-select {
+  background: linear-gradient(180deg, rgba(201, 168, 76, 0.08), rgba(201, 168, 76, 0.02));
+  border: 1px solid rgba(201, 168, 76, 0.22);
+  border-radius: 16px;
+  padding: 16px 18px 14px;
+}
+.ns-role-select > .ns-field { gap: 9px; }
+.ns-role-select > .ns-field > span {
+  text-align: center;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--gold-light, #e7cf8a);
+  font-weight: 700;
+}
+.ns-role-select select {
+  font-size: 16px;
+  font-weight: 700;
+  color: #f6efe0;
+  padding: 15px 46px 15px 18px;
+  border-radius: 12px;
+  border: 1px solid rgba(201, 168, 76, 0.38);
+  background-color: rgba(0, 0, 0, 0.42);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23e7cf8a' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 16px center;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+  text-align: center;
+  text-align-last: center;
+}
+.ns-role-select select:hover { border-color: rgba(240, 192, 96, 0.6); }
+.ns-role-select__hint { min-height: 17px; font-style: italic; }
+
 /* Select dropdowns (e.g. "Select School") match the register popup's .field select styling */
 .ns-field select {
   background: rgba(0, 0, 0, 0.45);
