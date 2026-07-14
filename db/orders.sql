@@ -23,5 +23,6 @@ CREATE TABLE IF NOT EXISTS orders (
   payment_url TEXT DEFAULT NULL,
   payment_error TEXT DEFAULT NULL,
   status         ENUM('paid','pending','fulfilled','cancelled') NOT NULL DEFAULT 'paid',
-  created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;

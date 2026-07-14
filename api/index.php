@@ -1208,7 +1208,9 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
                 json(['error' => 'Payment could not be verified.'], 400);
             }
             storefront_ensure_orders_payment_schema();
-            storefront_mark_order_paid($orderNo, 'razorpay', 'razorpay', $paymentId, $rzpOrderId);
+            // Bind the Razorpay order id to this order (the amount is correct by
+            // construction: the Razorpay order was created server-side for this order).
+            storefront_mark_order_paid($orderNo, 'razorpay', 'razorpay', $paymentId, $rzpOrderId, ['expect_session' => $rzpOrderId]);
             json(['message' => 'Payment confirmed.', 'order_no' => $orderNo, 'payment_status' => 'paid']);
         }
 
@@ -1223,8 +1225,21 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             if (!$cap['ok'] || $cap['status'] !== 'COMPLETED') {
                 json(['error' => 'Payment has not been completed.', 'status' => $cap['status'] ?? ''], 409);
             }
+            // Pull the actually-captured amount/currency + capture id from PayPal's response.
+            $capture = $cap['data']['purchase_units'][0]['payments']['captures'][0] ?? null;
+            $capAmtMinor = null; $capCurrency = ''; $captureId = $paypalOrderId;
+            if (is_array($capture) && isset($capture['amount']['value'])) {
+                $capAmtMinor = (int) round(((float) $capture['amount']['value']) * 100);
+                $capCurrency = (string) ($capture['amount']['currency_code'] ?? '');
+                $captureId   = (string) ($capture['id'] ?? $paypalOrderId);
+            }
             storefront_ensure_orders_payment_schema();
-            storefront_mark_order_paid($orderNo, 'paypal', 'paypal', $paypalOrderId, $paypalOrderId);
+            // Bind the PayPal order id to this order + verify the captured amount/currency.
+            storefront_mark_order_paid($orderNo, 'paypal', 'paypal', $captureId, $paypalOrderId, [
+                'expect_session' => $paypalOrderId,
+                'amount_minor'   => $capAmtMinor,
+                'currency'       => $capCurrency,
+            ]);
             json(['message' => 'Payment confirmed.', 'order_no' => $orderNo, 'payment_status' => 'paid']);
         }
 

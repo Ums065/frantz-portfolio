@@ -1176,6 +1176,8 @@ function storefront_ensure_orders_payment_schema(): void
         'payment_confirmed_at' => "ALTER TABLE orders ADD COLUMN payment_confirmed_at TIMESTAMP NULL DEFAULT NULL AFTER payment_intent_id",
         'payment_url' => "ALTER TABLE orders ADD COLUMN payment_url TEXT DEFAULT NULL AFTER payment_confirmed_at",
         'payment_error' => "ALTER TABLE orders ADD COLUMN payment_error TEXT DEFAULT NULL AFTER payment_url",
+        // The confirm / mark-paid UPDATEs write updated_at; older orders tables lack it.
+        'updated_at' => "ALTER TABLE orders ADD COLUMN updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER created_at",
     ];
 
     foreach ($columns as $column => $sql) {
@@ -1401,17 +1403,64 @@ function storefront_payment_config(): array
     ];
 }
 
-/** Idempotently mark an order paid (used by razorpay-verify + paypal-capture). */
-function storefront_mark_order_paid(string $orderNo, string $provider, string $method, string $intentId, string $sessionId = ''): void
+/**
+ * Idempotently mark an order paid (used by razorpay-verify + paypal-capture).
+ *
+ * When $verify is provided the payment is validated INSIDE the row lock before
+ * the order is flipped to paid, closing the C-3/C-4 payment-binding holes:
+ *   - expect_session : the provider order id the client presented MUST equal the
+ *                      provider order id we stored for this order at checkout.
+ *                      Stops replaying a genuine payment against a different
+ *                      (more expensive) order_no.
+ *   - amount_minor / currency : the amount actually captured MUST equal the
+ *                      order total + store currency (blocks underpayment /
+ *                      wrong-currency capture).
+ *   - the provider payment/capture id must not already be attached to another
+ *     order (blocks reusing one payment for two orders).
+ */
+function storefront_mark_order_paid(string $orderNo, string $provider, string $method, string $intentId, string $sessionId = '', ?array $verify = null): void
 {
     $pdo = db();
     $pdo->beginTransaction();
     try {
-        $lk = $pdo->prepare('SELECT payment_status FROM orders WHERE order_no = ? LIMIT 1 FOR UPDATE');
+        $lk = $pdo->prepare('SELECT payment_status, payment_session_id, total FROM orders WHERE order_no = ? LIMIT 1 FOR UPDATE');
         $lk->execute([$orderNo]);
-        $cur = $lk->fetchColumn();
-        if ($cur === false) { $pdo->rollBack(); json(['error' => 'Order not found.'], 404); }
-        if ((string) $cur === 'paid') { $pdo->commit(); return; }
+        $row = $lk->fetch();
+        if (!$row) { $pdo->rollBack(); json(['error' => 'Order not found.'], 404); }
+        if ((string) $row['payment_status'] === 'paid') { $pdo->commit(); return; }
+
+        if ($verify !== null) {
+            // Bind the provider order id to THIS order.
+            $expect = (string) ($verify['expect_session'] ?? '');
+            $stored = (string) ($row['payment_session_id'] ?? '');
+            if ($expect === '' || $stored === '' || !hash_equals($stored, $expect)) {
+                $pdo->rollBack();
+                json(['error' => 'Payment does not match this order.'], 400);
+            }
+            // Amount + currency must equal the order total (when the provider gives them).
+            if (array_key_exists('amount_minor', $verify) && $verify['amount_minor'] !== null) {
+                $orderMinor = (int) round(((float) $row['total']) * 100);
+                if ((int) $verify['amount_minor'] !== $orderMinor) {
+                    $pdo->rollBack();
+                    json(['error' => 'Paid amount does not match the order total.'], 400);
+                }
+                $cur = strtoupper((string) ($verify['currency'] ?? ''));
+                if ($cur !== '' && $cur !== strtoupper(storefront_currency())) {
+                    $pdo->rollBack();
+                    json(['error' => 'Payment currency does not match the order.'], 400);
+                }
+            }
+            // One provider payment id may only ever settle a single order.
+            if ($intentId !== '') {
+                $dup = $pdo->prepare('SELECT COUNT(*) FROM orders WHERE payment_intent_id = ? AND order_no <> ?');
+                $dup->execute([$intentId, $orderNo]);
+                if ((int) $dup->fetchColumn() > 0) {
+                    $pdo->rollBack();
+                    json(['error' => 'This payment has already been used.'], 409);
+                }
+            }
+        }
+
         $pdo->prepare(
             'UPDATE orders SET status = ?, payment_status = ?, payment_provider = ?, payment_method = ?,
                     payment_intent_id = ?, payment_session_id = COALESCE(NULLIF(?, ""), payment_session_id),

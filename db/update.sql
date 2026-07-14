@@ -1112,6 +1112,7 @@ CREATE TABLE IF NOT EXISTS `orders` (
   `payment_error` text,
   `status` enum('paid','pending','fulfilled','cancelled') NOT NULL DEFAULT 'paid',
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `order_no` (`order_no`),
   CONSTRAINT `orders_chk_1` CHECK (json_valid(`items`))
@@ -1137,6 +1138,7 @@ CALL add_column_if_missing('orders', 'payment_url', 'text', 'payment_confirmed_a
 CALL add_column_if_missing('orders', 'payment_error', 'text', 'payment_url');
 CALL add_column_if_missing('orders', 'status', 'enum(''paid'',''pending'',''fulfilled'',''cancelled'') NOT NULL DEFAULT ''paid''', 'payment_error');
 CALL add_column_if_missing('orders', 'created_at', 'timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP', 'status');
+CALL add_column_if_missing('orders', 'updated_at', 'timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP', 'created_at');
 
 -- ---------- partner_settings ----------
 CREATE TABLE IF NOT EXISTS `partner_settings` (
