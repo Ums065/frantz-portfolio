@@ -2388,10 +2388,24 @@ section.block {
   object-fit: cover;
 }
 /* Media Gallery (uniform variant): show the FULL image, never crop — on laptop,
-   desktop and phone. High-specificity (.gallery.gallery--uniform …) so these win
-   over the plain .gallery responsive rules that force a fixed row height. */
-.gallery.gallery--uniform { grid-auto-rows: auto; align-items: start; }
-.gallery.gallery--uniform .cell { height: auto; display: block; }
+   desktop and phone. Laid out as a tidy MASONRY (CSS columns) so images of
+   different aspect ratios pack together without leaving grid gaps. High
+   specificity (.gallery.gallery--uniform …) so these win over the plain
+   .gallery grid/responsive rules. */
+.gallery.gallery--uniform {
+  display: block;
+  column-count: 3;
+  column-gap: 16px;
+  grid-auto-rows: auto;
+}
+.gallery.gallery--uniform .cell {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 0 0 16px;
+  break-inside: avoid;
+  -webkit-column-break-inside: avoid;
+}
 .gallery.gallery--uniform .cell > img {
   position: static;
   width: 100%;
@@ -2400,6 +2414,8 @@ section.block {
   display: block;
 }
 .gallery.gallery--uniform .cell .cap { position: absolute; left: 0; right: 0; bottom: 0; }
+@media (max-width: 900px) { .gallery.gallery--uniform { column-count: 2; } }
+@media (max-width: 560px) { .gallery.gallery--uniform { column-count: 1; } }
 .gallery .cell::after {
   content: '';
   position: absolute;
