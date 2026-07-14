@@ -2387,6 +2387,19 @@ section.block {
   height: 100%;
   object-fit: cover;
 }
+/* Media Gallery (uniform variant): show the FULL image, never crop — on laptop,
+   desktop and phone. High-specificity (.gallery.gallery--uniform …) so these win
+   over the plain .gallery responsive rules that force a fixed row height. */
+.gallery.gallery--uniform { grid-auto-rows: auto; align-items: start; }
+.gallery.gallery--uniform .cell { height: auto; display: block; }
+.gallery.gallery--uniform .cell > img {
+  position: static;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+  display: block;
+}
+.gallery.gallery--uniform .cell .cap { position: absolute; left: 0; right: 0; bottom: 0; }
 .gallery .cell::after {
   content: '';
   position: absolute;

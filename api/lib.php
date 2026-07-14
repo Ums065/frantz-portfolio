@@ -585,6 +585,101 @@ function site_visits_ensure_schema(): void
     $ready = true;
 }
 
+/* ---------- Community media gallery (public + admin) ---------- */
+
+/** Self-healing schema for the community gallery submission + file tables. */
+function gallery_ensure_schema(): void
+{
+    static $ready = false;
+    if ($ready) return;
+    $pdo = db();
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS gallery_submissions (
+            id             INT AUTO_INCREMENT PRIMARY KEY,
+            user_id        INT DEFAULT NULL,
+            submitter_name VARCHAR(160) NOT NULL,
+            submitter_email VARCHAR(160) NOT NULL,
+            organization   VARCHAR(180) DEFAULT NULL,
+            message        TEXT DEFAULT NULL,
+            overall_status ENUM('pending_review','partially_approved','approved','rejected') NOT NULL DEFAULT 'pending_review',
+            created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_gallery_submissions_status (overall_status, created_at),
+            INDEX idx_gallery_submissions_user (user_id, created_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS gallery_submission_files (
+            id               INT AUTO_INCREMENT PRIMARY KEY,
+            submission_id    INT NOT NULL,
+            original_name    VARCHAR(255) NOT NULL,
+            display_title    VARCHAR(180) NOT NULL,
+            file_url         VARCHAR(255) NOT NULL,
+            mime_type        VARCHAR(120) NOT NULL,
+            media_kind       ENUM('image','video') NOT NULL,
+            size_bytes       BIGINT NOT NULL DEFAULT 0,
+            approval_status  ENUM('pending_review','approved','rejected') NOT NULL DEFAULT 'pending_review',
+            reviewed_by_user_id INT DEFAULT NULL,
+            reviewed_by_name VARCHAR(160) DEFAULT NULL,
+            reviewed_at      TIMESTAMP NULL DEFAULT NULL,
+            approved_at      TIMESTAMP NULL DEFAULT NULL,
+            rejected_at      TIMESTAMP NULL DEFAULT NULL,
+            created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_gallery_files_submission (submission_id, created_at),
+            INDEX idx_gallery_files_status (approval_status, media_kind, created_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+    $ready = true;
+}
+
+/** Build one admin gallery row: the submission fields + its already-formatted files. */
+function gallery_admin_submission_row(array $s, array $files): array
+{
+    return [
+        'id'              => (int) $s['id'],
+        'user_id'         => isset($s['user_id']) && $s['user_id'] !== null ? (int) $s['user_id'] : null,
+        'submitter_name'  => (string) $s['submitter_name'],
+        'submitter_email' => (string) $s['submitter_email'],
+        'organization'    => ($s['organization'] ?? '') !== '' ? (string) $s['organization'] : null,
+        'message'         => ($s['message'] ?? '') !== '' ? (string) $s['message'] : null,
+        'overall_status'  => (string) $s['overall_status'],
+        'created_at'      => $s['created_at'] ?? null,
+        'updated_at'      => $s['updated_at'] ?? null,
+        'files'           => $files,
+    ];
+}
+
+/** Public gallery payload: approved image + video files with contributor credit. */
+function gallery_public_payload(): array
+{
+    gallery_ensure_schema();
+    $rows = db()->query(
+        'SELECT f.id, f.submission_id, f.display_title, f.original_name, f.file_url, f.mime_type,
+                f.media_kind, f.size_bytes, s.submitter_name AS credit_name, s.organization AS credit_organization,
+                s.created_at AS submitted_at, f.approved_at
+         FROM gallery_submission_files f
+         JOIN gallery_submissions s ON s.id = f.submission_id
+         WHERE f.approval_status = "approved"
+         ORDER BY f.approved_at DESC, f.id DESC'
+    )->fetchAll() ?: [];
+    $items = array_map(static fn(array $r): array => [
+        'id'                  => (int) $r['id'],
+        'submission_id'       => (int) $r['submission_id'],
+        'display_title'       => (string) $r['display_title'],
+        'original_name'       => (string) $r['original_name'],
+        'file_url'            => (string) $r['file_url'],
+        'mime_type'           => (string) $r['mime_type'],
+        'media_kind'          => (string) $r['media_kind'],
+        'size_bytes'          => (int) $r['size_bytes'],
+        'credit_name'         => (string) $r['credit_name'],
+        'credit_organization' => ($r['credit_organization'] ?? '') !== '' ? (string) $r['credit_organization'] : null,
+        'submitted_at'        => $r['submitted_at'] ?? null,
+        'approved_at'         => $r['approved_at'] ?? null,
+    ], $rows);
+    return ['items' => $items];
+}
+
 /** Record one page view. Best-effort: callers swallow errors so tracking never breaks a page. */
 function site_visits_record(string $path, string $visitorToken, ?string $referrer, ?string $userAgent, ?int $userId = null): void
 {
