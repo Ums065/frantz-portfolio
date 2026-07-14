@@ -1,3 +1,10 @@
+# Security: never serve dotfiles (.env, .env.example, .htaccess) or raw config /
+# database / backup files. Without this, `.env` is a real file so the rewrite
+# below skips it and Apache hands out the secrets verbatim. Apache 2.4 syntax.
+<FilesMatch "(^\.|\.(env|ini|log|sql|sqlite|db|bak|old|orig|swp|sh)$)">
+    Require all denied
+</FilesMatch>
+
 RewriteEngine On
 
 # Route everything (that isn't a real file/dir) to the front controller.

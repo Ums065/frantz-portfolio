@@ -4,6 +4,13 @@
 
 Options -Indexes
 
+# Security (defense in depth): never serve dotfiles or raw config / database /
+# backup files anywhere under the web root. api/.htaccess repeats this for the
+# API directory. Apache 2.4 syntax.
+<FilesMatch "(^\.|\.(env|ini|log|sql|sqlite|db|bak|old|orig|swp|sh)$)">
+    Require all denied
+</FilesMatch>
+
 <IfModule mod_rewrite.c>
   RewriteEngine On
 
