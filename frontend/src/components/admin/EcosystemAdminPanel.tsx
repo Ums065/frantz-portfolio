@@ -145,7 +145,7 @@ function Announcer({ anns, setAnns }: { anns: EcoAnn[]; setAnns: (a: EcoAnn[]) =
     <div style={{ display: 'grid', gap: 12 }}>
       <div style={{ ...card, display: 'grid', gap: 10 }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12 }}>
-          <div><label style={lbl}>Audience</label><select style={inp} value={audience} onChange={(e) => setAudience(e.target.value)}>{['all', 'sponsor', 'partner', 'media', 'volunteer'].map((a) => <option key={a} value={a}>{a}</option>)}</select></div>
+          <div><label style={lbl}>Audience</label><select style={inp} value={audience} onChange={(e) => setAudience(e.target.value)}>{['all', 'sponsor', 'partner', 'media', 'volunteer', 'business', 'community'].map((a) => <option key={a} value={a}>{a}</option>)}</select></div>
           <div style={{ gridColumn: '1 / -1' }}><label style={lbl}>Title</label><input style={inp} value={title} onChange={(e) => setTitle(e.target.value)} /></div>
         </div>
         <div><label style={lbl}>Body</label><textarea style={{ ...inp, minHeight: 70, resize: 'vertical' }} value={body} onChange={(e) => setBody(e.target.value)} /></div>

@@ -330,6 +330,8 @@ try {
                 'requests' => $requests,
                 'orders' => $orders,
                 'rsvps' => $rsvps,
+                // Admin announcements targeted to the community (audience 'community' or 'all').
+                'announcements' => ecosystem_announcements_for_role('community'),
             ]);
         }
 

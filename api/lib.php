@@ -3591,6 +3591,10 @@ function business_dashboard_payload(array $user): array
             'solutions' => $solutions,
         ],
         'requests' => business_requests_for_user($userId),
+        // Admin-issued documents + business-targeted announcements (parity with the
+        // ecosystem dashboards) so admin can push docs/updates to businesses too.
+        'documents' => ecosystem_documents_for_user($userId),
+        'announcements' => ecosystem_announcements_for_role('business'),
     ];
 }
 
@@ -3991,7 +3995,15 @@ function ecosystem_referral_breakdown(string $code): array
 function ecosystem_accounts_list(): array
 {
     ecosystem_shared_ensure_schema();
-    return db()->query("SELECT ea.user_id, ea.role, ea.org_name, u.email, u.approval_status FROM ecosystem_accounts ea JOIN users u ON u.id = ea.user_id ORDER BY ea.role, ea.org_name")->fetchAll() ?: [];
+    // Ecosystem accounts + business accounts, so admin can issue documents to any of them.
+    $rows = db()->query("SELECT ea.user_id, ea.role, ea.org_name, u.email, u.approval_status FROM ecosystem_accounts ea JOIN users u ON u.id = ea.user_id")->fetchAll() ?: [];
+    try {
+        business_ensure_schema();
+        $biz = db()->query("SELECT ba.user_id, 'business' AS role, ba.business_name AS org_name, u.email, u.approval_status FROM business_accounts ba JOIN users u ON u.id = ba.user_id")->fetchAll() ?: [];
+        $rows = array_merge($rows, $biz);
+    } catch (Throwable $e) { if (app_debug()) error_log('ecosystem_accounts_list business: ' . $e->getMessage()); }
+    usort($rows, static fn($a, $b) => [$a['role'], $a['org_name']] <=> [$b['role'], $b['org_name']]);
+    return $rows;
 }
 function ecosystem_requests_all(): array
 {
@@ -4015,7 +4027,7 @@ function ecosystem_document_delete(int $id): void { ecosystem_shared_ensure_sche
 function ecosystem_announcement_add(string $audience, string $title, string $body): void
 {
     ecosystem_shared_ensure_schema();
-    $audience = in_array($audience, ['all', 'sponsor', 'partner', 'media', 'volunteer'], true) ? $audience : 'all';
+    $audience = in_array($audience, ['all', 'sponsor', 'partner', 'media', 'volunteer', 'business', 'community'], true) ? $audience : 'all';
     db()->prepare('INSERT INTO ecosystem_announcements (audience, title, body) VALUES (?,?,?)')->execute([$audience, mb_substr($title, 0, 180), mb_substr($body, 0, 4000) ?: null]);
 }
 function ecosystem_announcements_all(): array

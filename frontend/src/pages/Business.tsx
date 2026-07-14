@@ -64,14 +64,18 @@ interface BizRequest {
   created_ts: number
 }
 interface BizProfile { business_name: string; category: string | null; borough: string | null; contact_name: string | null; contact_phone: string | null; website: string | null; about: string | null }
+interface BizDoc { id: number; doc_type: string; label: string; file_url: string; created_ts: number }
+interface BizAnn { id: number; title: string; body: string; created_ts: number }
 interface BizDashboard {
   profile: BizProfile | null
   interviews: BizInterview[]
   impact: { interviews: number; students: number; solutions: number }
   requests: BizRequest[]
+  documents?: BizDoc[]
+  announcements?: BizAnn[]
 }
 
-type Tab = 'interviews' | 'solutions' | 'requests' | 'profile'
+type Tab = 'interviews' | 'solutions' | 'requests' | 'updates' | 'profile'
 
 const REQ_LABEL: Record<ReqType, string> = {
   implementation: 'Implementation Help',
@@ -273,11 +277,15 @@ export default function Business() {
   const impact = data?.impact ?? { interviews: 0, students: 0, solutions: 0 }
   const interviews = data?.interviews ?? []
   const requests = data?.requests ?? []
+  const documents = data?.documents ?? []
+  const announcements = data?.announcements ?? []
   const solutionInterviews = interviews.filter((i) => i.solution)
+  const updatesCount = documents.length + announcements.length
   const NAV: Array<{ key: Tab; label: string }> = [
     { key: 'interviews', label: `Interviews (${interviews.length})` },
     { key: 'solutions', label: `Student Solutions (${solutionInterviews.length})` },
     { key: 'requests', label: `My Requests (${requests.length})` },
+    { key: 'updates', label: `Updates${updatesCount ? ` (${updatesCount})` : ''}` },
     { key: 'profile', label: 'Business Profile' },
   ]
   const openReq = (d: ReqDraft) => { setReqErr(''); setDraft(d) }
@@ -382,6 +390,43 @@ export default function Business() {
                     {r.admin_note && <p style={{ color: 'var(--gold-light)', margin: '8px 0 0', fontSize: 13 }}><strong>Admin:</strong> {r.admin_note}</p>}
                   </div>
                 ))}
+            </div>
+          )}
+
+          {tab === 'updates' && (
+            <div style={{ display: 'grid', gap: 20 }}>
+              <div>
+                <h3 className="gold-text" style={{ fontFamily: 'var(--f-serif)', margin: '0 0 10px' }}>Announcements</h3>
+                {announcements.length === 0
+                  ? <Empty text="No announcements yet. Program updates from the admin will appear here." />
+                  : <div style={{ display: 'grid', gap: 12 }}>
+                      {announcements.map((a) => (
+                        <div key={a.id} style={cardS}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+                            <strong className="gold-text" style={{ fontSize: 15 }}>{a.title}</strong>
+                            <span style={{ color: 'var(--muted)', fontSize: 12 }}>{fmtDate(a.created_ts)}</span>
+                          </div>
+                          {a.body && <p style={{ color: '#d8d3c6', margin: '8px 0 0', lineHeight: 1.55, fontSize: 13.5 }}>{a.body}</p>}
+                        </div>
+                      ))}
+                    </div>}
+              </div>
+              <div>
+                <h3 className="gold-text" style={{ fontFamily: 'var(--f-serif)', margin: '0 0 10px' }}>Documents</h3>
+                {documents.length === 0
+                  ? <Empty text="No documents yet. Files the admin issues to your business (agreements, certificates, invoices) will appear here." />
+                  : <div style={{ display: 'grid', gap: 10 }}>
+                      {documents.map((d) => (
+                        <div key={d.id} style={{ ...cardS, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                          <div>
+                            <div style={{ fontWeight: 700 }}>{d.label}</div>
+                            <div style={{ color: 'var(--muted)', fontSize: 12 }}>{d.doc_type} · {fmtDate(d.created_ts)}</div>
+                          </div>
+                          <a className="btn btn--sm" href={d.file_url} target="_blank" rel="noreferrer">Download</a>
+                        </div>
+                      ))}
+                    </div>}
+              </div>
             </div>
           )}
 

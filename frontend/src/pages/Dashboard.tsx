@@ -25,6 +25,7 @@ interface DashboardData {
   requests: UserRequestRow[]
   orders: UserOrderRow[]
   rsvps: EventRsvpRow[]
+  announcements?: { id: number; title: string; body: string; created_ts: number }[]
 }
 
 const isAdmin = (role?: string) => ['admin', 'super_admin', 'editor'].includes(role || '')
@@ -315,6 +316,19 @@ export default function Dashboard() {
                     <Link className="btn btn--sm" to="/media">Media</Link>
                   </div>
                 </div>
+                {(data?.announcements?.length ?? 0) > 0 && (
+                  <div className="dashboard-card">
+                    <h3>Program Announcements</h3>
+                    <div style={{ display: 'grid', gap: 12 }}>
+                      {data!.announcements!.map((a) => (
+                        <div key={a.id}>
+                          <strong className="gold-text">{a.title}</strong>
+                          {a.body && <p style={{ margin: '4px 0 0' }}>{a.body}</p>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
               <div className="dashboard-notifications" style={{ marginTop: 22 }}>
                 <div className="dashboard-section-head">
