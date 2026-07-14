@@ -5,6 +5,9 @@
     Require all denied
 </FilesMatch>
 
+# L5: no directory listings under the API.
+Options -Indexes
+
 RewriteEngine On
 
 # Route everything (that isn't a real file/dir) to the front controller.

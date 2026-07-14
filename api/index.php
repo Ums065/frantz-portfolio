@@ -32,6 +32,7 @@ try {
         /* ---------------- AUTH ---------------- */
         // Temporary bypass: direct register/login is enabled and verification is disabled.
         case $key === 'POST auth/register': {
+            rate_limit('auth_register', 12, 3600); // H2: cap sign-ups per IP
             $b    = body();
             $name = require_name_field(field($b, 'full_name') ?: field($b, 'name'), 'Full name', 3);
             $email = require_email(field($b, 'email'));
@@ -128,6 +129,7 @@ try {
         }
 
         case $key === 'POST auth/login': {
+            rate_limit('auth_login', 12, 900); // H2: throttle password brute-force per IP
             $b     = body();
             $email = require_email(field($b, 'email'));
             $pass  = field($b, 'password');
@@ -213,6 +215,7 @@ try {
         }
 
         case $key === 'POST auth/reset-password': {
+            rate_limit('auth_reset', 10, 900); // H2: throttle reset-token guessing
             $b = body();
             $token = trim((string) field($b, 'token'));
             $pass = (string) field($b, 'password');
@@ -248,6 +251,7 @@ try {
         }
 
         case $key === 'POST auth/admin-login': {
+            rate_limit('admin_login', 8, 900); // H2: strict throttle on the admin login
             $b     = body();
             $email = require_email(field($b, 'email'));
             $pass  = field($b, 'password');
@@ -1155,59 +1159,28 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
                 json(['error' => 'Payment session does not match the order reference.'], 422);
             }
 
-            $pdo = db();
-            $pdo->beginTransaction();
-            try {
-                $lookup = $pdo->prepare('SELECT * FROM orders WHERE order_no = ? LIMIT 1 FOR UPDATE');
-                $lookup->execute([$orderNo]);
-                $order = $lookup->fetch();
-                if (!$order) {
-                    $pdo->rollBack();
-                    json(['error' => 'Order not found.'], 404);
+            // L1: bind + amount-check the Stripe confirmation the same way as Razorpay/
+            // PayPal — go through storefront_mark_order_paid() instead of a bespoke UPDATE.
+            $paymentIntentId = '';
+            if (isset($session['payment_intent'])) {
+                if (is_string($session['payment_intent'])) {
+                    $paymentIntentId = $session['payment_intent'];
+                } elseif (is_array($session['payment_intent']) && isset($session['payment_intent']['id'])) {
+                    $paymentIntentId = (string) $session['payment_intent']['id'];
                 }
-                if ((string) ($order['payment_status'] ?? '') === 'paid') {
-                    $pdo->commit();
-                    json([
-                        'message' => 'Payment already confirmed.',
-                        'order_no' => $orderNo,
-                    ]);
-                }
-
-                $update = $pdo->prepare(
-                    'UPDATE orders
-                     SET status = ?, payment_status = ?, payment_provider = ?, payment_method = ?, payment_intent_id = ?,
-                         payment_confirmed_at = NOW(), updated_at = NOW()
-                     WHERE order_no = ?'
-                );
-                $paymentIntentId = '';
-                if (isset($session['payment_intent'])) {
-                    if (is_string($session['payment_intent'])) {
-                        $paymentIntentId = $session['payment_intent'];
-                    } elseif (is_array($session['payment_intent']) && isset($session['payment_intent']['id'])) {
-                        $paymentIntentId = (string) $session['payment_intent']['id'];
-                    }
-                }
-                $update->execute([
-                    'paid',
-                    'paid',
-                    'stripe',
-                    'stripe_checkout',
-                    $paymentIntentId !== '' ? $paymentIntentId : null,
-                    $orderNo,
-                ]);
-
-                $pdo->commit();
-                json([
-                    'message' => 'Payment confirmed.',
-                    'order_no' => $orderNo,
-                    'payment_status' => 'paid',
-                ]);
-            } catch (Throwable $e) {
-                if ($pdo->inTransaction()) {
-                    $pdo->rollBack();
-                }
-                throw $e;
             }
+            $capAmtMinor = isset($session['amount_total']) ? (int) $session['amount_total'] : null;
+            $capCurrency = strtoupper((string) ($session['currency'] ?? ''));
+            storefront_mark_order_paid($orderNo, 'stripe', 'stripe_checkout', $paymentIntentId !== '' ? $paymentIntentId : $sessionId, $sessionId, [
+                'expect_session' => $sessionId,
+                'amount_minor'   => $capAmtMinor,
+                'currency'       => $capCurrency,
+            ]);
+            json([
+                'message' => 'Payment confirmed.',
+                'order_no' => $orderNo,
+                'payment_status' => 'paid',
+            ]);
         }
 
         // Razorpay: verify the payment signature client-side handshake returned, then mark paid.
@@ -2246,6 +2219,11 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             $target = $stmt->fetch();
             if (!$target) {
                 json(['error' => 'User not found.'], 404);
+            }
+            // L3: never impersonate an admin-tier account (prevents a lower admin/editor
+            // from assuming another admin or super_admin's session).
+            if (in_array((string) $target['role'], ['admin', 'super_admin', 'editor'], true)) {
+                json(['error' => 'Administrator accounts cannot be impersonated.'], 403);
             }
             start_impersonation((int) $admin['id'], $targetId);
             json([

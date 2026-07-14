@@ -13,10 +13,16 @@ $isCli = PHP_SAPI === 'cli';
 
 // ---- Session ----
 if (!$isCli) {
+    // L4: mark the session cookie Secure when the request is HTTPS — detected
+    // directly OR via a TLS-terminating proxy (X-Forwarded-Proto) — and always
+    // in production, so the session cookie is never issued over plaintext.
+    $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+        || strtolower((string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')) === 'https'
+        || strtolower((string) env('APP_ENV', 'local')) === 'production';
     session_set_cookie_params([
         'httponly' => true,
         'samesite' => 'Lax',
-        'secure'   => (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off'),
+        'secure'   => $isHttps,
     ]);
     session_name(env('SESSION_NAME', 'FC_SESSION'));
     session_start();

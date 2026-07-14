@@ -2365,8 +2365,13 @@ function new_school_handle_route(string $method, string $route): bool
             } elseif ($user['role'] === 'parent') {
                 $parent = new_school_fetch_parent_by_user_id((int) $user['id']);
                 $student = $parent ? new_school_fetch_student_by_id((int) $parent['student_id']) : null;
-            } elseif ($studentId > 0) {
+            } elseif (in_array($user['role'], ['admin', 'super_admin', 'editor'], true) && $studentId > 0) {
+                // H1: only staff may act on an arbitrary student_id. Previously ANY
+                // approved role (business/sponsor/etc.) could create/overwrite interview
+                // records for any student and manipulate ranking points (BOLA).
                 $student = new_school_fetch_student_by_id($studentId);
+            } else {
+                json(['error' => 'You are not allowed to add an interview for this student.'], 403);
             }
 
             if (!$student) {

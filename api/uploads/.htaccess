@@ -1,0 +1,15 @@
+# L2: uploaded files are user-supplied — never execute or list them.
+# (Exploitation is already blocked upstream by server-forced safe extensions;
+#  this is defense-in-depth so a future upload path can't lead to RCE.)
+Options -Indexes -ExecCGI
+
+# Deny serving/executing any script type outright.
+<FilesMatch "\.(php[0-9]?|phtml|phar|phps|cgi|pl|py|sh|asp|aspx|jsp|htaccess)$">
+    Require all denied
+</FilesMatch>
+
+# Belt-and-suspenders: strip script handlers and turn the PHP engine off here.
+RemoveHandler .php .phtml .phar .php3 .php4 .php5 .php7 .cgi .pl .py
+<IfModule mod_php.c>
+    php_admin_flag engine off
+</IfModule>
