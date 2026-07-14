@@ -1230,6 +1230,17 @@ CALL add_column_if_missing('posts', 'is_featured', 'tinyint(1) NOT NULL DEFAULT 
 CALL add_column_if_missing('posts', 'published_at', 'date DEFAULT NULL', 'is_featured');
 CALL add_column_if_missing('posts', 'created_at', 'timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP', 'published_at');
 
+-- ---------- rate_limits ----------
+CREATE TABLE IF NOT EXISTS `rate_limits` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `bucket` varchar(140) NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_rate_bucket` (`bucket`,`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+CALL add_column_if_missing('rate_limits', 'bucket', 'varchar(140) NOT NULL', 'id');
+CALL add_column_if_missing('rate_limits', 'created_at', 'timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP', 'bucket');
+
 -- ---------- requests ----------
 CREATE TABLE IF NOT EXISTS `requests` (
   `id` int NOT NULL AUTO_INCREMENT,

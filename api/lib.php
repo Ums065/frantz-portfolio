@@ -134,6 +134,60 @@ function current_user(): ?array
     }
 }
 
+/** Self-healing store for the sliding-window rate limiter. */
+function rate_limit_ensure_schema(): void
+{
+    static $ready = false;
+    if ($ready) return;
+    try {
+        db()->exec(
+            "CREATE TABLE IF NOT EXISTS rate_limits (
+                id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                bucket VARCHAR(140) NOT NULL,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_rate_bucket (bucket, created_at)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+        );
+    } catch (Throwable $e) {
+        if (app_debug()) error_log('rate_limit_ensure_schema: ' . $e->getMessage());
+    }
+    $ready = true;
+}
+
+/**
+ * Sliding-window rate limit. Sends HTTP 429 and exits when the caller has made
+ * >= $max requests to $action within the last $windowSeconds. Keyed on $id
+ * (defaults to client IP). Fails OPEN on limiter/database errors so a limiter
+ * fault never takes the app down. $windowSeconds/$max are trusted ints (never
+ * from user input) so the interval is safe to inline.
+ */
+function rate_limit(string $action, int $max, int $windowSeconds, ?string $id = null): void
+{
+    rate_limit_ensure_schema();
+    $bucket = mb_substr($action . ':' . ($id ?: (client_ip() ?: 'unknown')), 0, 140);
+    $w = max(1, (int) $windowSeconds);
+    try {
+        $pdo = db();
+        // Opportunistic cleanup of rows well past the window.
+        $pdo->exec('DELETE FROM rate_limits WHERE created_at < (NOW() - INTERVAL ' . ($w * 4) . ' SECOND)');
+        $c = $pdo->prepare('SELECT COUNT(*) FROM rate_limits WHERE bucket = ? AND created_at >= (NOW() - INTERVAL ' . $w . ' SECOND)');
+        $c->execute([$bucket]);
+        if ((int) $c->fetchColumn() >= max(1, $max)) {
+            json(['error' => 'Too many requests. Please slow down and try again in a little while.'], 429);
+        }
+        $pdo->prepare('INSERT INTO rate_limits (bucket) VALUES (?)')->execute([$bucket]);
+    } catch (Throwable $e) {
+        if (app_debug()) error_log('rate_limit: ' . $e->getMessage());
+        // fail open
+    }
+}
+
+/** Whether email verification is enforced (default off preserves current behavior). */
+function email_verification_required(): bool
+{
+    return filter_var(env('EMAIL_VERIFICATION_REQUIRED', 'false'), FILTER_VALIDATE_BOOLEAN);
+}
+
 /** Require a logged-in user (any role) or fail 401. */
 function require_login(): array
 {
@@ -1401,6 +1455,51 @@ function storefront_payment_config(): array
         'razorpay_key_id' => storefront_razorpay_enabled() ? storefront_razorpay_key_id() : '',
         'paypal_client_id' => storefront_paypal_enabled() ? storefront_paypal_client_id() : '',
     ];
+}
+
+/** Add the given order's line quantities back to inventory (used on release/cancel). */
+function storefront_restock_order(PDO $pdo, array $order): void
+{
+    $items = json_decode((string) ($order['items'] ?? '[]'), true);
+    if (!is_array($items)) return;
+    $up = $pdo->prepare('UPDATE store_inventory SET stock = stock + ? WHERE product_id = ?');
+    foreach ($items as $it) {
+        $pid = (string) ($it['product_id'] ?? '');
+        $qty = (int) ($it['qty'] ?? $it['quantity'] ?? 0);
+        if ($pid !== '' && $qty > 0) $up->execute([$qty, $pid]);
+    }
+}
+
+/**
+ * Release stock reserved by orders that were never paid. Checkout decrements
+ * stock up-front (a reservation); if the buyer abandons payment this returns the
+ * stock after $maxAgeMinutes and marks the order cancelled — closing the
+ * "anonymous checkout depletes stock forever" hole (M-3) without a cron.
+ * Best-effort: swallows errors so it never blocks a real checkout.
+ */
+function storefront_release_expired_reservations(int $maxAgeMinutes = 30): void
+{
+    try {
+        $pdo = db();
+        $pdo->beginTransaction();
+        $age = max(1, $maxAgeMinutes);
+        $sel = $pdo->query(
+            "SELECT id, items FROM orders
+             WHERE payment_status = 'pending' AND status = 'pending'
+               AND created_at < (NOW() - INTERVAL $age MINUTE)
+             FOR UPDATE"
+        );
+        $stale = $sel->fetchAll();
+        foreach ($stale as $order) {
+            storefront_restock_order($pdo, $order);
+            $pdo->prepare("UPDATE orders SET status = 'cancelled', payment_status = 'failed', updated_at = NOW() WHERE id = ?")
+                ->execute([(int) $order['id']]);
+        }
+        $pdo->commit();
+    } catch (Throwable $e) {
+        if (db()->inTransaction()) db()->rollBack();
+        if (app_debug()) error_log('release_expired_reservations: ' . $e->getMessage());
+    }
 }
 
 /**

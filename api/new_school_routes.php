@@ -811,23 +811,54 @@ function new_school_handle_route(string $method, string $route): bool
         }
 
         case preg_match('#^GET new-school/student/([0-9]{8})$#', $key, $m) === 1: {
+            // M-1: throttle to blunt id-space enumeration of the public lookup.
+            rate_limit('ns_student_lookup', 40, 3600);
             $student = new_school_fetch_student_by_participant_id($m[1]);
             if (!$student) {
                 json(['error' => 'Student not found.'], 404);
             }
 
-            $school = !empty($student['school_id'])
-                ? new_school_fetch_school_by_id((int) $student['school_id'])
-                : new_school_fetch_school_by_name((string) ($student['school_name'] ?? ''));
-            $teacher = !empty($student['teacher_id'])
-                ? new_school_fetch_teacher_by_id((int) $student['teacher_id'])
-                : null;
+            // M-1: this route is intentionally public so a not-yet-registered parent can
+            // confirm their child's NAME during consent. Everyone gets the minimal
+            // {id, full_name, participant_id}; the full profile (school, grade, teacher,
+            // approval statuses) is disclosed ONLY to the student themselves, their
+            // teacher/school, or an admin — preventing anonymous PII harvesting by
+            // walking the 8-digit id space.
+            $viewer = current_user();
+            $vrole = (string) ($viewer['role'] ?? '');
+            $vid = (int) ($viewer['id'] ?? 0);
+            $authorized = false;
+            if ($viewer) {
+                if (in_array($vrole, ['admin', 'super_admin', 'editor'], true)) {
+                    $authorized = true;
+                } elseif ((int) ($student['user_id'] ?? 0) === $vid && $vid > 0) {
+                    $authorized = true;
+                } else {
+                    if (!empty($student['teacher_id'])) {
+                        $t = new_school_fetch_teacher_by_id((int) $student['teacher_id']);
+                        if ($t && (int) ($t['user_id'] ?? 0) === $vid) $authorized = true;
+                    }
+                    if (!$authorized && !empty($student['school_id'])) {
+                        $sc = new_school_fetch_school_by_id((int) $student['school_id']);
+                        if ($sc && (int) ($sc['user_id'] ?? 0) === $vid) $authorized = true;
+                    }
+                }
+            }
 
-            json([
-                'student' => [
-                    'id' => (int) $student['id'],
-                    'full_name' => (string) $student['full_name'],
-                    'participant_id' => (string) $student['participant_id'],
+            $payload = ['student' => [
+                'id' => (int) $student['id'],
+                'full_name' => (string) $student['full_name'],
+                'participant_id' => (string) $student['participant_id'],
+            ]];
+
+            if ($authorized) {
+                $school = !empty($student['school_id'])
+                    ? new_school_fetch_school_by_id((int) $student['school_id'])
+                    : new_school_fetch_school_by_name((string) ($student['school_name'] ?? ''));
+                $teacher = !empty($student['teacher_id'])
+                    ? new_school_fetch_teacher_by_id((int) $student['teacher_id'])
+                    : null;
+                $payload['student'] += [
                     'school_id' => (int) ($student['school_id'] ?? 0),
                     'teacher_id' => (int) ($student['teacher_id'] ?? 0),
                     'school_name' => (string) $student['school_name'],
@@ -835,20 +866,22 @@ function new_school_handle_route(string $method, string $route): bool
                     'parent_consent_status' => (string) $student['parent_consent_status'],
                     'school_approval_status' => (string) $student['school_approval_status'],
                     'teacher_approval_status' => (string) $student['teacher_approval_status'],
-                ],
-                'school' => $school ? [
+                ];
+                $payload['school'] = $school ? [
                     'id' => (int) $school['id'],
                     'school_name' => (string) $school['school_name'],
                     'school_district' => (string) $school['school_district'],
                     'status' => (string) $school['status'],
-                ] : null,
-                'teacher' => $teacher ? [
+                ] : null;
+                $payload['teacher'] = $teacher ? [
                     'id' => (int) $teacher['id'],
                     'teacher_full_name' => (string) $teacher['teacher_full_name'],
                     'status' => (string) $teacher['status'],
                     'school_id' => (int) ($teacher['school_id'] ?? 0),
-                ] : null,
-            ]);
+                ] : null;
+            }
+
+            json($payload);
         }
 
         case $method === 'POST' && preg_match('#^new-school/notifications/(\d+)/read$#', $route, $m) === 1: {
@@ -2724,6 +2757,9 @@ function new_school_handle_route(string $method, string $route): bool
         }
 
         case $key === 'POST new-school/upload': {
+            // M-2: this endpoint is reachable by the (pre-account) parent-consent flow, so
+            // it cannot require login; rate-limit per IP to stop anonymous upload flooding.
+            rate_limit('ns_upload', 40, 3600);
             if (empty($_FILES['file']) || ($_FILES['file']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
                 json(['error' => 'No file uploaded.'], 422);
             }

@@ -52,6 +52,10 @@ try {
             $pdo->beginTransaction();
             try {
                 $passwordHash = password_hash($pass, PASSWORD_DEFAULT);
+                // M-6: when verification is enforced, new accounts start UNVERIFIED and
+                // must confirm their email before login (see the login handler). Default
+                // (flag off) keeps the current auto-verify behavior — no change.
+                $verifiedExpr = email_verification_required() ? 'NULL' : 'NOW()';
 
                 if ($existing) {
                     $existingApproval = (string) ($existing['approval_status'] ?? 'pending');
@@ -64,7 +68,7 @@ try {
                              approval_note = CASE WHEN ? = "approved" THEN approval_note ELSE NULL END,
                              approval_reviewed_by_user_id = CASE WHEN ? = "approved" THEN approval_reviewed_by_user_id ELSE NULL END,
                              approval_reviewed_at = CASE WHEN ? = "approved" THEN approval_reviewed_at ELSE NULL END,
-                             email_verified_at = NOW(),
+                             email_verified_at = ' . $verifiedExpr . ',
                              email_verification_otp_hash = NULL,
                              email_verification_otp_expires_at = NULL,
                              email_verification_otp_sent_at = NULL,
@@ -88,7 +92,7 @@ try {
                             email_verification_otp_expires_at,
                             email_verification_otp_sent_at,
                             email_verification_otp_attempts
-                         ) VALUES (?, ?, ?, "pending", NULL, NULL, NULL, NOW(), NULL, NULL, NULL, 0)'
+                         ) VALUES (?, ?, ?, "pending", NULL, NULL, NULL, ' . $verifiedExpr . ', NULL, NULL, NULL, 0)'
                     );
                     $insert->execute([$name, $email, $passwordHash]);
                     $userId = (int) $pdo->lastInsertId();
@@ -139,6 +143,10 @@ try {
             if ((string) ($u['approval_status'] ?? 'pending') === 'rejected') {
                 json(['error' => 'This account has been rejected. Please contact the administrator.'], 403);
             }
+            // M-6: block sign-in of unverified accounts when verification is enforced.
+            if (email_verification_required() && empty($u['email_verified_at'])) {
+                json(['error' => 'Please verify your email address before signing in.'], 403);
+            }
 
             $pdo->beginTransaction();
             try {
@@ -174,28 +182,27 @@ try {
         }
 
         case $key === 'POST auth/forgot-password': {
+            // M-7: throttle + return an identical generic response whether or not the
+            // email exists, so the endpoint can't be used to enumerate registered accounts.
+            rate_limit('forgot_password', 5, 900);
             $email = require_email(field(body(), 'email'));
+            $generic = ['message' => 'If an account exists for that email, we\'ve sent a password reset link. Please check your inbox.'];
 
             $stmt = db()->prepare('SELECT id, full_name, email FROM users WHERE email = ? LIMIT 1');
             $stmt->execute([$email]);
             $u = $stmt->fetch();
 
-            // Per product spec: tell the user when no account matches the email.
-            if (!$u) {
-                json(['error' => 'No account is registered with this email address.'], 404);
+            if ($u) {
+                try {
+                    create_password_reset($u);
+                } catch (Throwable $e) {
+                    // Log the real cause server-side; still return the generic message so
+                    // failures don't reveal whether the account exists.
+                    error_log('[forgot-password] ' . $e->getMessage());
+                }
             }
 
-            try {
-                create_password_reset($u);
-            } catch (Throwable $e) {
-                // Always log the real cause to the server error log so live 500s are diagnosable.
-                error_log('[forgot-password] ' . $e->getMessage());
-                json([
-                    'error' => app_debug() ? $e->getMessage() : 'Unable to send the reset link right now.',
-                ], 500);
-            }
-
-            json(['message' => 'We\'ve emailed you a link to reset your password. Please check your inbox.']);
+            json($generic);
         }
 
         case $key === 'GET auth/reset-password/verify': {
@@ -628,6 +635,8 @@ try {
         }
 
         case $key === 'POST sponsorship/upload-logo': {
+            // M-2: public sponsor-application logo upload — rate-limit per IP (no login here).
+            rate_limit('sponsor_logo', 15, 3600);
             sponsor_ensure_schema();
             if (empty($_FILES['file']) || ($_FILES['file']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
                 json(['error' => 'No file uploaded.'], 422);
@@ -969,6 +978,11 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
         }
 
         case $key === 'POST store/checkout': {
+            // M-3: cap anonymous checkout rate, and return stock reserved by orders that
+            // were never paid (abandoned) so the store cannot be drained by opening
+            // checkouts and never completing payment.
+            rate_limit('store_checkout', 20, 3600);
+            storefront_release_expired_reservations(30);
             $b = body();
             $name = field($b, 'customer_name') ?: field($b, 'name');
             $email = require_email(field($b, 'email'));
@@ -1970,8 +1984,23 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             if (!in_array($status, ['paid', 'pending', 'fulfilled', 'cancelled'], true)) {
                 json(['error' => 'Invalid status.'], 422);
             }
-            $stmt = db()->prepare('UPDATE orders SET status = ? WHERE id = ?');
-            $stmt->execute([$status, (int) $m[1]]);
+            // M-3: when an order is cancelled, return its items to inventory (once).
+            $pdo = db();
+            $pdo->beginTransaction();
+            try {
+                $cur = $pdo->prepare('SELECT * FROM orders WHERE id = ? LIMIT 1 FOR UPDATE');
+                $cur->execute([(int) $m[1]]);
+                $order = $cur->fetch();
+                if (!$order) { $pdo->rollBack(); json(['error' => 'Order not found.'], 404); }
+                if ($status === 'cancelled' && (string) $order['status'] !== 'cancelled') {
+                    storefront_restock_order($pdo, $order);
+                }
+                $pdo->prepare('UPDATE orders SET status = ? WHERE id = ?')->execute([$status, (int) $m[1]]);
+                $pdo->commit();
+            } catch (Throwable $e) {
+                if ($pdo->inTransaction()) $pdo->rollBack();
+                throw $e;
+            }
             json(['message' => 'Order updated.']);
         }
 

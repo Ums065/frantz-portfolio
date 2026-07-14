@@ -11,8 +11,29 @@ Options -Indexes
     Require all denied
 </FilesMatch>
 
+# M-4: HTTP security headers (hardening). CSP is intentionally framing-only so it
+# cannot break the Razorpay/Stripe/PayPal checkout scripts; a full script-src CSP
+# would need to allowlist those providers first.
+<IfModule mod_headers.c>
+  Header always set X-Frame-Options "SAMEORIGIN"
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  Header always set Content-Security-Policy "frame-ancestors 'self'"
+  # HSTS is honored by browsers only over HTTPS (ignored over plain HTTP), so
+  # setting it unconditionally is safe and takes effect once the site is on TLS.
+  Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
+</IfModule>
+
 <IfModule mod_rewrite.c>
   RewriteEngine On
+
+  # M-5: force HTTPS in production. Skips localhost / 127.0.0.1 so local WAMP
+  # HTTP development is not redirected.
+  RewriteCond %{HTTPS} !=on
+  RewriteCond %{HTTP:X-Forwarded-Proto} !=https
+  RewriteCond %{HTTP_HOST} !=localhost
+  RewriteCond %{HTTP_HOST} !^127\.0\.0\.1
+  RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L]
 
   # Root URL should open the built SPA.
   RewriteRule ^$ frontend/dist/index.html [L]
