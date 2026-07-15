@@ -13,18 +13,19 @@ import { resolveDashboardRoute } from '../../lib/dashboardRoute'
    visually consistent with the Business/Judge/Admin dark+gold theme. */
 
 export const S = {
-  wrap: { minHeight: '100vh', color: 'var(--white)', padding: '0 24px 60px', fontFamily: 'var(--f-body)' } as React.CSSProperties,
-  card: { background: 'rgba(255,255,255,0.04)', border: '1px solid var(--line)', borderRadius: 14, padding: 20 } as React.CSSProperties,
+  wrap: { minHeight: '100vh', color: 'var(--white)', padding: '0 clamp(14px,4vw,24px) 64px', fontFamily: 'var(--f-body)' } as React.CSSProperties,
+  card: { background: 'rgba(255,255,255,0.035)', border: '1px solid var(--line)', borderRadius: 16, padding: 'clamp(16px,3vw,22px)', boxShadow: '0 1px 0 rgba(255,255,255,0.03) inset, 0 18px 40px -30px rgba(0,0,0,0.7)' } as React.CSSProperties,
   label: { display: 'block', fontSize: 12, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--gold-light)', marginBottom: 6 } as React.CSSProperties,
   input: { width: '100%', background: 'rgba(0,0,0,0.25)', border: '1px solid var(--line)', borderRadius: 9, padding: '11px 13px', color: 'var(--ivory)', fontSize: 14 } as React.CSSProperties,
-  eyebrow: { fontSize: 11, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--gold)' } as React.CSSProperties,
+  eyebrow: { fontSize: 11.5, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--gold)' } as React.CSSProperties,
 }
 
 export function StatTile({ label, value }: { label: string; value: number | string }) {
   return (
-    <div style={{ ...S.card, textAlign: 'center' }}>
-      <div className="gold-text" style={{ fontFamily: 'var(--f-serif)', fontSize: 30, fontWeight: 800 }}>{value}</div>
-      <div style={{ ...S.eyebrow, marginTop: 4 }}>{label}</div>
+    <div style={{ position: 'relative', textAlign: 'center', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--line)', borderRadius: 14, padding: '18px 14px', overflow: 'hidden' }}>
+      <div aria-hidden="true" style={{ position: 'absolute', top: 0, left: '18%', right: '18%', height: 2, background: 'linear-gradient(90deg,transparent,var(--gold),transparent)', opacity: 0.7 }} />
+      <div className="gold-text" style={{ fontFamily: 'var(--f-serif)', fontSize: 32, fontWeight: 800, lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{value}</div>
+      <div style={{ ...S.eyebrow, marginTop: 6, color: 'var(--muted)' }}>{label}</div>
     </div>
   )
 }
@@ -54,8 +55,9 @@ export interface EcoAnn { id: number; title: string; body: string; created_ts: n
 export function Section({ title, children, right }: { title: string; children: React.ReactNode; right?: React.ReactNode }) {
   return (
     <section style={S.card}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
-        <div style={S.eyebrow}>{title}</div>{right}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginBottom: 16, paddingBottom: 11, borderBottom: '1px solid var(--line)', flexWrap: 'wrap' }}>
+        <h2 style={{ ...S.eyebrow, fontSize: 12.5, margin: 0 }}>{title}</h2>
+        {right && <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>{right}</div>}
       </div>
       {children}
     </section>
@@ -335,18 +337,28 @@ export default function EcosystemPortal({ config }: { config: PortalConfig }) {
   }
 
   // ---- approved dashboard ----
+  const orgName = data?.profile?.org_name || title
+  const initial = (orgName || title).trim().charAt(0).toUpperCase() || '•'
   return (
     <div className="admin-page" style={S.wrap}>
-      <div style={{ maxWidth: 980, margin: '0 auto' }}>
-        <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 12, margin: '8px 0 22px' }}>
-          <div>
-            <span style={S.eyebrow}>{title}</span>
-            <h1 className="gold-text" style={{ fontFamily: 'var(--f-serif)', fontSize: 30, margin: '4px 0 0' }}>{data?.profile?.org_name || title}</h1>
+      <div style={{ maxWidth: 1040, margin: '0 auto' }}>
+        <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 14, padding: '18px 0 16px', marginBottom: 22, borderBottom: '1px solid var(--line)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 0 }}>
+            <div aria-hidden="true" style={{ flex: '0 0 auto', width: 46, height: 46, borderRadius: 12, display: 'grid', placeItems: 'center', background: 'linear-gradient(150deg,rgba(201,168,76,0.25),rgba(201,168,76,0.06))', border: '1px solid var(--line)', color: 'var(--gold-light)', fontFamily: 'var(--f-serif)', fontSize: 22, fontWeight: 800 }}>{initial}</div>
+            <div style={{ minWidth: 0 }}>
+              <span style={S.eyebrow}>{title}</span>
+              <h1 className="gold-text" style={{ fontFamily: 'var(--f-serif)', fontSize: 'clamp(22px,4vw,29px)', margin: '2px 0 0', lineHeight: 1.1, overflow: 'hidden', textOverflow: 'ellipsis' }}>{orgName}</h1>
+            </div>
           </div>
-          <button className="btn btn--sm" onClick={() => logout()}>Sign Out</button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {(user?.approval_status === 'approved' || isAdmin) && <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.05em', textTransform: 'uppercase', color: 'var(--gold-light)', border: '1px solid var(--line)', borderRadius: 999, padding: '4px 11px' }}>● Active</span>}
+            <button className="btn btn--sm" onClick={() => logout()}>Sign Out</button>
+          </div>
         </header>
         {err && <p style={{ color: '#ff9a9a', fontSize: 13, marginBottom: 14 }}>{err}</p>}
-        {renderDashboard(data, () => { void reload() }, { logout })}
+        <div style={{ display: 'grid', gap: 16 }}>
+          {renderDashboard(data, () => { void reload() }, { logout })}
+        </div>
       </div>
     </div>
   )
