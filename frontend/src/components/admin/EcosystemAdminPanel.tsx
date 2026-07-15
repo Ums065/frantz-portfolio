@@ -1,235 +1,330 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { api } from '../../lib/api'
 
-/* Admin management for the ecosystem roles (sponsor / partner / media / volunteer):
-   review their requests, issue per-account documents (invoices, certificates,
-   press kits…), and post announcements. */
+/* Admin management for the ecosystem roles (sponsor / partner / media / volunteer)
+   + business accounts. Record-friendly: filterable tables with a detail drawer,
+   so it scales to lots of requests and accounts. Reuses the shared admin-table /
+   admin-toolbar / admin-pager styles for visual consistency. */
 
 interface EcoReq { id: number; org_name: string; role: string; req_type: string; message: string; status: string; admin_note: string; created_ts: number }
 interface EcoAccount { user_id: number; role: string; org_name: string; email: string; approval_status: string }
 interface EcoDoc { id: number; doc_type: string; label: string; url: string; created_ts: number }
 interface EcoAnn { id: number; audience: string; title: string; body: string; created_ts: number }
+interface EcoAssign { id: number; title: string; detail: string; assign_date: string | null; status: string; created_ts: number }
 
 const card: React.CSSProperties = { background: 'rgba(255,255,255,0.04)', border: '1px solid var(--line)', borderRadius: 14, padding: 16 }
 const inp: React.CSSProperties = { width: '100%', background: 'rgba(0,0,0,0.25)', border: '1px solid var(--line)', borderRadius: 9, padding: '9px 12px', color: 'var(--ivory)', fontSize: 13 }
 const lbl: React.CSSProperties = { display: 'block', fontSize: 11, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--gold-light)', marginBottom: 5 }
-const fmt = (ts: number) => { try { return new Date(ts * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) } catch { return '' } }
-const statusStyle = (s: string): React.CSSProperties => ({ color: ({ approved: 'var(--gold-light)', declined: '#ff9a9a', info_needed: 'var(--gold)' } as Record<string, string>)[s] || 'var(--muted)', fontWeight: 700, fontSize: 11, textTransform: 'uppercase' })
+const fmt = (ts: number) => { try { return new Date(ts * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) } catch { return '' } }
+const cap = (s: string) => (s || '').replace(/_/g, ' ')
 
-interface EcoAssign { id: number; title: string; detail: string; assign_date: string | null; status: string; created_ts: number }
-type Tab = 'requests' | 'documents' | 'manage' | 'announcements'
+const STATUS_COLORS: Record<string, string> = { approved: 'var(--gold-light)', declined: '#ff9a9a', rejected: '#ff9a9a', info_needed: 'var(--gold)', pending: 'var(--muted)', pending_review: 'var(--gold)' }
+function Pill({ status }: { status: string }) {
+  const c = STATUS_COLORS[status] || 'var(--muted)'
+  return <span style={{ display: 'inline-block', color: c, border: `1px solid ${c}`, borderRadius: 999, padding: '2px 9px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', whiteSpace: 'nowrap' }}>{cap(status)}</span>
+}
+
+/* ---------- reusable filterable table (shared admin-* styles) ---------- */
+interface FilterDef<T> { label: string; options: string[]; valueOf: (r: T) => string }
+function EcoTable<T>({ head, rows, renderRow, searchText, filters = [], searchPlaceholder, pageSize = 12 }: {
+  head: string[]; rows: T[]; renderRow: (r: T) => React.ReactNode; searchText?: (r: T) => string
+  filters?: FilterDef<T>[]; searchPlaceholder?: string; pageSize?: number
+}) {
+  const [q, setQ] = useState('')
+  const [fv, setFv] = useState<string[]>(filters.map(() => 'all'))
+  const [page, setPage] = useState(1)
+  const filtered = useMemo(() => rows.filter((r) => {
+    if (q && searchText && !searchText(r).toLowerCase().includes(q.toLowerCase())) return false
+    for (let i = 0; i < filters.length; i++) if (fv[i] !== 'all' && (filters[i].valueOf(r) || '').toLowerCase() !== fv[i]) return false
+    return true
+  }), [rows, q, fv, filters, searchText])
+  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize))
+  const safe = Math.min(page, pageCount)
+  useEffect(() => { if (page !== safe) setPage(safe) }, [page, safe])
+  const pageRows = filtered.slice((safe - 1) * pageSize, (safe - 1) * pageSize + pageSize)
+  return (
+    <div className="admin-panel">
+      <div className="admin-toolbar">
+        {searchText && <input className="admin-toolbar__search" type="search" value={q} onChange={(e) => { setQ(e.target.value); setPage(1) }} placeholder={searchPlaceholder || 'Search…'} />}
+        {filters.map((f, i) => (
+          <select key={f.label} className="admin-toolbar__filter" value={fv[i]} onChange={(e) => { const n = [...fv]; n[i] = e.target.value; setFv(n); setPage(1) }}>
+            <option value="all">All {f.label}</option>
+            {f.options.map((o) => <option key={o} value={o.toLowerCase()}>{cap(o)}</option>)}
+          </select>
+        ))}
+        <span className="admin-toolbar__count">{filtered.length === rows.length ? rows.length : `${filtered.length} of ${rows.length}`} {rows.length === 1 ? 'record' : 'records'}</span>
+      </div>
+      <div className="admin-table-wrap glass">
+        <table className="admin-table">
+          <thead><tr>{head.map((h, i) => <th key={h || i}>{h}</th>)}</tr></thead>
+          <tbody>
+            {pageRows.length ? pageRows.map(renderRow) : <tr><td className="admin-table__empty" colSpan={head.length}>No matching records.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+      {pageCount > 1 && (
+        <div className="admin-pager">
+          <button type="button" className="btn btn--sm" disabled={safe <= 1} onClick={() => setPage(safe - 1)}>‹ Prev</button>
+          <span className="admin-pager__label">Page {safe} of {pageCount}</span>
+          <button type="button" className="btn btn--sm" disabled={safe >= pageCount} onClick={() => setPage(safe + 1)}>Next ›</button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function Modal({ title, onClose, children, wide }: { title: string; onClose: () => void; children: React.ReactNode; wide?: boolean }) {
+  return createPortal(
+    <div className="modal-overlay open" onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
+      <div className="glass" style={{ maxWidth: wide ? 620 : 480, width: '94%', margin: '9vh auto', maxHeight: '82vh', overflowY: 'auto', padding: 24, borderRadius: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 14 }}>
+          <h3 className="gold-text" style={{ fontFamily: 'var(--f-serif)', fontSize: 20, margin: 0 }}>{title}</h3>
+          <button className="btn btn--sm" onClick={onClose} aria-label="Close">✕</button>
+        </div>
+        {children}
+      </div>
+    </div>, document.body)
+}
+
+/* ============================ main panel ============================ */
+type Tab = 'requests' | 'accounts' | 'announcements'
 
 export default function EcosystemAdminPanel() {
   const [tab, setTab] = useState<Tab>('requests')
   const [reqs, setReqs] = useState<EcoReq[]>([])
-  const [notes, setNotes] = useState<Record<number, string>>({})
   const [accounts, setAccounts] = useState<EcoAccount[]>([])
   const [anns, setAnns] = useState<EcoAnn[]>([])
   const [err, setErr] = useState('')
-  const [busyId, setBusyId] = useState(0)
+  const [openReq, setOpenReq] = useState<EcoReq | null>(null)
+  const [openAcct, setOpenAcct] = useState<EcoAccount | null>(null)
 
+  const loadReqs = () => api.get<{ requests: EcoReq[] }>('admin/ecosystem/requests').then((d) => setReqs(d.requests || [])).catch((e) => setErr(String(e)))
+  const loadAccounts = () => api.get<{ accounts: EcoAccount[] }>('admin/ecosystem/accounts').then((d) => setAccounts(d.accounts || [])).catch(() => {})
   useEffect(() => {
-    api.get<{ requests: EcoReq[] }>('admin/ecosystem/requests').then((d) => { setReqs(d.requests || []); setNotes(Object.fromEntries((d.requests || []).map((r) => [r.id, r.admin_note]))) }).catch((e) => setErr(String(e)))
-    api.get<{ accounts: EcoAccount[] }>('admin/ecosystem/accounts').then((d) => setAccounts(d.accounts || [])).catch(() => {})
+    void loadReqs(); void loadAccounts()
     api.get<{ announcements: EcoAnn[] }>('admin/ecosystem/announcements').then((d) => setAnns(d.announcements || [])).catch(() => {})
   }, [])
 
-  const act = async (id: number, status: string) => {
-    setBusyId(id); setErr('')
-    try { const d = await api.put<{ requests: EcoReq[] }>(`admin/ecosystem/request/${id}`, { status, admin_note: notes[id] || '' }); setReqs(d.requests || []) }
-    catch (e) { setErr(String(e)) }
-    finally { setBusyId(0) }
-  }
+  const pendingReqs = reqs.filter((r) => r.status === 'pending').length
+
+  const TABS: Array<{ key: Tab; label: string; badge?: number }> = [
+    { key: 'requests', label: 'Requests', badge: pendingReqs },
+    { key: 'accounts', label: 'Accounts' },
+    { key: 'announcements', label: 'Announcements' },
+  ]
 
   return (
     <div style={{ display: 'grid', gap: 14 }}>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        {(['requests', 'documents', 'manage', 'announcements'] as const).map((t) => (
-          <button key={t} className={`btn btn--sm${tab === t ? ' btn--solid' : ''}`} onClick={() => setTab(t)} style={{ textTransform: 'capitalize' }}>{t === 'manage' ? 'Recognition & Assignments' : t}</button>
+        {TABS.map((t) => (
+          <button key={t.key} className={`btn btn--sm${tab === t.key ? ' btn--solid' : ''}`} onClick={() => setTab(t.key)}>
+            {t.label}{t.badge ? <span style={{ marginLeft: 7, background: 'var(--gold)', color: '#1a1405', borderRadius: 999, padding: '1px 7px', fontSize: 11, fontWeight: 800 }}>{t.badge}</span> : null}
+          </button>
         ))}
       </div>
       {err && <p style={{ color: '#ff9a9a', fontSize: 13 }}>{err}</p>}
 
       {tab === 'requests' && (
-        reqs.length === 0 ? <div style={{ ...card, color: 'var(--muted)' }}>No ecosystem requests.</div> : reqs.map((r) => (
-          <div key={r.id} style={card}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
-              <div><span className="gold-text" style={{ fontWeight: 800, textTransform: 'capitalize' }}>{r.role} · {r.req_type}</span><span style={{ color: 'var(--muted)', fontSize: 12.5, marginLeft: 8 }}>{r.org_name} · {fmt(r.created_ts)}</span></div>
-              <span style={statusStyle(r.status)}>{r.status.replace('_', ' ')}</span>
-            </div>
-            {r.message && <p style={{ color: '#c7c1b4', fontSize: 13, margin: '8px 0 0', whiteSpace: 'pre-wrap' }}>“{r.message}”</p>}
-            <input style={{ ...inp, marginTop: 10 }} placeholder="Note to the account (for “Needs Info”, write what you need)…" value={notes[r.id] ?? ''} onChange={(e) => setNotes((n) => ({ ...n, [r.id]: e.target.value }))} />
-            <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-              {([['approved', 'Approve'], ['info_needed', 'Needs Info'], ['declined', 'Decline']] as const).map(([st, lbl]) => (
-                <button
-                  key={st}
-                  className={`btn btn--sm${r.status === st ? ' btn--solid' : ''}`}
-                  disabled={busyId === r.id}
-                  aria-pressed={r.status === st}
-                  title={st === 'info_needed' ? 'Ask the applicant for more information — they can reply and it returns to your queue' : ''}
-                  onClick={() => act(r.id, st)}
-                >{busyId === r.id ? '…' : lbl}{r.status === st ? ' ✓' : ''}</button>
-              ))}
-              <span style={{ color: 'var(--muted)', fontSize: 11.5, marginLeft: 'auto' }}>Current: <b style={{ textTransform: 'capitalize' }}>{r.status.replace('_', ' ')}</b></span>
-            </div>
-          </div>
-        ))
+        <EcoTable<EcoReq>
+          head={['Account', 'Role', 'Type', 'Request', 'Status', 'Date', '']}
+          rows={reqs}
+          searchText={(r) => `${r.org_name} ${r.role} ${r.req_type} ${r.message}`}
+          searchPlaceholder="Search requests…"
+          filters={[
+            { label: 'roles', options: ['sponsor', 'partner', 'media', 'volunteer'], valueOf: (r) => r.role },
+            { label: 'statuses', options: ['pending', 'approved', 'info_needed', 'declined'], valueOf: (r) => r.status },
+          ]}
+          renderRow={(r) => (
+            <tr key={r.id} style={{ cursor: 'pointer' }} onClick={() => setOpenReq(r)}>
+              <td style={{ fontWeight: 600 }}>{r.org_name}</td>
+              <td style={{ textTransform: 'capitalize' }}>{r.role}</td>
+              <td style={{ textTransform: 'capitalize' }}>{cap(r.req_type)}</td>
+              <td style={{ maxWidth: 260 }}><span style={{ display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical', overflow: 'hidden', color: 'var(--muted)' } as React.CSSProperties}>{r.message || '—'}</span></td>
+              <td><Pill status={r.status} /></td>
+              <td style={{ whiteSpace: 'nowrap', color: 'var(--muted)' }}>{fmt(r.created_ts)}</td>
+              <td><button className="btn btn--sm" onClick={(e) => { e.stopPropagation(); setOpenReq(r) }}>Review</button></td>
+            </tr>
+          )}
+        />
       )}
 
-      {tab === 'documents' && <DocumentIssuer accounts={accounts} />}
-
-      {tab === 'manage' && <AccountManager accounts={accounts} />}
+      {tab === 'accounts' && (
+        <EcoTable<EcoAccount>
+          head={['Organization', 'Role', 'Email', 'Approval', '']}
+          rows={accounts}
+          searchText={(a) => `${a.org_name} ${a.role} ${a.email}`}
+          searchPlaceholder="Search accounts…"
+          filters={[
+            { label: 'roles', options: ['sponsor', 'partner', 'media', 'volunteer', 'business'], valueOf: (a) => a.role },
+            { label: 'approval', options: ['pending', 'approved', 'rejected'], valueOf: (a) => a.approval_status },
+          ]}
+          renderRow={(a) => (
+            <tr key={a.user_id} style={{ cursor: 'pointer' }} onClick={() => setOpenAcct(a)}>
+              <td style={{ fontWeight: 600 }}>{a.org_name}</td>
+              <td style={{ textTransform: 'capitalize' }}>{a.role}</td>
+              <td style={{ color: 'var(--muted)' }}>{a.email}</td>
+              <td><Pill status={a.approval_status} /></td>
+              <td><button className="btn btn--sm" onClick={(e) => { e.stopPropagation(); setOpenAcct(a) }}>Manage</button></td>
+            </tr>
+          )}
+        />
+      )}
 
       {tab === 'announcements' && <Announcer anns={anns} setAnns={setAnns} />}
+
+      {openReq && <RequestModal req={openReq} onClose={() => setOpenReq(null)} onDone={(list) => { setReqs(list); setOpenReq(null) }} />}
+      {openAcct && <AccountModal acct={openAcct} onClose={() => setOpenAcct(null)} onApprovalChange={loadAccounts} />}
     </div>
   )
 }
 
-function DocumentIssuer({ accounts }: { accounts: EcoAccount[] }) {
-  const [uid, setUid] = useState(0)
-  const [docType, setDocType] = useState('invoice')
-  const [label, setLabel] = useState('')
-  const [docs, setDocs] = useState<EcoDoc[]>([])
-  const [busy, setBusy] = useState(false)
-  const [msg, setMsg] = useState('')
-  const acct = accounts.find((a) => a.user_id === uid)
-
-  const loadDocs = (id: number) => { if (id) api.get<{ documents: EcoDoc[] }>(`admin/ecosystem/documents/${id}`).then((d) => setDocs(d.documents || [])).catch(() => setDocs([])); else setDocs([]) }
-  useEffect(() => { loadDocs(uid) }, [uid])
-
-  const upload = async (file: File | null) => {
-    if (!file || !uid || !acct) { setMsg('Pick an account first.'); return }
-    setBusy(true); setMsg('')
-    try {
-      const up = await api.upload<{ url: string }>('admin/upload', file)
-      const d = await api.post<{ documents: EcoDoc[] }>('admin/ecosystem/document', { user_id: uid, role: acct.role, doc_type: docType, label: label || file.name, file_url: up.url })
-      setDocs(d.documents || []); setLabel(''); setMsg('Document added ✓')
-    } catch (e) { setMsg(e instanceof Error ? e.message : 'Upload failed.') } finally { setBusy(false) }
+/* ---------- request review modal ---------- */
+function RequestModal({ req, onClose, onDone }: { req: EcoReq; onClose: () => void; onDone: (list: EcoReq[]) => void }) {
+  const [note, setNote] = useState(req.admin_note || '')
+  const [busy, setBusy] = useState('')
+  const act = async (status: string) => {
+    setBusy(status)
+    try { const d = await api.put<{ requests: EcoReq[] }>(`admin/ecosystem/request/${req.id}`, { status, admin_note: note }); onDone(d.requests || []) }
+    catch { setBusy('') }
   }
-  const del = async (id: number) => { if (!confirm('Remove this document?')) return; await api.del(`admin/ecosystem/document/${id}`); loadDocs(uid) }
-
   return (
-    <div style={{ ...card, display: 'grid', gap: 12 }}>
-      <div><label style={lbl}>Account</label>
-        <select style={inp} value={uid} onChange={(e) => setUid(Number(e.target.value))}>
-          <option value={0}>Select an account…</option>
-          {accounts.map((a) => <option key={a.user_id} value={a.user_id}>{a.role} · {a.org_name} ({a.email})</option>)}
-        </select>
+    <Modal title={`${cap(req.req_type)} · ${req.org_name}`} onClose={onClose}>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
+        <span style={{ textTransform: 'capitalize', color: 'var(--muted)', fontSize: 13 }}>{req.role}</span>
+        <Pill status={req.status} />
+        <span style={{ color: 'var(--muted)', fontSize: 12, marginLeft: 'auto' }}>{fmt(req.created_ts)}</span>
       </div>
-      {uid > 0 && (
-        <>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12 }}>
-            <div><label style={lbl}>Type</label>
-              <select style={inp} value={docType} onChange={(e) => setDocType(e.target.value)}>
-                {['invoice', 'receipt', 'tax', 'agreement', 'report', 'certificate', 'press', 'handbook', 'document'].map((t) => <option key={t} value={t}>{t}</option>)}
-              </select>
-            </div>
-            <div><label style={lbl}>Label</label><input style={inp} value={label} onChange={(e) => setLabel(e.target.value)} placeholder="e.g. Q1 Invoice" /></div>
-          </div>
-          <label className="btn btn--sm btn--solid" style={{ cursor: 'pointer', justifySelf: 'start' }}>{busy ? 'Uploading…' : 'Upload PDF / image'}
-            <input type="file" accept="application/pdf,image/png,image/jpeg,image/webp" hidden onChange={(e) => { const f = e.target.files?.[0] || null; e.target.value = ''; upload(f) }} />
-          </label>
-          {msg && <span style={{ color: msg.includes('✓') ? 'var(--gold-light)' : '#ff9a9a', fontSize: 13 }}>{msg}</span>}
-          <div style={{ display: 'grid', gap: 6 }}>
-            {docs.map((d) => (
-              <div key={d.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, borderBottom: '1px solid var(--line)', paddingBottom: 6 }}>
-                <a href={d.url} target="_blank" rel="noreferrer" style={{ color: 'var(--ivory)', fontSize: 13 }}>{d.label} · <span style={{ color: 'var(--muted)' }}>{d.doc_type}</span></a>
-                <button className="btn btn--sm" onClick={() => del(d.id)}>✕</button>
-              </div>
-            ))}
-            {docs.length === 0 && <p style={{ color: 'var(--muted)', fontSize: 13, margin: 0 }}>No documents for this account yet.</p>}
-          </div>
-        </>
-      )}
-    </div>
+      {req.message && <p style={{ color: '#d8d3c6', fontSize: 13.5, lineHeight: 1.6, whiteSpace: 'pre-wrap', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--line)', borderRadius: 10, padding: '10px 12px' }}>{req.message}</p>}
+      <label style={{ ...lbl, marginTop: 12 }}>Note to the applicant <span style={{ textTransform: 'none', color: 'var(--muted)', fontWeight: 400 }}>(for “Needs Info”, write what you need)</span></label>
+      <textarea style={{ ...inp, minHeight: 70, resize: 'vertical' }} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Optional note — the applicant sees this…" />
+      <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
+        {([['approved', 'Approve'], ['info_needed', 'Needs Info'], ['declined', 'Decline']] as const).map(([st, l]) => (
+          <button key={st} className={`btn btn--sm${req.status === st ? ' btn--solid' : ''}`} disabled={!!busy} onClick={() => act(st)}>{busy === st ? '…' : l}{req.status === st ? ' ✓' : ''}</button>
+        ))}
+      </div>
+    </Modal>
   )
 }
 
-function AccountManager({ accounts }: { accounts: EcoAccount[] }) {
-  const [uid, setUid] = useState(0)
-  const acct = accounts.find((a) => a.user_id === uid)
-  // recognition
-  const [hours, setHours] = useState(''); const [events, setEvents] = useState(''); const [students, setStudents] = useState('')
-  const [recMsg, setRecMsg] = useState('')
-  // assignments
+/* ---------- per-account manager: approval + documents + recognition + assignments ---------- */
+function AccountModal({ acct, onClose, onApprovalChange }: { acct: EcoAccount; onClose: () => void; onApprovalChange: () => void }) {
+  const uid = acct.user_id
+  const [docs, setDocs] = useState<EcoDoc[]>([])
   const [assigns, setAssigns] = useState<EcoAssign[]>([])
-  const [aTitle, setATitle] = useState(''); const [aDetail, setADetail] = useState(''); const [aDate, setADate] = useState('')
-  const [busy, setBusy] = useState(false)
+  const [approval, setApproval] = useState(acct.approval_status)
+  // document form
+  const [docType, setDocType] = useState('agreement'); const [label, setLabel] = useState(''); const [docBusy, setDocBusy] = useState(false); const [docMsg, setDocMsg] = useState('')
+  // recognition
+  const [hours, setHours] = useState(''); const [events, setEvents] = useState(''); const [students, setStudents] = useState(''); const [recMsg, setRecMsg] = useState('')
+  // assignment form
+  const [aTitle, setATitle] = useState(''); const [aDetail, setADetail] = useState(''); const [aDate, setADate] = useState(''); const [aBusy, setABusy] = useState(false)
 
-  const loadAssigns = (id: number) => { if (id) api.get<{ assignments: EcoAssign[] }>(`admin/ecosystem/assignments/${id}`).then((d) => setAssigns(d.assignments || [])).catch(() => setAssigns([])); else setAssigns([]) }
-  useEffect(() => { loadAssigns(uid); setRecMsg('') }, [uid])
+  const loadDocs = () => api.get<{ documents: EcoDoc[] }>(`admin/ecosystem/documents/${uid}`).then((d) => setDocs(d.documents || [])).catch(() => setDocs([]))
+  const loadAssigns = () => api.get<{ assignments: EcoAssign[] }>(`admin/ecosystem/assignments/${uid}`).then((d) => setAssigns(d.assignments || [])).catch(() => setAssigns([]))
+  useEffect(() => { void loadDocs(); void loadAssigns() }, [uid])
 
+  const setUserApproval = async (status: string) => {
+    try { await api.put(`admin/user/${uid}/approval`, { approval_status: status }); setApproval(status); onApprovalChange() } catch { /* ignore */ }
+  }
+  const upload = async (file: File | null) => {
+    if (!file) return
+    setDocBusy(true); setDocMsg('')
+    try { const up = await api.upload<{ url: string }>('admin/upload', file); await api.post('admin/ecosystem/document', { user_id: uid, role: acct.role, doc_type: docType, label: label || file.name, file_url: up.url }); setLabel(''); setDocMsg('Added ✓'); loadDocs() }
+    catch (e) { setDocMsg(e instanceof Error ? e.message : 'Upload failed.') } finally { setDocBusy(false) }
+  }
+  const delDoc = async (id: number) => { if (!confirm('Remove this document?')) return; await api.del(`admin/ecosystem/document/${id}`); loadDocs() }
   const saveRec = async () => {
-    if (!uid) return
     setRecMsg('')
-    try {
-      await api.put(`admin/ecosystem/recognition/${uid}`, { hours: Number(hours || 0), events_supported: Number(events || 0), students_mentored: Number(students || 0) })
-      setRecMsg('Recognition saved ✓')
-    } catch (e) { setRecMsg(e instanceof Error ? e.message : 'Save failed.') }
+    try { await api.put(`admin/ecosystem/recognition/${uid}`, { hours: Number(hours || 0), events_supported: Number(events || 0), students_mentored: Number(students || 0) }); setRecMsg('Saved ✓') }
+    catch (e) { setRecMsg(e instanceof Error ? e.message : 'Save failed.') }
   }
   const addAssign = async () => {
-    if (!uid || !acct || !aTitle.trim()) return
-    setBusy(true)
-    try {
-      const d = await api.post<{ assignments: EcoAssign[] }>('admin/ecosystem/assignment', { user_id: uid, role: acct.role, title: aTitle, detail: aDetail, assign_date: aDate })
-      setAssigns(d.assignments || []); setATitle(''); setADetail(''); setADate('')
-    } catch { /* ignore */ } finally { setBusy(false) }
+    if (!aTitle.trim()) return
+    setABusy(true)
+    try { const d = await api.post<{ assignments: EcoAssign[] }>('admin/ecosystem/assignment', { user_id: uid, role: acct.role, title: aTitle, detail: aDetail, assign_date: aDate }); setAssigns(d.assignments || []); setATitle(''); setADetail(''); setADate('') }
+    catch { /* ignore */ } finally { setABusy(false) }
   }
-  const setStatus = async (id: number, status: string) => { await api.put(`admin/ecosystem/assignment/${id}`, { status }); loadAssigns(uid) }
-  const del = async (id: number) => { if (!confirm('Remove this assignment?')) return; await api.del(`admin/ecosystem/assignment/${id}`); loadAssigns(uid) }
+  const setAssignStatus = async (id: number, status: string) => { await api.put(`admin/ecosystem/assignment/${id}`, { status }); loadAssigns() }
+  const delAssign = async (id: number) => { if (!confirm('Remove this assignment?')) return; await api.del(`admin/ecosystem/assignment/${id}`); loadAssigns() }
 
+  const sect: React.CSSProperties = { borderTop: '1px solid var(--line)', paddingTop: 14, marginTop: 14 }
   return (
-    <div style={{ ...card, display: 'grid', gap: 14 }}>
-      <div><label style={lbl}>Account</label>
-        <select style={inp} value={uid} onChange={(e) => setUid(Number(e.target.value))}>
-          <option value={0}>Select an account…</option>
-          {accounts.map((a) => <option key={a.user_id} value={a.user_id}>{a.role} · {a.org_name} ({a.email})</option>)}
-        </select>
+    <Modal title={acct.org_name} onClose={onClose} wide>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <span style={{ textTransform: 'capitalize', color: 'var(--muted)', fontSize: 13 }}>{acct.role} · {acct.email}</span>
+        <Pill status={approval} />
       </div>
-      {uid > 0 && (
-        <>
-          <div>
-            <label style={lbl}>Recognition (mainly for volunteers)</label>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', gap: 10 }}>
-              <div><span style={{ ...lbl, textTransform: 'none', color: 'var(--muted)' }}>Hours logged</span><input style={inp} type="number" min="0" value={hours} onChange={(e) => setHours(e.target.value)} placeholder="0" /></div>
-              <div><span style={{ ...lbl, textTransform: 'none', color: 'var(--muted)' }}>Events supported</span><input style={inp} type="number" min="0" value={events} onChange={(e) => setEvents(e.target.value)} placeholder="0" /></div>
-              <div><span style={{ ...lbl, textTransform: 'none', color: 'var(--muted)' }}>Students mentored</span><input style={inp} type="number" min="0" value={students} onChange={(e) => setStudents(e.target.value)} placeholder="0" /></div>
-            </div>
-            <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 8 }}>
-              <button className="btn btn--solid btn--sm" onClick={saveRec}>Save Recognition</button>
-              {recMsg && <span style={{ color: recMsg.includes('✓') ? 'var(--gold-light)' : '#ff9a9a', fontSize: 13 }}>{recMsg}</span>}
-            </div>
-          </div>
 
-          <div style={{ borderTop: '1px solid var(--line)', paddingTop: 12 }}>
-            <label style={lbl}>Create an assignment</label>
-            <div style={{ display: 'grid', gap: 8 }}>
-              <input style={inp} value={aTitle} onChange={(e) => setATitle(e.target.value)} placeholder="Title — e.g. Mentor at Queens Innovation Academy" />
-              <textarea style={{ ...inp, minHeight: 60, resize: 'vertical' }} value={aDetail} onChange={(e) => setADetail(e.target.value)} placeholder="Details — who / where / what to do (you can name the student or school here)" />
-              <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-                <input style={{ ...inp, maxWidth: 180 }} type="date" value={aDate} onChange={(e) => setADate(e.target.value)} />
-                <button className="btn btn--solid btn--sm" disabled={busy || !aTitle.trim()} onClick={addAssign}>{busy ? 'Adding…' : 'Add Assignment'}</button>
+      <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+        <span style={{ ...lbl, marginBottom: 0, alignSelf: 'center' }}>Approval:</span>
+        {['approved', 'pending', 'rejected'].map((s) => (
+          <button key={s} className={`btn btn--sm${approval === s ? ' btn--solid' : ''}`} onClick={() => setUserApproval(s)} style={{ textTransform: 'capitalize' }}>{s}{approval === s ? ' ✓' : ''}</button>
+        ))}
+      </div>
+
+      <div style={sect}>
+        <label style={lbl}>Recognition (hours / events / students)</label>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(110px,1fr))', gap: 8 }}>
+          <input style={inp} type="number" min="0" value={hours} onChange={(e) => setHours(e.target.value)} placeholder="Hours" />
+          <input style={inp} type="number" min="0" value={events} onChange={(e) => setEvents(e.target.value)} placeholder="Events" />
+          <input style={inp} type="number" min="0" value={students} onChange={(e) => setStudents(e.target.value)} placeholder="Students" />
+        </div>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 8 }}>
+          <button className="btn btn--sm btn--solid" onClick={saveRec}>Save Recognition</button>
+          {recMsg && <span style={{ color: recMsg.includes('✓') ? 'var(--gold-light)' : '#ff9a9a', fontSize: 13 }}>{recMsg}</span>}
+        </div>
+      </div>
+
+      <div style={sect}>
+        <label style={lbl}>Documents</label>
+        <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: 8 }}>
+          <select style={inp} value={docType} onChange={(e) => setDocType(e.target.value)}>{['invoice', 'receipt', 'tax', 'agreement', 'report', 'certificate', 'press', 'handbook', 'document'].map((t) => <option key={t} value={t}>{t}</option>)}</select>
+          <input style={inp} value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Label (optional)" />
+        </div>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 8 }}>
+          <label className="btn btn--sm btn--solid" style={{ cursor: 'pointer' }}>{docBusy ? 'Uploading…' : 'Upload PDF / image'}
+            <input type="file" accept="application/pdf,image/png,image/jpeg,image/webp" hidden onChange={(e) => { const f = e.target.files?.[0] || null; e.target.value = ''; upload(f) }} />
+          </label>
+          {docMsg && <span style={{ color: docMsg.includes('✓') ? 'var(--gold-light)' : '#ff9a9a', fontSize: 13 }}>{docMsg}</span>}
+        </div>
+        <div style={{ display: 'grid', gap: 6, marginTop: 10 }}>
+          {docs.map((d) => (
+            <div key={d.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, borderBottom: '1px solid var(--line)', paddingBottom: 6 }}>
+              <a href={d.url} target="_blank" rel="noreferrer" style={{ color: 'var(--ivory)', fontSize: 13 }}>{d.label} · <span style={{ color: 'var(--muted)' }}>{d.doc_type}</span></a>
+              <button className="btn btn--sm" onClick={() => delDoc(d.id)}>✕</button>
+            </div>
+          ))}
+          {docs.length === 0 && <p style={{ color: 'var(--muted)', fontSize: 13, margin: 0 }}>No documents yet.</p>}
+        </div>
+      </div>
+
+      <div style={sect}>
+        <label style={lbl}>Assignments</label>
+        <input style={inp} value={aTitle} onChange={(e) => setATitle(e.target.value)} placeholder="Title — e.g. Mentor at Queens Innovation Academy" />
+        <textarea style={{ ...inp, minHeight: 54, resize: 'vertical', marginTop: 8 }} value={aDetail} onChange={(e) => setADetail(e.target.value)} placeholder="Details (you can name the student / school here)" />
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
+          <input style={{ ...inp, maxWidth: 170 }} type="date" value={aDate} onChange={(e) => setADate(e.target.value)} />
+          <button className="btn btn--sm btn--solid" disabled={aBusy || !aTitle.trim()} onClick={addAssign}>{aBusy ? 'Adding…' : 'Add Assignment'}</button>
+        </div>
+        <div style={{ display: 'grid', gap: 6, marginTop: 10 }}>
+          {assigns.map((a) => (
+            <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, borderBottom: '1px solid var(--line)', paddingBottom: 6 }}>
+              <div><span style={{ color: 'var(--ivory)', fontSize: 13, fontWeight: 600 }}>{a.title}</span> <span style={{ color: 'var(--muted)', fontSize: 12 }}>· {a.status}{a.assign_date ? ` · ${a.assign_date}` : ''}</span></div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                {a.status !== 'completed' && <button className="btn btn--sm" title="Mark completed" onClick={() => setAssignStatus(a.id, 'completed')}>✓</button>}
+                <button className="btn btn--sm" onClick={() => delAssign(a.id)}>✕</button>
               </div>
             </div>
-            <div style={{ display: 'grid', gap: 6, marginTop: 12 }}>
-              {assigns.map((a) => (
-                <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, borderBottom: '1px solid var(--line)', paddingBottom: 6 }}>
-                  <div><span style={{ color: 'var(--ivory)', fontSize: 13, fontWeight: 600 }}>{a.title}</span> <span style={{ color: 'var(--muted)', fontSize: 12 }}>· {a.status}{a.assign_date ? ` · ${a.assign_date}` : ''}</span></div>
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    {a.status !== 'completed' && <button className="btn btn--sm" onClick={() => setStatus(a.id, 'completed')} title="Mark completed">✓</button>}
-                    <button className="btn btn--sm" onClick={() => del(a.id)}>✕</button>
-                  </div>
-                </div>
-              ))}
-              {assigns.length === 0 && <p style={{ color: 'var(--muted)', fontSize: 13, margin: 0 }}>No assignments for this account yet.</p>}
-            </div>
-          </div>
-        </>
-      )}
-    </div>
+          ))}
+          {assigns.length === 0 && <p style={{ color: 'var(--muted)', fontSize: 13, margin: 0 }}>No assignments yet.</p>}
+        </div>
+      </div>
+    </Modal>
   )
 }
 
+/* ---------- announcements ---------- */
 function Announcer({ anns, setAnns }: { anns: EcoAnn[]; setAnns: (a: EcoAnn[]) => void }) {
   const [audience, setAudience] = useState('all')
   const [title, setTitle] = useState('')
