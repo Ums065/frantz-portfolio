@@ -4103,7 +4103,46 @@ function ecosystem_requests_all(): array
 {
     ecosystem_shared_ensure_schema();
     $rows = db()->query("SELECT r.*, UNIX_TIMESTAMP(r.created_at) AS created_ts, ea.org_name FROM ecosystem_requests r LEFT JOIN ecosystem_accounts ea ON ea.user_id = r.user_id ORDER BY (r.status = 'pending') DESC, r.created_at DESC")->fetchAll() ?: [];
-    return array_map(static fn(array $r): array => ['id' => (int) $r['id'], 'org_name' => (string) ($r['org_name'] ?? ('User #' . $r['user_id'])), 'role' => $r['role'], 'req_type' => $r['req_type'], 'message' => (string) ($r['message'] ?? ''), 'status' => $r['status'], 'admin_note' => (string) ($r['admin_note'] ?? ''), 'created_ts' => (int) $r['created_ts']], $rows);
+    return array_map(static fn(array $r): array => ['id' => (int) $r['id'], 'user_id' => (int) $r['user_id'], 'org_name' => (string) ($r['org_name'] ?? ('User #' . $r['user_id'])), 'role' => $r['role'], 'req_type' => $r['req_type'], 'message' => (string) ($r['message'] ?? ''), 'status' => $r['status'], 'admin_note' => (string) ($r['admin_note'] ?? ''), 'created_ts' => (int) $r['created_ts']], $rows);
+}
+
+/** Full profile of an ecosystem OR business account (admin view) — everything the
+ *  admin needs about the person/org behind a request. */
+function ecosystem_admin_account_profile(int $userId): array
+{
+    $s = db()->prepare('SELECT id, full_name, email, role, approval_status, created_at, referred_by_code FROM users WHERE id = ? LIMIT 1');
+    $s->execute([$userId]);
+    $user = $s->fetch();
+    if (!$user) json(['error' => 'Account not found.'], 404);
+    $role = (string) $user['role'];
+    $profile = [];
+    if (in_array($role, ecosystem_roles(), true)) {
+        $acc = ecosystem_account_for_user($userId);
+        if ($acc) $profile = [
+            'org_name' => $acc['org_name'], 'contact_name' => $acc['contact_name'], 'contact_phone' => $acc['contact_phone'],
+            'website' => $acc['website'], 'about' => $acc['about'], 'details' => $acc['details'] ?: (object) [],
+            'referral_code' => $acc['referral_code'] ?? null,
+        ];
+    } elseif ($role === 'business') {
+        $acc = business_account_for_user($userId);
+        if ($acc) $profile = [
+            'org_name' => $acc['business_name'], 'category' => $acc['category'], 'borough' => $acc['borough'],
+            'contact_name' => $acc['contact_name'], 'contact_phone' => $acc['contact_phone'], 'website' => $acc['website'], 'about' => $acc['about'],
+        ];
+    }
+    ecosystem_shared_ensure_schema();
+    $rc = db()->prepare('SELECT COUNT(*) FROM ecosystem_requests WHERE user_id = ?'); $rc->execute([$userId]);
+    $dc = db()->prepare('SELECT COUNT(*) FROM ecosystem_documents WHERE user_id = ?'); $dc->execute([$userId]);
+    $ac = db()->prepare('SELECT COUNT(*) FROM ecosystem_assignments WHERE user_id = ?'); $ac->execute([$userId]);
+    return [
+        'user' => [
+            'id' => (int) $user['id'], 'full_name' => (string) $user['full_name'], 'email' => (string) $user['email'],
+            'role' => $role, 'approval_status' => (string) $user['approval_status'], 'created_at' => $user['created_at'],
+            'referred_by_code' => $user['referred_by_code'] ?? null,
+        ],
+        'profile' => $profile,
+        'stats' => ['requests' => (int) $rc->fetchColumn(), 'documents' => (int) $dc->fetchColumn(), 'assignments' => (int) $ac->fetchColumn()],
+    ];
 }
 function ecosystem_request_update(int $id, string $status, string $note, int $adminId): void
 {

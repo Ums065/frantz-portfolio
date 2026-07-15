@@ -1426,6 +1426,11 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             require_admin();
             json(['requests' => ecosystem_requests_all()]);
         }
+        // Full profile of the account behind a request (View Profile).
+        case $method === 'GET' && preg_match('#^admin/ecosystem/account/(\d+)$#', $route, $m) === 1: {
+            require_admin();
+            json(ecosystem_admin_account_profile((int) $m[1]));
+        }
         case $method === 'PUT' && preg_match('#^admin/ecosystem/request/(\d+)$#', $route, $m) === 1: {
             $admin = require_admin();
             $b = body();

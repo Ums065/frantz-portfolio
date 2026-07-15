@@ -7,7 +7,12 @@ import { api } from '../../lib/api'
    so it scales to lots of requests and accounts. Reuses the shared admin-table /
    admin-toolbar / admin-pager styles for visual consistency. */
 
-interface EcoReq { id: number; org_name: string; role: string; req_type: string; message: string; status: string; admin_note: string; created_ts: number }
+interface EcoReq { id: number; user_id: number; org_name: string; role: string; req_type: string; message: string; status: string; admin_note: string; created_ts: number }
+interface AccountProfile {
+  user: { id: number; full_name: string; email: string; role: string; approval_status: string; created_at: string; referred_by_code: string | null }
+  profile: Record<string, unknown>
+  stats: { requests: number; documents: number; assignments: number }
+}
 interface EcoAccount { user_id: number; role: string; org_name: string; email: string; approval_status: string }
 interface EcoDoc { id: number; doc_type: string; label: string; url: string; created_ts: number }
 interface EcoAnn { id: number; audience: string; title: string; body: string; created_ts: number }
@@ -183,6 +188,7 @@ export default function EcosystemAdminPanel() {
 function RequestModal({ req, onClose, onDone }: { req: EcoReq; onClose: () => void; onDone: (list: EcoReq[]) => void }) {
   const [note, setNote] = useState(req.admin_note || '')
   const [busy, setBusy] = useState('')
+  const [showProfile, setShowProfile] = useState(false)
   const act = async (status: string) => {
     setBusy(status)
     try { const d = await api.put<{ requests: EcoReq[] }>(`admin/ecosystem/request/${req.id}`, { status, admin_note: note }); onDone(d.requests || []) }
@@ -193,8 +199,10 @@ function RequestModal({ req, onClose, onDone }: { req: EcoReq; onClose: () => vo
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
         <span style={{ textTransform: 'capitalize', color: 'var(--muted)', fontSize: 13 }}>{req.role}</span>
         <Pill status={req.status} />
+        <button className="btn btn--sm" onClick={() => setShowProfile(true)}>View Profile</button>
         <span style={{ color: 'var(--muted)', fontSize: 12, marginLeft: 'auto' }}>{fmt(req.created_ts)}</span>
       </div>
+      {showProfile && <ProfileModal userId={req.user_id} onClose={() => setShowProfile(false)} />}
       {req.message && <p style={{ color: '#d8d3c6', fontSize: 13.5, lineHeight: 1.6, whiteSpace: 'pre-wrap', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--line)', borderRadius: 10, padding: '10px 12px' }}>{req.message}</p>}
       <label style={{ ...lbl, marginTop: 12 }}>Note to the applicant <span style={{ textTransform: 'none', color: 'var(--muted)', fontWeight: 400 }}>(for “Needs Info”, write what you need)</span></label>
       <textarea style={{ ...inp, minHeight: 70, resize: 'vertical' }} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Optional note — the applicant sees this…" />
@@ -203,6 +211,61 @@ function RequestModal({ req, onClose, onDone }: { req: EcoReq; onClose: () => vo
           <button key={st} className={`btn btn--sm${req.status === st ? ' btn--solid' : ''}`} disabled={!!busy} onClick={() => act(st)}>{busy === st ? '…' : l}{req.status === st ? ' ✓' : ''}</button>
         ))}
       </div>
+    </Modal>
+  )
+}
+
+/* ---------- read-only applicant profile (View Profile) ---------- */
+function ProfileModal({ userId, onClose }: { userId: number; onClose: () => void }) {
+  const [p, setP] = useState<AccountProfile | null>(null)
+  const [err, setErr] = useState('')
+  useEffect(() => { api.get<AccountProfile>(`admin/ecosystem/account/${userId}`).then(setP).catch((e) => setErr(e instanceof Error ? e.message : 'Could not load profile.')) }, [userId])
+  const row = (k: string, v: React.ReactNode) => (
+    <><dt style={{ color: 'var(--muted)', fontSize: 12.5 }}>{k}</dt><dd style={{ margin: 0, color: '#e8e2d4', fontSize: 13.5, wordBreak: 'break-word' }}>{v || <span style={{ color: 'var(--muted)' }}>—</span>}</dd></>
+  )
+  const PRETTY: Record<string, string> = { tier: 'Tier', recognition_level: 'Recognition level', partner_type: 'Partner type', outlet: 'Outlet', beat: 'Beat', volunteer_type: 'Volunteer role', areas: 'Areas of expertise', availability: 'Availability', category: 'Category', borough: 'Borough / county', hours: 'Hours logged', events_supported: 'Events supported', students_mentored: 'Students mentored', logo_url: 'Logo' }
+  const details = (p?.profile?.details && typeof p.profile.details === 'object') ? (p.profile.details as Record<string, unknown>) : {}
+  return (
+    <Modal title="Applicant Profile" onClose={onClose}>
+      {!p && !err && <p style={{ color: 'var(--muted)' }}>Loading…</p>}
+      {err && <p style={{ color: '#ff9a9a', fontSize: 13 }}>{err}</p>}
+      {p && (
+        <div style={{ display: 'grid', gap: 16 }}>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+            <div style={{ width: 46, height: 46, borderRadius: 12, display: 'grid', placeItems: 'center', background: 'linear-gradient(150deg,rgba(201,168,76,.25),rgba(201,168,76,.06))', border: '1px solid var(--line)', color: 'var(--gold-light)', fontFamily: 'var(--f-serif)', fontSize: 20, fontWeight: 800 }}>{((p.profile.org_name as string) || p.user.full_name || '•').charAt(0).toUpperCase()}</div>
+            <div>
+              <div className="gold-text" style={{ fontFamily: 'var(--f-serif)', fontSize: 18 }}>{(p.profile.org_name as string) || p.user.full_name}</div>
+              <div style={{ color: 'var(--muted)', fontSize: 12.5, textTransform: 'capitalize' }}>{p.user.role} · joined {fmt(Math.floor(new Date(p.user.created_at).getTime() / 1000))}</div>
+            </div>
+            <span style={{ marginLeft: 'auto' }}><Pill status={p.user.approval_status} /></span>
+          </div>
+
+          <dl style={{ display: 'grid', gridTemplateColumns: '150px 1fr', rowGap: 9, columnGap: 12, margin: 0 }}>
+            {row('Contact name', (p.profile.contact_name as string) || p.user.full_name)}
+            {row('Email', <a href={`mailto:${p.user.email}`} style={{ color: 'var(--gold-light)' }}>{p.user.email}</a>)}
+            {row('Phone', p.profile.contact_phone as string)}
+            {row('Website', p.profile.website ? <a href={p.profile.website as string} target="_blank" rel="noreferrer" style={{ color: 'var(--gold-light)' }}>{p.profile.website as string}</a> : '')}
+            {p.profile.referral_code ? row('Referral code', String(p.profile.referral_code)) : null}
+            {p.user.referred_by_code ? row('Referred by', String(p.user.referred_by_code)) : null}
+            {Object.entries(details).filter(([k]) => k !== 'logo_url').map(([k, v]) => (
+              <span key={k} style={{ display: 'contents' }}>{row(PRETTY[k] || k, String(v ?? ''))}</span>
+            ))}
+          </dl>
+
+          {(p.profile.about as string) && (
+            <div>
+              <div style={{ ...lbl }}>About</div>
+              <p style={{ color: '#d8d3c6', fontSize: 13.5, lineHeight: 1.6, margin: 0, whiteSpace: 'pre-wrap' }}>{p.profile.about as string}</p>
+            </div>
+          )}
+
+          <div style={{ display: 'flex', gap: 18, borderTop: '1px solid var(--line)', paddingTop: 12 }}>
+            {([['Requests', p.stats.requests], ['Documents', p.stats.documents], ['Assignments', p.stats.assignments]] as const).map(([k, v]) => (
+              <div key={k}><div className="gold-text" style={{ fontFamily: 'var(--f-serif)', fontSize: 22, fontWeight: 800 }}>{v}</div><div style={{ color: 'var(--muted)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '.05em' }}>{k}</div></div>
+            ))}
+          </div>
+        </div>
+      )}
     </Modal>
   )
 }
