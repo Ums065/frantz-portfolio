@@ -282,10 +282,21 @@ function AccountModal({ acct, onClose, onApprovalChange }: { acct: EcoAccount; o
   const [hours, setHours] = useState(''); const [events, setEvents] = useState(''); const [students, setStudents] = useState(''); const [recMsg, setRecMsg] = useState('')
   // assignment form
   const [aTitle, setATitle] = useState(''); const [aDetail, setADetail] = useState(''); const [aDate, setADate] = useState(''); const [aBusy, setABusy] = useState(false)
+  // full profile (shown at top + used to pre-fill recognition)
+  const [prof, setProf] = useState<AccountProfile | null>(null)
 
   const loadDocs = () => api.get<{ documents: EcoDoc[] }>(`admin/ecosystem/documents/${uid}`).then((d) => setDocs(d.documents || [])).catch(() => setDocs([]))
   const loadAssigns = () => api.get<{ assignments: EcoAssign[] }>(`admin/ecosystem/assignments/${uid}`).then((d) => setAssigns(d.assignments || [])).catch(() => setAssigns([]))
-  useEffect(() => { void loadDocs(); void loadAssigns() }, [uid])
+  useEffect(() => {
+    void loadDocs(); void loadAssigns()
+    api.get<AccountProfile>(`admin/ecosystem/account/${uid}`).then((p) => {
+      setProf(p)
+      const d = (p.profile?.details && typeof p.profile.details === 'object') ? p.profile.details as Record<string, unknown> : {}
+      if (d.hours != null) setHours(String(d.hours))
+      if (d.events_supported != null) setEvents(String(d.events_supported))
+      if (d.students_mentored != null) setStudents(String(d.students_mentored))
+    }).catch(() => {})
+  }, [uid])
 
   const setUserApproval = async (status: string) => {
     try { await api.put(`admin/user/${uid}/approval`, { approval_status: status }); setApproval(status); onApprovalChange() } catch { /* ignore */ }
@@ -325,6 +336,33 @@ function AccountModal({ acct, onClose, onApprovalChange }: { acct: EcoAccount; o
           <button key={s} className={`btn btn--sm${approval === s ? ' btn--solid' : ''}`} onClick={() => setUserApproval(s)} style={{ textTransform: 'capitalize' }}>{s}{approval === s ? ' ✓' : ''}</button>
         ))}
       </div>
+
+      {prof && (
+        <div style={sect}>
+          <label style={lbl}>Profile</label>
+          <dl style={{ display: 'grid', gridTemplateColumns: '140px 1fr', rowGap: 7, columnGap: 12, margin: 0, fontSize: 13 }}>
+            {([
+              ['Contact', (prof.profile.contact_name as string) || prof.user.full_name],
+              ['Email', prof.user.email],
+              ['Phone', prof.profile.contact_phone as string],
+              ['Website', prof.profile.website as string],
+              ['Category', prof.profile.category as string],
+              ['Tier', (prof.profile.details as Record<string, unknown> | undefined)?.tier as string],
+              ['Partner type', (prof.profile.details as Record<string, unknown> | undefined)?.partner_type as string],
+              ['Outlet', (prof.profile.details as Record<string, unknown> | undefined)?.outlet as string],
+              ['Volunteer role', (prof.profile.details as Record<string, unknown> | undefined)?.volunteer_type as string],
+              ['Expertise', (prof.profile.details as Record<string, unknown> | undefined)?.areas as string],
+              ['Availability', (prof.profile.details as Record<string, unknown> | undefined)?.availability as string],
+            ] as Array<[string, string | undefined]>).filter(([, v]) => v).map(([k, v]) => (
+              <span key={k} style={{ display: 'contents' }}>
+                <dt style={{ color: 'var(--muted)' }}>{k}</dt>
+                <dd style={{ margin: 0, color: '#e8e2d4', wordBreak: 'break-word' }}>{v}</dd>
+              </span>
+            ))}
+          </dl>
+          {(prof.profile.about as string) && <p style={{ color: '#d8d3c6', fontSize: 13, lineHeight: 1.55, margin: '8px 0 0', whiteSpace: 'pre-wrap' }}>{prof.profile.about as string}</p>}
+        </div>
+      )}
 
       <div style={sect}>
         <label style={lbl}>Recognition (hours / events / students)</label>
