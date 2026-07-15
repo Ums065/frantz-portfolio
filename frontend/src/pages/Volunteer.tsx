@@ -32,7 +32,7 @@ function OpportunityList({ role, reload, requests }: { role: string; reload: () 
     } finally { setBusy('') }
   }
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(230px,1fr))', gap: 10 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,200px),1fr))', gap: 10 }}>
       {OPPORTUNITIES.map((o) => {
         const applied = appliedFor.has(o)
         return (
@@ -145,7 +145,7 @@ const config: PortalConfig = {
         </Section>
 
         <Section title="Volunteer Profile" right={<RequestButton role="volunteer" reqType="availability" label="Update Availability" reload={reload} />}>
-          <dl style={{ display: 'grid', gridTemplateColumns: '160px 1fr', rowGap: 8, columnGap: 12, margin: 0, color: '#d8d3c6', fontSize: 13.5 }}>
+          <dl className="eco-dl" style={{ color: '#d8d3c6', fontSize: 13.5 }}>
             <dt style={{ color: 'var(--muted)' }}>Role</dt><dd style={{ margin: 0 }}>{d.volunteer_type || '—'}</dd>
             <dt style={{ color: 'var(--muted)' }}>Expertise</dt><dd style={{ margin: 0 }}>{d.areas || '—'}</dd>
             <dt style={{ color: 'var(--muted)' }}>Availability</dt><dd style={{ margin: 0 }}>{d.availability || '—'}</dd>

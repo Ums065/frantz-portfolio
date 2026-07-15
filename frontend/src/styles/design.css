@@ -2954,6 +2954,16 @@ section#challenge .challenge-features .ns-gain p {
 .admin-nav__item:hover .admin-nav__icon,
 .admin-nav__item.is-active .admin-nav__icon { opacity: 1; }
 .admin-nav__label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Responsive label/value list used on the ecosystem + volunteer dashboards.
+   Two columns on desktop; stacks (label above value) on small phones. */
+.eco-dl { display: grid; grid-template-columns: 150px 1fr; row-gap: 8px; column-gap: 12px; margin: 0; }
+.eco-dl dt { color: var(--muted); }
+.eco-dl dd { margin: 0; word-break: break-word; }
+@media (max-width: 560px) {
+  .eco-dl { grid-template-columns: 1fr; row-gap: 2px; }
+  .eco-dl dt { color: var(--gold-light); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; margin-top: 8px; }
+}
 .admin-nav__item:hover {
   background: rgba(201,168,76,0.08);
   border-color: rgba(201,168,76,0.16);

@@ -11,7 +11,7 @@ import { resolveDashboardRoute } from '../lib/dashboardRoute'
    solutions, and raise requests (implementation help / contact school /
    internship-hiring / volunteer) that all go to the Admin for review + consent. */
 
-const WRAP_S: React.CSSProperties = { minHeight: '100vh', color: 'var(--white)', padding: '0 24px 60px', fontFamily: 'var(--f-body)' }
+const WRAP_S: React.CSSProperties = { minHeight: '100vh', color: 'var(--white)', padding: '0 clamp(12px,4vw,24px) 60px', fontFamily: 'var(--f-body)' }
 const cardS: React.CSSProperties = { background: 'rgba(255,255,255,0.04)', border: '1px solid var(--line)', borderRadius: 14, padding: 20 }
 const labelS: React.CSSProperties = { display: 'block', fontSize: 12, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--gold-light)', marginBottom: 6 }
 const inputS: React.CSSProperties = { width: '100%', background: 'rgba(0,0,0,0.25)', border: '1px solid var(--line)', borderRadius: 9, padding: '11px 13px', color: 'var(--ivory)', fontSize: 14 }

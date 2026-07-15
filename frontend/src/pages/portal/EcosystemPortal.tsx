@@ -263,7 +263,7 @@ export default function EcosystemPortal({ config }: { config: PortalConfig }) {
   if (loading) {
     return (
       <div className="admin-page" style={S.wrap}>
-        <div className="glass" style={{ maxWidth: 420, margin: '90px auto', padding: 36, borderRadius: 16, textAlign: 'center' }}>
+        <div className="glass" style={{ maxWidth: 420, margin: '90px auto', padding: 'clamp(20px,6vw,36px)', borderRadius: 16, textAlign: 'center' }}>
           <span style={S.eyebrow}>{title}</span>
           <h1 className="gold-text" style={{ fontFamily: 'var(--f-serif)', fontSize: 26, marginTop: 8 }}>Loading…</h1>
         </div>
@@ -276,7 +276,7 @@ export default function EcosystemPortal({ config }: { config: PortalConfig }) {
     return (
       <div className="admin-page" style={S.wrap}>
         <div className="glass" style={{ maxWidth: 580, margin: '48px auto', borderRadius: 16, overflow: 'hidden' }}>
-          <div style={{ padding: '26px 30px 0' }}>
+          <div style={{ padding: 'clamp(18px,5vw,26px) clamp(16px,5vw,30px) 0' }}>
             <span style={S.eyebrow}>{title}</span>
             <h1 className="gold-text" style={{ fontFamily: 'var(--f-serif)', fontSize: 30, margin: '6px 0 6px' }}>{title}</h1>
             <p style={{ color: 'var(--muted)', fontSize: 14, lineHeight: 1.65 }}>{tagline}</p>
@@ -288,13 +288,13 @@ export default function EcosystemPortal({ config }: { config: PortalConfig }) {
           {err && <p style={{ color: '#ff9a9a', fontSize: 13, padding: '12px 30px 0' }}>{err}</p>}
 
           {mode === 'login' ? (
-            <form onSubmit={doLogin} style={{ padding: '18px 30px 30px', display: 'grid', gap: 14 }}>
+            <form onSubmit={doLogin} style={{ padding: '18px clamp(16px,5vw,30px) 30px', display: 'grid', gap: 14 }}>
               <div><label style={S.label}>Email</label><input style={S.input} type="email" required value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} /></div>
               <div><label style={S.label}>Password</label><input style={S.input} type="password" required value={loginPass} onChange={(e) => setLoginPass(e.target.value)} /></div>
               <button className="btn btn--solid" disabled={busy === 'login'}>{busy === 'login' ? 'Signing in…' : 'Sign In'}</button>
             </form>
           ) : (
-            <form onSubmit={doRegister} style={{ padding: '18px 30px 30px', display: 'grid', gap: 14 }}>
+            <form onSubmit={doRegister} style={{ padding: '18px clamp(16px,5vw,30px) 30px', display: 'grid', gap: 14 }}>
               {orgLabel && <div><label style={S.label}>{orgLabel} *</label><input style={S.input} required value={f.org_name || ''} onChange={(e) => set('org_name', e.target.value)} /></div>}
               {extraFields.length > 0 && (
                 <div style={{ display: 'grid', gridTemplateColumns: extraFields.length > 1 ? 'repeat(auto-fit, minmax(150px, 1fr))' : '1fr', gap: 12 }}>
@@ -342,7 +342,7 @@ export default function EcosystemPortal({ config }: { config: PortalConfig }) {
   if (!isRole && !isAdmin) {
     return (
       <div className="admin-page" style={S.wrap}>
-        <div className="glass" style={{ maxWidth: 460, margin: '80px auto', padding: 36, borderRadius: 16, textAlign: 'center' }}>
+        <div className="glass" style={{ maxWidth: 460, margin: '80px auto', padding: 'clamp(20px,6vw,36px)', borderRadius: 16, textAlign: 'center' }}>
           <span style={S.eyebrow}>{title}</span>
           <h2 className="gold-text" style={{ fontFamily: 'var(--f-serif)', margin: '6px 0 8px' }}>Different Account Type</h2>
           <p style={{ color: 'var(--muted)', fontSize: 14, marginBottom: 20, lineHeight: 1.65 }}>You're signed in with a {uRole || 'different'} account. This portal is for {role} accounts.</p>
@@ -359,7 +359,7 @@ export default function EcosystemPortal({ config }: { config: PortalConfig }) {
   if (isRole && !approved) {
     return (
       <div className="admin-page" style={S.wrap}>
-        <div className="glass" style={{ maxWidth: 480, margin: '80px auto', padding: 36, borderRadius: 16, textAlign: 'center' }}>
+        <div className="glass" style={{ maxWidth: 480, margin: '80px auto', padding: 'clamp(20px,6vw,36px)', borderRadius: 16, textAlign: 'center' }}>
           <span style={S.eyebrow}>{title}</span>
           <h2 className="gold-text" style={{ fontFamily: 'var(--f-serif)', margin: '6px 0 10px' }}>Account Pending Approval</h2>
           <p style={{ color: 'var(--muted)', fontSize: 14, lineHeight: 1.7, marginBottom: 20 }}>Thanks for registering. An admin is reviewing your account and your dashboard will unlock once it's approved.</p>
