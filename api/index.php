@@ -1605,6 +1605,11 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
                 try { return (int) db()->query("SELECT COUNT(*) FROM `$table`")->fetchColumn(); }
                 catch (Throwable $e) { return 0; }
             };
+            // Same, for a custom COUNT query (e.g. WHERE status = 'pending'). Trusted SQL only.
+            $countWhere = static function (string $sql): int {
+                try { return (int) db()->query($sql)->fetchColumn(); }
+                catch (Throwable $e) { return 0; }
+            };
             json([
                 'requests'    => db()->query('SELECT * FROM requests ORDER BY created_at DESC LIMIT 200')->fetchAll(),
                 'subscribers' => db()->query('SELECT * FROM subscribers ORDER BY created_at DESC LIMIT 200')->fetchAll(),
@@ -1622,6 +1627,10 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
                     'rsvps'        => $countOf('event_rsvps'),
                     'sponsors'     => $countOf('sponsor_applications'),
                     'gallery'      => $countOf('gallery_submission_files'),
+                    // Pending counts that drive the sidebar "needs attention" badges.
+                    'business_requests'  => $countWhere("SELECT COUNT(*) FROM business_requests WHERE status = 'pending'"),
+                    'ecosystem_requests' => $countWhere("SELECT COUNT(*) FROM ecosystem_requests WHERE status = 'pending'"),
+                    'sponsors_pending'   => $countWhere("SELECT COUNT(*) FROM sponsor_applications WHERE approval_status = 'pending_review'"),
                 ],
             ]);
         }

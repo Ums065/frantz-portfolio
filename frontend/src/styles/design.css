@@ -2953,7 +2953,7 @@ section#challenge .challenge-features .ns-gain p {
 .admin-nav__icon { width: 20px; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; opacity: 0.82; }
 .admin-nav__item:hover .admin-nav__icon,
 .admin-nav__item.is-active .admin-nav__icon { opacity: 1; }
-.admin-nav__label { flex: 1; min-width: 0; }
+.admin-nav__label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .admin-nav__item:hover {
   background: rgba(201,168,76,0.08);
   border-color: rgba(201,168,76,0.16);

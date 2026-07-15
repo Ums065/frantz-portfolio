@@ -35,7 +35,7 @@ const NAV_GROUPS: Array<{ group: string; items: NavItem[] }> = [
     { key: 'members', label: 'User Accounts' },
     { key: 'approvals', label: 'Account Approvals' },
     { key: 'business-requests', label: 'Business Requests' },
-    { key: 'ecosystem', label: 'Ecosystem (Sponsor/Partner/Media/Volunteer)' },
+    { key: 'ecosystem', label: 'Ecosystem' },
     { key: 'contacts', label: 'Contact Messages' },
     { key: 'subscribers', label: 'Newsletter' },
   ] },
@@ -98,7 +98,7 @@ interface OrderRow {
 }
 interface Submissions {
   requests: RequestRow[]; subscribers: SubRow[]; contacts: ContactRow[]; members: MemberRow[]; orders: OrderRow[]
-  counts?: Partial<Record<'awards' | 'events' | 'blog' | 'testimonials' | 'media' | 'gallery' | 'inventory' | 'community' | 'rsvps' | 'sponsors', number>>
+  counts?: Partial<Record<'awards' | 'events' | 'blog' | 'testimonials' | 'media' | 'gallery' | 'inventory' | 'community' | 'rsvps' | 'sponsors' | 'business_requests' | 'ecosystem_requests' | 'sponsors_pending', number>>
 }
 
 interface DetailField {
@@ -700,8 +700,11 @@ export default function Admin() {
   const notifications: Partial<Record<TabKey, number>> = {
     approvals: pendingAccounts,
     members: pendingAccounts,
+    'business-requests': data?.counts?.business_requests ?? 0,
+    ecosystem: data?.counts?.ecosystem_requests ?? 0,
     requests: reqBy('new'),
     orders: ordBy('pending'),
+    sponsors: data?.counts?.sponsors_pending ?? 0,
     contacts: data?.contacts.length ?? 0,
     'ns-submissions': nsPendingReview,
     'ns-chat': chatUnreadCount,
