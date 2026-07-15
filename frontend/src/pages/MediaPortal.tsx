@@ -80,7 +80,7 @@ const config: PortalConfig = {
 
         <Section title="Branding"><LogoUploader role="media" current={d.logo_url} reload={reload} /></Section>
         <Section title="Announcements"><EcoAnnouncements items={data?.announcements} /></Section>
-        <Section title="Notifications — Your Requests"><EcoRequests items={data?.requests} /></Section>
+        <Section title="Notifications — Your Requests"><EcoRequests items={data?.requests} role="media" reload={reload} /></Section>
       </div>
     )
   },

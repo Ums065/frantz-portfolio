@@ -3966,6 +3966,23 @@ function ecosystem_requests_for_user(int $userId): array
     return array_map(static fn(array $r): array => ['id' => (int) $r['id'], 'req_type' => $r['req_type'], 'message' => (string) ($r['message'] ?? ''), 'status' => $r['status'], 'admin_note' => (string) ($r['admin_note'] ?? ''), 'created_ts' => (int) $r['created_ts']], $s->fetchAll());
 }
 
+/** Applicant reply to a "Needs Info" request: append their answer to the message
+ *  and return it to the admin queue (status back to pending). */
+function ecosystem_request_reply(int $userId, int $reqId, string $reply): array
+{
+    ecosystem_shared_ensure_schema();
+    $reply = trim($reply);
+    if ($reply === '') json(['error' => 'Please type your reply first.'], 422);
+    $s = db()->prepare('SELECT message FROM ecosystem_requests WHERE id = ? AND user_id = ? LIMIT 1');
+    $s->execute([$reqId, $userId]);
+    $r = $s->fetch();
+    if (!$r) json(['error' => 'Request not found.'], 404);
+    $newMsg = trim((string) ($r['message'] ?? '')) . "\n\n[Applicant reply] " . mb_substr($reply, 0, 1500);
+    db()->prepare("UPDATE ecosystem_requests SET message = ?, status = 'pending', reviewed_at = NULL WHERE id = ?")
+        ->execute([mb_substr($newMsg, 0, 4000), $reqId]);
+    return ecosystem_requests_for_user($userId);
+}
+
 /** Which request types each ecosystem role may raise. */
 function ecosystem_request_type_allowed(string $role, string $type): bool
 {

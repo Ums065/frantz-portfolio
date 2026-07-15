@@ -1529,6 +1529,13 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             $u = require_ecosystem($m[1]);
             json(ecosystem_create_request($u, $m[1], body()), 201);
         }
+        // Applicant replies to a "Needs Info" request → appends their answer and sends it
+        // back to the admin queue (status returns to pending).
+        case $method === 'POST' && preg_match('#^ecosystem/(sponsor|partner|media|volunteer)/request/(\d+)/reply$#', $route, $m) === 1: {
+            $u = require_ecosystem($m[1]);
+            $requests = ecosystem_request_reply((int) $u['id'], (int) $m[2], (string) field(body(), 'message'));
+            json(['message' => 'Reply sent — the team will review it.', 'requests' => $requests]);
+        }
 
         /* ---------------- OUR PARTNERS (dynamic content directory) ---------------- */
         case $key === 'GET partners': {

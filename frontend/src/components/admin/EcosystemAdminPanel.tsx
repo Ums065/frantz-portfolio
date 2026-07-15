@@ -26,6 +26,7 @@ export default function EcosystemAdminPanel() {
   const [accounts, setAccounts] = useState<EcoAccount[]>([])
   const [anns, setAnns] = useState<EcoAnn[]>([])
   const [err, setErr] = useState('')
+  const [busyId, setBusyId] = useState(0)
 
   useEffect(() => {
     api.get<{ requests: EcoReq[] }>('admin/ecosystem/requests').then((d) => { setReqs(d.requests || []); setNotes(Object.fromEntries((d.requests || []).map((r) => [r.id, r.admin_note]))) }).catch((e) => setErr(String(e)))
@@ -34,7 +35,10 @@ export default function EcosystemAdminPanel() {
   }, [])
 
   const act = async (id: number, status: string) => {
-    try { const d = await api.put<{ requests: EcoReq[] }>(`admin/ecosystem/request/${id}`, { status, admin_note: notes[id] || '' }); setReqs(d.requests || []) } catch (e) { setErr(String(e)) }
+    setBusyId(id); setErr('')
+    try { const d = await api.put<{ requests: EcoReq[] }>(`admin/ecosystem/request/${id}`, { status, admin_note: notes[id] || '' }); setReqs(d.requests || []) }
+    catch (e) { setErr(String(e)) }
+    finally { setBusyId(0) }
   }
 
   return (
@@ -53,12 +57,20 @@ export default function EcosystemAdminPanel() {
               <div><span className="gold-text" style={{ fontWeight: 800, textTransform: 'capitalize' }}>{r.role} · {r.req_type}</span><span style={{ color: 'var(--muted)', fontSize: 12.5, marginLeft: 8 }}>{r.org_name} · {fmt(r.created_ts)}</span></div>
               <span style={statusStyle(r.status)}>{r.status.replace('_', ' ')}</span>
             </div>
-            {r.message && <p style={{ color: '#c7c1b4', fontSize: 13, margin: '8px 0 0' }}>“{r.message}”</p>}
-            <input style={{ ...inp, marginTop: 10 }} placeholder="Note to the account…" value={notes[r.id] ?? ''} onChange={(e) => setNotes((n) => ({ ...n, [r.id]: e.target.value }))} />
-            <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
-              <button className="btn btn--solid btn--sm" onClick={() => act(r.id, 'approved')}>Approve</button>
-              <button className="btn btn--sm" onClick={() => act(r.id, 'info_needed')}>Needs Info</button>
-              <button className="btn btn--sm" onClick={() => act(r.id, 'declined')}>Decline</button>
+            {r.message && <p style={{ color: '#c7c1b4', fontSize: 13, margin: '8px 0 0', whiteSpace: 'pre-wrap' }}>“{r.message}”</p>}
+            <input style={{ ...inp, marginTop: 10 }} placeholder="Note to the account (for “Needs Info”, write what you need)…" value={notes[r.id] ?? ''} onChange={(e) => setNotes((n) => ({ ...n, [r.id]: e.target.value }))} />
+            <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+              {([['approved', 'Approve'], ['info_needed', 'Needs Info'], ['declined', 'Decline']] as const).map(([st, lbl]) => (
+                <button
+                  key={st}
+                  className={`btn btn--sm${r.status === st ? ' btn--solid' : ''}`}
+                  disabled={busyId === r.id}
+                  aria-pressed={r.status === st}
+                  title={st === 'info_needed' ? 'Ask the applicant for more information — they can reply and it returns to your queue' : ''}
+                  onClick={() => act(r.id, st)}
+                >{busyId === r.id ? '…' : lbl}{r.status === st ? ' ✓' : ''}</button>
+              ))}
+              <span style={{ color: 'var(--muted)', fontSize: 11.5, marginLeft: 'auto' }}>Current: <b style={{ textTransform: 'capitalize' }}>{r.status.replace('_', ' ')}</b></span>
             </div>
           </div>
         ))

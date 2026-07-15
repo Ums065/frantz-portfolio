@@ -88,21 +88,54 @@ export function EcoAnnouncements({ items }: { items?: EcoAnn[] }) {
   )
 }
 
-export function EcoRequests({ items }: { items?: EcoReq[] }) {
+export function EcoRequests({ items, role, reload }: { items?: EcoReq[]; role?: string; reload?: () => void }) {
   if (!items?.length) return <p style={{ color: 'var(--muted)', fontSize: 13, margin: 0 }}>No requests yet.</p>
   return (
-    <div style={{ display: 'grid', gap: 10 }}>
+    <div style={{ display: 'grid', gap: 12 }}>
       {items.map((r) => (
-        <div key={r.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', borderBottom: '1px solid var(--line)', paddingBottom: 8 }}>
-          <div>
-            <span style={{ color: 'var(--ivory)', fontWeight: 700, textTransform: 'capitalize' }}>{r.req_type}</span>
-            {r.message && <div style={{ color: 'var(--muted)', fontSize: 12.5 }}>{r.message}</div>}
-            {r.admin_note && <div style={{ color: 'var(--gold-light)', fontSize: 12.5 }}>Admin: {r.admin_note}</div>}
-            <div style={{ color: 'var(--muted)', fontSize: 11, marginTop: 2 }}>{ecoDate(r.created_ts)}</div>
+        <div key={r.id} style={{ borderBottom: '1px solid var(--line)', paddingBottom: 10 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+            <div style={{ minWidth: 0 }}>
+              <span style={{ color: 'var(--ivory)', fontWeight: 700, textTransform: 'capitalize' }}>{r.req_type}</span>
+              {r.message && <div style={{ color: 'var(--muted)', fontSize: 12.5, whiteSpace: 'pre-wrap' }}>{r.message}</div>}
+              <div style={{ color: 'var(--muted)', fontSize: 11, marginTop: 2 }}>{ecoDate(r.created_ts)}</div>
+            </div>
+            <span style={ecoStatus(r.status)}>{r.status.replace('_', ' ')}</span>
           </div>
-          <span style={ecoStatus(r.status)}>{r.status.replace('_', ' ')}</span>
+          {r.admin_note && (
+            <div style={{ marginTop: 8, borderLeft: '2px solid var(--gold)', paddingLeft: 11, color: 'var(--gold-light)', fontSize: 12.5, lineHeight: 1.5 }}>
+              <strong style={{ color: 'var(--gold)' }}>{r.status === 'info_needed' ? 'The team needs more info:' : 'Team note:'}</strong> {r.admin_note}
+            </div>
+          )}
+          {r.status === 'info_needed' && role && reload && <RequestReply role={role} id={r.id} reload={reload} />}
         </div>
       ))}
+    </div>
+  )
+}
+
+/** Inline reply box shown on an "info needed" request. */
+function RequestReply({ role, id, reload }: { role: string; id: number; reload: () => void }) {
+  const [open, setOpen] = useState(false)
+  const [msg, setMsg] = useState('')
+  const [busy, setBusy] = useState(false)
+  const send = async () => {
+    if (!msg.trim()) return
+    setBusy(true)
+    try {
+      await api.post(`ecosystem/${role}/request/${id}/reply`, { message: msg })
+      window.fcToast?.('Reply sent — the team will review it.')
+      reload()
+    } catch { window.fcToast?.('Could not send your reply. Please try again.') } finally { setBusy(false) }
+  }
+  if (!open) return <button className="btn btn--sm" style={{ marginTop: 8 }} onClick={() => setOpen(true)}>Provide the info →</button>
+  return (
+    <div style={{ marginTop: 8, display: 'grid', gap: 8 }}>
+      <textarea style={{ ...S.input, minHeight: 62, resize: 'vertical' }} value={msg} onChange={(e) => setMsg(e.target.value)} placeholder="Answer the team's question…" autoFocus />
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+        <button className="btn btn--sm" onClick={() => { setOpen(false); setMsg('') }} disabled={busy}>Cancel</button>
+        <button className="btn btn--sm btn--solid" onClick={send} disabled={busy || !msg.trim()}>{busy ? 'Sending…' : 'Send Reply'}</button>
+      </div>
     </div>
   )
 }

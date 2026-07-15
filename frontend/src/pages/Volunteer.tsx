@@ -167,7 +167,7 @@ const config: PortalConfig = {
 
         <Section title="Certificates & Handbook"><EcoDocuments docs={data?.documents} /></Section>
         <Section title="Announcements"><EcoAnnouncements items={data?.announcements} /></Section>
-        <Section title="My Requests"><EcoRequests items={data?.requests} /></Section>
+        <Section title="My Requests"><EcoRequests items={data?.requests} role="volunteer" reload={reload} /></Section>
       </div>
     )
   },
