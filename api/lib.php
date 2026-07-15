@@ -3359,6 +3359,16 @@ function business_ensure_schema(): void
     };
     $addCol('business_user_id', 'INT DEFAULT NULL');
     $addCol('business_website', 'VARCHAR(255) DEFAULT NULL');
+    // Job-offer consent chain (internship/hiring): once admin approves the offer it
+    // goes to the student, then the parent. pending | accepted | declined.
+    $addColReq = static function (string $col, string $def) use ($pdo): void {
+        try {
+            $has = $pdo->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'business_requests' AND COLUMN_NAME = " . $pdo->quote($col))->fetchColumn();
+            if ((int) $has === 0) $pdo->exec("ALTER TABLE business_requests ADD COLUMN $col $def");
+        } catch (Throwable $e) { if (app_debug()) error_log("business_requests column $col: " . $e->getMessage()); }
+    };
+    $addColReq('student_consent', "VARCHAR(12) NOT NULL DEFAULT 'pending'");
+    $addColReq('parent_consent', "VARCHAR(12) NOT NULL DEFAULT 'pending'");
     $ready = true;
 }
 
@@ -3619,6 +3629,8 @@ function business_requests_all(): array
         'message' => (string) ($r['message'] ?? ''),
         'status' => $r['status'],
         'admin_note' => (string) ($r['admin_note'] ?? ''),
+        'student_consent' => (string) ($r['student_consent'] ?? 'pending'),
+        'parent_consent' => (string) ($r['parent_consent'] ?? 'pending'),
         'created_ts' => (int) $r['created_ts'],
     ], $rows);
 }
@@ -3628,7 +3640,7 @@ function business_request_update(int $id, string $status, string $note, int $adm
 {
     business_ensure_schema();
     if (!in_array($status, ['pending', 'approved', 'declined', 'info_needed'], true)) json(['error' => 'Invalid status.'], 422);
-    $own = db()->prepare('SELECT business_user_id, request_type FROM business_requests WHERE id = ? LIMIT 1');
+    $own = db()->prepare('SELECT business_user_id, request_type, student_id FROM business_requests WHERE id = ? LIMIT 1');
     $own->execute([$id]);
     $req = $own->fetch();
     db()->prepare('UPDATE business_requests SET status=?, admin_note=?, reviewed_by_user_id=?, reviewed_at=NOW() WHERE id=?')
@@ -3639,6 +3651,147 @@ function business_request_update(int $id, string $status, string $note, int $adm
         $body = "Your \"" . (string) $req['request_type'] . "\" request has been $label by the program team." . ($note !== '' ? "\n\nNote: " . $note : '');
         ecosystem_notify_user((int) $req['business_user_id'], 'Update on your business request', $body);
     }
+    // Job-offer consent chain: approving an internship/hiring request sends it to
+    // the student for their acceptance (then the parent for consent).
+    if ($req && $status === 'approved' && (string) $req['request_type'] === 'internship' && !empty($req['student_id'])) {
+        business_offer_notify_student((int) $id);
+    }
+}
+
+/* ==================== Job-offer consent chain (business → admin → student → parent) ==================== */
+
+/** Business + student names for an offer, for notification text. */
+function business_offer_meta(int $reqId): ?array
+{
+    $s = db()->prepare(
+        "SELECT br.id, br.student_id, br.business_user_id, br.request_type, br.status, br.student_consent, br.parent_consent,
+                br.message, ba.business_name, ba.category
+         FROM business_requests br LEFT JOIN business_accounts ba ON ba.user_id = br.business_user_id
+         WHERE br.id = ? LIMIT 1"
+    );
+    $s->execute([$reqId]);
+    $r = $s->fetch();
+    return $r ?: null;
+}
+
+/** Notify the student that an internship offer is waiting for their response. */
+function business_offer_notify_student(int $reqId): void
+{
+    $r = business_offer_meta($reqId);
+    if (!$r || empty($r['student_id'])) return;
+    $sid = (int) $r['student_id'];
+    $biz = (string) ($r['business_name'] ?? 'A local business');
+    new_school_add_notification($sid, 'student', 'job_offer', 'New internship offer', "$biz would like to offer you an internship. Open your dashboard to accept or decline.", ['request_id' => $reqId]);
+    try {
+        $st = db()->prepare('SELECT s.email, u.email AS user_email, s.full_name FROM new_school_students s LEFT JOIN users u ON u.id = s.user_id WHERE s.id = ? LIMIT 1');
+        $st->execute([$sid]);
+        $row = $st->fetch();
+        $email = (string) ($row['email'] ?: ($row['user_email'] ?? ''));
+        if ($email !== '' && function_exists('mail_queue_enqueue')) {
+            mail_queue_enqueue('notification', $email, 'You have an internship offer', "Hi " . (string) ($row['full_name'] ?? 'there') . ",\n\n$biz would like to offer you an internship through the Student Challenge. Sign in to your dashboard to accept or decline. If you accept, your parent/guardian will be asked to give consent.\n\n— FrantzCoutard.com");
+        }
+    } catch (Throwable $e) { if (app_debug()) error_log('offer notify student: ' . $e->getMessage()); }
+}
+
+/** Internship offers visible to a student (admin-approved), newest first. */
+function business_offers_for_student(int $studentUserId): array
+{
+    business_ensure_schema();
+    $st = new_school_fetch_student_by_user_id($studentUserId);
+    if (!$st) return [];
+    $s = db()->prepare(
+        "SELECT br.id, br.message, br.status, br.student_consent, br.parent_consent, UNIX_TIMESTAMP(br.created_at) AS created_ts,
+                ba.business_name, ba.category, ba.contact_name
+         FROM business_requests br LEFT JOIN business_accounts ba ON ba.user_id = br.business_user_id
+         WHERE br.student_id = ? AND br.request_type = 'internship' AND br.status = 'approved'
+         ORDER BY br.created_at DESC"
+    );
+    $s->execute([(int) $st['id']]);
+    return array_map(static fn(array $r): array => [
+        'id' => (int) $r['id'], 'business_name' => (string) ($r['business_name'] ?? 'A local business'),
+        'category' => (string) ($r['category'] ?? ''), 'message' => (string) ($r['message'] ?? ''),
+        'student_consent' => (string) $r['student_consent'], 'parent_consent' => (string) $r['parent_consent'], 'created_ts' => (int) $r['created_ts'],
+    ], $s->fetchAll());
+}
+
+/** Internship offers the parent must consent to (child accepted), newest first. */
+function business_offers_for_parent(int $parentUserId): array
+{
+    business_ensure_schema();
+    $p = new_school_fetch_parent_by_user_id($parentUserId);
+    if (!$p) return [];
+    $s = db()->prepare(
+        "SELECT br.id, br.message, br.status, br.student_consent, br.parent_consent, UNIX_TIMESTAMP(br.created_at) AS created_ts,
+                ba.business_name, ba.category, s.full_name AS student_name
+         FROM business_requests br
+         LEFT JOIN business_accounts ba ON ba.user_id = br.business_user_id
+         LEFT JOIN new_school_students s ON s.id = br.student_id
+         WHERE br.student_id = ? AND br.request_type = 'internship' AND br.status = 'approved' AND br.student_consent = 'accepted'
+         ORDER BY br.created_at DESC"
+    );
+    $s->execute([(int) $p['student_id']]);
+    return array_map(static fn(array $r): array => [
+        'id' => (int) $r['id'], 'business_name' => (string) ($r['business_name'] ?? 'A local business'),
+        'category' => (string) ($r['category'] ?? ''), 'student_name' => (string) ($r['student_name'] ?? 'your child'),
+        'message' => (string) ($r['message'] ?? ''), 'student_consent' => (string) $r['student_consent'],
+        'parent_consent' => (string) $r['parent_consent'], 'created_ts' => (int) $r['created_ts'],
+    ], $s->fetchAll());
+}
+
+/** Student accepts/declines an internship offer. On accept → parent is asked to consent. */
+function business_student_respond(int $studentUserId, int $reqId, string $decision): array
+{
+    business_ensure_schema();
+    $st = new_school_fetch_student_by_user_id($studentUserId);
+    if (!$st) json(['error' => 'Student profile not found.'], 404);
+    $chk = db()->prepare("SELECT id, business_user_id, student_consent FROM business_requests WHERE id = ? AND student_id = ? AND request_type = 'internship' AND status = 'approved' LIMIT 1");
+    $chk->execute([$reqId, (int) $st['id']]);
+    $r = $chk->fetch();
+    if (!$r) json(['error' => 'Offer not found.'], 404);
+    if ((string) $r['student_consent'] !== 'pending') json(['error' => 'You have already responded to this offer.'], 409);
+    $dec = $decision === 'accept' ? 'accepted' : 'declined';
+    db()->prepare('UPDATE business_requests SET student_consent = ? WHERE id = ?')->execute([$dec, $reqId]);
+    $meta = business_offer_meta($reqId);
+    $biz = (string) ($meta['business_name'] ?? 'the business');
+    if ($dec === 'accepted') {
+        // Ask the parent to consent.
+        new_school_add_notification((int) $st['id'], 'parent', 'job_offer_consent', 'Consent needed: internship offer', "Your child accepted an internship offer from $biz. Please review and give consent in your dashboard.", ['request_id' => $reqId]);
+        try {
+            $pp = db()->prepare('SELECT email, parent_full_name FROM new_school_parents WHERE student_id = ? LIMIT 1');
+            $pp->execute([(int) $st['id']]);
+            $pr = $pp->fetch();
+            if ($pr && !empty($pr['email']) && function_exists('mail_queue_enqueue')) {
+                mail_queue_enqueue('notification', (string) $pr['email'], 'Consent needed: internship offer', "Hi " . (string) ($pr['parent_full_name'] ?? 'there') . ",\n\nYour child has accepted an internship offer from $biz. Please sign in to your parent dashboard to review and provide consent before anything proceeds.\n\n— FrantzCoutard.com");
+            }
+        } catch (Throwable $e) { if (app_debug()) error_log('offer notify parent: ' . $e->getMessage()); }
+    } else {
+        // Declined by student → tell the business.
+        if ($meta && function_exists('ecosystem_notify_user')) ecosystem_notify_user((int) $meta['business_user_id'], 'Internship offer declined', "The student declined your internship offer.");
+    }
+    return business_offers_for_student($studentUserId);
+}
+
+/** Parent gives/declines final consent for the internship offer. On consent → business notified. */
+function business_parent_respond(int $parentUserId, int $reqId, string $decision): array
+{
+    business_ensure_schema();
+    $p = new_school_fetch_parent_by_user_id($parentUserId);
+    if (!$p) json(['error' => 'Parent profile not found.'], 404);
+    $chk = db()->prepare("SELECT id, business_user_id, student_consent, parent_consent FROM business_requests WHERE id = ? AND student_id = ? AND request_type = 'internship' AND status = 'approved' LIMIT 1");
+    $chk->execute([$reqId, (int) $p['student_id']]);
+    $r = $chk->fetch();
+    if (!$r) json(['error' => 'Offer not found.'], 404);
+    if ((string) $r['student_consent'] !== 'accepted') json(['error' => 'This offer is not ready for parent consent yet.'], 409);
+    if ((string) $r['parent_consent'] !== 'pending') json(['error' => 'You have already responded to this offer.'], 409);
+    $dec = $decision === 'accept' ? 'accepted' : 'declined';
+    db()->prepare('UPDATE business_requests SET parent_consent = ? WHERE id = ?')->execute([$dec, $reqId]);
+    if (function_exists('ecosystem_notify_user')) {
+        $msg = $dec === 'accepted'
+            ? "Your internship offer has been accepted — the student and their parent/guardian have both consented. The program team will coordinate the next steps with you."
+            : "The parent/guardian declined consent for your internship offer.";
+        ecosystem_notify_user((int) $r['business_user_id'], 'Internship offer: ' . ($dec === 'accepted' ? 'accepted' : 'declined'), $msg);
+    }
+    return business_offers_for_parent($parentUserId);
 }
 
 /* ==================== Ecosystem accounts (sponsor / partner / media / volunteer) ==================== */

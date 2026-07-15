@@ -730,6 +730,67 @@ const challengeFaqItems = [
     answer: "Choose the correct registration role at the top of the page, then follow the workflow through the dashboard.",
   },
 ] as const
+interface JobOffer { id: number; business_name: string; category: string; message: string; student_consent: string; parent_consent: string; created_ts: number }
+
+/* Internship/job offers surfaced on the student + parent dashboards. Self-fetches
+   so it needs no changes to the dashboard data pipeline. Flow: admin approves →
+   student accepts → parent consents → business is notified. */
+function JobOffers({ role, hidden }: { role: 'student' | 'parent'; hidden?: boolean }) {
+  const [offers, setOffers] = useState<JobOffer[]>([])
+  const [busy, setBusy] = useState(0)
+  useEffect(() => {
+    let alive = true
+    api.get<{ offers: JobOffer[] }>(`new-school/${role}/offers`).then((d) => { if (alive) setOffers(d.offers || []) }).catch(() => {})
+    return () => { alive = false }
+  }, [role])
+  const respond = async (id: number, decision: 'accept' | 'decline') => {
+    setBusy(id)
+    try {
+      const d = await api.post<{ offers: JobOffer[]; message?: string }>(`new-school/${role}/offer/${id}/respond`, { decision })
+      setOffers(d.offers || [])
+      window.fcToast?.(d.message || 'Saved.')
+    } catch (e) { window.fcToast?.(e instanceof Error ? e.message : 'Could not save your response.') } finally { setBusy(0) }
+  }
+  if (offers.length === 0) return null
+  const statusLine = (o: JobOffer): string => {
+    if (role === 'student') {
+      if (o.student_consent === 'declined') return 'You declined this offer.'
+      if (o.student_consent === 'accepted') return o.parent_consent === 'accepted' ? 'Accepted — your parent/guardian has consented. The team will coordinate next steps.' : o.parent_consent === 'declined' ? 'Your parent/guardian declined consent.' : 'You accepted — waiting for your parent/guardian to consent.'
+      return 'Respond below to accept or decline.'
+    }
+    if (o.parent_consent === 'accepted') return 'You consented. The business has been notified.'
+    if (o.parent_consent === 'declined') return 'You declined consent.'
+    return 'Your child accepted this offer — please give or decline consent.'
+  }
+  const canAct = (o: JobOffer) => role === 'student' ? o.student_consent === 'pending' : o.parent_consent === 'pending'
+  return (
+    <article className="glass ns-dash-card ns-dash-card--wide reveal in" hidden={hidden}>
+      <div className="ns-dash-card__head">
+        <span className="eyebrow">{role === 'student' ? '💼 Internship Offers' : '💼 Consent — Internship Offers'}</span>
+        <span className="ns-board__badge">{offers.filter(canAct).length || ''}</span>
+      </div>
+      <div style={{ display: 'grid', gap: 12 }}>
+        {offers.map((o) => (
+          <div key={o.id} style={{ border: '1px solid var(--line)', borderRadius: 12, padding: '12px 14px', background: 'rgba(0,0,0,0.14)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+              <strong style={{ color: 'var(--gold-light)' }}>{o.business_name}</strong>
+              {o.category && <span style={{ color: 'var(--muted)', fontSize: 12 }}>{o.category}</span>}
+            </div>
+            {o.message && <p style={{ color: '#d8d3c6', fontSize: 13.5, lineHeight: 1.55, margin: '6px 0 0', whiteSpace: 'pre-wrap' }}>{o.message}</p>}
+            <p style={{ color: 'var(--muted)', fontSize: 12.5, margin: '8px 0 0' }}>{statusLine(o)}</p>
+            {canAct(o) && (
+              <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+                <button className="btn btn--sm btn--solid" disabled={busy === o.id} onClick={() => respond(o.id, 'accept')}>{busy === o.id ? '…' : role === 'student' ? 'Accept offer' : 'Give consent'}</button>
+                <button className="btn btn--sm" disabled={busy === o.id} onClick={() => respond(o.id, 'decline')}>Decline</button>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </article>
+  )
+}
+
 const dashboardTabsByRole: Record<string, DashboardTabConfig[]> = {
   student: [
     { key: 'overview', label: 'Overview', hint: 'Your progress at a glance' },
@@ -2845,6 +2906,7 @@ export default function NewSchool() {
 
               {studentDashboard && (
             <div className="ns-dash-grid">
+              <JobOffers role="student" hidden={dashboardTab !== 'overview'} />
               {String(studentDashboard.parent?.link_status || '').toLowerCase() === 'pending_student' && (
                 <article className="glass ns-dash-card ns-dash-card--wide reveal in">
                   <div className="ns-dash-card__head">
@@ -3294,6 +3356,7 @@ export default function NewSchool() {
 
               {parentDashboard && (
             <div className="ns-dash-grid">
+              <JobOffers role="parent" hidden={dashboardTab !== 'overview'} />
               <article className="glass ns-dash-card reveal in">
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">Parent Dashboard</span>

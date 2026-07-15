@@ -18,6 +18,8 @@ interface BizAdminRequest {
   message: string
   status: string
   admin_note: string
+  student_consent: string
+  parent_consent: string
   created_ts: number
 }
 
@@ -100,6 +102,16 @@ function BizRequestModal({ req, onClose, onDone }: { req: BizAdminRequest; onClo
         <p style={{ color: '#d8d3c6', fontSize: 13, margin: '0 0 10px' }}>
           <span style={{ color: 'var(--muted)' }}>Regarding:</span> {[req.student_name, req.school_name].filter(Boolean).join(' · ')}
         </p>
+      )}
+      {req.request_type === 'internship' && req.status === 'approved' && (
+        <div style={{ display: 'flex', gap: 16, margin: '0 0 12px', flexWrap: 'wrap', fontSize: 12.5 }}>
+          <span style={{ color: 'var(--muted)' }}>Consent chain:</span>
+          <span>Student <Pill status={req.student_consent} /></span>
+          <span>Parent <Pill status={req.parent_consent} /></span>
+        </div>
+      )}
+      {req.request_type === 'internship' && req.status !== 'approved' && (
+        <p style={{ color: 'var(--gold-light)', fontSize: 12.5, margin: '0 0 10px' }}>Approving this sends the offer to the student, then their parent/guardian for consent.</p>
       )}
       {req.message && <p style={{ color: '#d8d3c6', fontSize: 13.5, lineHeight: 1.6, whiteSpace: 'pre-wrap', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--line)', borderRadius: 10, padding: '10px 12px' }}>{req.message}</p>}
 

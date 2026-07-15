@@ -118,6 +118,8 @@ CREATE TABLE IF NOT EXISTS `business_requests` (
   `reviewed_at` timestamp NULL DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `student_consent` varchar(12) NOT NULL DEFAULT 'pending',
+  `parent_consent` varchar(12) NOT NULL DEFAULT 'pending',
   PRIMARY KEY (`id`),
   KEY `idx_breq_biz` (`business_user_id`),
   KEY `idx_breq_status` (`status`)
@@ -135,6 +137,8 @@ CALL add_column_if_missing('business_requests', 'reviewed_by_user_id', 'int DEFA
 CALL add_column_if_missing('business_requests', 'reviewed_at', 'timestamp NULL DEFAULT NULL', 'reviewed_by_user_id');
 CALL add_column_if_missing('business_requests', 'created_at', 'timestamp NULL DEFAULT CURRENT_TIMESTAMP', 'reviewed_at');
 CALL add_column_if_missing('business_requests', 'updated_at', 'timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP', 'created_at');
+CALL add_column_if_missing('business_requests', 'student_consent', 'varchar(12) NOT NULL DEFAULT ''pending''', 'updated_at');
+CALL add_column_if_missing('business_requests', 'parent_consent', 'varchar(12) NOT NULL DEFAULT ''pending''', 'student_consent');
 
 -- ---------- community_comments ----------
 CREATE TABLE IF NOT EXISTS `community_comments` (
