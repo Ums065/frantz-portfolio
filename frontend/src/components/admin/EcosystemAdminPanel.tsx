@@ -25,14 +25,14 @@ const fmt = (ts: number) => { try { return new Date(ts * 1000).toLocaleDateStrin
 const cap = (s: string) => (s || '').replace(/_/g, ' ')
 
 const STATUS_COLORS: Record<string, string> = { approved: 'var(--gold-light)', declined: '#ff9a9a', rejected: '#ff9a9a', info_needed: 'var(--gold)', pending: 'var(--muted)', pending_review: 'var(--gold)' }
-function Pill({ status }: { status: string }) {
+export function Pill({ status }: { status: string }) {
   const c = STATUS_COLORS[status] || 'var(--muted)'
   return <span style={{ display: 'inline-block', color: c, border: `1px solid ${c}`, borderRadius: 999, padding: '2px 9px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', whiteSpace: 'nowrap' }}>{cap(status)}</span>
 }
 
 /* ---------- reusable filterable table (shared admin-* styles) ---------- */
 interface FilterDef<T> { label: string; options: string[]; valueOf: (r: T) => string }
-function EcoTable<T>({ head, rows, renderRow, searchText, filters = [], searchPlaceholder, pageSize = 12 }: {
+export function EcoTable<T>({ head, rows, renderRow, searchText, filters = [], searchPlaceholder, pageSize = 12 }: {
   head: string[]; rows: T[]; renderRow: (r: T) => React.ReactNode; searchText?: (r: T) => string
   filters?: FilterDef<T>[]; searchPlaceholder?: string; pageSize?: number
 }) {
@@ -79,7 +79,7 @@ function EcoTable<T>({ head, rows, renderRow, searchText, filters = [], searchPl
   )
 }
 
-function Modal({ title, onClose, children, wide }: { title: string; onClose: () => void; children: React.ReactNode; wide?: boolean }) {
+export function Modal({ title, onClose, children, wide }: { title: string; onClose: () => void; children: React.ReactNode; wide?: boolean }) {
   return createPortal(
     <div className="modal-overlay open" onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
       <div className="glass" style={{ maxWidth: wide ? 620 : 480, width: '94%', margin: '9vh auto', maxHeight: '82vh', overflowY: 'auto', padding: 24, borderRadius: 16 }}>
@@ -121,6 +121,12 @@ export default function EcosystemAdminPanel() {
 
   return (
     <div style={{ display: 'grid', gap: 14 }}>
+      <div style={{ background: 'rgba(201,168,76,0.06)', border: '1px solid var(--line)', borderRadius: 12, padding: '13px 16px' }}>
+        <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.05em', textTransform: 'uppercase', color: 'var(--gold)' }}>What this tab is for</div>
+        <p style={{ color: '#d8d3c6', fontSize: 13, lineHeight: 1.6, margin: '5px 0 0' }}>
+          Manage the ecosystem partners — <strong>Sponsors, Partners, Media &amp; Volunteers</strong> (plus Business accounts). <strong>Requests</strong>: review meeting / event / credential / opportunity requests they raise. <strong>Accounts</strong>: approve accounts, issue documents, set volunteer recognition, and create assignments. <strong>Announcements</strong>: post updates to any role. Each account is emailed when you act on their request.
+        </p>
+      </div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         {TABS.map((t) => (
           <button key={t.key} className={`btn btn--sm${tab === t.key ? ' btn--solid' : ''}`} onClick={() => setTab(t.key)}>
@@ -216,7 +222,7 @@ function RequestModal({ req, onClose, onDone }: { req: EcoReq; onClose: () => vo
 }
 
 /* ---------- read-only applicant profile (View Profile) ---------- */
-function ProfileModal({ userId, onClose }: { userId: number; onClose: () => void }) {
+export function ProfileModal({ userId, onClose }: { userId: number; onClose: () => void }) {
   const [p, setP] = useState<AccountProfile | null>(null)
   const [err, setErr] = useState('')
   useEffect(() => { api.get<AccountProfile>(`admin/ecosystem/account/${userId}`).then(setP).catch((e) => setErr(e instanceof Error ? e.message : 'Could not load profile.')) }, [userId])

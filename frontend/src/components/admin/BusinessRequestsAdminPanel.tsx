@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react'
 import { api } from '../../lib/api'
+import { Pill, Modal, EcoTable, ProfileModal } from './EcosystemAdminPanel'
 
 /* Admin review of Business opportunity requests (implementation help / contact
-   school / internship-hiring / volunteer). The admin decides whether consent is
-   required from the student, parent/guardian, school, teacher, or program admin
-   before anything proceeds — nothing is granted automatically. */
+   school / internship-hiring / volunteer). Table + filters + detail modal, so it
+   scales to lots of records. The business can't reach students/schools directly —
+   admin approves and coordinates consent. */
 
 interface BizAdminRequest {
   id: number
+  business_user_id: number
   business_name: string
   request_type: string
   student_name: string | null
@@ -25,75 +27,91 @@ const LABEL: Record<string, string> = {
   internship: 'Internship / Hiring',
   volunteer: 'Volunteer Support',
 }
-const statusStyle = (s: string): React.CSSProperties => {
-  const map: Record<string, string> = { approved: 'var(--gold-light)', declined: '#ff9a9a', info_needed: 'var(--gold)', pending: 'var(--muted)' }
-  return { color: map[s] || 'var(--muted)', fontWeight: 700, fontSize: 11, textTransform: 'uppercase', letterSpacing: '.05em' }
-}
-const fmtDate = (ts: number) => { try { return new Date(ts * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) } catch { return '' } }
-const cardS: React.CSSProperties = { background: 'rgba(255,255,255,0.04)', border: '1px solid var(--line)', borderRadius: 14, padding: 18 }
-const inputS: React.CSSProperties = { width: '100%', background: 'rgba(0,0,0,0.25)', border: '1px solid var(--line)', borderRadius: 9, padding: '9px 12px', color: 'var(--ivory)', fontSize: 13 }
+const fmt = (ts: number) => { try { return new Date(ts * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) } catch { return '' } }
+const clamp = { display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical', overflow: 'hidden', color: 'var(--muted)' } as React.CSSProperties
 
 export default function BusinessRequestsAdminPanel() {
   const [rows, setRows] = useState<BizAdminRequest[]>([])
-  const [notes, setNotes] = useState<Record<number, string>>({})
-  const [busyId, setBusyId] = useState(0)
+  const [open, setOpen] = useState<BizAdminRequest | null>(null)
   const [err, setErr] = useState('')
-  const [filter, setFilter] = useState<'all' | 'pending'>('pending')
-
-  const load = () => api.get<{ requests: BizAdminRequest[] }>('admin/business-requests')
-    .then((d) => { setRows(d.requests || []); setNotes(Object.fromEntries((d.requests || []).map((r) => [r.id, r.admin_note]))) })
-    .catch((e) => setErr(e instanceof Error ? e.message : 'Could not load requests.'))
+  const load = () => api.get<{ requests: BizAdminRequest[] }>('admin/business-requests').then((d) => setRows(d.requests || [])).catch((e) => setErr(e instanceof Error ? e.message : 'Could not load requests.'))
   useEffect(() => { void load() }, [])
-
-  const act = async (id: number, status: string) => {
-    setBusyId(id); setErr('')
-    try {
-      const d = await api.put<{ requests: BizAdminRequest[] }>(`admin/business-request/${id}`, { status, admin_note: notes[id] || '' })
-      setRows(d.requests || [])
-    } catch (e) { setErr(e instanceof Error ? e.message : 'Could not update.') }
-    finally { setBusyId(0) }
-  }
-
-  const shown = rows.filter((r) => filter === 'all' || r.status === 'pending')
-  const pendingCount = rows.filter((r) => r.status === 'pending').length
 
   return (
     <div style={{ display: 'grid', gap: 14 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
-        <div style={{ color: 'var(--muted)', fontSize: 13 }}>{pendingCount} pending · {rows.length} total</div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button className={`btn btn--sm${filter === 'pending' ? ' btn--solid' : ''}`} onClick={() => setFilter('pending')}>Pending</button>
-          <button className={`btn btn--sm${filter === 'all' ? ' btn--solid' : ''}`} onClick={() => setFilter('all')}>All</button>
-        </div>
+      <div style={{ background: 'rgba(201,168,76,0.06)', border: '1px solid var(--line)', borderRadius: 12, padding: '13px 16px' }}>
+        <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.05em', textTransform: 'uppercase', color: 'var(--gold)' }}>What this tab is for</div>
+        <p style={{ color: '#d8d3c6', fontSize: 13, lineHeight: 1.6, margin: '5px 0 0' }}>
+          Opportunity requests raised by <strong>local businesses</strong> off a student's interview or submitted solution —
+          <em> implementation help</em>, <em>hiring a student</em> (ages 16–19), <em>contacting a school</em>, or <em>volunteer support</em>.
+          Review each and Approve / ask for more info / Decline. A business can <strong>never</strong> contact a student or school
+          directly — you approve and coordinate the required consent. The business is emailed your decision.
+        </p>
       </div>
-
       {err && <p style={{ color: '#ff9a9a', fontSize: 13 }}>{err}</p>}
 
-      {shown.length === 0
-        ? <div style={{ ...cardS, color: 'var(--muted)', fontSize: 14 }}>No {filter === 'pending' ? 'pending ' : ''}business requests.</div>
-        : shown.map((r) => (
-          <div key={r.id} style={cardS}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-              <div>
-                <span className="gold-text" style={{ fontWeight: 800, fontSize: 15 }}>{LABEL[r.request_type] || r.request_type}</span>
-                <span style={{ color: 'var(--muted)', fontSize: 12.5, marginLeft: 8 }}>· {r.business_name} · {fmtDate(r.created_ts)}</span>
-              </div>
-              <span style={statusStyle(r.status)}>{r.status.replace('_', ' ')}</span>
-            </div>
-            <div style={{ color: '#d8d3c6', fontSize: 13, marginTop: 6 }}>
-              {[r.student_name && `Student: ${r.student_name}`, r.school_name && `School: ${r.school_name}`, r.submission_id && `Solution #${r.submission_id}`].filter(Boolean).join(' · ') || 'General request'}
-            </div>
-            {r.message && <p style={{ color: '#c7c1b4', fontSize: 13.5, margin: '8px 0 0', lineHeight: 1.55 }}>“{r.message}”</p>}
-            <div style={{ marginTop: 12 }}>
-              <input style={inputS} placeholder="Note to the business (consent required, next steps…)" value={notes[r.id] ?? ''} onChange={(e) => setNotes((n) => ({ ...n, [r.id]: e.target.value }))} />
-            </div>
-            <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
-              <button className="btn btn--solid btn--sm" disabled={busyId === r.id} onClick={() => act(r.id, 'approved')}>Approve</button>
-              <button className="btn btn--sm" disabled={busyId === r.id} onClick={() => act(r.id, 'info_needed')}>Needs Info</button>
-              <button className="btn btn--sm" disabled={busyId === r.id} onClick={() => act(r.id, 'declined')}>Decline</button>
-            </div>
-          </div>
-        ))}
+      <EcoTable<BizAdminRequest>
+        head={['Business', 'Type', 'Student / School', 'Request', 'Status', 'Date', '']}
+        rows={rows}
+        searchText={(r) => `${r.business_name} ${r.request_type} ${r.student_name || ''} ${r.school_name || ''} ${r.message}`}
+        searchPlaceholder="Search business requests…"
+        filters={[
+          { label: 'types', options: ['implementation', 'contact_school', 'internship', 'volunteer'], valueOf: (r) => r.request_type },
+          { label: 'statuses', options: ['pending', 'approved', 'info_needed', 'declined'], valueOf: (r) => r.status },
+        ]}
+        renderRow={(r) => (
+          <tr key={r.id} style={{ cursor: 'pointer' }} onClick={() => setOpen(r)}>
+            <td style={{ fontWeight: 600 }}>{r.business_name}</td>
+            <td>{LABEL[r.request_type] || r.request_type}</td>
+            <td style={{ color: 'var(--muted)' }}>{[r.student_name, r.school_name].filter(Boolean).join(' · ') || '—'}</td>
+            <td style={{ maxWidth: 240 }}><span style={clamp}>{r.message || '—'}</span></td>
+            <td><Pill status={r.status} /></td>
+            <td style={{ whiteSpace: 'nowrap', color: 'var(--muted)' }}>{fmt(r.created_ts)}</td>
+            <td><button className="btn btn--sm" onClick={(e) => { e.stopPropagation(); setOpen(r) }}>Review</button></td>
+          </tr>
+        )}
+      />
+
+      {open && <BizRequestModal req={open} onClose={() => setOpen(null)} onDone={(list) => { setRows(list); setOpen(null) }} />}
     </div>
+  )
+}
+
+function BizRequestModal({ req, onClose, onDone }: { req: BizAdminRequest; onClose: () => void; onDone: (list: BizAdminRequest[]) => void }) {
+  const [note, setNote] = useState(req.admin_note || '')
+  const [busy, setBusy] = useState('')
+  const [showProfile, setShowProfile] = useState(false)
+  const inp: React.CSSProperties = { width: '100%', background: 'rgba(0,0,0,0.25)', border: '1px solid var(--line)', borderRadius: 9, padding: '9px 12px', color: 'var(--ivory)', fontSize: 13 }
+  const act = async (status: string) => {
+    setBusy(status)
+    try { const d = await api.put<{ requests: BizAdminRequest[] }>(`admin/business-request/${req.id}`, { status, admin_note: note }); onDone(d.requests || []) }
+    catch { setBusy('') }
+  }
+  return (
+    <Modal title={`${LABEL[req.request_type] || req.request_type} · ${req.business_name}`} onClose={onClose}>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
+        <Pill status={req.status} />
+        <button className="btn btn--sm" onClick={() => setShowProfile(true)}>View Profile</button>
+        <span style={{ color: 'var(--muted)', fontSize: 12, marginLeft: 'auto' }}>{fmt(req.created_ts)}</span>
+      </div>
+      {showProfile && <ProfileModal userId={req.business_user_id} onClose={() => setShowProfile(false)} />}
+
+      {(req.student_name || req.school_name) && (
+        <p style={{ color: '#d8d3c6', fontSize: 13, margin: '0 0 10px' }}>
+          <span style={{ color: 'var(--muted)' }}>Regarding:</span> {[req.student_name, req.school_name].filter(Boolean).join(' · ')}
+        </p>
+      )}
+      {req.message && <p style={{ color: '#d8d3c6', fontSize: 13.5, lineHeight: 1.6, whiteSpace: 'pre-wrap', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--line)', borderRadius: 10, padding: '10px 12px' }}>{req.message}</p>}
+
+      <label style={{ display: 'block', fontSize: 11, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--gold-light)', margin: '12px 0 5px' }}>
+        Note to the business <span style={{ textTransform: 'none', color: 'var(--muted)', fontWeight: 400 }}>(for “Needs Info”, write what you need)</span>
+      </label>
+      <textarea style={{ ...inp, minHeight: 70, resize: 'vertical' }} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Optional note — the business sees this…" />
+      <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
+        {([['approved', 'Approve'], ['info_needed', 'Needs Info'], ['declined', 'Decline']] as const).map(([st, l]) => (
+          <button key={st} className={`btn btn--sm${req.status === st ? ' btn--solid' : ''}`} disabled={!!busy} onClick={() => act(st)}>{busy === st ? '…' : l}{req.status === st ? ' ✓' : ''}</button>
+        ))}
+      </div>
+    </Modal>
   )
 }

@@ -3610,6 +3610,7 @@ function business_requests_all(): array
     )->fetchAll();
     return array_map(static fn(array $r): array => [
         'id' => (int) $r['id'],
+        'business_user_id' => (int) $r['business_user_id'],
         'business_name' => (string) ($r['business_name'] ?? ('Business #' . $r['business_user_id'])),
         'request_type' => $r['request_type'],
         'student_name' => $r['student_name'],
@@ -3627,8 +3628,17 @@ function business_request_update(int $id, string $status, string $note, int $adm
 {
     business_ensure_schema();
     if (!in_array($status, ['pending', 'approved', 'declined', 'info_needed'], true)) json(['error' => 'Invalid status.'], 422);
+    $own = db()->prepare('SELECT business_user_id, request_type FROM business_requests WHERE id = ? LIMIT 1');
+    $own->execute([$id]);
+    $req = $own->fetch();
     db()->prepare('UPDATE business_requests SET status=?, admin_note=?, reviewed_by_user_id=?, reviewed_at=NOW() WHERE id=?')
         ->execute([$status, mb_substr($note, 0, 2000) ?: null, $adminId, $id]);
+    // Email the business owner about the decision (Feature E parity with ecosystem).
+    if ($req && $status !== 'pending' && function_exists('ecosystem_notify_user')) {
+        $label = ['approved' => 'approved', 'declined' => 'declined', 'info_needed' => 'needs more information'][$status] ?? $status;
+        $body = "Your \"" . (string) $req['request_type'] . "\" request has been $label by the program team." . ($note !== '' ? "\n\nNote: " . $note : '');
+        ecosystem_notify_user((int) $req['business_user_id'], 'Update on your business request', $body);
+    }
 }
 
 /* ==================== Ecosystem accounts (sponsor / partner / media / volunteer) ==================== */
