@@ -18,6 +18,8 @@ const inputS: React.CSSProperties = { width: '100%', background: 'rgba(0,0,0,0.2
 const eyebrow: React.CSSProperties = { fontSize: 11, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--gold)' }
 const thS: React.CSSProperties = { textAlign: 'left', padding: '12px 14px', color: 'var(--gold-light)', fontWeight: 600, borderBottom: '1px solid var(--line)', textTransform: 'uppercase', fontSize: 11, letterSpacing: '.06em' }
 const tdS: React.CSSProperties = { padding: '12px 14px', verticalAlign: 'top', color: '#d8d3c6', borderBottom: '1px solid rgba(201,168,76,0.08)' }
+// 2-line preview clamp for long text inside a table cell.
+const clampS = { display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', lineHeight: 1.45 } as React.CSSProperties
 
 interface BizMaterial { label: string; url: string }
 interface BizSolution {
@@ -113,6 +115,8 @@ export default function Business() {
   const [draft, setDraft] = useState<ReqDraft | null>(null)
   const [reqBusy, setReqBusy] = useState(false)
   const [reqErr, setReqErr] = useState('')
+  // interview detail modal
+  const [detail, setDetail] = useState<BizInterview | null>(null)
 
   // auth panel
   const [mode, setMode] = useState<'login' | 'register'>('register')
@@ -341,13 +345,15 @@ export default function Business() {
                     <thead><tr><th style={thS}>Student</th><th style={thS}>School</th><th style={thS}>Visited</th><th style={thS}>Challenge they logged</th><th style={thS}>Solution</th><th style={thS}></th></tr></thead>
                     <tbody>
                       {interviews.map((i) => (
-                        <tr key={i.id}>
+                        <tr key={i.id} onClick={() => setDetail(i)} style={{ cursor: 'pointer' }} title="Click to view full interview details">
                           <td style={tdS}>{i.student_name}{i.verified && <span title="Signed / verified visit" style={{ color: 'var(--gold)', marginLeft: 6 }}>✓</span>}</td>
                           <td style={tdS}>{i.school_name}{i.grade_level ? ` · ${i.grade_level}` : ''}</td>
-                          <td style={tdS}>{i.date_of_visit || '—'}</td>
-                          <td style={{ ...tdS, maxWidth: 280 }}>{i.main_challenge || '—'}</td>
-                          <td style={tdS}>{i.solution ? <span style={{ color: 'var(--gold-light)' }}>Submitted</span> : i.solution_pending ? <span style={{ color: 'var(--muted)' }}>In progress</span> : <span style={{ color: 'var(--muted)' }}>—</span>}</td>
-                          <td style={tdS}><button className="btn btn--sm" onClick={() => openReq({ type: 'contact_school', title: `Contact ${i.school_name}`, student_id: i.student_id, school_name: i.school_name, note: '' })}>Contact School</button></td>
+                          <td style={{ ...tdS, whiteSpace: 'nowrap' }}>{i.date_of_visit || '—'}</td>
+                          <td style={{ ...tdS, maxWidth: 320 }}><span style={clampS}>{i.main_challenge || '—'}</span></td>
+                          <td style={{ ...tdS, whiteSpace: 'nowrap' }}>{i.solution ? <span style={{ color: 'var(--gold-light)' }}>Submitted</span> : i.solution_pending ? <span style={{ color: 'var(--muted)' }}>In progress</span> : <span style={{ color: 'var(--muted)' }}>—</span>}</td>
+                          <td style={{ ...tdS, whiteSpace: 'nowrap' }}>
+                            <button className="btn btn--sm" onClick={(e) => { e.stopPropagation(); setDetail(i) }}>View</button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -454,6 +460,76 @@ export default function Business() {
           </div>
         </div>
       )}
+
+      {detail && (
+        <div onClick={() => setDetail(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', display: 'grid', placeItems: 'center', padding: 20, zIndex: 60 }}>
+          <div onClick={(e) => e.stopPropagation()} className="glass" style={{ maxWidth: 640, width: '100%', maxHeight: '86vh', overflowY: 'auto', padding: 26, borderRadius: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+              <div>
+                <span style={eyebrow}>Interview · Visit #{detail.visit_number}</span>
+                <h3 className="gold-text" style={{ fontFamily: 'var(--f-serif)', fontSize: 22, margin: '4px 0 0' }}>
+                  {detail.student_name}{detail.verified && <span title="Signed / verified visit" style={{ color: 'var(--gold)', marginLeft: 6 }}>✓</span>}
+                </h3>
+                <div style={{ color: 'var(--muted)', fontSize: 13, marginTop: 3 }}>
+                  {[detail.school_name, detail.grade_level, detail.student_age ? `Age ${detail.student_age}` : ''].filter(Boolean).join(' · ')}
+                </div>
+              </div>
+              <button className="btn btn--sm" onClick={() => setDetail(null)} aria-label="Close">✕</button>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12, margin: '18px 0' }}>
+              {detailStat('Visited', detail.date_of_visit || '—')}
+              {detailStat('Category', detail.business_category || '—')}
+              {detailStat('Solution', detail.solution ? 'Submitted' : detail.solution_pending ? 'In progress' : 'None yet')}
+              {detailStat('Internship', detail.internship_eligible ? 'Eligible' : '—')}
+            </div>
+
+            {detail.business_address && <DetailBlock label="Business address">{detail.business_address}</DetailBlock>}
+            {detail.owner_name && <DetailBlock label="Owner / contact">{detail.owner_name}</DetailBlock>}
+            <DetailBlock label="Challenge they logged">{detail.main_challenge || '—'}</DetailBlock>
+
+            {detail.solution && (
+              <div style={{ marginTop: 8, paddingTop: 14, borderTop: '1px solid var(--line)' }}>
+                <span style={eyebrow}>Student solution</span>
+                <DetailBlock label="Problem identified">{detail.solution.problem_identified}</DetailBlock>
+                <DetailBlock label="Proposed solution">{detail.solution.proposed_solution}</DetailBlock>
+                <DetailBlock label="How it helps">{detail.solution.how_it_helps}</DetailBlock>
+                <DetailBlock label="Expected impact">{detail.solution.expected_impact}</DetailBlock>
+                {(detail.solution.video_url || detail.solution.written_url || detail.solution.materials.length > 0) && (
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
+                    {detail.solution.video_url && <a className="btn btn--sm" href={detail.solution.video_url} target="_blank" rel="noreferrer">▶ Video</a>}
+                    {detail.solution.written_url && <a className="btn btn--sm" href={detail.solution.written_url} target="_blank" rel="noreferrer">📄 Document</a>}
+                    {detail.solution.materials.map((mm, k) => <a key={k} className="btn btn--sm" href={mm.url} target="_blank" rel="noreferrer">{mm.label || 'Attachment'}</a>)}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: 10, marginTop: 20, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+              <button className="btn btn--sm" onClick={() => { const s = detail; setDetail(null); openReq({ type: 'contact_school', title: `Contact ${s.school_name}`, student_id: s.student_id, school_name: s.school_name, note: '' }) }}>Contact School</button>
+              {detail.solution && <button className="btn btn--solid btn--sm" onClick={() => { const s = detail; setDetail(null); openReq({ type: 'implementation', title: 'Request Implementation Help', submission_id: s.solution!.submission_id, student_id: s.student_id, school_name: s.school_name, note: '' }) }}>Request Implementation</button>}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function detailStat(label: string, value: string) {
+  return (
+    <div style={{ ...cardS, padding: '12px 14px' }}>
+      <div style={{ ...eyebrow, fontSize: 10 }}>{label}</div>
+      <div style={{ color: '#e8e2d4', fontSize: 14, marginTop: 4, fontWeight: 600 }}>{value}</div>
+    </div>
+  )
+}
+
+function DetailBlock({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div style={{ marginTop: 12 }}>
+      <div style={{ ...eyebrow, fontSize: 10, marginBottom: 4 }}>{label}</div>
+      <p style={{ color: '#d8d3c6', margin: 0, lineHeight: 1.6, fontSize: 13.5, whiteSpace: 'pre-wrap' }}>{children}</p>
     </div>
   )
 }
