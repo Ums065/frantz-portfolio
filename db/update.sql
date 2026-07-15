@@ -241,6 +241,27 @@ CALL add_column_if_missing('ecosystem_announcements', 'title', 'varchar(180) NOT
 CALL add_column_if_missing('ecosystem_announcements', 'body', 'text', 'title');
 CALL add_column_if_missing('ecosystem_announcements', 'created_at', 'timestamp NULL DEFAULT CURRENT_TIMESTAMP', 'body');
 
+-- ---------- ecosystem_assignments ----------
+CREATE TABLE IF NOT EXISTS `ecosystem_assignments` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `user_id` int NOT NULL,
+  `role` varchar(20) NOT NULL,
+  `title` varchar(180) NOT NULL,
+  `detail` text,
+  `assign_date` date DEFAULT NULL,
+  `status` varchar(16) NOT NULL DEFAULT 'active',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_ecoassign_user` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+CALL add_column_if_missing('ecosystem_assignments', 'user_id', 'int NOT NULL', 'id');
+CALL add_column_if_missing('ecosystem_assignments', 'role', 'varchar(20) NOT NULL', 'user_id');
+CALL add_column_if_missing('ecosystem_assignments', 'title', 'varchar(180) NOT NULL', 'role');
+CALL add_column_if_missing('ecosystem_assignments', 'detail', 'text', 'title');
+CALL add_column_if_missing('ecosystem_assignments', 'assign_date', 'date DEFAULT NULL', 'detail');
+CALL add_column_if_missing('ecosystem_assignments', 'status', 'varchar(16) NOT NULL DEFAULT ''active''', 'assign_date');
+CALL add_column_if_missing('ecosystem_assignments', 'created_at', 'timestamp NULL DEFAULT CURRENT_TIMESTAMP', 'status');
+
 -- ---------- ecosystem_documents ----------
 CREATE TABLE IF NOT EXISTS `ecosystem_documents` (
   `id` int NOT NULL AUTO_INCREMENT,

@@ -1449,6 +1449,43 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             json(['message' => 'Announcement removed.']);
         }
 
+        // B: set recognition stats (hours / events_supported / students_mentored) on an account.
+        case $method === 'PUT' && preg_match('#^admin/ecosystem/recognition/(\d+)$#', $route, $m) === 1: {
+            require_admin();
+            $b = body();
+            ecosystem_set_recognition((int) $m[1], [
+                'hours' => field($b, 'hours'),
+                'events_supported' => field($b, 'events_supported'),
+                'students_mentored' => field($b, 'students_mentored'),
+            ]);
+            json(['message' => 'Recognition updated.']);
+        }
+
+        // C: per-account assignments (create / list / status / delete).
+        case $method === 'GET' && preg_match('#^admin/ecosystem/assignments/(\d+)$#', $route, $m) === 1: {
+            require_admin();
+            json(['assignments' => ecosystem_assignments_for_user((int) $m[1])]);
+        }
+        case $key === 'POST admin/ecosystem/assignment': {
+            require_admin();
+            $b = body();
+            $uid = (int) (field($b, 'user_id') ?: 0);
+            if ($uid <= 0) json(['error' => 'A recipient account is required.'], 422);
+            if (trim((string) field($b, 'title')) === '') json(['error' => 'Title is required.'], 422);
+            ecosystem_assignment_add($uid, (string) field($b, 'role'), (string) field($b, 'title'), (string) field($b, 'detail'), (string) field($b, 'assign_date'));
+            json(['message' => 'Assignment created.', 'assignments' => ecosystem_assignments_for_user($uid)], 201);
+        }
+        case $method === 'PUT' && preg_match('#^admin/ecosystem/assignment/(\d+)$#', $route, $m) === 1: {
+            require_admin();
+            ecosystem_assignment_set_status((int) $m[1], (string) field(body(), 'status'));
+            json(['message' => 'Assignment updated.']);
+        }
+        case $method === 'DELETE' && preg_match('#^admin/ecosystem/assignment/(\d+)$#', $route, $m) === 1: {
+            require_admin();
+            ecosystem_assignment_delete((int) $m[1]);
+            json(['message' => 'Assignment removed.']);
+        }
+
         /* ---------------- DEMO ONE-CLICK LOGIN (presentations; DEMO_MODE=off to disable) ---------------- */
         case $key === 'GET demo/accounts': {
             if (!demo_mode_enabled()) json(['error' => 'Not found.'], 404);

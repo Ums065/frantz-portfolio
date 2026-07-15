@@ -3826,6 +3826,7 @@ function ecosystem_dashboard_payload(string $role, array $user): array
     $out['documents'] = ecosystem_documents_for_user((int) $user['id']);
     $out['requests'] = ecosystem_requests_for_user((int) $user['id']);
     $out['announcements'] = ecosystem_announcements_for_role($role);
+    $out['assignments'] = ecosystem_assignments_for_user((int) $user['id']);
     return $out;
 }
 
@@ -3870,7 +3871,83 @@ function ecosystem_shared_ensure_schema(): void
         id INT AUTO_INCREMENT PRIMARY KEY, audience VARCHAR(20) NOT NULL DEFAULT 'all', title VARCHAR(180) NOT NULL,
         body TEXT DEFAULT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, INDEX idx_ecoann_aud (audience)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    // Admin-created assignments handed to a specific ecosystem account (e.g. assign a
+    // volunteer to an event / a student mentoring slot). Feature C.
+    $pdo->exec("CREATE TABLE IF NOT EXISTS ecosystem_assignments (
+        id INT AUTO_INCREMENT PRIMARY KEY, user_id INT NOT NULL, role VARCHAR(20) NOT NULL,
+        title VARCHAR(180) NOT NULL, detail TEXT DEFAULT NULL, assign_date DATE NULL,
+        status VARCHAR(16) NOT NULL DEFAULT 'active',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, INDEX idx_ecoassign_user (user_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     $ready = true;
+}
+
+/** Assignments shown on an ecosystem account's dashboard. */
+function ecosystem_assignments_for_user(int $userId): array
+{
+    ecosystem_shared_ensure_schema();
+    $s = db()->prepare('SELECT id, title, detail, assign_date, status, UNIX_TIMESTAMP(created_at) AS created_ts FROM ecosystem_assignments WHERE user_id = ? ORDER BY (status = "active") DESC, assign_date IS NULL, assign_date ASC, created_at DESC');
+    $s->execute([$userId]);
+    return array_map(static fn(array $r): array => [
+        'id' => (int) $r['id'], 'title' => (string) $r['title'], 'detail' => (string) ($r['detail'] ?? ''),
+        'assign_date' => $r['assign_date'], 'status' => (string) $r['status'], 'created_ts' => (int) $r['created_ts'],
+    ], $s->fetchAll());
+}
+
+function ecosystem_assignment_add(int $userId, string $role, string $title, string $detail, ?string $date): void
+{
+    ecosystem_shared_ensure_schema();
+    $d = ($date && preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) ? $date : null;
+    db()->prepare('INSERT INTO ecosystem_assignments (user_id, role, title, detail, assign_date) VALUES (?,?,?,?,?)')
+        ->execute([$userId, mb_substr($role, 0, 20), mb_substr($title, 0, 180), mb_substr($detail, 0, 2000) ?: null, $d]);
+    // Let the volunteer/org know they have a new assignment.
+    ecosystem_notify_user($userId, 'New assignment: ' . mb_substr($title, 0, 120), $detail);
+}
+
+function ecosystem_assignment_set_status(int $id, string $status): void
+{
+    ecosystem_shared_ensure_schema();
+    if (!in_array($status, ['active', 'completed', 'cancelled'], true)) json(['error' => 'Invalid status.'], 422);
+    db()->prepare('UPDATE ecosystem_assignments SET status = ? WHERE id = ?')->execute([$status, $id]);
+}
+
+function ecosystem_assignment_delete(int $id): void
+{
+    ecosystem_shared_ensure_schema();
+    db()->prepare('DELETE FROM ecosystem_assignments WHERE id = ?')->execute([$id]);
+}
+
+/** Merge recognition stats (hours / events_supported / students_mentored) into an
+ *  ecosystem account's details JSON. Feature B. */
+function ecosystem_set_recognition(int $userId, array $stats): void
+{
+    ecosystem_ensure_schema();
+    $acc = ecosystem_account_for_user($userId);
+    if (!$acc) json(['error' => 'Account not found.'], 404);
+    $details = is_array($acc['details']) ? $acc['details'] : [];
+    foreach (['hours', 'events_supported', 'students_mentored'] as $k) {
+        if (array_key_exists($k, $stats)) $details[$k] = max(0, (int) $stats[$k]);
+    }
+    db()->prepare('UPDATE ecosystem_accounts SET details = ?, updated_at = NOW() WHERE user_id = ?')
+        ->execute([json_encode($details), $userId]);
+}
+
+/** Best-effort email to an ecosystem account's user (used for assignments + request replies). */
+function ecosystem_notify_user(int $userId, string $subject, string $body): void
+{
+    try {
+        $s = db()->prepare('SELECT full_name, email FROM users WHERE id = ? LIMIT 1');
+        $s->execute([$userId]);
+        $u = $s->fetch();
+        if (!$u || empty($u['email'])) return;
+        $name = (string) ($u['full_name'] ?: 'there');
+        $text = "Hi $name,\n\n$body\n\nSign in to your dashboard to see the details.\n\n— FrantzCoutard.com";
+        if (function_exists('mail_queue_enqueue')) {
+            mail_queue_enqueue('notification', (string) $u['email'], $subject, $text);
+        }
+    } catch (Throwable $e) {
+        if (app_debug()) error_log('ecosystem_notify_user: ' . $e->getMessage());
+    }
 }
 
 function ecosystem_documents_for_user(int $userId): array
@@ -4015,7 +4092,16 @@ function ecosystem_request_update(int $id, string $status, string $note, int $ad
 {
     ecosystem_shared_ensure_schema();
     if (!in_array($status, ['pending', 'approved', 'declined', 'info_needed'], true)) json(['error' => 'Invalid status.'], 422);
+    // Look up the owner + request type first so we can notify them (Feature E).
+    $own = db()->prepare('SELECT user_id, req_type FROM ecosystem_requests WHERE id = ? LIMIT 1');
+    $own->execute([$id]);
+    $req = $own->fetch();
     db()->prepare('UPDATE ecosystem_requests SET status = ?, admin_note = ?, reviewed_by_user_id = ?, reviewed_at = NOW() WHERE id = ?')->execute([$status, mb_substr($note, 0, 2000) ?: null, $adminId, $id]);
+    if ($req && $status !== 'pending') {
+        $label = ['approved' => 'approved', 'declined' => 'declined', 'info_needed' => 'needs more information'][$status] ?? $status;
+        $body = "Your request (" . (string) $req['req_type'] . ") has been $label by the program team." . ($note !== '' ? "\n\nNote: " . $note : '');
+        ecosystem_notify_user((int) $req['user_id'], 'Update on your request', $body);
+    }
 }
 function ecosystem_document_add(int $userId, string $role, string $docType, string $label, string $url): void
 {

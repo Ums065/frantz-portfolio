@@ -16,7 +16,8 @@ const lbl: React.CSSProperties = { display: 'block', fontSize: 11, fontWeight: 7
 const fmt = (ts: number) => { try { return new Date(ts * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) } catch { return '' } }
 const statusStyle = (s: string): React.CSSProperties => ({ color: ({ approved: 'var(--gold-light)', declined: '#ff9a9a', info_needed: 'var(--gold)' } as Record<string, string>)[s] || 'var(--muted)', fontWeight: 700, fontSize: 11, textTransform: 'uppercase' })
 
-type Tab = 'requests' | 'documents' | 'announcements'
+interface EcoAssign { id: number; title: string; detail: string; assign_date: string | null; status: string; created_ts: number }
+type Tab = 'requests' | 'documents' | 'manage' | 'announcements'
 
 export default function EcosystemAdminPanel() {
   const [tab, setTab] = useState<Tab>('requests')
@@ -39,8 +40,8 @@ export default function EcosystemAdminPanel() {
   return (
     <div style={{ display: 'grid', gap: 14 }}>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        {(['requests', 'documents', 'announcements'] as const).map((t) => (
-          <button key={t} className={`btn btn--sm${tab === t ? ' btn--solid' : ''}`} onClick={() => setTab(t)} style={{ textTransform: 'capitalize' }}>{t}</button>
+        {(['requests', 'documents', 'manage', 'announcements'] as const).map((t) => (
+          <button key={t} className={`btn btn--sm${tab === t ? ' btn--solid' : ''}`} onClick={() => setTab(t)} style={{ textTransform: 'capitalize' }}>{t === 'manage' ? 'Recognition & Assignments' : t}</button>
         ))}
       </div>
       {err && <p style={{ color: '#ff9a9a', fontSize: 13 }}>{err}</p>}
@@ -64,6 +65,8 @@ export default function EcosystemAdminPanel() {
       )}
 
       {tab === 'documents' && <DocumentIssuer accounts={accounts} />}
+
+      {tab === 'manage' && <AccountManager accounts={accounts} />}
 
       {tab === 'announcements' && <Announcer anns={anns} setAnns={setAnns} />}
     </div>
@@ -123,6 +126,91 @@ function DocumentIssuer({ accounts }: { accounts: EcoAccount[] }) {
               </div>
             ))}
             {docs.length === 0 && <p style={{ color: 'var(--muted)', fontSize: 13, margin: 0 }}>No documents for this account yet.</p>}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+function AccountManager({ accounts }: { accounts: EcoAccount[] }) {
+  const [uid, setUid] = useState(0)
+  const acct = accounts.find((a) => a.user_id === uid)
+  // recognition
+  const [hours, setHours] = useState(''); const [events, setEvents] = useState(''); const [students, setStudents] = useState('')
+  const [recMsg, setRecMsg] = useState('')
+  // assignments
+  const [assigns, setAssigns] = useState<EcoAssign[]>([])
+  const [aTitle, setATitle] = useState(''); const [aDetail, setADetail] = useState(''); const [aDate, setADate] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  const loadAssigns = (id: number) => { if (id) api.get<{ assignments: EcoAssign[] }>(`admin/ecosystem/assignments/${id}`).then((d) => setAssigns(d.assignments || [])).catch(() => setAssigns([])); else setAssigns([]) }
+  useEffect(() => { loadAssigns(uid); setRecMsg('') }, [uid])
+
+  const saveRec = async () => {
+    if (!uid) return
+    setRecMsg('')
+    try {
+      await api.put(`admin/ecosystem/recognition/${uid}`, { hours: Number(hours || 0), events_supported: Number(events || 0), students_mentored: Number(students || 0) })
+      setRecMsg('Recognition saved ✓')
+    } catch (e) { setRecMsg(e instanceof Error ? e.message : 'Save failed.') }
+  }
+  const addAssign = async () => {
+    if (!uid || !acct || !aTitle.trim()) return
+    setBusy(true)
+    try {
+      const d = await api.post<{ assignments: EcoAssign[] }>('admin/ecosystem/assignment', { user_id: uid, role: acct.role, title: aTitle, detail: aDetail, assign_date: aDate })
+      setAssigns(d.assignments || []); setATitle(''); setADetail(''); setADate('')
+    } catch { /* ignore */ } finally { setBusy(false) }
+  }
+  const setStatus = async (id: number, status: string) => { await api.put(`admin/ecosystem/assignment/${id}`, { status }); loadAssigns(uid) }
+  const del = async (id: number) => { if (!confirm('Remove this assignment?')) return; await api.del(`admin/ecosystem/assignment/${id}`); loadAssigns(uid) }
+
+  return (
+    <div style={{ ...card, display: 'grid', gap: 14 }}>
+      <div><label style={lbl}>Account</label>
+        <select style={inp} value={uid} onChange={(e) => setUid(Number(e.target.value))}>
+          <option value={0}>Select an account…</option>
+          {accounts.map((a) => <option key={a.user_id} value={a.user_id}>{a.role} · {a.org_name} ({a.email})</option>)}
+        </select>
+      </div>
+      {uid > 0 && (
+        <>
+          <div>
+            <label style={lbl}>Recognition (mainly for volunteers)</label>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', gap: 10 }}>
+              <div><span style={{ ...lbl, textTransform: 'none', color: 'var(--muted)' }}>Hours logged</span><input style={inp} type="number" min="0" value={hours} onChange={(e) => setHours(e.target.value)} placeholder="0" /></div>
+              <div><span style={{ ...lbl, textTransform: 'none', color: 'var(--muted)' }}>Events supported</span><input style={inp} type="number" min="0" value={events} onChange={(e) => setEvents(e.target.value)} placeholder="0" /></div>
+              <div><span style={{ ...lbl, textTransform: 'none', color: 'var(--muted)' }}>Students mentored</span><input style={inp} type="number" min="0" value={students} onChange={(e) => setStudents(e.target.value)} placeholder="0" /></div>
+            </div>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 8 }}>
+              <button className="btn btn--solid btn--sm" onClick={saveRec}>Save Recognition</button>
+              {recMsg && <span style={{ color: recMsg.includes('✓') ? 'var(--gold-light)' : '#ff9a9a', fontSize: 13 }}>{recMsg}</span>}
+            </div>
+          </div>
+
+          <div style={{ borderTop: '1px solid var(--line)', paddingTop: 12 }}>
+            <label style={lbl}>Create an assignment</label>
+            <div style={{ display: 'grid', gap: 8 }}>
+              <input style={inp} value={aTitle} onChange={(e) => setATitle(e.target.value)} placeholder="Title — e.g. Mentor at Queens Innovation Academy" />
+              <textarea style={{ ...inp, minHeight: 60, resize: 'vertical' }} value={aDetail} onChange={(e) => setADetail(e.target.value)} placeholder="Details — who / where / what to do (you can name the student or school here)" />
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                <input style={{ ...inp, maxWidth: 180 }} type="date" value={aDate} onChange={(e) => setADate(e.target.value)} />
+                <button className="btn btn--solid btn--sm" disabled={busy || !aTitle.trim()} onClick={addAssign}>{busy ? 'Adding…' : 'Add Assignment'}</button>
+              </div>
+            </div>
+            <div style={{ display: 'grid', gap: 6, marginTop: 12 }}>
+              {assigns.map((a) => (
+                <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, borderBottom: '1px solid var(--line)', paddingBottom: 6 }}>
+                  <div><span style={{ color: 'var(--ivory)', fontSize: 13, fontWeight: 600 }}>{a.title}</span> <span style={{ color: 'var(--muted)', fontSize: 12 }}>· {a.status}{a.assign_date ? ` · ${a.assign_date}` : ''}</span></div>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    {a.status !== 'completed' && <button className="btn btn--sm" onClick={() => setStatus(a.id, 'completed')} title="Mark completed">✓</button>}
+                    <button className="btn btn--sm" onClick={() => del(a.id)}>✕</button>
+                  </div>
+                </div>
+              ))}
+              {assigns.length === 0 && <p style={{ color: 'var(--muted)', fontSize: 13, margin: 0 }}>No assignments for this account yet.</p>}
+            </div>
           </div>
         </>
       )}
