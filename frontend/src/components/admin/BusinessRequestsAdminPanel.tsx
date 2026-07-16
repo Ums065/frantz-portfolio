@@ -125,7 +125,7 @@ function BizRequestModal({ req, onClose, onDone }: { req: BizAdminRequest; onClo
 
       {/* Rich internship details */}
       {isInternship && meta.some(([, v]) => v) && (
-        <dl style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '5px 12px', fontSize: 13, margin: '0 0 12px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--line)', borderRadius: 10, padding: '10px 12px' }}>
+        <dl className="eco-dl" style={{ fontSize: 13, margin: '0 0 12px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--line)', borderRadius: 10, padding: '10px 12px' }}>
           {meta.filter(([, v]) => v).map(([k, v]) => (
             <div key={k} style={{ display: 'contents' }}><dt style={{ color: 'var(--muted)' }}>{k}</dt><dd style={{ margin: 0, color: 'var(--ivory)' }}>{v}</dd></div>
           ))}

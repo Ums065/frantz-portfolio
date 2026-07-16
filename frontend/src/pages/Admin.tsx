@@ -2648,15 +2648,15 @@ function TimelineAdmin() {
         {cardHead(4, 'Timeline Milestones', 'The dated steps shown on the public New School page', <span className="msub" style={{ fontSize: 12 }}>{rows.length} step{rows.length === 1 ? '' : 's'}</span>)}
         <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: 0 }}>Reorder with ↑ ↓ · tick ★ to gold-highlight a step (e.g. Winners Announced) · ✕ to remove.</p>
         <div style={{ display: 'grid', gap: 8 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '26px 1fr 1fr 128px', gap: 8, padding: '0 12px', fontSize: 10, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--muted)' }}>
+          <div className="admin-tl-head" style={{ padding: '0 12px', fontSize: 10, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--muted)' }}>
             <span>#</span><span>Milestone</span><span>When</span><span style={{ textAlign: 'right' }}>Actions</span>
           </div>
           {rows.map((row, i) => (
-            <div key={i} style={{ display: 'grid', gridTemplateColumns: '26px 1fr 1fr 128px', gap: 8, alignItems: 'center', background: row.highlight ? 'rgba(201,168,76,0.08)' : 'rgba(255,255,255,0.03)', border: `1px solid ${row.highlight ? 'var(--gold)' : 'var(--line)'}`, borderRadius: 10, padding: '9px 12px' }}>
+            <div key={i} className="admin-tl-row" style={{ background: row.highlight ? 'rgba(201,168,76,0.08)' : 'rgba(255,255,255,0.03)', border: `1px solid ${row.highlight ? 'var(--gold)' : 'var(--line)'}`, borderRadius: 10, padding: '9px 12px' }}>
               <span className="msub" style={{ fontSize: 13, fontWeight: 700, textAlign: 'center' }}>{i + 1}</span>
               <input value={row.phase} onChange={(e) => update(i, { phase: e.target.value })} placeholder="Milestone name" style={inp} />
               <input value={row.when} onChange={(e) => update(i, { when: e.target.value })} placeholder="e.g. June 27, 2026" style={inp} />
-              <div style={{ display: 'flex', gap: 4, alignItems: 'center', justifyContent: 'flex-end' }}>
+              <div className="admin-tl-row__actions" style={{ display: 'flex', gap: 4, alignItems: 'center', justifyContent: 'flex-end' }}>
                 <button type="button" title="Highlight" onClick={() => update(i, { highlight: !row.highlight })} style={{ cursor: 'pointer', background: 'none', border: 0, fontSize: 16, color: row.highlight ? 'var(--gold)' : 'var(--muted)', padding: 2 }}>★</button>
                 <button className="btn btn--sm" type="button" title="Move up" onClick={() => move(i, -1)} disabled={i === 0} style={{ padding: '4px 8px' }}>↑</button>
                 <button className="btn btn--sm" type="button" title="Move down" onClick={() => move(i, 1)} disabled={i === rows.length - 1} style={{ padding: '4px 8px' }}>↓</button>
@@ -4094,8 +4094,8 @@ function DataTable<T>({ head, rows, renderRow, searchText, statusOf, statusOptio
 
 function Table({ head, children }: { head: string[]; children: React.ReactNode }) {
   return (
-    <div className="glass" style={{ borderRadius: 14, overflow: 'hidden' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5 }}>
+    <div className="glass" style={{ borderRadius: 14, overflowX: 'auto' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5, minWidth: 640 }}>
         <thead>
           <tr>{head.map((h) => <th key={h} style={thS}>{h}</th>)}</tr>
         </thead>
@@ -4105,7 +4105,7 @@ function Table({ head, children }: { head: string[]; children: React.ReactNode }
   )
 }
 
-const wrapS: React.CSSProperties = { minHeight: '100vh', color: 'var(--white)', padding: '0 24px 60px', fontFamily: 'var(--f-body)' }
+const wrapS: React.CSSProperties = { minHeight: '100vh', color: 'var(--white)', padding: '0 clamp(12px,4vw,24px) 60px', fontFamily: 'var(--f-body)' }
 const thS: React.CSSProperties = { textAlign: 'left', padding: '14px 16px', color: 'var(--gold-light)', fontWeight: 600, borderBottom: '1px solid var(--line)', textTransform: 'uppercase', fontSize: 11, letterSpacing: '.06em' }
 const tdS: React.CSSProperties = { padding: '13px 16px', verticalAlign: 'top', color: '#d8d3c6', overflowWrap: 'anywhere', wordBreak: 'break-word' }
 const rowS: React.CSSProperties = { borderBottom: '1px solid rgba(201,168,76,0.08)' }

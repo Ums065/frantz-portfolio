@@ -3454,6 +3454,20 @@ section#challenge .challenge-features .ns-gain p {
   .admin-nav__items { grid-template-columns: 1fr; }
 }
 
+/* Timeline-milestone editor rows: 4-up on desktop, fully stacked on phones
+   (the header labels hide and each field + the action buttons take a row). */
+.admin-tl-head, .admin-tl-row { display: grid; grid-template-columns: 26px 1fr 1fr 128px; gap: 8px; }
+.admin-tl-row { align-items: center; }
+@media (max-width: 600px) {
+  .admin-tl-head { display: none; }
+  .admin-tl-row { grid-template-columns: 1fr; }
+  .admin-tl-row__actions { justify-content: flex-start !important; }
+}
+
+/* Gallery review card: thumbnail beside details on desktop, stacked on phones. */
+.admin-media-review { display: grid; grid-template-columns: minmax(0, 180px) 1fr; gap: 14px; align-items: start; }
+@media (max-width: 560px) { .admin-media-review { grid-template-columns: 1fr; } }
+
 /* Mobile: collapse the dashboard sidebar behind a toggle so the content
    (not a 30-item nav) is what greets you. Desktop is unaffected — the
    collapse rule lives only inside the mobile breakpoint. */

@@ -246,7 +246,7 @@ export function ProfileModal({ userId, onClose }: { userId: number; onClose: () 
             <span style={{ marginLeft: 'auto' }}><Pill status={p.user.approval_status} /></span>
           </div>
 
-          <dl style={{ display: 'grid', gridTemplateColumns: '150px 1fr', rowGap: 9, columnGap: 12, margin: 0 }}>
+          <dl className="eco-dl" style={{ margin: 0 }}>
             {row('Contact name', (p.profile.contact_name as string) || p.user.full_name)}
             {row('Email', <a href={`mailto:${p.user.email}`} style={{ color: 'var(--gold-light)' }}>{p.user.email}</a>)}
             {row('Phone', p.profile.contact_phone as string)}
@@ -346,7 +346,7 @@ function AccountModal({ acct, onClose, onApprovalChange }: { acct: EcoAccount; o
       {prof && (
         <div style={sect}>
           <label style={lbl}>Profile</label>
-          <dl style={{ display: 'grid', gridTemplateColumns: '140px 1fr', rowGap: 7, columnGap: 12, margin: 0, fontSize: 13 }}>
+          <dl className="eco-dl" style={{ margin: 0, fontSize: 13 }}>
             {([
               ['Contact', (prof.profile.contact_name as string) || prof.user.full_name],
               ['Email', prof.user.email],

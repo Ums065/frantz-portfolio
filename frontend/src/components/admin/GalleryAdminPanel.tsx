@@ -74,8 +74,8 @@ export default function GalleryAdminPanel() {
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
             <div>
               <h3 className="gold-text" style={{ fontSize: 20 }}>{submission.submitter_name}</h3>
-              <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: 6 }}>{submission.submitter_email}{submission.organization ? ` · ${submission.organization}` : ''}</p>
-              <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: 6 }}>Submitted: {submission.created_at || '—'} · Files: {submission.files.length}</p>
+              <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: 6 }}>{submission.submitter_email}{submission.organization ? ` ï¿½ ${submission.organization}` : ''}</p>
+              <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: 6 }}>Submitted: {submission.created_at || 'ï¿½'} ï¿½ Files: {submission.files.length}</p>
             </div>
             <span className={statusClass(submission.overall_status)}>{submission.overall_status.replace('_', ' ')}</span>
           </div>
@@ -88,7 +88,7 @@ export default function GalleryAdminPanel() {
           <div style={{ display: 'grid', gap: 12 }}>
             {submission.files.map((file) => (
               <div key={file.id} style={{ display: 'grid', gap: 12, border: '1px solid var(--line)', borderRadius: 14, padding: 14, background: 'rgba(255,255,255,0.02)' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 180px) 1fr', gap: 14, alignItems: 'start' }}>
+                <div className="admin-media-review">
                   <div className="glass" style={{ minHeight: 120, display: 'grid', placeItems: 'center', overflow: 'hidden', borderRadius: 12 }}>
                     {file.media_kind === 'image' ? (
                       <img src={file.file_url} alt={file.display_title} style={{ width: '100%', height: 120, objectFit: 'cover' }} />
@@ -104,7 +104,7 @@ export default function GalleryAdminPanel() {
                       </div>
                       <span className={statusClass(file.approval_status)}>{file.approval_status.replace('_', ' ')}</span>
                     </div>
-                    <p style={{ color: 'var(--muted)', fontSize: 12 }}>{file.media_kind} · {file.mime_type} · {fmtSize(file.size_bytes)}</p>
+                    <p style={{ color: 'var(--muted)', fontSize: 12 }}>{file.media_kind} ï¿½ {file.mime_type} ï¿½ {fmtSize(file.size_bytes)}</p>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                       <a className="btn btn--sm" href={file.file_url} target="_blank" rel="noreferrer">Open file</a>
                       <button className="btn btn--sm btn--solid" type="button" disabled={busyId === file.id || file.approval_status === 'approved'} onClick={() => void review(file, 'approved')}>
