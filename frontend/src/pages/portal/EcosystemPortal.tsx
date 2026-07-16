@@ -127,6 +127,50 @@ export function EcoAssignments({ items, role, reload }: { items?: EcoAssign[]; r
   )
 }
 
+/** Upcoming events with a per-event register button + live application status.
+   Shared by the ecosystem portals (label/prefix vary by role). */
+export function EcoEventCalendar({ role, requests, reload, label, prefix }: { role: string; requests: EcoReq[]; reload: () => void; label: string; prefix: string }) {
+  const [events, setEvents] = useState<{ id: number; title: string; location: string; event_date: string }[]>([])
+  const [busy, setBusy] = useState(0)
+  useEffect(() => {
+    api.get<{ events: { id: number; title: string; location: string; event_date: string; is_past: number }[] }>('events')
+      .then((d) => setEvents((d.events || []).filter((e) => !e.is_past).slice(0, 8)))
+      .catch(() => setEvents([]))
+  }, [])
+  const statusByEvent = new Map<string, string>()
+  requests.filter((r) => r.req_type === 'event' && r.message.startsWith(prefix))
+    .forEach((r) => statusByEvent.set(r.message.replace(prefix, '').trim(), r.status))
+  const register = async (ev: { id: number; title: string }) => {
+    setBusy(ev.id)
+    try {
+      await api.post(`ecosystem/${role}/request`, { req_type: 'event', message: `${prefix}${ev.title}` })
+      window.fcToast?.(`Registered for "${ev.title}".`)
+      reload()
+    } catch { window.fcToast?.('Could not register. Please try again.') } finally { setBusy(0) }
+  }
+  if (events.length === 0) {
+    return <p style={{ color: 'var(--muted)', fontSize: 13, margin: 0 }}>No upcoming events right now. Check the <a href="/events" style={{ color: 'var(--gold-light)' }}>Events page</a> soon.</p>
+  }
+  return (
+    <div style={{ display: 'grid', gap: 10 }}>
+      {events.map((ev) => {
+        const status = statusByEvent.get(ev.title)
+        return (
+          <div key={ev.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', background: 'rgba(0,0,0,0.18)', border: '1px solid var(--line)', borderRadius: 10, padding: '10px 14px' }}>
+            <div>
+              <div style={{ color: 'var(--ivory)', fontSize: 13.5, fontWeight: 600 }}>{ev.title}</div>
+              <div style={{ color: 'var(--muted)', fontSize: 12 }}>{[ev.event_date, ev.location].filter(Boolean).join(' · ')}</div>
+            </div>
+            {status
+              ? <EcoStatusPill status={status} />
+              : <button className="btn btn--sm" disabled={busy === ev.id} onClick={() => register(ev)}>{busy === ev.id ? '…' : label}</button>}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 /** A titled card section with an optional action on the right. */
 export function Section({ title, children, right }: { title: string; children: React.ReactNode; right?: React.ReactNode }) {
   return (
