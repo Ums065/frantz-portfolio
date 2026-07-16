@@ -6,6 +6,7 @@ import { useSeo } from '../hooks/useSeo'
 import { resolveDashboardRoute } from '../lib/dashboardRoute'
 import OfferStepper, { type OfferStage, type OfferEvent } from '../components/OfferStepper'
 import { unseenAnnCount, markAnnSeen } from './portal/EcosystemPortal'
+import { useLiveRefresh } from '../hooks/useLiveRefresh'
 
 /* Business Portal — access, review & opportunity requests for a verified business.
    The business is NOT a judge: it cannot rate, score or rank students, and cannot
@@ -171,6 +172,8 @@ export default function Business() {
     try { const d = await api.get<{ offers: BizOffer[] }>('business/offers'); setOffers(d.offers || []) } catch { /* non-fatal */ }
   }, [user, isBusiness, isAdmin, approved])
   useEffect(() => { void loadOffers() }, [loadOffers])
+  // Keep interview/offer/announcement counters live without a manual refresh.
+  useLiveRefresh(() => { void loadDashboard(); void loadOffers() }, { enabled: !!user && (isBusiness || isAdmin) && approved })
 
   // Clear the Updates announcement notification once that tab is opened.
   const [, setAnnBump] = useState(0)

@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { api, type AnalyticsPayload, type AwardRow, type CommunityCommentRow, type CommunityThreadRow, type EventItem, type EventRsvpRow, type InventoryRow, type MediaRow, type PostDetail, type ProductVisibility, type TestimonialRow, type User } from '../lib/api'
 import { useAuth } from '../context/AuthContext'
 import { useSeo } from '../hooks/useSeo'
+import { useLiveRefresh } from '../hooks/useLiveRefresh'
 import { resolveDashboardRoute } from '../lib/dashboardRoute'
 import SponsorsAdminPanel from '../components/admin/SponsorsAdminPanel'
 import GalleryAdminPanel from '../components/admin/GalleryAdminPanel'
@@ -347,6 +348,8 @@ export default function Admin() {
     void loadChatThreads()
     void loadEdu()
   }, [user])
+  // Keep the overview achievement card + sidebar badges live without a refresh.
+  useLiveRefresh(() => { void refreshData(); void loadChatThreads(); void loadEdu() }, { enabled: isAdmin(user?.role), intervalMs: 60000 })
 
   const doLogin = async (e: React.FormEvent) => {
     e.preventDefault(); setError('')

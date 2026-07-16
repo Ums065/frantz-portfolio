@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { api } from '../../lib/api'
 import { useAuth } from '../../context/AuthContext'
 import { useSeo } from '../../hooks/useSeo'
+import { useLiveRefresh } from '../../hooks/useLiveRefresh'
 import { resolveDashboardRoute } from '../../lib/dashboardRoute'
 
 /* Shared shell for the ecosystem role portals (Sponsor / Partner / Media /
@@ -433,6 +434,8 @@ export default function EcosystemPortal({ config }: { config: PortalConfig }) {
   }, [user, isRole, isAdmin, approved, role])
 
   useEffect(() => { void reload() }, [reload])
+  // Keep counters/badges live without a manual page refresh.
+  useLiveRefresh(reload, { enabled: !!user && (isRole || isAdmin) && approved })
 
   const set = (k: string, v: string) => setF((p) => ({ ...p, [k]: v }))
 
