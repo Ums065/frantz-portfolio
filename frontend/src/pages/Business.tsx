@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { useSeo } from '../hooks/useSeo'
 import { resolveDashboardRoute } from '../lib/dashboardRoute'
 import OfferStepper, { type OfferStage, type OfferEvent } from '../components/OfferStepper'
+import { unseenAnnCount, markAnnSeen } from './portal/EcosystemPortal'
 
 /* Business Portal — access, review & opportunity requests for a verified business.
    The business is NOT a judge: it cannot rate, score or rank students, and cannot
@@ -171,6 +172,12 @@ export default function Business() {
   }, [user, isBusiness, isAdmin, approved])
   useEffect(() => { void loadOffers() }, [loadOffers])
 
+  // Clear the Updates announcement notification once that tab is opened.
+  const [, setAnnBump] = useState(0)
+  useEffect(() => {
+    if (tab === 'updates') { markAnnSeen('business', data?.announcements ?? []); setAnnBump((x) => x + 1) }
+  }, [tab, data])
+
   const submitRequest = async () => {
     if (!draft) return
     setReqBusy(true); setReqErr('')
@@ -324,12 +331,13 @@ export default function Business() {
   const solutionInterviews = interviews.filter((i) => i.solution)
   const updatesCount = documents.length + announcements.length
   const activePipeline = offers.filter((o) => !o.stage?.rejected && o.stage?.key !== 'confirmed').length
-  const NAV: Array<{ key: Tab; label: string }> = [
+  const annUnseen = unseenAnnCount('business', announcements)
+  const NAV: Array<{ key: Tab; label: string; badge?: number }> = [
     { key: 'interviews', label: `Interviews (${interviews.length})` },
     { key: 'solutions', label: `Student Solutions (${solutionInterviews.length})` },
     { key: 'pipeline', label: `Internship Offers${offers.length ? ` (${offers.length})` : ''}` },
     { key: 'requests', label: `My Requests (${requests.length})` },
-    { key: 'updates', label: `Updates${updatesCount ? ` (${updatesCount})` : ''}` },
+    { key: 'updates', label: `Updates${updatesCount ? ` (${updatesCount})` : ''}`, badge: annUnseen },
     { key: 'profile', label: 'Business Profile' },
   ]
   const openReq = (d: ReqDraft) => { setReqErr(''); setDraft(d) }
@@ -351,7 +359,10 @@ export default function Business() {
               <span className="admin-nav__group-label">Dashboard</span>
               <div className="admin-nav__items">
                 {NAV.map((item) => (
-                  <button key={item.key} type="button" className={`admin-nav__item${tab === item.key ? ' is-active' : ''}`} onClick={() => setTab(item.key)}>{item.label}</button>
+                  <button key={item.key} type="button" className={`admin-nav__item${tab === item.key ? ' is-active' : ''}`} onClick={() => setTab(item.key)}>
+                    <span className="admin-nav__label">{item.label}</span>
+                    {item.badge ? <span className="admin-nav__badge">{item.badge}</span> : null}
+                  </button>
                 ))}
               </div>
             </div>

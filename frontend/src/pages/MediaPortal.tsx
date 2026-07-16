@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
 import EcosystemPortal, {
   Section, DownloadList, EcoDocuments, EcoRequests, EcoAnnouncements, EcoAssignments,
-  EcoStatusPill, LogoUploader, RequestButton, type EcoReq, type EcoAssign, type PortalConfig,
+  EcoStatusPill, LogoUploader, RequestButton, unseenAnnCount, markAnnSeen, type EcoReq, type EcoAssign, type PortalConfig,
 } from './portal/EcosystemPortal'
 
 /* Media Portal — a press room for journalists & outlets: official statistics,
@@ -156,7 +156,8 @@ const config: PortalConfig = {
     {
       key: 'updates',
       label: 'Updates',
-      badge: (data) => ((data?.requests as EcoReq[]) || []).filter((r) => r.status === 'info_needed').length,
+      badge: (data) => unseenAnnCount('media', data?.announcements),
+      onActivate: (data) => markAnnSeen('media', data?.announcements),
       render: (data, reload) => (
         <>
           <Section title="Announcements"><EcoAnnouncements items={data?.announcements} /></Section>

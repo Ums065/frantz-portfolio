@@ -42,6 +42,20 @@ export function DownloadList({ items }: { items?: Array<{ label: string; url: st
 }
 
 const ecoDate = (ts: number) => { try { return new Date(ts * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) } catch { return '' } }
+
+/* Unseen-announcement notification counter. "Seen" is the newest announcement
+   timestamp the user has viewed (per role, in localStorage) — so the badge
+   clears once they open the announcements/updates area. */
+export function unseenAnnCount(role: string, anns?: Array<{ created_ts: number }>): number {
+  if (!anns?.length) return 0
+  let seen = 0
+  try { seen = Number(localStorage.getItem(`fc_ann_seen_${role}`) || 0) } catch { /* ignore */ }
+  return anns.filter((a) => (a.created_ts || 0) > seen).length
+}
+export function markAnnSeen(role: string, anns?: Array<{ created_ts: number }>): void {
+  if (!anns?.length) return
+  try { localStorage.setItem(`fc_ann_seen_${role}`, String(anns.reduce((m, a) => Math.max(m, a.created_ts || 0), 0))) } catch { /* ignore */ }
+}
 const ecoStatus = (s: string): React.CSSProperties => {
   const m: Record<string, string> = { approved: 'var(--gold-light)', declined: '#ff9a9a', info_needed: 'var(--gold)', pending: 'var(--muted)' }
   return { color: m[s] || 'var(--muted)', fontWeight: 700, fontSize: 11, textTransform: 'uppercase', letterSpacing: '.05em', flex: '0 0 auto' }
@@ -315,6 +329,8 @@ export interface PortalTab {
   key: string
   label: string
   badge?: (data: any) => number
+  // Called when the tab becomes active (e.g. to mark announcements seen).
+  onActivate?: (data: any) => void
   render: (data: any, reload: () => void, ctx: { logout: () => void }) => ReactNode
 }
 export interface PortalConfig {
@@ -336,8 +352,12 @@ function TabbedDashboard({ config, data, reload, logout, orgName }: { config: Po
   const tabs = config.tabs!
   const [tab, setTab] = useState(tabs[0].key)
   const [navOpen, setNavOpen] = useState(false)
+  const [, setSeenBump] = useState(0)
   const active = tabs.find((t) => t.key === tab) ?? tabs[0]
   const tiles = config.statTiles ? config.statTiles(data) : []
+  // Marking-seen runs when the active tab changes (or its data loads), then a
+  // bump re-renders so the just-cleared tab's badge recomputes to zero.
+  useEffect(() => { active.onActivate?.(data); setSeenBump((x) => x + 1) }, [tab, data]) // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <div className={`admin-layout${navOpen ? '' : ' is-nav-collapsed'}`}>
       <button type="button" className="admin-mobilebar" onClick={() => setNavOpen((o) => !o)} aria-expanded={navOpen}>

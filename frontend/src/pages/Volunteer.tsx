@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { api } from '../lib/api'
 import EcosystemPortal, {
   Section, EcoDocuments, EcoRequests, EcoAnnouncements, EcoAssignments, EcoStatusPill,
-  EcoEventCalendar, RequestButton, type EcoReq, type EcoAssign, type PortalConfig,
+  EcoEventCalendar, RequestButton, unseenAnnCount, markAnnSeen, type EcoReq, type EcoAssign, type PortalConfig,
 } from './portal/EcosystemPortal'
 
 /* Volunteer Portal — contribute time & expertise: opportunities, assignments,
@@ -178,7 +178,8 @@ const config: PortalConfig = {
     {
       key: 'updates',
       label: 'Updates',
-      badge: (data) => ((data?.requests as EcoReq[]) || []).filter((r) => r.status === 'info_needed').length,
+      badge: (data) => unseenAnnCount('volunteer', data?.announcements),
+      onActivate: (data) => markAnnSeen('volunteer', data?.announcements),
       render: (data, reload) => (
         <>
           <Section title="Certificates & Handbook"><EcoDocuments docs={data?.documents} /></Section>
