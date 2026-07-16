@@ -843,7 +843,7 @@ function JobOffers({ role, hidden }: { role: 'student' | 'parent'; hidden?: bool
                 <p style={{ color: 'var(--muted)', fontSize: 13, lineHeight: 1.6, margin: '0 0 12px' }}>
                   Please review the details of the internship your child accepted. Your consent is required before it can proceed.
                 </p>
-                <dl style={{ display: 'grid', gridTemplateColumns: '130px 1fr', gap: '6px 12px', fontSize: 13.5, margin: 0 }}>
+                <dl className="eco-dl" style={{ fontSize: 13.5, margin: 0 }}>
                   <dt style={{ color: 'var(--muted)' }}>Role</dt><dd style={{ margin: 0, color: 'var(--white)' }}>{modal.offer.job_title || 'Internship'}</dd>
                   {modal.offer.location && (<><dt style={{ color: 'var(--muted)' }}>Location</dt><dd style={{ margin: 0, color: 'var(--white)' }}>{modal.offer.location}</dd></>)}
                   {modal.offer.duration && (<><dt style={{ color: 'var(--muted)' }}>Duration</dt><dd style={{ margin: 0, color: 'var(--white)' }}>{modal.offer.duration}</dd></>)}
