@@ -266,13 +266,76 @@ export function RequestButton({ role, reqType, label, reload, solid }: { role: s
 }
 
 export interface PortalField { key: string; label: string; kind?: 'text' | 'select' | 'textarea'; options?: string[]; placeholder?: string; full?: boolean }
+/** One tab in the optional Business-style tabbed layout. */
+export interface PortalTab {
+  key: string
+  label: string
+  badge?: (data: any) => number
+  render: (data: any, reload: () => void, ctx: { logout: () => void }) => ReactNode
+}
 export interface PortalConfig {
   role: string
   title: string
   tagline: string
   orgLabel?: string
   extraFields?: PortalField[]
-  renderDashboard: (data: any, reload: () => void, ctx: { logout: () => void }) => ReactNode
+  // Flat single-page dashboard (default). Ignored when `tabs` is provided.
+  renderDashboard?: (data: any, reload: () => void, ctx: { logout: () => void }) => ReactNode
+  // Opt into a Business-style layout: a sidebar of tabs + a persistent stat-tile
+  // strip. Reuses the same auth/login/pending shell.
+  tabs?: PortalTab[]
+  statTiles?: (data: any) => Array<{ label: string; value: number | string }>
+}
+
+/** Business-style authenticated frame: collapsible sidebar of tabs + stat tiles. */
+function TabbedDashboard({ config, data, reload, logout, orgName }: { config: PortalConfig; data: any; reload: () => void; logout: () => void; orgName: string }) {
+  const tabs = config.tabs!
+  const [tab, setTab] = useState(tabs[0].key)
+  const [navOpen, setNavOpen] = useState(false)
+  const active = tabs.find((t) => t.key === tab) ?? tabs[0]
+  const tiles = config.statTiles ? config.statTiles(data) : []
+  return (
+    <div className={`admin-layout${navOpen ? '' : ' is-nav-collapsed'}`}>
+      <button type="button" className="admin-mobilebar" onClick={() => setNavOpen((o) => !o)} aria-expanded={navOpen}>
+        <span>☰&nbsp; Menu</span>
+        <span className="admin-mobilebar__hint">{navOpen ? 'Tap to close' : active.label}</span>
+      </button>
+      <aside className="admin-sidebar glass">
+        <div className="admin-sidebar__brand">
+          <span className="admin-kicker" style={S.eyebrow}>{config.title}</span>
+          <strong className="gold-text">{orgName}</strong>
+        </div>
+        <nav className="admin-nav" onClick={() => setNavOpen(false)}>
+          <div className="admin-nav__group">
+            <div className="admin-nav__items">
+              {tabs.map((t) => {
+                const b = t.badge ? t.badge(data) : 0
+                return (
+                  <button key={t.key} type="button" className={`admin-nav__item${tab === t.key ? ' is-active' : ''}`} onClick={() => setTab(t.key)}>
+                    <span className="admin-nav__label">{t.label}</span>
+                    {b > 0 && <span className="admin-nav__badge">{b}</span>}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        </nav>
+        <button className="btn btn--sm" style={{ margin: 16 }} onClick={() => logout()}>Sign Out</button>
+      </aside>
+      <main className="admin-main">
+        <header style={{ margin: '6px 0 18px' }}>
+          <span style={S.eyebrow}>{config.title}</span>
+          <h1 className="gold-text" style={{ fontFamily: 'var(--f-serif)', fontSize: 'clamp(22px,4vw,28px)', margin: '4px 0 0' }}>{active.label}</h1>
+        </header>
+        {tiles.length > 0 && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: 14, marginBottom: 20 }}>
+            {tiles.map((t) => <StatTile key={t.label} label={t.label} value={t.value} />)}
+          </div>
+        )}
+        <div style={{ display: 'grid', gap: 16 }}>{active.render(data, reload, { logout })}</div>
+      </main>
+    </div>
+  )
 }
 
 const ADMIN_ROLES = ['admin', 'super_admin', 'editor']
@@ -448,6 +511,17 @@ export default function EcosystemPortal({ config }: { config: PortalConfig }) {
   // ---- approved dashboard ----
   const orgName = data?.profile?.org_name || title
   const initial = (orgName || title).trim().charAt(0).toUpperCase() || '•'
+
+  // Business-style tabbed layout when the config opts in.
+  if (config.tabs && config.tabs.length) {
+    return (
+      <div className="admin-page" style={S.wrap}>
+        {err && <p style={{ color: '#ff9a9a', fontSize: 13, maxWidth: 1340, margin: '0 auto 12px' }}>{err}</p>}
+        <TabbedDashboard config={config} data={data} reload={() => { void reload() }} logout={logout} orgName={orgName} />
+      </div>
+    )
+  }
+
   return (
     <div className="admin-page" style={S.wrap}>
       <div style={{ maxWidth: 1040, margin: '0 auto' }}>
@@ -466,7 +540,7 @@ export default function EcosystemPortal({ config }: { config: PortalConfig }) {
         </header>
         {err && <p style={{ color: '#ff9a9a', fontSize: 13, marginBottom: 14 }}>{err}</p>}
         <div style={{ display: 'grid', gap: 16 }}>
-          {renderDashboard(data, () => { void reload() }, { logout })}
+          {renderDashboard?.(data, () => { void reload() }, { logout })}
         </div>
       </div>
     </div>
