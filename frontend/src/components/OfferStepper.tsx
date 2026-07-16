@@ -88,6 +88,12 @@ export default function OfferStepper({ stage, timeline, compact }: { stage: Offe
   // when the whole flow is confirmed). Never overshoots the active dot.
   const fillPct = terminalDone ? 100 : STEP_CENTERS[activeIndex]
   const displayPct = terminalDone ? 100 : [25, 50, 75, 100][activeIndex]
+  // On a rejected flow the steps that succeeded before the stop stay gold; only
+  // the hop into the declined step turns red. So the gold rail runs to the last
+  // completed dot, then a short red segment reaches the declined dot.
+  const goldPct = rejected ? (activeIndex > 0 ? STEP_CENTERS[activeIndex - 1] : 0) : fillPct
+  const redFromPct = goldPct
+  const redToPct = STEP_CENTERS[activeIndex]
 
   return (
     <div style={{ display: 'grid', gap: compact ? 10 : 14 }}>
@@ -101,13 +107,20 @@ export default function OfferStepper({ stage, timeline, compact }: { stage: Offe
       {/* Step rail: the fill stops at the current dot; that dot is highlighted. */}
       <div style={{ position: 'relative', padding: '2px 0' }}>
         <div style={{ position: 'relative', height: 4, background: 'rgba(255,255,255,0.09)', borderRadius: 4 }}>
+          {/* Gold portion — completed steps. */}
           <div style={{
-            position: 'absolute', left: 0, top: 0, bottom: 0, width: `${fillPct}%`,
-            background: rejected
-              ? 'linear-gradient(90deg, #e08a8a, #c96f6f)'
-              : 'linear-gradient(90deg, var(--gold), var(--gold-light))',
+            position: 'absolute', left: 0, top: 0, bottom: 0, width: `${goldPct}%`,
+            background: 'linear-gradient(90deg, var(--gold), var(--gold-light))',
             borderRadius: 4, transition: 'width 700ms cubic-bezier(.2,.8,.2,1)',
           }} />
+          {/* Red portion — only the failing hop into the declined step. */}
+          {rejected && (
+            <div style={{
+              position: 'absolute', left: `${redFromPct}%`, top: 0, bottom: 0, width: `${Math.max(0, redToPct - redFromPct)}%`,
+              background: 'linear-gradient(90deg, #d98a8a, #c96f6f)',
+              borderRadius: 4, transition: 'width 700ms cubic-bezier(.2,.8,.2,1)',
+            }} />
+          )}
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: -13 }}>
           {STEP_LABELS.map((label, i) => {
