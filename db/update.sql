@@ -90,7 +90,7 @@ CREATE TABLE IF NOT EXISTS `business_accounts` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `user_id` (`user_id`),
   KEY `idx_business_name` (`business_name`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 CALL add_column_if_missing('business_accounts', 'user_id', 'int NOT NULL', 'id');
 CALL add_column_if_missing('business_accounts', 'business_name', 'varchar(160) NOT NULL', 'user_id');
 CALL add_column_if_missing('business_accounts', 'category', 'varchar(80) DEFAULT NULL', 'business_name');
@@ -113,7 +113,7 @@ CREATE TABLE IF NOT EXISTS `business_offer_events` (
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `idx_offer_events_req` (`request_id`,`created_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 CALL add_column_if_missing('business_offer_events', 'request_id', 'int NOT NULL', 'id');
 CALL add_column_if_missing('business_offer_events', 'event', 'varchar(32) NOT NULL', 'request_id');
 CALL add_column_if_missing('business_offer_events', 'actor_role', 'varchar(20) NOT NULL', 'event');
@@ -150,7 +150,7 @@ CREATE TABLE IF NOT EXISTS `business_requests` (
   PRIMARY KEY (`id`),
   KEY `idx_breq_biz` (`business_user_id`),
   KEY `idx_breq_status` (`status`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 CALL add_column_if_missing('business_requests', 'business_user_id', 'int NOT NULL', 'id');
 CALL add_column_if_missing('business_requests', 'request_type', 'varchar(24) NOT NULL', 'business_user_id');
 CALL add_column_if_missing('business_requests', 'submission_id', 'int DEFAULT NULL', 'request_type');
@@ -251,7 +251,7 @@ CREATE TABLE IF NOT EXISTS `ecosystem_accounts` (
   UNIQUE KEY `user_id` (`user_id`),
   KEY `idx_eco_role` (`role`),
   KEY `idx_eco_refby` (`referred_by_code`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 CALL add_column_if_missing('ecosystem_accounts', 'user_id', 'int NOT NULL', 'id');
 CALL add_column_if_missing('ecosystem_accounts', 'role', 'varchar(20) NOT NULL', 'user_id');
 CALL add_column_if_missing('ecosystem_accounts', 'org_name', 'varchar(160) NOT NULL', 'role');
@@ -274,7 +274,7 @@ CREATE TABLE IF NOT EXISTS `ecosystem_announcements` (
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `idx_ecoann_aud` (`audience`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 CALL add_column_if_missing('ecosystem_announcements', 'audience', 'varchar(20) NOT NULL DEFAULT ''all''', 'id');
 CALL add_column_if_missing('ecosystem_announcements', 'title', 'varchar(180) NOT NULL', 'audience');
 CALL add_column_if_missing('ecosystem_announcements', 'body', 'text', 'title');
@@ -294,7 +294,7 @@ CREATE TABLE IF NOT EXISTS `ecosystem_assignments` (
   `responded_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `idx_ecoassign_user` (`user_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 CALL add_column_if_missing('ecosystem_assignments', 'user_id', 'int NOT NULL', 'id');
 CALL add_column_if_missing('ecosystem_assignments', 'role', 'varchar(20) NOT NULL', 'user_id');
 CALL add_column_if_missing('ecosystem_assignments', 'title', 'varchar(180) NOT NULL', 'role');
@@ -316,7 +316,7 @@ CREATE TABLE IF NOT EXISTS `ecosystem_documents` (
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `idx_ecodoc_user` (`user_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 CALL add_column_if_missing('ecosystem_documents', 'user_id', 'int NOT NULL', 'id');
 CALL add_column_if_missing('ecosystem_documents', 'role', 'varchar(20) NOT NULL', 'user_id');
 CALL add_column_if_missing('ecosystem_documents', 'doc_type', 'varchar(40) NOT NULL DEFAULT ''document''', 'role');
@@ -339,7 +339,7 @@ CREATE TABLE IF NOT EXISTS `ecosystem_requests` (
   PRIMARY KEY (`id`),
   KEY `idx_ecoreq_user` (`user_id`),
   KEY `idx_ecoreq_status` (`status`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 CALL add_column_if_missing('ecosystem_requests', 'user_id', 'int NOT NULL', 'id');
 CALL add_column_if_missing('ecosystem_requests', 'role', 'varchar(20) NOT NULL', 'user_id');
 CALL add_column_if_missing('ecosystem_requests', 'req_type', 'varchar(30) NOT NULL', 'role');
@@ -1301,7 +1301,7 @@ CREATE TABLE IF NOT EXISTS `rate_limits` (
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `idx_rate_bucket` (`bucket`,`created_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 CALL add_column_if_missing('rate_limits', 'bucket', 'varchar(140) NOT NULL', 'id');
 CALL add_column_if_missing('rate_limits', 'created_at', 'timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP', 'bucket');
 
