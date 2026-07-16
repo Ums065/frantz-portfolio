@@ -1393,6 +1393,12 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             json(['offers' => business_offers_pipeline((int) $u['id'])]);
         }
 
+        // Business answers an admin "Needs more info" note → back to the review queue.
+        case $method === 'POST' && preg_match('#^business/request/(\d+)/reply$#', $route, $m) === 1: {
+            $u = require_business();
+            json(['message' => 'Reply sent — the team will review it.', 'requests' => business_request_reply((int) $u['id'], (int) $m[1], (string) field(body(), 'message'))]);
+        }
+
         // Timeline (audit trail) for a single offer the business owns.
         case $method === 'GET' && preg_match('#^business/offer/(\d+)/timeline$#', $route, $m) === 1: {
             $u = require_business();

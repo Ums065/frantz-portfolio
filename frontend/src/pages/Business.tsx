@@ -497,8 +497,13 @@ export default function Business() {
                     <div style={{ color: 'var(--muted)', fontSize: 12.5, marginTop: 3 }}>
                       {[r.student_name, r.school_name].filter(Boolean).join(' · ') || 'General'} · {fmtDate(r.created_ts)}
                     </div>
-                    {r.message && <p style={{ color: '#d8d3c6', margin: '8px 0 0', lineHeight: 1.55, fontSize: 13.5 }}>{r.message}</p>}
-                    {r.admin_note && <p style={{ color: 'var(--gold-light)', margin: '8px 0 0', fontSize: 13 }}><strong>Admin:</strong> {r.admin_note}</p>}
+                    {r.message && <p style={{ color: '#d8d3c6', margin: '8px 0 0', lineHeight: 1.55, fontSize: 13.5, whiteSpace: 'pre-wrap' }}>{r.message}</p>}
+                    {r.admin_note && (
+                      <div style={{ marginTop: 8, borderLeft: '2px solid var(--gold)', paddingLeft: 11, color: 'var(--gold-light)', fontSize: 13, lineHeight: 1.5 }}>
+                        <strong style={{ color: 'var(--gold)' }}>{r.status === 'info_needed' ? 'The team needs more info:' : 'Admin:'}</strong> {r.admin_note}
+                      </div>
+                    )}
+                    {r.status === 'info_needed' && <BizRequestReply reqId={r.id} onDone={(list) => setData((d) => d ? { ...d, requests: list } : d)} />}
                   </div>
                 ))}
             </div>
@@ -679,6 +684,33 @@ function OfferChip({ icon, text }: { icon: string; text: string }) {
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--line)', borderRadius: 999, padding: '4px 11px', fontSize: 12, color: '#e0dccf' }}>
       <span aria-hidden>{icon}</span>{text}
     </span>
+  )
+}
+
+/* Inline reply to an admin "Needs more info" note — appends the answer and
+   sends the request back to the review queue (mirrors the ecosystem loop). */
+function BizRequestReply({ reqId, onDone }: { reqId: number; onDone: (list: BizRequest[]) => void }) {
+  const [open, setOpen] = useState(false)
+  const [msg, setMsg] = useState('')
+  const [busy, setBusy] = useState(false)
+  const send = async () => {
+    if (!msg.trim()) return
+    setBusy(true)
+    try {
+      const d = await api.post<{ requests: BizRequest[] }>(`business/request/${reqId}/reply`, { message: msg })
+      window.fcToast?.('Reply sent — the team will review it.')
+      onDone(d.requests || [])
+    } catch (e) { window.fcToast?.(e instanceof Error ? e.message : 'Could not send your reply.') } finally { setBusy(false) }
+  }
+  if (!open) return <button className="btn btn--sm" style={{ marginTop: 10 }} onClick={() => setOpen(true)}>Provide the info →</button>
+  return (
+    <div style={{ marginTop: 10, display: 'grid', gap: 8 }}>
+      <textarea autoFocus value={msg} onChange={(e) => setMsg(e.target.value)} placeholder="Answer the team's question…" style={{ ...inputS, minHeight: 70, resize: 'vertical' }} />
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+        <button className="btn btn--sm" disabled={busy} onClick={() => { setOpen(false); setMsg('') }}>Cancel</button>
+        <button className="btn btn--solid btn--sm" disabled={busy || !msg.trim()} onClick={send}>{busy ? 'Sending…' : 'Send Reply'}</button>
+      </div>
+    </div>
   )
 }
 

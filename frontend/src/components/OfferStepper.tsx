@@ -48,6 +48,7 @@ const EVENT_LABELS: Record<string, string> = {
   admin_approved: 'Approved by admin',
   admin_rejected: 'Rejected by admin',
   admin_info: 'Admin requested more information',
+  business_reply: 'Business replied with more info',
   student_accepted: 'Accepted by student',
   student_declined: 'Declined by student',
   parent_approved: 'Consent given by parent/guardian',

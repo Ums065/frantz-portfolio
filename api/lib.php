@@ -3744,6 +3744,25 @@ function business_request_update(int $id, string $status, string $note, int $adm
     }
 }
 
+/** Business reply to a "Needs Info" request: append their answer to the message
+ *  and return it to the admin queue (status back to pending). Owner-scoped. */
+function business_request_reply(int $userId, int $reqId, string $reply): array
+{
+    business_ensure_schema();
+    $reply = trim($reply);
+    if ($reply === '') json(['error' => 'Please type your reply first.'], 422);
+    $s = db()->prepare('SELECT message, request_type FROM business_requests WHERE id = ? AND business_user_id = ? LIMIT 1');
+    $s->execute([$reqId, $userId]);
+    $r = $s->fetch();
+    if (!$r) json(['error' => 'Request not found.'], 404);
+    $newMsg = trim((string) ($r['message'] ?? '')) . "\n\n[Business reply] " . mb_substr($reply, 0, 1500);
+    db()->prepare("UPDATE business_requests SET message = ?, status = 'pending', reviewed_at = NULL WHERE id = ?")
+        ->execute([mb_substr($newMsg, 0, 4000), $reqId]);
+    business_offer_log($reqId, 'business_reply', 'business', '', $reply);
+    if (function_exists('notify')) notify('Business replied to a request', 'A business answered your "needs more info" question — it is back in the review queue.');
+    return business_requests_for_user($userId);
+}
+
 /* ==================== Job-offer consent chain (business → admin → student → parent) ==================== */
 
 /** Business + student names for an offer, for notification text. */
