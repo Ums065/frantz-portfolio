@@ -4174,8 +4174,17 @@ function ecosystem_shared_ensure_schema(): void
         id INT AUTO_INCREMENT PRIMARY KEY, user_id INT NOT NULL, role VARCHAR(20) NOT NULL,
         title VARCHAR(180) NOT NULL, detail TEXT DEFAULT NULL, assign_date DATE NULL,
         status VARCHAR(16) NOT NULL DEFAULT 'active',
+        volunteer_note TEXT DEFAULT NULL, responded_at TIMESTAMP NULL DEFAULT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, INDEX idx_ecoassign_user (user_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    // Self-heal: add the volunteer-response columns to an existing table.
+    $addCol = static function (string $col, string $def) use ($pdo): void {
+        $c = $pdo->prepare("SELECT 1 FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'ecosystem_assignments' AND column_name = ? LIMIT 1");
+        $c->execute([$col]);
+        if (!$c->fetchColumn()) $pdo->exec("ALTER TABLE ecosystem_assignments ADD COLUMN $col $def");
+    };
+    $addCol('volunteer_note', 'TEXT DEFAULT NULL');
+    $addCol('responded_at', 'TIMESTAMP NULL DEFAULT NULL');
     $ready = true;
 }
 
@@ -4183,11 +4192,13 @@ function ecosystem_shared_ensure_schema(): void
 function ecosystem_assignments_for_user(int $userId): array
 {
     ecosystem_shared_ensure_schema();
-    $s = db()->prepare('SELECT id, title, detail, assign_date, status, UNIX_TIMESTAMP(created_at) AS created_ts FROM ecosystem_assignments WHERE user_id = ? ORDER BY (status = "active") DESC, assign_date IS NULL, assign_date ASC, created_at DESC');
+    $s = db()->prepare('SELECT id, title, detail, assign_date, status, volunteer_note, UNIX_TIMESTAMP(created_at) AS created_ts, UNIX_TIMESTAMP(responded_at) AS responded_ts FROM ecosystem_assignments WHERE user_id = ? ORDER BY (status = "active") DESC, assign_date IS NULL, assign_date ASC, created_at DESC');
     $s->execute([$userId]);
     return array_map(static fn(array $r): array => [
         'id' => (int) $r['id'], 'title' => (string) $r['title'], 'detail' => (string) ($r['detail'] ?? ''),
-        'assign_date' => $r['assign_date'], 'status' => (string) $r['status'], 'created_ts' => (int) $r['created_ts'],
+        'assign_date' => $r['assign_date'], 'status' => (string) $r['status'],
+        'volunteer_note' => (string) ($r['volunteer_note'] ?? ''),
+        'created_ts' => (int) $r['created_ts'], 'responded_ts' => (int) ($r['responded_ts'] ?? 0),
     ], $s->fetchAll());
 }
 
@@ -4204,7 +4215,8 @@ function ecosystem_assignment_add(int $userId, string $role, string $title, stri
 function ecosystem_assignment_set_status(int $id, string $status): void
 {
     ecosystem_shared_ensure_schema();
-    if (!in_array($status, ['active', 'completed', 'cancelled'], true)) json(['error' => 'Invalid status.'], 422);
+    // active = awaiting the volunteer; accepted/declined = their response; completed/cancelled = closed.
+    if (!in_array($status, ['active', 'accepted', 'declined', 'completed', 'cancelled'], true)) json(['error' => 'Invalid status.'], 422);
     db()->prepare('UPDATE ecosystem_assignments SET status = ? WHERE id = ?')->execute([$status, $id]);
 }
 
@@ -4212,6 +4224,35 @@ function ecosystem_assignment_delete(int $id): void
 {
     ecosystem_shared_ensure_schema();
     db()->prepare('DELETE FROM ecosystem_assignments WHERE id = ?')->execute([$id]);
+}
+
+/**
+ * Two-way assignments: the volunteer (owner) responds to an assignment handed to
+ * them — accept, decline (with optional reason), or mark complete. The admin is
+ * notified of the response. Returns the account's refreshed assignment list.
+ */
+function ecosystem_assignment_respond(int $userId, int $id, string $action, string $note = ''): array
+{
+    ecosystem_shared_ensure_schema();
+    $s = db()->prepare('SELECT id, title, status FROM ecosystem_assignments WHERE id = ? AND user_id = ? LIMIT 1');
+    $s->execute([$id, $userId]);
+    $a = $s->fetch();
+    if (!$a) json(['error' => 'Assignment not found.'], 404);
+    $cur = (string) $a['status'];
+    $map = ['accept' => 'accepted', 'decline' => 'declined', 'complete' => 'completed'];
+    if (!isset($map[$action])) json(['error' => 'Choose accept, decline, or complete.'], 422);
+    $new = $map[$action];
+    // Only sensible transitions: respond to an open one; complete one you accepted.
+    if (in_array($cur, ['cancelled', 'completed'], true)) json(['error' => 'This assignment is already closed.'], 409);
+    if ($action === 'complete' && $cur !== 'accepted' && $cur !== 'active') json(['error' => 'Accept the assignment before marking it complete.'], 409);
+    db()->prepare('UPDATE ecosystem_assignments SET status = ?, volunteer_note = CASE WHEN ? <> "" THEN ? ELSE volunteer_note END, responded_at = NOW() WHERE id = ?')
+        ->execute([$new, $note, mb_substr($note, 0, 2000), $id]);
+    // Tell the admins how the volunteer responded.
+    if (function_exists('notify')) {
+        $label = ['accepted' => 'accepted', 'declined' => 'declined', 'completed' => 'marked complete'][$new] ?? $new;
+        notify('Assignment ' . $label, 'A volunteer has ' . $label . ' the assignment "' . (string) $a['title'] . '".' . ($note !== '' ? "\n\nNote: " . $note : ''));
+    }
+    return ecosystem_assignments_for_user($userId);
 }
 
 /** Merge recognition stats (hours / events_supported / students_mentored) into an

@@ -1557,6 +1557,14 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             $requests = ecosystem_request_reply((int) $u['id'], (int) $m[2], (string) field(body(), 'message'));
             json(['message' => 'Reply sent — the team will review it.', 'requests' => $requests]);
         }
+        // Two-way assignments: the account responds to an assignment handed to them
+        // (accept / decline / complete). Owner-scoped; the admin is notified.
+        case $method === 'PUT' && preg_match('#^ecosystem/(sponsor|partner|media|volunteer)/assignment/(\d+)/respond$#', $route, $m) === 1: {
+            $u = require_ecosystem($m[1]);
+            $b = body();
+            $assignments = ecosystem_assignment_respond((int) $u['id'], (int) $m[2], (string) field($b, 'action'), trim((string) field($b, 'note')));
+            json(['message' => 'Assignment updated.', 'assignments' => $assignments]);
+        }
 
         /* ---------------- OUR PARTNERS (dynamic content directory) ---------------- */
         case $key === 'GET partners': {
