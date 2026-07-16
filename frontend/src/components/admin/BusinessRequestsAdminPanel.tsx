@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../../lib/api'
 import { Pill, Modal, EcoTable, ProfileModal } from './EcosystemAdminPanel'
+import OfferStepper, { type OfferStage, type OfferEvent } from '../OfferStepper'
 
 /* Admin review of Business opportunity requests (implementation help / contact
    school / internship-hiring / volunteer). Table + filters + detail modal, so it
@@ -20,6 +21,16 @@ interface BizAdminRequest {
   admin_note: string
   student_consent: string
   parent_consent: string
+  decline_reason?: string
+  declined_by?: string
+  job_title?: string
+  location?: string
+  duration?: string
+  stipend?: string
+  working_hours?: string
+  skills?: string
+  stage?: OfferStage
+  timeline?: OfferEvent[]
   created_ts: number
 }
 
@@ -82,13 +93,21 @@ export default function BusinessRequestsAdminPanel() {
 function BizRequestModal({ req, onClose, onDone }: { req: BizAdminRequest; onClose: () => void; onDone: (list: BizAdminRequest[]) => void }) {
   const [note, setNote] = useState(req.admin_note || '')
   const [busy, setBusy] = useState('')
+  const [err, setErr] = useState('')
   const [showProfile, setShowProfile] = useState(false)
+  const isInternship = req.request_type === 'internship'
   const inp: React.CSSProperties = { width: '100%', background: 'rgba(0,0,0,0.25)', border: '1px solid var(--line)', borderRadius: 9, padding: '9px 12px', color: 'var(--ivory)', fontSize: 13 }
   const act = async (status: string) => {
-    setBusy(status)
+    // A reason is mandatory when declining, so the business always learns why.
+    if (status === 'declined' && note.trim() === '') { setErr('A reason is required when declining. Please add a note to the business.'); return }
+    setErr(''); setBusy(status)
     try { const d = await api.put<{ requests: BizAdminRequest[] }>(`admin/business-request/${req.id}`, { status, admin_note: note }); onDone(d.requests || []) }
-    catch { setBusy('') }
+    catch (e) { setBusy(''); setErr(e instanceof Error ? e.message : 'Could not update the request.') }
   }
+  const meta: Array<[string, string | undefined]> = [
+    ['Role', req.job_title], ['Location', req.location], ['Duration', req.duration],
+    ['Stipend', req.stipend], ['Working hours', req.working_hours], ['Skills', req.skills],
+  ]
   return (
     <Modal title={`${LABEL[req.request_type] || req.request_type} · ${req.business_name}`} onClose={onClose}>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
@@ -103,22 +122,33 @@ function BizRequestModal({ req, onClose, onDone }: { req: BizAdminRequest; onClo
           <span style={{ color: 'var(--muted)' }}>Regarding:</span> {[req.student_name, req.school_name].filter(Boolean).join(' · ')}
         </p>
       )}
-      {req.request_type === 'internship' && req.status === 'approved' && (
-        <div style={{ display: 'flex', gap: 16, margin: '0 0 12px', flexWrap: 'wrap', fontSize: 12.5 }}>
-          <span style={{ color: 'var(--muted)' }}>Consent chain:</span>
-          <span>Student <Pill status={req.student_consent} /></span>
-          <span>Parent <Pill status={req.parent_consent} /></span>
+
+      {/* Rich internship details */}
+      {isInternship && meta.some(([, v]) => v) && (
+        <dl style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '5px 12px', fontSize: 13, margin: '0 0 12px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--line)', borderRadius: 10, padding: '10px 12px' }}>
+          {meta.filter(([, v]) => v).map(([k, v]) => (
+            <div key={k} style={{ display: 'contents' }}><dt style={{ color: 'var(--muted)' }}>{k}</dt><dd style={{ margin: 0, color: 'var(--ivory)' }}>{v}</dd></div>
+          ))}
+        </dl>
+      )}
+
+      {/* Live status tracker for internships */}
+      {isInternship && req.stage && (
+        <div style={{ margin: '0 0 14px', background: 'rgba(0,0,0,0.15)', border: '1px solid var(--line)', borderRadius: 12, padding: '12px 14px' }}>
+          <OfferStepper stage={req.stage} timeline={req.timeline} />
         </div>
       )}
-      {req.request_type === 'internship' && req.status !== 'approved' && (
+      {isInternship && req.status !== 'approved' && !req.stage?.rejected && (
         <p style={{ color: 'var(--gold-light)', fontSize: 12.5, margin: '0 0 10px' }}>Approving this sends the offer to the student, then their parent/guardian for consent.</p>
       )}
+
       {req.message && <p style={{ color: '#d8d3c6', fontSize: 13.5, lineHeight: 1.6, whiteSpace: 'pre-wrap', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--line)', borderRadius: 10, padding: '10px 12px' }}>{req.message}</p>}
 
       <label style={{ display: 'block', fontSize: 11, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--gold-light)', margin: '12px 0 5px' }}>
-        Note to the business <span style={{ textTransform: 'none', color: 'var(--muted)', fontWeight: 400 }}>(for “Needs Info”, write what you need)</span>
+        Note to the business <span style={{ textTransform: 'none', color: 'var(--muted)', fontWeight: 400 }}>(required to decline; for “Needs Info”, write what you need)</span>
       </label>
-      <textarea style={{ ...inp, minHeight: 70, resize: 'vertical' }} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Optional note — the business sees this…" />
+      <textarea style={{ ...inp, minHeight: 70, resize: 'vertical' }} value={note} onChange={(e) => setNote(e.target.value)} placeholder="The business sees this note…" />
+      {err && <p style={{ color: '#ff9a9a', fontSize: 12.5, margin: '8px 0 0' }}>{err}</p>}
       <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
         {([['approved', 'Approve'], ['info_needed', 'Needs Info'], ['declined', 'Decline']] as const).map(([st, l]) => (
           <button key={st} className={`btn btn--sm${req.status === st ? ' btn--solid' : ''}`} disabled={!!busy} onClick={() => act(st)}>{busy === st ? '…' : l}{req.status === st ? ' ✓' : ''}</button>

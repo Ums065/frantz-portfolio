@@ -4,6 +4,7 @@ import { api } from '../lib/api'
 import { useAuth } from '../context/AuthContext'
 import { useSeo } from '../hooks/useSeo'
 import { resolveDashboardRoute } from '../lib/dashboardRoute'
+import OfferStepper, { type OfferStage, type OfferEvent } from '../components/OfferStepper'
 
 /* Business Portal — access, review & opportunity requests for a verified business.
    The business is NOT a judge: it cannot rate, score or rank students, and cannot
@@ -65,6 +66,26 @@ interface BizRequest {
   admin_note: string
   created_ts: number
 }
+interface BizOffer {
+  id: number
+  job_title: string
+  student_name: string
+  school_name: string
+  location: string
+  duration: string
+  stipend: string
+  working_hours: string
+  skills: string
+  message: string
+  status: string
+  student_consent: string
+  parent_consent: string
+  admin_note: string
+  decline_reason: string
+  created_ts: number
+  stage: OfferStage
+  timeline: OfferEvent[]
+}
 interface BizProfile { business_name: string; category: string | null; borough: string | null; contact_name: string | null; contact_phone: string | null; website: string | null; about: string | null }
 interface BizDoc { id: number; doc_type: string; label: string; file_url: string; created_ts: number }
 interface BizAnn { id: number; title: string; body: string; created_ts: number }
@@ -77,7 +98,7 @@ interface BizDashboard {
   announcements?: BizAnn[]
 }
 
-type Tab = 'interviews' | 'solutions' | 'requests' | 'updates' | 'profile'
+type Tab = 'interviews' | 'solutions' | 'pipeline' | 'requests' | 'updates' | 'profile'
 
 const REQ_LABEL: Record<ReqType, string> = {
   implementation: 'Implementation Help',
@@ -93,8 +114,12 @@ const fmtDate = (ts: number) => { try { return new Date(ts * 1000).toLocaleDateS
 
 const ADMIN_ROLES = ['admin', 'super_admin', 'editor']
 
-// A pending request the modal is collecting a message for.
-interface ReqDraft { type: ReqType; title: string; note: string; submission_id?: number; student_id?: number; school_name?: string }
+// A pending request the modal is collecting a message for. Internship requests
+// carry rich offer fields (job title, location, duration, stipend, hours, skills).
+interface ReqDraft {
+  type: ReqType; title: string; note: string; submission_id?: number; student_id?: number; school_name?: string
+  job_title?: string; location?: string; duration?: string; stipend?: string; working_hours?: string; skills?: string
+}
 
 export default function Business() {
   const { user, loading, login, refresh, logout } = useAuth()
@@ -117,6 +142,8 @@ export default function Business() {
   const [reqErr, setReqErr] = useState('')
   // interview detail modal
   const [detail, setDetail] = useState<BizInterview | null>(null)
+  // internship pipeline
+  const [offers, setOffers] = useState<BizOffer[]>([])
 
   // auth panel
   const [mode, setMode] = useState<'login' | 'register'>('register')
@@ -137,6 +164,12 @@ export default function Business() {
 
   useEffect(() => { void loadDashboard() }, [loadDashboard])
 
+  const loadOffers = useCallback(async () => {
+    if (!user || !(isBusiness || isAdmin) || !approved) return
+    try { const d = await api.get<{ offers: BizOffer[] }>('business/offers'); setOffers(d.offers || []) } catch { /* non-fatal */ }
+  }, [user, isBusiness, isAdmin, approved])
+  useEffect(() => { void loadOffers() }, [loadOffers])
+
   const submitRequest = async () => {
     if (!draft) return
     setReqBusy(true); setReqErr('')
@@ -147,9 +180,13 @@ export default function Business() {
         student_id: draft.student_id,
         school_name: draft.school_name,
         message: draft.note,
+        job_title: draft.job_title, location: draft.location, duration: draft.duration,
+        stipend: draft.stipend, working_hours: draft.working_hours, skills: draft.skills,
       })
       setData((d) => d ? { ...d, requests: r.requests || d.requests } : d)
-      setDraft(null); setTab('requests')
+      const wasInternship = draft.type === 'internship'
+      setDraft(null); setTab(wasInternship ? 'pipeline' : 'requests')
+      if (wasInternship) void loadOffers()
     } catch (e) { setReqErr(e instanceof Error ? e.message : 'Could not send your request.') }
     finally { setReqBusy(false) }
   }
@@ -285,9 +322,11 @@ export default function Business() {
   const announcements = data?.announcements ?? []
   const solutionInterviews = interviews.filter((i) => i.solution)
   const updatesCount = documents.length + announcements.length
+  const activePipeline = offers.filter((o) => !o.stage?.rejected && o.stage?.key !== 'confirmed').length
   const NAV: Array<{ key: Tab; label: string }> = [
     { key: 'interviews', label: `Interviews (${interviews.length})` },
     { key: 'solutions', label: `Student Solutions (${solutionInterviews.length})` },
+    { key: 'pipeline', label: `Internship Pipeline${offers.length ? ` (${offers.length})` : ''}` },
     { key: 'requests', label: `My Requests (${requests.length})` },
     { key: 'updates', label: `Updates${updatesCount ? ` (${updatesCount})` : ''}` },
     { key: 'profile', label: 'Business Profile' },
@@ -372,6 +411,44 @@ export default function Business() {
               )
           )}
 
+          {tab === 'pipeline' && (
+            <div style={{ display: 'grid', gap: 16 }}>
+              <div style={{ ...cardS }}>
+                <div className="gold-text" style={{ fontFamily: 'var(--f-serif)', fontSize: 18 }}>Track every internship offer in real time</div>
+                <div style={{ color: 'var(--muted)', fontSize: 13, marginTop: 4, lineHeight: 1.6 }}>
+                  Each offer moves through admin review → the student → their parent/guardian. You'll see exactly where every offer stands, what happens next, and the full history — with email + in-app notifications at each step.
+                  {offers.length > 0 && <> <strong style={{ color: 'var(--gold-light)' }}>{activePipeline} in progress.</strong></>}
+                </div>
+                <div style={{ marginTop: 12 }}>
+                  <button className="btn btn--sm" onClick={() => setTab('solutions')}>+ Make an offer from a student solution</button>
+                </div>
+              </div>
+              {offers.length === 0
+                ? <Empty text="No internship offers yet. Open a student's solution and choose “Request Internship / Hiring” to send an offer. It will appear here with a live status tracker." />
+                : offers.map((o) => (
+                  <div key={o.id} style={cardS}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
+                      <div>
+                        <div className="gold-text" style={{ fontWeight: 800, fontSize: 16 }}>{o.job_title || 'Internship'}</div>
+                        <div style={{ color: 'var(--muted)', fontSize: 12.5, marginTop: 2 }}>
+                          {[o.student_name, o.school_name].filter(Boolean).join(' · ')} · Sent {fmtDate(o.created_ts)}
+                        </div>
+                      </div>
+                    </div>
+                    {(o.location || o.duration || o.stipend || o.working_hours) && (
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+                        {o.location && <OfferChip icon="📍" text={o.location} />}
+                        {o.duration && <OfferChip icon="⏳" text={o.duration} />}
+                        {o.stipend && <OfferChip icon="💰" text={o.stipend} />}
+                        {o.working_hours && <OfferChip icon="🕑" text={o.working_hours} />}
+                      </div>
+                    )}
+                    <OfferStepper stage={o.stage} timeline={o.timeline} />
+                  </div>
+                ))}
+            </div>
+          )}
+
           {tab === 'requests' && (
             <div style={{ display: 'grid', gap: 16 }}>
               <div style={{ ...cardS, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
@@ -444,18 +521,40 @@ export default function Business() {
 
       {draft && (
         <div onClick={() => !reqBusy && setDraft(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'grid', placeItems: 'center', padding: 20, zIndex: 60 }}>
-          <div onClick={(e) => e.stopPropagation()} className="glass" style={{ maxWidth: 480, width: '100%', padding: 26, borderRadius: 16 }}>
+          <div onClick={(e) => e.stopPropagation()} className="glass" style={{ maxWidth: draft.type === 'internship' ? 560 : 480, width: '100%', maxHeight: '88vh', overflowY: 'auto', padding: 26, borderRadius: 16 }}>
             <span style={eyebrow}>{REQ_LABEL[draft.type]}</span>
             <h3 className="gold-text" style={{ fontFamily: 'var(--f-serif)', fontSize: 21, margin: '4px 0 8px' }}>{draft.title}</h3>
             <p style={{ color: 'var(--muted)', fontSize: 13, lineHeight: 1.6, marginTop: 0 }}>
-              This request goes to the program admin for review. No student is contacted and nothing is implemented without the required student, parent/guardian, and school consent.
+              {draft.type === 'internship'
+                ? 'Describe the internship. It goes to the program admin first — then, if approved, to the student and their parent/guardian for consent. Nothing is finalised without all approvals.'
+                : 'This request goes to the program admin for review. No student is contacted and nothing is implemented without the required student, parent/guardian, and school consent.'}
             </p>
-            <label style={labelS}>Message (optional)</label>
-            <textarea autoFocus style={{ ...inputS, minHeight: 90, resize: 'vertical' }} value={draft.note} onChange={(e) => setDraft({ ...draft, note: e.target.value })} placeholder="Add any details for the admin…" />
+
+            {draft.type === 'internship' && (
+              <div style={{ display: 'grid', gap: 12, marginBottom: 4 }}>
+                <div>
+                  <label style={labelS}>Role / job title *</label>
+                  <input style={inputS} value={draft.job_title || ''} onChange={(e) => setDraft({ ...draft, job_title: e.target.value })} placeholder="e.g. Marketing Intern" />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12 }}>
+                  <div><label style={labelS}>Location</label><input style={inputS} value={draft.location || ''} onChange={(e) => setDraft({ ...draft, location: e.target.value })} placeholder="On-site / Remote / Brooklyn" /></div>
+                  <div><label style={labelS}>Duration</label><input style={inputS} value={draft.duration || ''} onChange={(e) => setDraft({ ...draft, duration: e.target.value })} placeholder="e.g. 8 weeks (summer)" /></div>
+                  <div><label style={labelS}>Stipend / pay</label><input style={inputS} value={draft.stipend || ''} onChange={(e) => setDraft({ ...draft, stipend: e.target.value })} placeholder="e.g. $15/hr or Unpaid" /></div>
+                  <div><label style={labelS}>Working hours</label><input style={inputS} value={draft.working_hours || ''} onChange={(e) => setDraft({ ...draft, working_hours: e.target.value })} placeholder="e.g. 10 hrs/week, after school" /></div>
+                </div>
+                <div>
+                  <label style={labelS}>Skills / requirements</label>
+                  <input style={inputS} value={draft.skills || ''} onChange={(e) => setDraft({ ...draft, skills: e.target.value })} placeholder="Comma-separated, e.g. Canva, teamwork, writing" />
+                </div>
+              </div>
+            )}
+
+            <label style={labelS}>{draft.type === 'internship' ? 'Description / message to the student' : 'Message (optional)'}</label>
+            <textarea autoFocus style={{ ...inputS, minHeight: 90, resize: 'vertical' }} value={draft.note} onChange={(e) => setDraft({ ...draft, note: e.target.value })} placeholder={draft.type === 'internship' ? 'What the student will do, why you chose them, and anything they should know…' : 'Add any details for the admin…'} />
             {reqErr && <p style={{ color: '#ff9a9a', fontSize: 13, margin: '10px 0 0' }}>{reqErr}</p>}
             <div style={{ display: 'flex', gap: 10, marginTop: 16, justifyContent: 'flex-end' }}>
               <button className="btn btn--sm" disabled={reqBusy} onClick={() => setDraft(null)}>Cancel</button>
-              <button className="btn btn--solid btn--sm" disabled={reqBusy} onClick={submitRequest}>{reqBusy ? 'Sending…' : 'Send Request'}</button>
+              <button className="btn btn--solid btn--sm" disabled={reqBusy || (draft.type === 'internship' && !(draft.job_title || '').trim())} onClick={submitRequest}>{reqBusy ? 'Sending…' : draft.type === 'internship' ? 'Send Offer' : 'Send Request'}</button>
             </div>
           </div>
         </div>
@@ -545,6 +644,14 @@ function StatTile({ label, value }: { label: string; value: number }) {
 
 function Empty({ text }: { text: string }) {
   return <div style={{ ...cardS, color: 'var(--muted)', fontSize: 14, lineHeight: 1.65 }}>{text}</div>
+}
+
+function OfferChip({ icon, text }: { icon: string; text: string }) {
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--line)', borderRadius: 999, padding: '4px 11px', fontSize: 12, color: '#e0dccf' }}>
+      <span aria-hidden>{icon}</span>{text}
+    </span>
+  )
 }
 
 function SolutionCard({ interview, onReq }: { interview: BizInterview; onReq: (d: ReqDraft) => void }) {

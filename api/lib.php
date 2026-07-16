@@ -3369,7 +3369,72 @@ function business_ensure_schema(): void
     };
     $addColReq('student_consent', "VARCHAR(12) NOT NULL DEFAULT 'pending'");
     $addColReq('parent_consent', "VARCHAR(12) NOT NULL DEFAULT 'pending'");
+    // Rich internship-offer detail (job-portal style) + rejection reason.
+    $addColReq('job_title', 'VARCHAR(160) DEFAULT NULL');
+    $addColReq('location', 'VARCHAR(160) DEFAULT NULL');
+    $addColReq('duration', 'VARCHAR(80) DEFAULT NULL');
+    $addColReq('stipend', 'VARCHAR(80) DEFAULT NULL');
+    $addColReq('working_hours', 'VARCHAR(120) DEFAULT NULL');
+    $addColReq('skills', 'VARCHAR(400) DEFAULT NULL');
+    $addColReq('decline_reason', 'TEXT DEFAULT NULL');
+    $addColReq('declined_by', "VARCHAR(12) DEFAULT NULL");
+    // Full audit trail of every step in an offer's lifecycle (the timeline).
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS business_offer_events (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            request_id INT NOT NULL,
+            event VARCHAR(32) NOT NULL,
+            actor_role VARCHAR(20) NOT NULL,
+            actor_label VARCHAR(160) DEFAULT NULL,
+            note TEXT DEFAULT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_offer_events_req (request_id, created_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+    );
     $ready = true;
+}
+
+/** Append an audit event to an offer's timeline. */
+function business_offer_log(int $requestId, string $event, string $actorRole, string $actorLabel = '', string $note = ''): void
+{
+    try {
+        db()->prepare('INSERT INTO business_offer_events (request_id, event, actor_role, actor_label, note) VALUES (?,?,?,?,?)')
+            ->execute([$requestId, mb_substr($event, 0, 32), mb_substr($actorRole, 0, 20), mb_substr($actorLabel, 0, 160) ?: null, mb_substr($note, 0, 2000) ?: null]);
+    } catch (Throwable $e) { if (app_debug()) error_log('business_offer_log: ' . $e->getMessage()); }
+}
+
+/** The timeline (audit events) for one offer, oldest first. */
+function business_offer_timeline(int $requestId): array
+{
+    business_ensure_schema();
+    $s = db()->prepare('SELECT event, actor_role, actor_label, note, UNIX_TIMESTAMP(created_at) AS ts FROM business_offer_events WHERE request_id = ? ORDER BY created_at ASC, id ASC');
+    $s->execute([$requestId]);
+    return array_map(static fn(array $r): array => [
+        'event' => (string) $r['event'], 'actor_role' => (string) $r['actor_role'],
+        'actor_label' => (string) ($r['actor_label'] ?? ''), 'note' => (string) ($r['note'] ?? ''), 'ts' => (int) $r['ts'],
+    ], $s->fetchAll());
+}
+
+/**
+ * Derive the live stage of an internship offer from its status + consents.
+ * Returns key, human label, 0-100 progress, next action, and rejection info —
+ * the single source of truth for every stakeholder's status tracker.
+ */
+function business_offer_stage(array $r): array
+{
+    $status = (string) ($r['status'] ?? 'pending');
+    $sc = (string) ($r['student_consent'] ?? 'pending');
+    $pc = (string) ($r['parent_consent'] ?? 'pending');
+    $by = (string) ($r['declined_by'] ?? '');
+    $reason = (string) ($r['decline_reason'] ?? ($r['admin_note'] ?? ''));
+    if ($status === 'declined' || $by === 'admin') return ['key' => 'rejected_admin', 'label' => 'Rejected by Admin', 'progress' => 100, 'rejected' => true, 'by' => 'admin', 'reason' => $reason, 'next' => 'No further action.'];
+    if ($sc === 'declined' || $by === 'student') return ['key' => 'declined_student', 'label' => 'Declined by Student', 'progress' => 100, 'rejected' => true, 'by' => 'student', 'reason' => $reason, 'next' => 'No further action.'];
+    if ($pc === 'declined' || $by === 'parent') return ['key' => 'declined_parent', 'label' => 'Parent Consent Declined', 'progress' => 100, 'rejected' => true, 'by' => 'parent', 'reason' => $reason, 'next' => 'No further action.'];
+    if ($pc === 'accepted') return ['key' => 'confirmed', 'label' => 'Internship Confirmed', 'progress' => 100, 'rejected' => false, 'next' => 'The team will coordinate the next steps.'];
+    if ($sc === 'accepted') return ['key' => 'awaiting_parent', 'label' => 'Waiting for Parent Consent', 'progress' => 80, 'rejected' => false, 'next' => 'The parent/guardian needs to give consent.'];
+    if ($status === 'approved') return ['key' => 'awaiting_student', 'label' => 'Waiting for Student Response', 'progress' => 55, 'rejected' => false, 'next' => 'The student needs to accept the offer.'];
+    if ($status === 'info_needed') return ['key' => 'info_needed', 'label' => 'Admin Needs Information', 'progress' => 35, 'rejected' => false, 'next' => 'Respond to the admin\'s question.'];
+    return ['key' => 'awaiting_admin', 'label' => 'Waiting for Admin Approval', 'progress' => 25, 'rejected' => false, 'next' => 'An admin will review your offer.'];
 }
 
 /** Business account row for a user id (or null). */
@@ -3556,17 +3621,27 @@ function business_create_request(array $user, array $b): array
     }
     // 'volunteer' needs no target.
 
+    $s = static fn(string $k, int $max): ?string => mb_substr(trim((string) field($b, $k)), 0, $max) ?: null;
     db()->prepare(
-        'INSERT INTO business_requests (business_user_id, request_type, submission_id, student_id, student_name, school_name, message, status)
-         VALUES (?,?,?,?,?,?,?, "pending")'
+        'INSERT INTO business_requests (business_user_id, request_type, submission_id, student_id, student_name, school_name, message, status,
+             job_title, location, duration, stipend, working_hours, skills)
+         VALUES (?,?,?,?,?,?,?, "pending", ?,?,?,?,?,?)'
     )->execute([
         (int) $user['id'], $type, $subId ?: null, $studentId ?: null, $studentName, $schoolName,
         mb_substr(trim((string) field($b, 'message')), 0, 2000) ?: null,
+        $type === 'internship' ? $s('job_title', 160) : null,
+        $type === 'internship' ? $s('location', 160) : null,
+        $type === 'internship' ? $s('duration', 80) : null,
+        $type === 'internship' ? $s('stipend', 80) : null,
+        $type === 'internship' ? $s('working_hours', 120) : null,
+        $type === 'internship' ? $s('skills', 400) : null,
     ]);
+    $newId = (int) db()->lastInsertId();
+    business_offer_log($newId, 'created', 'business', (string) $account['business_name'], (string) ($type === 'internship' ? (field($b, 'job_title') ?: 'Internship offer') : $type));
     if (function_exists('notify')) {
         notify('New business request: ' . $type, $account['business_name'] . ' submitted a "' . $type . '" request for admin review.');
     }
-    return ['id' => (int) db()->lastInsertId(), 'requests' => business_requests_for_user((int) $user['id'])];
+    return ['id' => $newId, 'requests' => business_requests_for_user((int) $user['id'])];
 }
 
 /** Full dashboard payload for a signed-in business user (access + review + requests; NO rating). */
@@ -3631,6 +3706,13 @@ function business_requests_all(): array
         'admin_note' => (string) ($r['admin_note'] ?? ''),
         'student_consent' => (string) ($r['student_consent'] ?? 'pending'),
         'parent_consent' => (string) ($r['parent_consent'] ?? 'pending'),
+        'decline_reason' => (string) ($r['decline_reason'] ?? ''),
+        'declined_by' => (string) ($r['declined_by'] ?? ''),
+        'job_title' => (string) ($r['job_title'] ?? ''), 'location' => (string) ($r['location'] ?? ''),
+        'duration' => (string) ($r['duration'] ?? ''), 'stipend' => (string) ($r['stipend'] ?? ''),
+        'working_hours' => (string) ($r['working_hours'] ?? ''), 'skills' => (string) ($r['skills'] ?? ''),
+        'stage' => business_offer_stage($r),
+        'timeline' => (string) $r['request_type'] === 'internship' ? business_offer_timeline((int) $r['id']) : [],
         'created_ts' => (int) $r['created_ts'],
     ], $rows);
 }
@@ -3640,11 +3722,15 @@ function business_request_update(int $id, string $status, string $note, int $adm
 {
     business_ensure_schema();
     if (!in_array($status, ['pending', 'approved', 'declined', 'info_needed'], true)) json(['error' => 'Invalid status.'], 422);
+    // Rejecting requires a reason (mandatory), so the business owner always learns why.
+    if ($status === 'declined' && trim($note) === '') json(['error' => 'A reason is required when declining a request.'], 422);
     $own = db()->prepare('SELECT business_user_id, request_type, student_id FROM business_requests WHERE id = ? LIMIT 1');
     $own->execute([$id]);
     $req = $own->fetch();
-    db()->prepare('UPDATE business_requests SET status=?, admin_note=?, reviewed_by_user_id=?, reviewed_at=NOW() WHERE id=?')
-        ->execute([$status, mb_substr($note, 0, 2000) ?: null, $adminId, $id]);
+    $declinedBy = $status === 'declined' ? 'admin' : null;
+    db()->prepare('UPDATE business_requests SET status=?, admin_note=?, decline_reason=CASE WHEN ?="declined" THEN ? ELSE decline_reason END, declined_by=?, reviewed_by_user_id=?, reviewed_at=NOW() WHERE id=?')
+        ->execute([$status, mb_substr($note, 0, 2000) ?: null, $status, mb_substr($note, 0, 2000) ?: null, $declinedBy, $adminId, $id]);
+    if ($req) business_offer_log((int) $id, $status === 'approved' ? 'admin_approved' : ($status === 'declined' ? 'admin_rejected' : 'admin_info'), 'admin', 'Admin', $note);
     // Email the business owner about the decision (Feature E parity with ecosystem).
     if ($req && $status !== 'pending' && function_exists('ecosystem_notify_user')) {
         $label = ['approved' => 'approved', 'declined' => 'declined', 'info_needed' => 'needs more information'][$status] ?? $status;
@@ -3700,7 +3786,7 @@ function business_offers_for_student(int $studentUserId): array
     $st = new_school_fetch_student_by_user_id($studentUserId);
     if (!$st) return [];
     $s = db()->prepare(
-        "SELECT br.id, br.message, br.status, br.student_consent, br.parent_consent, UNIX_TIMESTAMP(br.created_at) AS created_ts,
+        "SELECT br.*, UNIX_TIMESTAMP(br.created_at) AS created_ts,
                 ba.business_name, ba.category, ba.contact_name
          FROM business_requests br LEFT JOIN business_accounts ba ON ba.user_id = br.business_user_id
          WHERE br.student_id = ? AND br.request_type = 'internship' AND br.status = 'approved'
@@ -3709,8 +3795,14 @@ function business_offers_for_student(int $studentUserId): array
     $s->execute([(int) $st['id']]);
     return array_map(static fn(array $r): array => [
         'id' => (int) $r['id'], 'business_name' => (string) ($r['business_name'] ?? 'A local business'),
-        'category' => (string) ($r['category'] ?? ''), 'message' => (string) ($r['message'] ?? ''),
-        'student_consent' => (string) $r['student_consent'], 'parent_consent' => (string) $r['parent_consent'], 'created_ts' => (int) $r['created_ts'],
+        'category' => (string) ($r['category'] ?? ''), 'contact_name' => (string) ($r['contact_name'] ?? ''),
+        'message' => (string) ($r['message'] ?? ''),
+        'job_title' => (string) ($r['job_title'] ?? 'Internship'), 'location' => (string) ($r['location'] ?? ''),
+        'duration' => (string) ($r['duration'] ?? ''), 'stipend' => (string) ($r['stipend'] ?? ''),
+        'working_hours' => (string) ($r['working_hours'] ?? ''), 'skills' => (string) ($r['skills'] ?? ''),
+        'student_consent' => (string) $r['student_consent'], 'parent_consent' => (string) $r['parent_consent'],
+        'decline_reason' => (string) ($r['decline_reason'] ?? ''), 'created_ts' => (int) $r['created_ts'],
+        'stage' => business_offer_stage($r), 'timeline' => business_offer_timeline((int) $r['id']),
     ], $s->fetchAll());
 }
 
@@ -3721,8 +3813,8 @@ function business_offers_for_parent(int $parentUserId): array
     $p = new_school_fetch_parent_by_user_id($parentUserId);
     if (!$p) return [];
     $s = db()->prepare(
-        "SELECT br.id, br.message, br.status, br.student_consent, br.parent_consent, UNIX_TIMESTAMP(br.created_at) AS created_ts,
-                ba.business_name, ba.category, s.full_name AS student_name
+        "SELECT br.*, UNIX_TIMESTAMP(br.created_at) AS created_ts,
+                ba.business_name, ba.category, ba.contact_name, s.full_name AS student_name
          FROM business_requests br
          LEFT JOIN business_accounts ba ON ba.user_id = br.business_user_id
          LEFT JOIN new_school_students s ON s.id = br.student_id
@@ -3732,14 +3824,20 @@ function business_offers_for_parent(int $parentUserId): array
     $s->execute([(int) $p['student_id']]);
     return array_map(static fn(array $r): array => [
         'id' => (int) $r['id'], 'business_name' => (string) ($r['business_name'] ?? 'A local business'),
-        'category' => (string) ($r['category'] ?? ''), 'student_name' => (string) ($r['student_name'] ?? 'your child'),
-        'message' => (string) ($r['message'] ?? ''), 'student_consent' => (string) $r['student_consent'],
-        'parent_consent' => (string) $r['parent_consent'], 'created_ts' => (int) $r['created_ts'],
+        'category' => (string) ($r['category'] ?? ''), 'contact_name' => (string) ($r['contact_name'] ?? ''),
+        'student_name' => (string) ($r['student_name'] ?? 'your child'),
+        'message' => (string) ($r['message'] ?? ''),
+        'job_title' => (string) ($r['job_title'] ?? 'Internship'), 'location' => (string) ($r['location'] ?? ''),
+        'duration' => (string) ($r['duration'] ?? ''), 'stipend' => (string) ($r['stipend'] ?? ''),
+        'working_hours' => (string) ($r['working_hours'] ?? ''), 'skills' => (string) ($r['skills'] ?? ''),
+        'student_consent' => (string) $r['student_consent'], 'parent_consent' => (string) $r['parent_consent'],
+        'decline_reason' => (string) ($r['decline_reason'] ?? ''), 'created_ts' => (int) $r['created_ts'],
+        'stage' => business_offer_stage($r), 'timeline' => business_offer_timeline((int) $r['id']),
     ], $s->fetchAll());
 }
 
 /** Student accepts/declines an internship offer. On accept → parent is asked to consent. */
-function business_student_respond(int $studentUserId, int $reqId, string $decision): array
+function business_student_respond(int $studentUserId, int $reqId, string $decision, string $reason = ''): array
 {
     business_ensure_schema();
     $st = new_school_fetch_student_by_user_id($studentUserId);
@@ -3750,7 +3848,9 @@ function business_student_respond(int $studentUserId, int $reqId, string $decisi
     if (!$r) json(['error' => 'Offer not found.'], 404);
     if ((string) $r['student_consent'] !== 'pending') json(['error' => 'You have already responded to this offer.'], 409);
     $dec = $decision === 'accept' ? 'accepted' : 'declined';
-    db()->prepare('UPDATE business_requests SET student_consent = ? WHERE id = ?')->execute([$dec, $reqId]);
+    db()->prepare('UPDATE business_requests SET student_consent = ?, declined_by = CASE WHEN ?="declined" THEN "student" ELSE declined_by END, decline_reason = CASE WHEN ?="declined" THEN ? ELSE decline_reason END WHERE id = ?')
+        ->execute([$dec, $dec, $dec, mb_substr($reason, 0, 2000) ?: null, $reqId]);
+    business_offer_log($reqId, $dec === 'accepted' ? 'student_accepted' : 'student_declined', 'student', (string) ($st['full_name'] ?? 'Student'), $reason);
     $meta = business_offer_meta($reqId);
     $biz = (string) ($meta['business_name'] ?? 'the business');
     if ($dec === 'accepted') {
@@ -3765,14 +3865,14 @@ function business_student_respond(int $studentUserId, int $reqId, string $decisi
             }
         } catch (Throwable $e) { if (app_debug()) error_log('offer notify parent: ' . $e->getMessage()); }
     } else {
-        // Declined by student → tell the business.
-        if ($meta && function_exists('ecosystem_notify_user')) ecosystem_notify_user((int) $meta['business_user_id'], 'Internship offer declined', "The student declined your internship offer.");
+        // Declined by student → tell the business (with reason).
+        if ($meta && function_exists('ecosystem_notify_user')) ecosystem_notify_user((int) $meta['business_user_id'], 'Internship offer declined', "The student declined your internship offer." . ($reason !== '' ? "\n\nReason: " . $reason : ''));
     }
     return business_offers_for_student($studentUserId);
 }
 
 /** Parent gives/declines final consent for the internship offer. On consent → business notified. */
-function business_parent_respond(int $parentUserId, int $reqId, string $decision): array
+function business_parent_respond(int $parentUserId, int $reqId, string $decision, string $reason = ''): array
 {
     business_ensure_schema();
     $p = new_school_fetch_parent_by_user_id($parentUserId);
@@ -3784,14 +3884,48 @@ function business_parent_respond(int $parentUserId, int $reqId, string $decision
     if ((string) $r['student_consent'] !== 'accepted') json(['error' => 'This offer is not ready for parent consent yet.'], 409);
     if ((string) $r['parent_consent'] !== 'pending') json(['error' => 'You have already responded to this offer.'], 409);
     $dec = $decision === 'accept' ? 'accepted' : 'declined';
-    db()->prepare('UPDATE business_requests SET parent_consent = ? WHERE id = ?')->execute([$dec, $reqId]);
+    db()->prepare('UPDATE business_requests SET parent_consent = ?, declined_by = CASE WHEN ?="declined" THEN "parent" ELSE declined_by END, decline_reason = CASE WHEN ?="declined" THEN ? ELSE decline_reason END WHERE id = ?')
+        ->execute([$dec, $dec, $dec, mb_substr($reason, 0, 2000) ?: null, $reqId]);
+    business_offer_log($reqId, $dec === 'accepted' ? 'parent_approved' : 'parent_declined', 'parent', (string) ($p['parent_full_name'] ?? 'Parent/Guardian'), $reason);
+    if ($dec === 'accepted') business_offer_log($reqId, 'confirmed', 'system', 'System', '');
     if (function_exists('ecosystem_notify_user')) {
         $msg = $dec === 'accepted'
-            ? "Your internship offer has been accepted — the student and their parent/guardian have both consented. The program team will coordinate the next steps with you."
-            : "The parent/guardian declined consent for your internship offer.";
-        ecosystem_notify_user((int) $r['business_user_id'], 'Internship offer: ' . ($dec === 'accepted' ? 'accepted' : 'declined'), $msg);
+            ? "🎉 Your internship offer has been accepted — the student and their parent/guardian have both consented. The program team will coordinate the next steps with you."
+            : "The parent/guardian declined consent for your internship offer." . ($reason !== '' ? "\n\nReason: " . $reason : '');
+        ecosystem_notify_user((int) $r['business_user_id'], 'Internship offer: ' . ($dec === 'accepted' ? 'accepted 🎉' : 'declined'), $msg);
     }
     return business_offers_for_parent($parentUserId);
+}
+
+/** All internship offers this business has made, with live stage + timeline (the Pipeline). */
+function business_offers_pipeline(int $businessUserId): array
+{
+    business_ensure_schema();
+    $s = db()->prepare(
+        "SELECT br.*, UNIX_TIMESTAMP(br.created_at) AS created_ts, s.full_name AS student_name_live, sch.school_name
+         FROM business_requests br
+         LEFT JOIN new_school_students s ON s.id = br.student_id
+         LEFT JOIN new_school_schools sch ON sch.id = s.school_id
+         WHERE br.business_user_id = ? AND br.request_type = 'internship'
+         ORDER BY br.created_at DESC"
+    );
+    $s->execute([$businessUserId]);
+    return array_map(static function (array $r): array {
+        return [
+            'id' => (int) $r['id'],
+            'job_title' => (string) ($r['job_title'] ?? 'Internship'),
+            'student_name' => (string) ($r['student_name_live'] ?? $r['student_name'] ?? 'Student'),
+            'school_name' => (string) ($r['school_name'] ?? $r['school_name'] ?? ''),
+            'location' => (string) ($r['location'] ?? ''), 'duration' => (string) ($r['duration'] ?? ''),
+            'stipend' => (string) ($r['stipend'] ?? ''), 'working_hours' => (string) ($r['working_hours'] ?? ''),
+            'skills' => (string) ($r['skills'] ?? ''), 'message' => (string) ($r['message'] ?? ''),
+            'status' => (string) $r['status'], 'student_consent' => (string) ($r['student_consent'] ?? 'pending'),
+            'parent_consent' => (string) ($r['parent_consent'] ?? 'pending'), 'admin_note' => (string) ($r['admin_note'] ?? ''),
+            'decline_reason' => (string) ($r['decline_reason'] ?? ''), 'created_ts' => (int) $r['created_ts'],
+            'stage' => business_offer_stage($r),
+            'timeline' => business_offer_timeline((int) $r['id']),
+        ];
+    }, $s->fetchAll());
 }
 
 /* ==================== Ecosystem accounts (sponsor / partner / media / volunteer) ==================== */

@@ -10,6 +10,7 @@ import { resolveDashboardRoute } from '../lib/dashboardRoute'
 import { awards } from '../lib/awards'
 import TermsAgreement from '../components/TermsAgreement'
 import DashboardGuide from '../components/DashboardGuide'
+import OfferStepper, { Confetti, type OfferStage, type OfferEvent } from '../components/OfferStepper'
 import ScholarshipWizard, { type ScholarshipAnswer } from '../components/ScholarshipWizard'
 import NsRecordDetail from '../components/NsRecordDetail'
 import ChallengeRegistration from '../components/ChallengeRegistration'
@@ -730,64 +731,167 @@ const challengeFaqItems = [
     answer: "Choose the correct registration role at the top of the page, then follow the workflow through the dashboard.",
   },
 ] as const
-interface JobOffer { id: number; business_name: string; category: string; message: string; student_consent: string; parent_consent: string; created_ts: number }
+interface JobOffer {
+  id: number; business_name: string; category: string; contact_name?: string; message: string
+  job_title: string; location: string; duration: string; stipend: string; working_hours: string; skills: string
+  student_name?: string; student_consent: string; parent_consent: string; decline_reason?: string; created_ts: number
+  stage: OfferStage; timeline: OfferEvent[]
+}
 
-/* Internship/job offers surfaced on the student + parent dashboards. Self-fetches
-   so it needs no changes to the dashboard data pipeline. Flow: admin approves →
-   student accepts → parent consents → business is notified. */
+function initials(name: string): string {
+  return (name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase() || '').join('') || '?'
+}
+
+/* Internship/job offers surfaced on the student + parent dashboards — now a full
+   job-portal experience: rich offer cards (logo initials, role, meta chips,
+   skills, description), a live status tracker (OfferStepper), confetti when the
+   student confirms, and a proper consent modal for the parent with safety notes.
+   Flow: admin approves → student accepts → parent consents → business notified. */
 function JobOffers({ role, hidden }: { role: 'student' | 'parent'; hidden?: boolean }) {
   const [offers, setOffers] = useState<JobOffer[]>([])
   const [busy, setBusy] = useState(0)
+  const [celebrate, setCelebrate] = useState(false)
+  const [modal, setModal] = useState<{ offer: JobOffer; mode: 'consent' | 'decline'; forRole: 'student' | 'parent' } | null>(null)
+  const [reason, setReason] = useState('')
   useEffect(() => {
     let alive = true
     api.get<{ offers: JobOffer[] }>(`new-school/${role}/offers`).then((d) => { if (alive) setOffers(d.offers || []) }).catch(() => {})
     return () => { alive = false }
   }, [role])
-  const respond = async (id: number, decision: 'accept' | 'decline') => {
+  const respond = async (id: number, decision: 'accept' | 'decline', why = '') => {
     setBusy(id)
     try {
-      const d = await api.post<{ offers: JobOffer[]; message?: string }>(`new-school/${role}/offer/${id}/respond`, { decision })
+      const d = await api.post<{ offers: JobOffer[]; message?: string }>(`new-school/${role}/offer/${id}/respond`, { decision, reason: why })
       setOffers(d.offers || [])
       window.fcToast?.(d.message || 'Saved.')
+      if (decision === 'accept') { setCelebrate(true); window.setTimeout(() => setCelebrate(false), 1700) }
+      setModal(null); setReason('')
     } catch (e) { window.fcToast?.(e instanceof Error ? e.message : 'Could not save your response.') } finally { setBusy(0) }
   }
   if (offers.length === 0) return null
-  const statusLine = (o: JobOffer): string => {
-    if (role === 'student') {
-      if (o.student_consent === 'declined') return 'You declined this offer.'
-      if (o.student_consent === 'accepted') return o.parent_consent === 'accepted' ? 'Accepted — your parent/guardian has consented. The team will coordinate next steps.' : o.parent_consent === 'declined' ? 'Your parent/guardian declined consent.' : 'You accepted — waiting for your parent/guardian to consent.'
-      return 'Respond below to accept or decline.'
-    }
-    if (o.parent_consent === 'accepted') return 'You consented. The business has been notified.'
-    if (o.parent_consent === 'declined') return 'You declined consent.'
-    return 'Your child accepted this offer — please give or decline consent.'
-  }
   const canAct = (o: JobOffer) => role === 'student' ? o.student_consent === 'pending' : o.parent_consent === 'pending'
+  const acceptLabel = role === 'student' ? 'Accept offer' : 'Give consent'
   return (
-    <article className="glass ns-dash-card ns-dash-card--wide reveal in" hidden={hidden}>
-      <div className="ns-dash-card__head">
-        <span className="eyebrow">{role === 'student' ? '💼 Internship Offers' : '💼 Consent — Internship Offers'}</span>
-        <span className="ns-board__badge">{offers.filter(canAct).length || ''}</span>
-      </div>
-      <div style={{ display: 'grid', gap: 12 }}>
-        {offers.map((o) => (
-          <div key={o.id} style={{ border: '1px solid var(--line)', borderRadius: 12, padding: '12px 14px', background: 'rgba(0,0,0,0.14)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
-              <strong style={{ color: 'var(--gold-light)' }}>{o.business_name}</strong>
-              {o.category && <span style={{ color: 'var(--muted)', fontSize: 12 }}>{o.category}</span>}
-            </div>
-            {o.message && <p style={{ color: '#d8d3c6', fontSize: 13.5, lineHeight: 1.55, margin: '6px 0 0', whiteSpace: 'pre-wrap' }}>{o.message}</p>}
-            <p style={{ color: 'var(--muted)', fontSize: 12.5, margin: '8px 0 0' }}>{statusLine(o)}</p>
-            {canAct(o) && (
-              <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
-                <button className="btn btn--sm btn--solid" disabled={busy === o.id} onClick={() => respond(o.id, 'accept')}>{busy === o.id ? '…' : role === 'student' ? 'Accept offer' : 'Give consent'}</button>
-                <button className="btn btn--sm" disabled={busy === o.id} onClick={() => respond(o.id, 'decline')}>Decline</button>
+    <>
+      <Confetti show={celebrate} />
+      <article className="glass ns-dash-card ns-dash-card--wide reveal in" hidden={hidden}>
+        <div className="ns-dash-card__head">
+          <span className="eyebrow">{role === 'student' ? '💼 Internship Offers' : '💼 Consent — Internship Offers'}</span>
+          <span className="ns-board__badge">{offers.filter(canAct).length || ''}</span>
+        </div>
+        <div style={{ display: 'grid', gap: 16 }}>
+          {offers.map((o) => (
+            <div key={o.id} style={{ border: '1px solid var(--line)', borderRadius: 14, padding: 0, background: 'rgba(0,0,0,0.16)', overflow: 'hidden' }}>
+              {/* Header band with logo + role + business */}
+              <div style={{ display: 'flex', gap: 12, alignItems: 'center', padding: '14px 16px', background: 'linear-gradient(180deg, rgba(212,175,90,0.08), transparent)' }}>
+                <div style={{ width: 46, height: 46, flex: '0 0 46px', borderRadius: 12, display: 'grid', placeItems: 'center', background: 'linear-gradient(135deg, var(--gold), var(--gold-light))', color: '#1c1a14', fontWeight: 900, fontSize: 17, fontFamily: 'var(--f-serif)' }}>
+                  {initials(o.business_name)}
+                </div>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div style={{ color: 'var(--white)', fontWeight: 800, fontSize: 16, lineHeight: 1.2 }}>{o.job_title || 'Internship'}</div>
+                  <div style={{ color: 'var(--gold-light)', fontSize: 13, marginTop: 2 }}>{o.business_name}{o.category ? ` · ${o.category}` : ''}</div>
+                </div>
               </div>
+
+              <div style={{ padding: '4px 16px 16px' }}>
+                {role === 'parent' && o.student_name && (
+                  <p style={{ color: 'var(--muted)', fontSize: 12.5, margin: '10px 0 0' }}>Offer for <strong style={{ color: 'var(--white)' }}>{o.student_name}</strong></p>
+                )}
+                {(o.location || o.duration || o.stipend || o.working_hours) && (
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', margin: '12px 0 0' }}>
+                    {o.location && <NsOfferChip icon="📍" text={o.location} />}
+                    {o.duration && <NsOfferChip icon="⏳" text={o.duration} />}
+                    {o.stipend && <NsOfferChip icon="💰" text={o.stipend} />}
+                    {o.working_hours && <NsOfferChip icon="🕑" text={o.working_hours} />}
+                  </div>
+                )}
+                {o.skills && (
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', margin: '10px 0 0' }}>
+                    {o.skills.split(',').map((s) => s.trim()).filter(Boolean).map((s, i) => (
+                      <span key={i} style={{ fontSize: 11.5, color: 'var(--gold-light)', background: 'rgba(212,175,90,0.12)', border: '1px solid rgba(212,175,90,0.3)', borderRadius: 6, padding: '2px 8px' }}>{s}</span>
+                    ))}
+                  </div>
+                )}
+                {o.message && <p style={{ color: '#d8d3c6', fontSize: 13.5, lineHeight: 1.55, margin: '12px 0 0', whiteSpace: 'pre-wrap' }}>{o.message}</p>}
+
+                <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--line)' }}>
+                  <OfferStepper stage={o.stage} timeline={o.timeline} />
+                </div>
+
+                {canAct(o) && (
+                  <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
+                    <button className="btn btn--sm btn--solid" disabled={busy === o.id} onClick={() => role === 'parent' ? setModal({ offer: o, mode: 'consent', forRole: 'parent' }) : respond(o.id, 'accept')}>{busy === o.id ? '…' : acceptLabel}</button>
+                    <button className="btn btn--sm" disabled={busy === o.id} onClick={() => setModal({ offer: o, mode: 'decline', forRole: role })}>Decline</button>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </article>
+
+      {modal && createPortal(
+        <div onClick={() => busy === 0 && setModal(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.66)', display: 'grid', placeItems: 'center', padding: 20, zIndex: 9998 }}>
+          <div onClick={(e) => e.stopPropagation()} className="glass" style={{ maxWidth: 520, width: '100%', maxHeight: '88vh', overflowY: 'auto', padding: 26, borderRadius: 16 }}>
+            <span className="eyebrow">{modal.offer.business_name}</span>
+            <h3 style={{ fontFamily: 'var(--f-serif)', color: 'var(--gold-light)', fontSize: 22, margin: '4px 0 6px' }}>
+              {modal.mode === 'consent' ? 'Consent to this internship' : 'Decline this offer'}
+            </h3>
+
+            {modal.mode === 'consent' && (
+              <>
+                <p style={{ color: 'var(--muted)', fontSize: 13, lineHeight: 1.6, margin: '0 0 12px' }}>
+                  Please review the details of the internship your child accepted. Your consent is required before it can proceed.
+                </p>
+                <dl style={{ display: 'grid', gridTemplateColumns: '130px 1fr', gap: '6px 12px', fontSize: 13.5, margin: 0 }}>
+                  <dt style={{ color: 'var(--muted)' }}>Role</dt><dd style={{ margin: 0, color: 'var(--white)' }}>{modal.offer.job_title || 'Internship'}</dd>
+                  {modal.offer.location && (<><dt style={{ color: 'var(--muted)' }}>Location</dt><dd style={{ margin: 0, color: 'var(--white)' }}>{modal.offer.location}</dd></>)}
+                  {modal.offer.duration && (<><dt style={{ color: 'var(--muted)' }}>Duration</dt><dd style={{ margin: 0, color: 'var(--white)' }}>{modal.offer.duration}</dd></>)}
+                  {modal.offer.working_hours && (<><dt style={{ color: 'var(--muted)' }}>Working hours</dt><dd style={{ margin: 0, color: 'var(--white)' }}>{modal.offer.working_hours}</dd></>)}
+                  {modal.offer.stipend && (<><dt style={{ color: 'var(--muted)' }}>Stipend / pay</dt><dd style={{ margin: 0, color: 'var(--white)' }}>{modal.offer.stipend}</dd></>)}
+                  {modal.offer.contact_name && (<><dt style={{ color: 'var(--muted)' }}>Contact</dt><dd style={{ margin: 0, color: 'var(--white)' }}>{modal.offer.contact_name}</dd></>)}
+                </dl>
+                <div style={{ background: 'rgba(212,175,90,0.08)', border: '1px solid rgba(212,175,90,0.25)', borderRadius: 10, padding: '12px 14px', marginTop: 14 }}>
+                  <div style={{ color: 'var(--gold-light)', fontSize: 12.5, fontWeight: 700, marginBottom: 6 }}>🛡️ Safety & your rights</div>
+                  <ul style={{ margin: 0, paddingLeft: 18, color: '#d8d3c6', fontSize: 12.5, lineHeight: 1.6 }}>
+                    <li>The program team coordinates and can be contacted at any time.</li>
+                    <li>Working hours must respect school schedules and youth labor rules.</li>
+                    <li>You can withdraw consent later by contacting the program team.</li>
+                    <li>Your child is never obligated — this is an opportunity, not a requirement.</li>
+                  </ul>
+                </div>
+                <div style={{ display: 'flex', gap: 10, marginTop: 18, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                  <button className="btn btn--sm" disabled={busy !== 0} onClick={() => setModal({ ...modal, mode: 'decline' })}>Decline instead</button>
+                  <button className="btn btn--sm btn--solid" disabled={busy !== 0} onClick={() => respond(modal.offer.id, 'accept')}>{busy !== 0 ? 'Saving…' : 'I consent — approve'}</button>
+                </div>
+              </>
+            )}
+
+            {modal.mode === 'decline' && (
+              <>
+                <p style={{ color: 'var(--muted)', fontSize: 13, lineHeight: 1.6, margin: '0 0 12px' }}>
+                  {modal.forRole === 'student' ? 'You can add a short reason so the business understands (optional).' : 'You are declining consent for this internship. A short reason helps everyone understand (optional).'}
+                </p>
+                <textarea autoFocus value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason (optional)…" style={{ width: '100%', minHeight: 90, resize: 'vertical', background: 'rgba(0,0,0,0.25)', border: '1px solid var(--line)', borderRadius: 10, color: 'var(--white)', padding: '10px 12px', fontSize: 13.5, fontFamily: 'inherit' }} />
+                <div style={{ display: 'flex', gap: 10, marginTop: 16, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                  <button className="btn btn--sm" disabled={busy !== 0} onClick={() => setModal(null)}>Cancel</button>
+                  <button className="btn btn--sm" style={{ borderColor: '#e08a8a', color: '#e59a9a' }} disabled={busy !== 0} onClick={() => respond(modal.offer.id, 'decline', reason.trim())}>{busy !== 0 ? 'Saving…' : 'Confirm decline'}</button>
+                </div>
+              </>
             )}
           </div>
-        ))}
-      </div>
-    </article>
+        </div>,
+        document.body,
+      )}
+    </>
+  )
+}
+
+function NsOfferChip({ icon, text }: { icon: string; text: string }) {
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: 'rgba(0,0,0,0.22)', border: '1px solid var(--line)', borderRadius: 999, padding: '4px 11px', fontSize: 12, color: '#e0dccf' }}>
+      <span aria-hidden>{icon}</span>{text}
+    </span>
   )
 }
 

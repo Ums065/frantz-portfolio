@@ -630,9 +630,11 @@ function new_school_handle_route(string $method, string $route): bool
         }
         case $method === 'POST' && preg_match('#^new-school/student/offer/(\d+)/respond$#', $route, $m) === 1: {
             $user = require_login();
-            $decision = (string) field(body(), 'decision');
+            $b = body();
+            $decision = (string) field($b, 'decision');
             if (!in_array($decision, ['accept', 'decline'], true)) json(['error' => 'Choose accept or decline.'], 422);
-            json(['message' => $decision === 'accept' ? 'Offer accepted — your parent/guardian will be asked to consent.' : 'Offer declined.', 'offers' => business_student_respond((int) $user['id'], (int) $m[1], $decision)]);
+            $reason = trim((string) field($b, 'reason'));
+            json(['message' => $decision === 'accept' ? 'Offer accepted — your parent/guardian will be asked to consent.' : 'Offer declined.', 'offers' => business_student_respond((int) $user['id'], (int) $m[1], $decision, $reason)]);
         }
         case $key === 'GET new-school/parent/offers': {
             $user = require_login();
@@ -640,9 +642,11 @@ function new_school_handle_route(string $method, string $route): bool
         }
         case $method === 'POST' && preg_match('#^new-school/parent/offer/(\d+)/respond$#', $route, $m) === 1: {
             $user = require_login();
-            $decision = (string) field(body(), 'decision');
+            $b = body();
+            $decision = (string) field($b, 'decision');
             if (!in_array($decision, ['accept', 'decline'], true)) json(['error' => 'Choose accept or decline.'], 422);
-            json(['message' => $decision === 'accept' ? 'Consent recorded — the business has been notified.' : 'Consent declined.', 'offers' => business_parent_respond((int) $user['id'], (int) $m[1], $decision)]);
+            $reason = trim((string) field($b, 'reason'));
+            json(['message' => $decision === 'accept' ? 'Consent recorded — the business has been notified.' : 'Consent declined.', 'offers' => business_parent_respond((int) $user['id'], (int) $m[1], $decision, $reason)]);
         }
 
         case $key === 'GET new-school/dashboard': {

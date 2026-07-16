@@ -102,6 +102,25 @@ CALL add_column_if_missing('business_accounts', 'about', 'text', 'website');
 CALL add_column_if_missing('business_accounts', 'created_at', 'timestamp NULL DEFAULT CURRENT_TIMESTAMP', 'about');
 CALL add_column_if_missing('business_accounts', 'updated_at', 'timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP', 'created_at');
 
+-- ---------- business_offer_events ----------
+CREATE TABLE IF NOT EXISTS `business_offer_events` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `request_id` int NOT NULL,
+  `event` varchar(32) NOT NULL,
+  `actor_role` varchar(20) NOT NULL,
+  `actor_label` varchar(160) DEFAULT NULL,
+  `note` text,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_offer_events_req` (`request_id`,`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+CALL add_column_if_missing('business_offer_events', 'request_id', 'int NOT NULL', 'id');
+CALL add_column_if_missing('business_offer_events', 'event', 'varchar(32) NOT NULL', 'request_id');
+CALL add_column_if_missing('business_offer_events', 'actor_role', 'varchar(20) NOT NULL', 'event');
+CALL add_column_if_missing('business_offer_events', 'actor_label', 'varchar(160) DEFAULT NULL', 'actor_role');
+CALL add_column_if_missing('business_offer_events', 'note', 'text', 'actor_label');
+CALL add_column_if_missing('business_offer_events', 'created_at', 'timestamp NULL DEFAULT CURRENT_TIMESTAMP', 'note');
+
 -- ---------- business_requests ----------
 CREATE TABLE IF NOT EXISTS `business_requests` (
   `id` int NOT NULL AUTO_INCREMENT,
@@ -120,6 +139,14 @@ CREATE TABLE IF NOT EXISTS `business_requests` (
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `student_consent` varchar(12) NOT NULL DEFAULT 'pending',
   `parent_consent` varchar(12) NOT NULL DEFAULT 'pending',
+  `job_title` varchar(160) DEFAULT NULL,
+  `location` varchar(160) DEFAULT NULL,
+  `duration` varchar(80) DEFAULT NULL,
+  `stipend` varchar(80) DEFAULT NULL,
+  `working_hours` varchar(120) DEFAULT NULL,
+  `skills` varchar(400) DEFAULT NULL,
+  `decline_reason` text,
+  `declined_by` varchar(12) DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `idx_breq_biz` (`business_user_id`),
   KEY `idx_breq_status` (`status`)
@@ -139,6 +166,14 @@ CALL add_column_if_missing('business_requests', 'created_at', 'timestamp NULL DE
 CALL add_column_if_missing('business_requests', 'updated_at', 'timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP', 'created_at');
 CALL add_column_if_missing('business_requests', 'student_consent', 'varchar(12) NOT NULL DEFAULT ''pending''', 'updated_at');
 CALL add_column_if_missing('business_requests', 'parent_consent', 'varchar(12) NOT NULL DEFAULT ''pending''', 'student_consent');
+CALL add_column_if_missing('business_requests', 'job_title', 'varchar(160) DEFAULT NULL', 'parent_consent');
+CALL add_column_if_missing('business_requests', 'location', 'varchar(160) DEFAULT NULL', 'job_title');
+CALL add_column_if_missing('business_requests', 'duration', 'varchar(80) DEFAULT NULL', 'location');
+CALL add_column_if_missing('business_requests', 'stipend', 'varchar(80) DEFAULT NULL', 'duration');
+CALL add_column_if_missing('business_requests', 'working_hours', 'varchar(120) DEFAULT NULL', 'stipend');
+CALL add_column_if_missing('business_requests', 'skills', 'varchar(400) DEFAULT NULL', 'working_hours');
+CALL add_column_if_missing('business_requests', 'decline_reason', 'text', 'skills');
+CALL add_column_if_missing('business_requests', 'declined_by', 'varchar(12) DEFAULT NULL', 'decline_reason');
 
 -- ---------- community_comments ----------
 CREATE TABLE IF NOT EXISTS `community_comments` (

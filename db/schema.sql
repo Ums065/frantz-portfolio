@@ -440,12 +440,38 @@ CREATE TABLE IF NOT EXISTS business_requests (
   message TEXT DEFAULT NULL,
   status VARCHAR(16) NOT NULL DEFAULT 'pending',
   admin_note TEXT DEFAULT NULL,
+  -- Internship consent chain (business -> admin -> student -> parent)
+  student_consent VARCHAR(12) NOT NULL DEFAULT 'pending',
+  parent_consent VARCHAR(12) NOT NULL DEFAULT 'pending',
+  -- Rich internship offer fields
+  job_title VARCHAR(160) DEFAULT NULL,
+  location VARCHAR(160) DEFAULT NULL,
+  duration VARCHAR(80) DEFAULT NULL,
+  stipend VARCHAR(80) DEFAULT NULL,
+  working_hours VARCHAR(120) DEFAULT NULL,
+  skills VARCHAR(400) DEFAULT NULL,
+  decline_reason TEXT DEFAULT NULL,
+  declined_by VARCHAR(12) DEFAULT NULL,
   reviewed_by_user_id INT DEFAULT NULL,
   reviewed_at TIMESTAMP NULL DEFAULT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_breq_biz (business_user_id),
   INDEX idx_breq_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Audit trail / timeline for internship offers: one row per state transition
+-- (created, admin_approved/rejected/info, student_accepted/declined,
+-- parent_approved/declined, confirmed). Powers the real-time status tracker.
+CREATE TABLE IF NOT EXISTS business_offer_events (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  request_id INT NOT NULL,
+  event VARCHAR(32) NOT NULL,
+  actor_role VARCHAR(20) DEFAULT NULL,
+  actor_label VARCHAR(160) DEFAULT NULL,
+  note TEXT DEFAULT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_boe_req (request_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ---------- Our Partners content page (dynamic, admin-editable) ----------

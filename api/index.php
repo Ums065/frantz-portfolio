@@ -1387,6 +1387,22 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             json(business_create_request($u, body()), 201);
         }
 
+        // Internship pipeline: every offer this business made, with live stage + timeline.
+        case $key === 'GET business/offers': {
+            $u = require_business();
+            json(['offers' => business_offers_pipeline((int) $u['id'])]);
+        }
+
+        // Timeline (audit trail) for a single offer the business owns.
+        case $method === 'GET' && preg_match('#^business/offer/(\d+)/timeline$#', $route, $m) === 1: {
+            $u = require_business();
+            business_ensure_schema();
+            $own = db()->prepare("SELECT id FROM business_requests WHERE id = ? AND business_user_id = ? LIMIT 1");
+            $own->execute([(int) $m[1], (int) $u['id']]);
+            if (!$own->fetch()) json(['error' => 'Not found.'], 404);
+            json(['timeline' => business_offer_timeline((int) $m[1])]);
+        }
+
         case $key === 'GET admin/business-requests': {
             require_admin();
             json(['requests' => business_requests_all()]);
