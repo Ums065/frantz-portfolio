@@ -326,7 +326,7 @@ export default function Business() {
   const NAV: Array<{ key: Tab; label: string }> = [
     { key: 'interviews', label: `Interviews (${interviews.length})` },
     { key: 'solutions', label: `Student Solutions (${solutionInterviews.length})` },
-    { key: 'pipeline', label: `Internship Pipeline${offers.length ? ` (${offers.length})` : ''}` },
+    { key: 'pipeline', label: `Internship Offers${offers.length ? ` (${offers.length})` : ''}` },
     { key: 'requests', label: `My Requests (${requests.length})` },
     { key: 'updates', label: `Updates${updatesCount ? ` (${updatesCount})` : ''}` },
     { key: 'profile', label: 'Business Profile' },
