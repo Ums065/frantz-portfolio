@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { api } from '../lib/api'
-import EcosystemPortal, { S, StatTile, Section, DownloadList, EcoDocuments, EcoRequests, EcoAnnouncements, LogoUploader, RequestButton, type PortalConfig } from './portal/EcosystemPortal'
+import EcosystemPortal, { S, StatTile, Section, DownloadList, EcoDocuments, EcoRequests, EcoAnnouncements, EcoAssignments, LogoUploader, RequestButton, type EcoAssign, type PortalConfig } from './portal/EcosystemPortal'
 
 /* Media Portal — a press room: credentials, press kit, photos/logos, founder
    bio, official statistics, event calendar and interview requests. Media never
@@ -48,6 +48,8 @@ const config: PortalConfig = {
     const p = data?.profile
     const d = p?.details || {}
     const imp = data?.impact || {}
+    const assignments = (data?.assignments as EcoAssign[] | undefined) || []
+    const pendingAssignments = assignments.filter((a) => a.status.toLowerCase() === 'active').length
     return (
       <div style={{ display: 'grid', gap: 18 }}>
         <Section title="Challenge Statistics">
@@ -79,6 +81,11 @@ const config: PortalConfig = {
         <Section title="Interview Requests"><InterviewRequest org={p?.org_name || d.outlet || ''} /></Section>
 
         <Section title="Branding"><LogoUploader role="media" current={d.logo_url} reload={reload} /></Section>
+
+        <Section title={`My Assignments${pendingAssignments ? ` · ${pendingAssignments} awaiting you` : ''}`}>
+          <EcoAssignments items={assignments} role="media" reload={reload} />
+        </Section>
+
         <Section title="Announcements"><EcoAnnouncements items={data?.announcements} /></Section>
         <Section title="Notifications — Your Requests"><EcoRequests items={data?.requests} role="media" reload={reload} /></Section>
       </div>

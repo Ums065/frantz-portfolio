@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import EcosystemPortal, { S, StatTile, Section, DownloadList, EcoDocuments, EcoRequests, EcoAnnouncements, LogoUploader, RequestButton, type PortalConfig } from './portal/EcosystemPortal'
+import EcosystemPortal, { S, StatTile, Section, DownloadList, EcoDocuments, EcoRequests, EcoAnnouncements, EcoAssignments, LogoUploader, RequestButton, type EcoAssign, type PortalConfig } from './portal/EcosystemPortal'
 
 /* Partner Portal — helps grow the movement: toolkit + marketing resources,
    a referral link with analytics, events, certificates and announcements.
@@ -30,6 +30,8 @@ const config: PortalConfig = {
     const d = p?.details || {}
     const ref = data?.referral || { code: '', count: 0, by_role: {} }
     const by = ref.by_role || {}
+    const assignments = (data?.assignments as EcoAssign[] | undefined) || []
+    const pendingAssignments = assignments.filter((a) => a.status.toLowerCase() === 'active').length
     return (
       <div style={{ display: 'grid', gap: 18 }}>
         <Section title="Referral Analytics">
@@ -61,6 +63,11 @@ const config: PortalConfig = {
         </Section>
 
         <Section title="Certificates & Recognition"><EcoDocuments docs={data?.documents} /></Section>
+
+        <Section title={`My Assignments${pendingAssignments ? ` · ${pendingAssignments} awaiting you` : ''}`}>
+          <EcoAssignments items={assignments} role="partner" reload={reload} />
+        </Section>
+
         <Section title="Announcements"><EcoAnnouncements items={data?.announcements} /></Section>
         <Section title="Notifications — Your Requests"><EcoRequests items={data?.requests} role="partner" reload={reload} /></Section>
       </div>

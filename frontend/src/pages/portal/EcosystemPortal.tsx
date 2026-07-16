@@ -50,6 +50,82 @@ const ecoStatus = (s: string): React.CSSProperties => {
 export interface EcoDoc { id: number; doc_type: string; label: string; url: string; created_ts: number }
 export interface EcoReq { id: number; req_type: string; message: string; status: string; admin_note: string; created_ts: number }
 export interface EcoAnn { id: number; title: string; body: string; created_ts: number }
+export interface EcoAssign { id: number; title: string; detail: string; assign_date: string | null; status: string; volunteer_note: string; created_ts: number; responded_ts: number }
+
+/* A small status pill shared across assignments + applications (opportunities /
+   events). One map covers every status either context can produce. */
+export function EcoStatusPill({ status }: { status: string }) {
+  const s = (status || '').toLowerCase()
+  const map: Record<string, { fg: string; bg: string; bd: string; label: string }> = {
+    pending: { fg: 'var(--gold-light)', bg: 'rgba(212,175,90,0.14)', bd: 'rgba(212,175,90,0.36)', label: 'Pending' },
+    active: { fg: 'var(--gold-light)', bg: 'rgba(212,175,90,0.14)', bd: 'rgba(212,175,90,0.36)', label: 'Awaiting you' },
+    info_needed: { fg: 'var(--gold-light)', bg: 'rgba(212,175,90,0.14)', bd: 'rgba(212,175,90,0.36)', label: 'Needs info' },
+    approved: { fg: '#8fd6a3', bg: 'rgba(120,200,140,0.15)', bd: 'rgba(120,200,140,0.4)', label: 'Accepted' },
+    accepted: { fg: '#8fd6a3', bg: 'rgba(120,200,140,0.15)', bd: 'rgba(120,200,140,0.4)', label: 'Accepted' },
+    completed: { fg: 'var(--muted)', bg: 'rgba(255,255,255,0.06)', bd: 'var(--line)', label: 'Completed' },
+    declined: { fg: '#e59a9a', bg: 'rgba(224,138,138,0.14)', bd: 'rgba(224,138,138,0.4)', label: 'Declined' },
+    cancelled: { fg: '#e59a9a', bg: 'rgba(224,138,138,0.14)', bd: 'rgba(224,138,138,0.4)', label: 'Cancelled' },
+  }
+  const t = map[s] || { fg: 'var(--muted)', bg: 'rgba(255,255,255,0.06)', bd: 'var(--line)', label: status }
+  return <span style={{ fontSize: 11.5, fontWeight: 700, color: t.fg, background: t.bg, border: `1px solid ${t.bd}`, borderRadius: 999, padding: '2px 10px', whiteSpace: 'nowrap' }}>{t.label}</span>
+}
+
+/* Two-way assignments for every ecosystem role: the account can Accept /
+   Decline (with a reason) or mark an accepted assignment Complete. The admin is
+   notified of the response. Works for sponsor/partner/media/volunteer alike. */
+export function EcoAssignments({ items, role, reload }: { items?: EcoAssign[]; role: string; reload: () => void }) {
+  const [busy, setBusy] = useState(0)
+  const [declining, setDeclining] = useState(0)
+  const [reason, setReason] = useState('')
+  if (!items?.length) {
+    return <p style={{ color: 'var(--muted)', fontSize: 13, margin: 0 }}>No assignments yet. When the program team assigns you to an event or a task, it will appear here — and you can accept, decline, or mark it complete.</p>
+  }
+  const respond = async (id: number, action: 'accept' | 'decline' | 'complete', note = '') => {
+    setBusy(id)
+    try {
+      await api.put(`ecosystem/${role}/assignment/${id}/respond`, { action, note })
+      window.fcToast?.(action === 'accept' ? 'Assignment accepted.' : action === 'complete' ? 'Marked complete — thank you!' : 'Assignment declined.')
+      setDeclining(0); setReason(''); reload()
+    } catch (e) { window.fcToast?.(e instanceof Error ? e.message : 'Could not update the assignment.') } finally { setBusy(0) }
+  }
+  return (
+    <div style={{ display: 'grid', gap: 10 }}>
+      {items.map((a) => {
+        const st = a.status.toLowerCase()
+        const open = st === 'active'
+        const accepted = st === 'accepted'
+        const closed = st === 'completed' || st === 'declined' || st === 'cancelled'
+        return (
+          <div key={a.id} style={{ background: 'rgba(0,0,0,0.18)', border: '1px solid var(--line)', borderRadius: 10, padding: '12px 14px', opacity: st === 'cancelled' ? 0.6 : 1 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+              <strong style={{ color: 'var(--ivory)', fontSize: 14 }}>{a.title}</strong>
+              <EcoStatusPill status={a.status} />
+            </div>
+            {a.assign_date && <div style={{ color: 'var(--muted)', fontSize: 12, marginTop: 3 }}>📅 {a.assign_date}</div>}
+            {a.detail && <p style={{ color: '#d8d3c6', fontSize: 13, margin: '6px 0 0', lineHeight: 1.55 }}>{a.detail}</p>}
+            {a.volunteer_note && st === 'declined' && <p style={{ color: '#e8c9c9', fontSize: 12.5, margin: '6px 0 0', fontStyle: 'italic' }}>Your reason: {a.volunteer_note}</p>}
+
+            {declining === a.id ? (
+              <div style={{ marginTop: 10 }}>
+                <textarea autoFocus value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason (optional)…" style={{ ...S.input, minHeight: 64, resize: 'vertical' }} />
+                <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+                  <button className="btn btn--sm" disabled={busy === a.id} onClick={() => { setDeclining(0); setReason('') }}>Cancel</button>
+                  <button className="btn btn--sm" style={{ borderColor: '#e08a8a', color: '#e59a9a' }} disabled={busy === a.id} onClick={() => respond(a.id, 'decline', reason.trim())}>{busy === a.id ? '…' : 'Confirm decline'}</button>
+                </div>
+              </div>
+            ) : !closed && (
+              <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+                {open && <button className="btn btn--sm btn--solid" disabled={busy === a.id} onClick={() => respond(a.id, 'accept')}>{busy === a.id ? '…' : 'Accept'}</button>}
+                {accepted && <button className="btn btn--sm btn--solid" disabled={busy === a.id} onClick={() => respond(a.id, 'complete')}>{busy === a.id ? '…' : 'Mark complete'}</button>}
+                <button className="btn btn--sm" disabled={busy === a.id} onClick={() => { setDeclining(a.id); setReason('') }}>Decline</button>
+              </div>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
 
 /** A titled card section with an optional action on the right. */
 export function Section({ title, children, right }: { title: string; children: React.ReactNode; right?: React.ReactNode }) {

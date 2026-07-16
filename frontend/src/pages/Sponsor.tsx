@@ -1,4 +1,4 @@
-import EcosystemPortal, { S, StatTile, Section, DownloadList, EcoDocuments, EcoRequests, EcoAnnouncements, LogoUploader, RequestButton, type PortalConfig } from './portal/EcosystemPortal'
+import EcosystemPortal, { StatTile, Section, DownloadList, EcoDocuments, EcoRequests, EcoAnnouncements, EcoAssignments, LogoUploader, RequestButton, type EcoAssign, type PortalConfig } from './portal/EcosystemPortal'
 
 /* Sponsor Portal — an investment portal: package + recognition, branding, live
    impact, documents (invoices/agreements), award ceremony, renewal + meeting
@@ -19,6 +19,8 @@ const config: PortalConfig = {
     const imp = data?.impact || {}
     const cer = data?.ceremony || {}
     const hasCer = cer.date || cer.venue || cer.description || cer.link
+    const assignments = (data?.assignments as EcoAssign[] | undefined) || []
+    const pendingAssignments = assignments.filter((a) => a.status.toLowerCase() === 'active').length
     return (
       <div style={{ display: 'grid', gap: 18 }}>
         <Section title="Impact Dashboard">
@@ -66,6 +68,10 @@ const config: PortalConfig = {
 
         <Section title="Renewal Center" right={<div style={{ display: 'flex', gap: 8 }}><RequestButton role="sponsor" reqType="meeting" label="Request Meeting" reload={reload} /><RequestButton role="sponsor" reqType="renewal" label="Renew Sponsorship" reload={reload} solid /></div>}>
           <p style={{ color: 'var(--muted)', fontSize: 13, margin: 0 }}>Ready to continue your impact, or want to talk options? Request a renewal or a meeting with the program team.</p>
+        </Section>
+
+        <Section title={`My Assignments${pendingAssignments ? ` · ${pendingAssignments} awaiting you` : ''}`}>
+          <EcoAssignments items={assignments} role="sponsor" reload={reload} />
         </Section>
 
         <Section title="Announcements"><EcoAnnouncements items={data?.announcements} /></Section>
