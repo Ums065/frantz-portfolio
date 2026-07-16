@@ -30,15 +30,32 @@ export function Pill({ status }: { status: string }) {
   return <span style={{ display: 'inline-block', color: c, border: `1px solid ${c}`, borderRadius: 999, padding: '2px 9px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', whiteSpace: 'nowrap' }}>{cap(status)}</span>
 }
 
+/* Counter strip (parity with the admin DataTable sections' StatChips). */
+export function EcoStatChips({ items }: { items: Array<{ label: string; value: number | string; tone?: 'gold' | 'green' | 'red' | 'blue' | 'muted' }> }) {
+  return (
+    <div className="admin-statchips">
+      {items.map((it) => (
+        <div key={it.label} className={`admin-statchip${it.tone ? ` admin-statchip--${it.tone}` : ''}`}>
+          <strong>{it.value}</strong><span>{it.label}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 /* ---------- reusable filterable table (shared admin-* styles) ---------- */
 interface FilterDef<T> { label: string; options: string[]; valueOf: (r: T) => string }
-export function EcoTable<T>({ head, rows, renderRow, searchText, filters = [], searchPlaceholder, pageSize = 12 }: {
-  head: string[]; rows: T[]; renderRow: (r: T) => React.ReactNode; searchText?: (r: T) => string
+export interface EcoBulkAction { label: string; danger?: boolean; onClick: (ids: number[]) => void | Promise<void> }
+export function EcoTable<T>({ head, rows, renderRow, searchText, filters = [], searchPlaceholder, pageSize = 12, rowId, rowSelectable, bulkActions }: {
+  head: string[]; rows: T[]; renderRow: (r: T, checkbox?: React.ReactNode, index?: number) => React.ReactNode; searchText?: (r: T) => string
   filters?: FilterDef<T>[]; searchPlaceholder?: string; pageSize?: number
+  rowId?: (r: T) => number; rowSelectable?: (r: T) => boolean; bulkActions?: EcoBulkAction[]
 }) {
   const [q, setQ] = useState('')
   const [fv, setFv] = useState<string[]>(filters.map(() => 'all'))
   const [page, setPage] = useState(1)
+  const [selected, setSelected] = useState<Set<number>>(new Set())
+  const bulkEnabled = !!(rowId && bulkActions && bulkActions.length)
   const filtered = useMemo(() => rows.filter((r) => {
     if (q && searchText && !searchText(r).toLowerCase().includes(q.toLowerCase())) return false
     for (let i = 0; i < filters.length; i++) if (fv[i] !== 'all' && (filters[i].valueOf(r) || '').toLowerCase() !== fv[i]) return false
@@ -47,7 +64,18 @@ export function EcoTable<T>({ head, rows, renderRow, searchText, filters = [], s
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize))
   const safe = Math.min(page, pageCount)
   useEffect(() => { if (page !== safe) setPage(safe) }, [page, safe])
-  const pageRows = filtered.slice((safe - 1) * pageSize, (safe - 1) * pageSize + pageSize)
+  const start = (safe - 1) * pageSize
+  const pageRows = filtered.slice(start, start + pageSize)
+
+  const isSel = (r: T) => bulkEnabled && (!rowSelectable || rowSelectable(r))
+  const pageSelIds = bulkEnabled ? pageRows.filter(isSel).map((r) => rowId!(r)) : []
+  const allPageSel = pageSelIds.length > 0 && pageSelIds.every((id) => selected.has(id))
+  const selIds = [...selected]
+  const toggleOne = (id: number) => setSelected((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n })
+  const togglePage = () => setSelected((p) => { const n = new Set(p); allPageSel ? pageSelIds.forEach((id) => n.delete(id)) : pageSelIds.forEach((id) => n.add(id)); return n })
+  const clearSel = () => setSelected(new Set())
+  const runBulk = async (a: EcoBulkAction) => { if (!selIds.length) return; await a.onClick(selIds); clearSel() }
+
   return (
     <div className="admin-panel">
       <div className="admin-toolbar">
@@ -60,11 +88,29 @@ export function EcoTable<T>({ head, rows, renderRow, searchText, filters = [], s
         ))}
         <span className="admin-toolbar__count">{filtered.length === rows.length ? rows.length : `${filtered.length} of ${rows.length}`} {rows.length === 1 ? 'record' : 'records'}</span>
       </div>
+      {bulkEnabled && selIds.length > 0 && (
+        <div className="admin-bulkbar">
+          <span className="admin-bulkbar__count">{selIds.length} selected</span>
+          {bulkActions!.map((a, i) => (
+            <button key={i} type="button" className={`btn btn--sm${a.danger ? ' admin-bulkbar__danger' : ''}`} onClick={() => void runBulk(a)}>{a.label}</button>
+          ))}
+          <button type="button" className="btn btn--sm" onClick={clearSel}>Clear</button>
+        </div>
+      )}
       <div className="admin-table-wrap glass">
         <table className="admin-table">
-          <thead><tr>{head.map((h, i) => <th key={h || i}>{h}</th>)}</tr></thead>
+          <thead><tr>
+            {bulkEnabled && <th className="admin-table__check"><input type="checkbox" aria-label="Select all on page" checked={allPageSel} onChange={togglePage} /></th>}
+            {head.map((h, i) => <th key={h || i}>{h}</th>)}
+          </tr></thead>
           <tbody>
-            {pageRows.length ? pageRows.map(renderRow) : <tr><td className="admin-table__empty" colSpan={head.length}>No matching records.</td></tr>}
+            {pageRows.length ? pageRows.map((r, i) => renderRow(
+              r,
+              bulkEnabled ? (isSel(r)
+                ? <td className="admin-table__check"><input type="checkbox" aria-label="Select row" checked={selected.has(rowId!(r))} onChange={() => toggleOne(rowId!(r))} /></td>
+                : <td className="admin-table__check" />) : undefined,
+              start + i + 1,
+            )) : <tr><td className="admin-table__empty" colSpan={head.length + (bulkEnabled ? 1 : 0)}>No matching records.</td></tr>}
           </tbody>
         </table>
       </div>
@@ -112,6 +158,16 @@ export default function EcosystemAdminPanel() {
   }, [])
 
   const pendingReqs = reqs.filter((r) => r.status === 'pending').length
+  const reqBy = (s: string) => reqs.filter((r) => r.status === s).length
+  const acctBy = (s: string) => accounts.filter((a) => a.approval_status === s).length
+  const bulkApproveReqs = async (ids: number[]) => {
+    for (const id of ids) { try { await api.put(`admin/ecosystem/request/${id}`, { status: 'approved', admin_note: '' }) } catch { /* skip */ } }
+    void loadReqs()
+  }
+  const bulkApproveAccounts = async (ids: number[]) => {
+    for (const id of ids) { try { await api.put(`admin/user/${id}/approval`, { approval_status: 'approved' }) } catch { /* skip */ } }
+    void loadAccounts()
+  }
 
   const TABS: Array<{ key: Tab; label: string; badge?: number }> = [
     { key: 'requests', label: 'Requests', badge: pendingReqs },
@@ -137,49 +193,76 @@ export default function EcosystemAdminPanel() {
       {err && <p style={{ color: '#ff9a9a', fontSize: 13 }}>{err}</p>}
 
       {tab === 'requests' && (
-        <EcoTable<EcoReq>
-          head={['Account', 'Role', 'Type', 'Request', 'Status', 'Date', '']}
-          rows={reqs}
-          searchText={(r) => `${r.org_name} ${r.role} ${r.req_type} ${r.message}`}
-          searchPlaceholder="Search requests…"
-          filters={[
-            { label: 'roles', options: ['sponsor', 'partner', 'media', 'volunteer'], valueOf: (r) => r.role },
-            { label: 'statuses', options: ['pending', 'approved', 'info_needed', 'declined'], valueOf: (r) => r.status },
-          ]}
-          renderRow={(r) => (
-            <tr key={r.id} style={{ cursor: 'pointer' }} onClick={() => setOpenReq(r)}>
-              <td style={{ fontWeight: 600 }}>{r.org_name}</td>
-              <td style={{ textTransform: 'capitalize' }}>{r.role}</td>
-              <td style={{ textTransform: 'capitalize' }}>{cap(r.req_type)}</td>
-              <td style={{ maxWidth: 260 }}><span style={{ display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical', overflow: 'hidden', color: 'var(--muted)' } as React.CSSProperties}>{r.message || '—'}</span></td>
-              <td><Pill status={r.status} /></td>
-              <td style={{ whiteSpace: 'nowrap', color: 'var(--muted)' }}>{fmt(r.created_ts)}</td>
-              <td><button className="btn btn--sm" onClick={(e) => { e.stopPropagation(); setOpenReq(r) }}>Review</button></td>
-            </tr>
-          )}
-        />
+        <>
+          <EcoStatChips items={[
+            { label: 'Total', value: reqs.length },
+            { label: 'Pending', value: reqBy('pending'), tone: 'gold' },
+            { label: 'Approved', value: reqBy('approved'), tone: 'green' },
+            { label: 'Needs info', value: reqBy('info_needed'), tone: 'blue' },
+            { label: 'Declined', value: reqBy('declined'), tone: 'red' },
+          ]} />
+          <EcoTable<EcoReq>
+            head={['#', 'Account', 'Role', 'Type', 'Request', 'Status', 'Date', '']}
+            rows={reqs}
+            searchText={(r) => `${r.org_name} ${r.role} ${r.req_type} ${r.message}`}
+            searchPlaceholder="Search requests…"
+            filters={[
+              { label: 'roles', options: ['sponsor', 'partner', 'media', 'volunteer'], valueOf: (r) => r.role },
+              { label: 'statuses', options: ['pending', 'approved', 'info_needed', 'declined'], valueOf: (r) => r.status },
+            ]}
+            rowId={(r) => r.id}
+            rowSelectable={(r) => r.status === 'pending'}
+            bulkActions={[{ label: 'Approve selected', onClick: bulkApproveReqs }]}
+            renderRow={(r, checkbox, index) => (
+              <tr key={r.id} style={{ cursor: 'pointer' }} onClick={() => setOpenReq(r)}>
+                {checkbox}
+                <td className="admin-table__idx">{index}</td>
+                <td style={{ fontWeight: 600 }}>{r.org_name}</td>
+                <td style={{ textTransform: 'capitalize' }}>{r.role}</td>
+                <td style={{ textTransform: 'capitalize' }}>{cap(r.req_type)}</td>
+                <td style={{ maxWidth: 260 }}><span style={{ display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical', overflow: 'hidden', color: 'var(--muted)' } as React.CSSProperties}>{r.message || '—'}</span></td>
+                <td><Pill status={r.status} /></td>
+                <td style={{ whiteSpace: 'nowrap', color: 'var(--muted)' }}>{fmt(r.created_ts)}</td>
+                <td><button className="btn btn--sm" onClick={(e) => { e.stopPropagation(); setOpenReq(r) }}>Review</button></td>
+              </tr>
+            )}
+          />
+        </>
       )}
 
       {tab === 'accounts' && (
-        <EcoTable<EcoAccount>
-          head={['Organization', 'Role', 'Email', 'Approval', '']}
-          rows={accounts}
-          searchText={(a) => `${a.org_name} ${a.role} ${a.email}`}
-          searchPlaceholder="Search accounts…"
-          filters={[
-            { label: 'roles', options: ['sponsor', 'partner', 'media', 'volunteer', 'business'], valueOf: (a) => a.role },
-            { label: 'approval', options: ['pending', 'approved', 'rejected'], valueOf: (a) => a.approval_status },
-          ]}
-          renderRow={(a) => (
-            <tr key={a.user_id} style={{ cursor: 'pointer' }} onClick={() => setOpenAcct(a)}>
-              <td style={{ fontWeight: 600 }}>{a.org_name}</td>
-              <td style={{ textTransform: 'capitalize' }}>{a.role}</td>
-              <td style={{ color: 'var(--muted)' }}>{a.email}</td>
-              <td><Pill status={a.approval_status} /></td>
-              <td><button className="btn btn--sm" onClick={(e) => { e.stopPropagation(); setOpenAcct(a) }}>Manage</button></td>
-            </tr>
-          )}
-        />
+        <>
+          <EcoStatChips items={[
+            { label: 'Total', value: accounts.length },
+            { label: 'Pending', value: acctBy('pending'), tone: 'gold' },
+            { label: 'Approved', value: acctBy('approved'), tone: 'green' },
+            { label: 'Rejected', value: acctBy('rejected'), tone: 'red' },
+          ]} />
+          <EcoTable<EcoAccount>
+            head={['#', 'Organization', 'Role', 'Email', 'Approval', '']}
+            rows={accounts}
+            searchText={(a) => `${a.org_name} ${a.role} ${a.email}`}
+            searchPlaceholder="Search accounts…"
+            filters={[
+              { label: 'roles', options: ['sponsor', 'partner', 'media', 'volunteer', 'business'], valueOf: (a) => a.role },
+              { label: 'approval', options: ['pending', 'approved', 'rejected'], valueOf: (a) => a.approval_status },
+            ]}
+            rowId={(a) => a.user_id}
+            rowSelectable={(a) => a.approval_status === 'pending'}
+            bulkActions={[{ label: 'Approve selected', onClick: bulkApproveAccounts }]}
+            renderRow={(a, checkbox, index) => (
+              <tr key={a.user_id} style={{ cursor: 'pointer' }} onClick={() => setOpenAcct(a)}>
+                {checkbox}
+                <td className="admin-table__idx">{index}</td>
+                <td style={{ fontWeight: 600 }}>{a.org_name}</td>
+                <td style={{ textTransform: 'capitalize' }}>{a.role}</td>
+                <td style={{ color: 'var(--muted)' }}>{a.email}</td>
+                <td><Pill status={a.approval_status} /></td>
+                <td><button className="btn btn--sm" onClick={(e) => { e.stopPropagation(); setOpenAcct(a) }}>Manage</button></td>
+              </tr>
+            )}
+          />
+        </>
       )}
 
       {tab === 'announcements' && <Announcer anns={anns} setAnns={setAnns} />}

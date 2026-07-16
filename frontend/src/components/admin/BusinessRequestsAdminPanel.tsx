@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../../lib/api'
-import { Pill, Modal, EcoTable, ProfileModal } from './EcosystemAdminPanel'
+import { Pill, Modal, EcoTable, EcoStatChips, ProfileModal } from './EcosystemAdminPanel'
 import OfferStepper, { type OfferStage, type OfferEvent } from '../OfferStepper'
 
 /* Admin review of Business opportunity requests (implementation help / contact
@@ -50,6 +50,14 @@ export default function BusinessRequestsAdminPanel() {
   const load = () => api.get<{ requests: BizAdminRequest[] }>('admin/business-requests').then((d) => setRows(d.requests || [])).catch((e) => setErr(e instanceof Error ? e.message : 'Could not load requests.'))
   useEffect(() => { void load() }, [])
 
+  const by = (s: string) => rows.filter((r) => r.status === s).length
+  // A confirmed internship = fully consented by student + parent — a program win.
+  const confirmedInternships = rows.filter((r) => r.request_type === 'internship' && r.parent_consent === 'accepted').length
+  const bulkApprove = async (ids: number[]) => {
+    for (const id of ids) { try { await api.put(`admin/business-request/${id}`, { status: 'approved', admin_note: '' }) } catch { /* skip */ } }
+    void load()
+  }
+
   return (
     <div style={{ display: 'grid', gap: 14 }}>
       <div style={{ background: 'rgba(201,168,76,0.06)', border: '1px solid var(--line)', borderRadius: 12, padding: '13px 16px' }}>
@@ -63,8 +71,16 @@ export default function BusinessRequestsAdminPanel() {
       </div>
       {err && <p style={{ color: '#ff9a9a', fontSize: 13 }}>{err}</p>}
 
+      <EcoStatChips items={[
+        { label: 'Total', value: rows.length },
+        { label: 'Pending', value: by('pending'), tone: 'gold' },
+        { label: 'Approved', value: by('approved'), tone: 'green' },
+        { label: 'Declined', value: by('declined'), tone: 'red' },
+        { label: '🎓 Internships placed', value: confirmedInternships, tone: 'green' },
+      ]} />
+
       <EcoTable<BizAdminRequest>
-        head={['Business', 'Type', 'Student / School', 'Request', 'Status', 'Date', '']}
+        head={['#', 'Business', 'Type', 'Student / School', 'Request', 'Status', 'Date', '']}
         rows={rows}
         searchText={(r) => `${r.business_name} ${r.request_type} ${r.student_name || ''} ${r.school_name || ''} ${r.message}`}
         searchPlaceholder="Search business requests…"
@@ -72,8 +88,13 @@ export default function BusinessRequestsAdminPanel() {
           { label: 'types', options: ['implementation', 'contact_school', 'internship', 'volunteer'], valueOf: (r) => r.request_type },
           { label: 'statuses', options: ['pending', 'approved', 'info_needed', 'declined'], valueOf: (r) => r.status },
         ]}
-        renderRow={(r) => (
+        rowId={(r) => r.id}
+        rowSelectable={(r) => r.status === 'pending'}
+        bulkActions={[{ label: 'Approve selected', onClick: bulkApprove }]}
+        renderRow={(r, checkbox, index) => (
           <tr key={r.id} style={{ cursor: 'pointer' }} onClick={() => setOpen(r)}>
+            {checkbox}
+            <td className="admin-table__idx">{index}</td>
             <td style={{ fontWeight: 600 }}>{r.business_name}</td>
             <td>{LABEL[r.request_type] || r.request_type}</td>
             <td style={{ color: 'var(--muted)' }}>{[r.student_name, r.school_name].filter(Boolean).join(' · ') || '—'}</td>

@@ -1660,6 +1660,8 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
                     'business_requests'  => $countWhere("SELECT COUNT(*) FROM business_requests WHERE status = 'pending'"),
                     'ecosystem_requests' => $countWhere("SELECT COUNT(*) FROM ecosystem_requests WHERE status = 'pending'"),
                     'sponsors_pending'   => $countWhere("SELECT COUNT(*) FROM sponsor_applications WHERE approval_status = 'pending_review'"),
+                    // Fully-consented internships — a headline achievement for the program.
+                    'internships_confirmed' => $countWhere("SELECT COUNT(*) FROM business_requests WHERE request_type = 'internship' AND parent_consent = 'accepted'"),
                 ],
             ]);
         }

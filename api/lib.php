@@ -3902,15 +3902,30 @@ function business_offers_pipeline(int $businessUserId): array
 {
     business_ensure_schema();
     $s = db()->prepare(
-        "SELECT br.*, UNIX_TIMESTAMP(br.created_at) AS created_ts, s.full_name AS student_name_live, sch.school_name
+        "SELECT br.*, UNIX_TIMESTAMP(br.created_at) AS created_ts,
+                s.full_name AS student_name_live, s.email AS student_email, s.phone_number AS student_phone,
+                sch.school_name,
+                p.parent_full_name, p.email AS parent_email, p.phone_number AS parent_phone
          FROM business_requests br
          LEFT JOIN new_school_students s ON s.id = br.student_id
          LEFT JOIN new_school_schools sch ON sch.id = s.school_id
+         LEFT JOIN new_school_parents p ON p.student_id = br.student_id
          WHERE br.business_user_id = ? AND br.request_type = 'internship'
          ORDER BY br.created_at DESC"
     );
     $s->execute([$businessUserId]);
     return array_map(static function (array $r): array {
+        // Contact details are released to the business ONLY once the internship is
+        // fully confirmed (student accepted + parent/guardian consented) — before
+        // that the business must go through the program team.
+        $confirmed = (string) ($r['parent_consent'] ?? '') === 'accepted';
+        $contact = $confirmed ? [
+            'student_email' => (string) ($r['student_email'] ?? ''),
+            'student_phone' => (string) ($r['student_phone'] ?? ''),
+            'parent_name' => (string) ($r['parent_full_name'] ?? ''),
+            'parent_email' => (string) ($r['parent_email'] ?? ''),
+            'parent_phone' => (string) ($r['parent_phone'] ?? ''),
+        ] : null;
         return [
             'id' => (int) $r['id'],
             'job_title' => (string) ($r['job_title'] ?? 'Internship'),
@@ -3923,6 +3938,7 @@ function business_offers_pipeline(int $businessUserId): array
             'parent_consent' => (string) ($r['parent_consent'] ?? 'pending'), 'admin_note' => (string) ($r['admin_note'] ?? ''),
             'decline_reason' => (string) ($r['decline_reason'] ?? ''), 'created_ts' => (int) $r['created_ts'],
             'stage' => business_offer_stage($r),
+            'contact' => $contact,
             'timeline' => business_offer_timeline((int) $r['id']),
         ];
     }, $s->fetchAll());

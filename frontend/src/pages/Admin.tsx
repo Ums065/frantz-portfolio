@@ -98,7 +98,7 @@ interface OrderRow {
 }
 interface Submissions {
   requests: RequestRow[]; subscribers: SubRow[]; contacts: ContactRow[]; members: MemberRow[]; orders: OrderRow[]
-  counts?: Partial<Record<'awards' | 'events' | 'blog' | 'testimonials' | 'media' | 'gallery' | 'inventory' | 'community' | 'rsvps' | 'sponsors' | 'business_requests' | 'ecosystem_requests' | 'sponsors_pending', number>>
+  counts?: Partial<Record<'awards' | 'events' | 'blog' | 'testimonials' | 'media' | 'gallery' | 'inventory' | 'community' | 'rsvps' | 'sponsors' | 'business_requests' | 'ecosystem_requests' | 'sponsors_pending' | 'internships_confirmed', number>>
 }
 
 interface DetailField {
@@ -841,6 +841,19 @@ export default function Admin() {
 
           {tab === 'overview' && (
             <div className="admin-overview">
+              <button
+                type="button"
+                className="admin-achievement glass"
+                onClick={() => setTab('business-requests')}
+                title="Open Business Requests"
+              >
+                <span className="admin-achievement__ico" aria-hidden="true">🎓</span>
+                <span className="admin-achievement__body">
+                  <strong className="admin-achievement__num gold-text">{data?.counts?.internships_confirmed ?? 0}</strong>
+                  <span className="admin-achievement__label">Successful Internship{(data?.counts?.internships_confirmed ?? 0) === 1 ? '' : 's'} placed</span>
+                  <span className="admin-achievement__hint">Students hired through the challenge — fully approved by admin, student & parent.</span>
+                </span>
+              </button>
               {approvalQueueCount > 0 && (
                 <div className="admin-overview__cta glass">
                   <div>

@@ -85,6 +85,7 @@ interface BizOffer {
   created_ts: number
   stage: OfferStage
   timeline: OfferEvent[]
+  contact: { student_email: string; student_phone: string; parent_name: string; parent_email: string; parent_phone: string } | null
 }
 interface BizProfile { business_name: string; category: string | null; borough: string | null; contact_name: string | null; contact_phone: string | null; website: string | null; about: string | null }
 interface BizDoc { id: number; doc_type: string; label: string; file_url: string; created_ts: number }
@@ -444,6 +445,19 @@ export default function Business() {
                       </div>
                     )}
                     <OfferStepper stage={o.stage} timeline={o.timeline} />
+                    {o.contact && (
+                      <div style={{ marginTop: 14, background: 'rgba(120,200,140,0.08)', border: '1px solid rgba(120,200,140,0.32)', borderRadius: 12, padding: '12px 14px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                          <span style={{ fontSize: 16 }}>🎉</span>
+                          <strong style={{ color: '#8fd6a3', fontSize: 13.5 }}>Confirmed — you can now contact them directly</strong>
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 12 }}>
+                          <ContactCard title={`Student · ${o.student_name}`} email={o.contact.student_email} phone={o.contact.student_phone} />
+                          <ContactCard title={`Parent / Guardian${o.contact.parent_name ? ` · ${o.contact.parent_name}` : ''}`} email={o.contact.parent_email} phone={o.contact.parent_phone} />
+                        </div>
+                        <p style={{ color: 'var(--muted)', fontSize: 11.5, margin: '10px 0 0', lineHeight: 1.5 }}>Please coordinate respectfully and keep the program team informed. Working hours must respect school schedules and youth labor rules.</p>
+                      </div>
+                    )}
                   </div>
                 ))}
             </div>
@@ -651,6 +665,20 @@ function OfferChip({ icon, text }: { icon: string; text: string }) {
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--line)', borderRadius: 999, padding: '4px 11px', fontSize: 12, color: '#e0dccf' }}>
       <span aria-hidden>{icon}</span>{text}
     </span>
+  )
+}
+
+function ContactCard({ title, email, phone }: { title: string; email: string; phone: string }) {
+  return (
+    <div style={{ background: 'rgba(0,0,0,0.2)', border: '1px solid var(--line)', borderRadius: 10, padding: '10px 12px' }}>
+      <div style={{ ...eyebrow, fontSize: 10, marginBottom: 6 }}>{title}</div>
+      {email
+        ? <div style={{ fontSize: 13 }}>📧 <a href={`mailto:${email}`} style={{ color: 'var(--gold-light)' }}>{email}</a></div>
+        : <div style={{ fontSize: 13, color: 'var(--muted)' }}>📧 —</div>}
+      {phone
+        ? <div style={{ fontSize: 13, marginTop: 3 }}>📞 <a href={`tel:${phone}`} style={{ color: 'var(--gold-light)' }}>{phone}</a></div>
+        : <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 3 }}>📞 —</div>}
+    </div>
   )
 }
 
