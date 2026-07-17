@@ -214,7 +214,7 @@ export default function SponsorsAdminPanel() {
         </div>
       </div>
 
-      <div className="glass" style={{ padding: 20, borderRadius: 14, overflowX: 'auto' }}>
+      <div className="glass admin-table-wrap" style={{ padding: 20, borderRadius: 14 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: 16, flexWrap: 'wrap' }}>
           <div>
             <h3 className="gold-text" style={{ margin: 0 }}>Sponsor Applications</h3>

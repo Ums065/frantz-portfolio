@@ -3065,7 +3065,19 @@ section#challenge .challenge-features .ns-gain p {
 }
 
 /* --- Tables --- */
-.admin-table-wrap { border-radius: 14px; overflow-x: auto; }
+.admin-table-wrap {
+  border-radius: 14px;
+  overflow-x: auto;
+  max-width: 100%;
+  -webkit-overflow-scrolling: touch; /* momentum scroll on iOS */
+}
+/* A visible, on-brand scrollbar so it's obvious the table scrolls sideways on
+   phones (otherwise users don't realise more columns exist off-screen). */
+.admin-table-wrap::-webkit-scrollbar { height: 9px; }
+.admin-table-wrap::-webkit-scrollbar-track { background: rgba(255,255,255,0.04); border-radius: 0 0 14px 14px; }
+.admin-table-wrap::-webkit-scrollbar-thumb { background: rgba(201,168,76,0.4); border-radius: 8px; }
+.admin-table-wrap::-webkit-scrollbar-thumb:hover { background: rgba(201,168,76,0.6); }
+.admin-table-wrap { scrollbar-color: rgba(201,168,76,0.4) rgba(255,255,255,0.04); scrollbar-width: thin; }
 .admin-table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 560px; }
 .admin-table th {
   text-align: left;

@@ -238,7 +238,7 @@ export default function JudgesAdminPanel() {
 
         {filteredJudges.length === 0 ? <p className="msub">No judges match.</p> : (
           <>
-            <div style={{ overflowX: 'auto' }}>
+            <div className="admin-table-wrap">
               <table className="admin-table">
                 <thead><tr>
                   <th style={{ width: 34 }}><input type="checkbox" checked={allJChecked} onChange={toggleAllJ} aria-label="Select all judges" /></th>
@@ -264,7 +264,7 @@ export default function JudgesAdminPanel() {
       <div>
         <h3 className="gold-text">Reported Concerns ({reports.filter((r) => r.status === 'open').length} open)</h3>
         {reports.length === 0 ? <p className="msub">No reports.</p> : (
-          <div style={{ overflowX: 'auto' }}>
+          <div className="admin-table-wrap">
             <table className="admin-table"><thead><tr><th>When</th><th>Reporter</th><th>Student</th><th>Reason</th><th>Notes</th><th>Status</th><th></th></tr></thead>
               <tbody>{reports.map((r) => (
                 <tr key={r.id}>
@@ -303,7 +303,7 @@ export default function JudgesAdminPanel() {
 
         {filteredResults.length === 0 ? <p className="msub">No projects match.</p> : (
           <>
-            <div style={{ overflowX: 'auto' }}>
+            <div className="admin-table-wrap">
               <table className="admin-table">
                 <thead><tr>
                   <th style={{ width: 34 }}><input type="checkbox" checked={allRChecked} onChange={toggleAllR} aria-label="Select all results" /></th>
@@ -410,7 +410,7 @@ export default function JudgesAdminPanel() {
                   <p className="msub">This judge has not scored any students yet.</p>
                 ) : (
                   <>
-                    <div style={{ overflowX: 'auto' }}>
+                    <div className="admin-table-wrap">
                       <table className="admin-table">
                         <thead><tr><th>Student</th><th>School</th><th>Status</th><th>Scored On</th><th style={{ textAlign: 'right' }}>Score</th></tr></thead>
                         <tbody>{detail.reviews.map((r) => (

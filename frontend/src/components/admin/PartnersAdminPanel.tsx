@@ -110,7 +110,7 @@ export default function PartnersAdminPanel() {
         </div>
         <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, type, industry…" style={{ ...inp, margin: '12px 0', maxWidth: 360 }} />
         {filtered.length === 0 ? <p className="msub">No partners.</p> : (
-          <div style={{ overflowX: 'auto' }}>
+          <div className="admin-table-wrap">
             <table className="admin-table">
               <thead><tr><th></th><th>Name</th><th>Type</th><th>Industry</th><th>Location</th><th>Since</th><th>Flags</th><th>Status</th><th></th></tr></thead>
               <tbody>{filtered.map((r) => (

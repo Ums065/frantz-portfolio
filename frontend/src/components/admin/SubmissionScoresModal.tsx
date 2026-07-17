@@ -61,7 +61,7 @@ export default function SubmissionScoresModal({ submissionId, studentName, onClo
             </div>
 
             {data.scores.length === 0 ? <p className="msub">No judge has scored this submission yet.</p> : (
-              <div style={{ overflowX: 'auto' }}>
+              <div className="admin-table-wrap">
                 <table className="admin-table">
                   <thead>
                     <tr>
@@ -89,7 +89,7 @@ export default function SubmissionScoresModal({ submissionId, studentName, onClo
             {data.audit && data.audit.length > 0 && (
               <details style={{ marginTop: 14 }}>
                 <summary style={{ cursor: 'pointer', fontWeight: 700 }} className="gold-text">Score Audit Trail ({data.audit.length})</summary>
-                <div style={{ overflowX: 'auto', marginTop: 8 }}>
+                <div className="admin-table-wrap" style={{ marginTop: 8 }}>
                   <table className="admin-table">
                     <thead><tr><th>When</th><th>Judge</th><th>Action</th><th>Old</th><th>New</th></tr></thead>
                     <tbody>

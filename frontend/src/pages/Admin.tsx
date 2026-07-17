@@ -1887,7 +1887,7 @@ function UserDetailModal({
             ))}
 
             {detail.tables.map((table) => (
-              <section key={table.title} className="glass" style={{ padding: 18, borderRadius: 14, overflowX: 'auto' }}>
+              <section key={table.title} className="glass admin-table-wrap" style={{ padding: 18, borderRadius: 14 }}>
                 <h4 className="gold-text" style={{ fontSize: 18, marginBottom: 12 }}>{table.title}</h4>
                 <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 620 }}>
                   <thead>
@@ -2452,7 +2452,7 @@ function TrafficAdmin() {
                     : <p className="msub" style={{ margin: '0 0 4px' }}>👤 Anonymous visitor (never signed in)</p>}
                   <p className="msub" style={{ fontSize: 12, marginTop: 0 }}>Visitor ID <code>{selToken.slice(0, 12)}…</code> · {visits?.length || 0} page views (latest 200)</p>
                   {!visits ? <p className="msub">Loading…</p> : visits.length === 0 ? <p className="msub">No visits.</p> : (
-                    <div style={{ overflowX: 'auto' }}>
+                    <div className="admin-table-wrap">
                       <table className="admin-table">
                         <thead><tr><th>When (ET)</th><th>Page</th><th>Came from</th></tr></thead>
                         <tbody>{visits.map((v, i) => (
@@ -2465,7 +2465,7 @@ function TrafficAdmin() {
               ) : !vd ? <p className="msub">Loading…</p> : vd.visitors.length === 0 ? <p className="msub">No visitors yet.</p> : (
                 <>
                   <p className="msub" style={{ fontSize: 12, marginTop: 0 }}>{vd.total} visitor{vd.total === 1 ? '' : 's'} — click one to see every visit. Visitors are anonymous first-party IDs.</p>
-                  <div style={{ overflowX: 'auto' }}>
+                  <div className="admin-table-wrap">
                     <table className="admin-table">
                       <thead><tr><th>User</th><th>Visitor ID</th><th>Visits</th><th>First seen</th><th>Last seen</th><th>Last page</th></tr></thead>
                       <tbody>{vd.visitors.map((v) => (
@@ -4112,7 +4112,7 @@ function DataTable<T>({ head, rows, renderRow, searchText, statusOf, statusOptio
 
 function Table({ head, children }: { head: string[]; children: React.ReactNode }) {
   return (
-    <div className="glass" style={{ borderRadius: 14, overflowX: 'auto' }}>
+    <div className="glass admin-table-wrap" style={{ borderRadius: 14 }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5, minWidth: 640 }}>
         <thead>
           <tr>{head.map((h) => <th key={h} style={thS}>{h}</th>)}</tr>
