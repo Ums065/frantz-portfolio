@@ -216,7 +216,7 @@ export default function JudgesAdminPanel() {
   )
 
   return (
-    <div style={{ display: 'grid', gap: 22 }}>
+    <div style={{ display: 'grid', gap: 22, minWidth: 0 }}>
       {/* Judges */}
       <div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
@@ -390,7 +390,7 @@ export default function JudgesAdminPanel() {
             <div style={{ padding: '18px 22px', display: 'grid', gap: 22 }}>
               <section className="glass" style={{ padding: '14px 16px' }}>
                 <h4 className="gold-text" style={{ margin: '0 0 10px' }}>Edit Judge</h4>
-                <div style={{ display: 'grid', gap: 10, gridTemplateColumns: '1fr 1fr' }}>
+                <div style={{ display: 'grid', gap: 10, gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)' }}>
                   <div className="field"><label>Full Name</label><input type="text" value={eName} onChange={(e) => setEName(e.target.value)} /></div>
                   <div className="field"><label>Email</label><input type="email" value={eEmail} onChange={(e) => setEEmail(e.target.value)} /></div>
                   <div className="field" style={{ gridColumn: '1 / -1' }}><label>New Password (leave blank to keep)</label><input type="text" value={ePass} onChange={(e) => setEPass(e.target.value)} placeholder="••••••" /></div>
