@@ -345,7 +345,7 @@ function RequestModal({ req, onClose, onDone }: { req: EcoReq; onClose: () => vo
         <span style={{ color: 'var(--muted)', fontSize: 12, marginLeft: 'auto' }}>{fmt(req.created_ts)}</span>
       </div>
       {showProfile && <ProfileModal userId={req.user_id} onClose={() => setShowProfile(false)} />}
-      {req.message && <p style={{ color: '#d8d3c6', fontSize: 13.5, lineHeight: 1.6, whiteSpace: 'pre-wrap', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--line)', borderRadius: 10, padding: '10px 12px' }}>{req.message}</p>}
+      {req.message && <p style={{ color: '#d8d3c6', fontSize: 13.5, lineHeight: 1.6, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--line)', borderRadius: 10, padding: '10px 12px' }}>{req.message}</p>}
       <label style={{ ...lbl, marginTop: 12 }}>Note to the applicant <span style={{ textTransform: 'none', color: 'var(--muted)', fontWeight: 400 }}>(for “Needs Info”, write what you need)</span></label>
       <textarea style={{ ...inp, minHeight: 70, resize: 'vertical' }} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Optional note — the applicant sees this…" />
       <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
@@ -412,7 +412,7 @@ export function ProfileModal({ userId, onClose }: { userId: number; onClose: () 
             </div>
           )}
 
-          <div style={{ display: 'flex', gap: 18, borderTop: '1px solid var(--line)', paddingTop: 12 }}>
+          <div style={{ display: 'flex', gap: 18, borderTop: '1px solid var(--line)', paddingTop: 12, flexWrap: 'wrap' }}>
             {([['Requests', p.stats.requests], ['Documents', p.stats.documents], ['Assignments', p.stats.assignments]] as const).map(([k, v]) => (
               <div key={k}><div className="gold-text" style={{ fontFamily: 'var(--f-serif)', fontSize: 22, fontWeight: 800 }}>{v}</div><div style={{ color: 'var(--muted)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '.05em' }}>{k}</div></div>
             ))}
@@ -545,8 +545,8 @@ function AccountModal({ acct, onClose, onApprovalChange }: { acct: EcoAccount; o
         <div style={{ display: 'grid', gap: 6, marginTop: 10 }}>
           {docs.map((d) => (
             <div key={d.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, borderBottom: '1px solid var(--line)', paddingBottom: 6 }}>
-              <a href={d.url} target="_blank" rel="noreferrer" style={{ color: 'var(--ivory)', fontSize: 13 }}>{d.label} · <span style={{ color: 'var(--muted)' }}>{d.doc_type}</span></a>
-              <button className="btn btn--sm" onClick={() => delDoc(d.id)}>✕</button>
+              <a href={d.url} target="_blank" rel="noreferrer" style={{ color: 'var(--ivory)', fontSize: 13, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.label} · <span style={{ color: 'var(--muted)' }}>{d.doc_type}</span></a>
+              <button className="btn btn--sm" style={{ flex: '0 0 auto' }} onClick={() => delDoc(d.id)}>✕</button>
             </div>
           ))}
           {docs.length === 0 && <p style={{ color: 'var(--muted)', fontSize: 13, margin: 0 }}>No documents yet.</p>}
@@ -564,8 +564,8 @@ function AccountModal({ acct, onClose, onApprovalChange }: { acct: EcoAccount; o
         <div style={{ display: 'grid', gap: 6, marginTop: 10 }}>
           {assigns.map((a) => (
             <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, borderBottom: '1px solid var(--line)', paddingBottom: 6 }}>
-              <div><span style={{ color: 'var(--ivory)', fontSize: 13, fontWeight: 600 }}>{a.title}</span> <span style={{ color: 'var(--muted)', fontSize: 12 }}>· {a.status}{a.assign_date ? ` · ${a.assign_date}` : ''}</span></div>
-              <div style={{ display: 'flex', gap: 6 }}>
+              <div style={{ minWidth: 0, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}><span style={{ color: 'var(--ivory)', fontSize: 13, fontWeight: 600 }}>{a.title}</span> <span style={{ color: 'var(--muted)', fontSize: 12 }}>· {a.status}{a.assign_date ? ` · ${a.assign_date}` : ''}</span></div>
+              <div style={{ display: 'flex', gap: 6, flex: '0 0 auto' }}>
                 {a.status !== 'completed' && <button className="btn btn--sm" title="Mark completed" onClick={() => setAssignStatus(a.id, 'completed')}>✓</button>}
                 <button className="btn btn--sm" onClick={() => delAssign(a.id)}>✕</button>
               </div>

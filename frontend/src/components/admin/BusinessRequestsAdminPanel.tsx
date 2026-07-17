@@ -163,7 +163,7 @@ function BizRequestModal({ req, onClose, onDone }: { req: BizAdminRequest; onClo
         <p style={{ color: 'var(--gold-light)', fontSize: 12.5, margin: '0 0 10px' }}>Approving this sends the offer to the student, then their parent/guardian for consent.</p>
       )}
 
-      {req.message && <p style={{ color: '#d8d3c6', fontSize: 13.5, lineHeight: 1.6, whiteSpace: 'pre-wrap', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--line)', borderRadius: 10, padding: '10px 12px' }}>{req.message}</p>}
+      {req.message && <p style={{ color: '#d8d3c6', fontSize: 13.5, lineHeight: 1.6, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--line)', borderRadius: 10, padding: '10px 12px' }}>{req.message}</p>}
 
       <label style={{ display: 'block', fontSize: 11, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--gold-light)', margin: '12px 0 5px' }}>
         Note to the business <span style={{ textTransform: 'none', color: 'var(--muted)', fontWeight: 400 }}>(required to decline; for “Needs Info”, write what you need)</span>
