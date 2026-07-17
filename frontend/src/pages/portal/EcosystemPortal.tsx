@@ -185,8 +185,8 @@ export function EcoEventCalendar({ role, requests, reload, label, prefix }: { ro
         const status = statusByEvent.get(ev.title)
         return (
           <div key={ev.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', background: 'rgba(0,0,0,0.18)', border: '1px solid var(--line)', borderRadius: 10, padding: '10px 14px' }}>
-            <div>
-              <div style={{ color: 'var(--ivory)', fontSize: 13.5, fontWeight: 600 }}>{ev.title}</div>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ color: 'var(--ivory)', fontSize: 13.5, fontWeight: 600, overflowWrap: 'anywhere' }}>{ev.title}</div>
               <div style={{ color: 'var(--muted)', fontSize: 12 }}>{[ev.event_date, ev.location].filter(Boolean).join(' · ')}</div>
             </div>
             {status
@@ -294,7 +294,7 @@ export function EcoRequests({ items, role, reload }: { items?: EcoReq[]; role?: 
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
             <div style={{ minWidth: 0 }}>
               <span style={{ color: 'var(--ivory)', fontWeight: 700, textTransform: 'capitalize' }}>{r.req_type}</span>
-              {r.message && <div style={{ color: 'var(--muted)', fontSize: 12.5, whiteSpace: 'pre-wrap' }}>{r.message}</div>}
+              {r.message && <div style={{ color: 'var(--muted)', fontSize: 12.5, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{r.message}</div>}
               <div style={{ color: 'var(--muted)', fontSize: 11, marginTop: 2 }}>{ecoDate(r.created_ts)}</div>
             </div>
             <span style={ecoStatus(r.status)}>{r.status.replace('_', ' ')}</span>
@@ -621,7 +621,7 @@ export default function EcosystemPortal({ config }: { config: PortalConfig }) {
           <span style={S.eyebrow}>{title}</span>
           <h2 className="gold-text" style={{ fontFamily: 'var(--f-serif)', margin: '6px 0 8px' }}>Different Account Type</h2>
           <p style={{ color: 'var(--muted)', fontSize: 14, marginBottom: 20, lineHeight: 1.65 }}>You're signed in with a {uRole || 'different'} account. This portal is for {role} accounts.</p>
-          <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
             <button className="btn btn--solid" onClick={() => navigate(resolveDashboardRoute(uRole))}>My Dashboard</button>
             <button className="btn" onClick={() => logout()}>Sign Out</button>
           </div>

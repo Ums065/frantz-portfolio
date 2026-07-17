@@ -40,8 +40,8 @@ function OpportunityList({ reload, requests }: { reload: () => void; requests: E
       {OPPORTUNITIES.map((o) => {
         const status = statusByOpp.get(o)
         return (
-          <div key={o} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, background: 'rgba(0,0,0,0.18)', border: '1px solid var(--line)', borderRadius: 10, padding: '10px 12px' }}>
-            <span style={{ color: 'var(--ivory)', fontSize: 13 }}>{o}</span>
+          <div key={o} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', background: 'rgba(0,0,0,0.18)', border: '1px solid var(--line)', borderRadius: 10, padding: '10px 12px' }}>
+            <span style={{ color: 'var(--ivory)', fontSize: 13, minWidth: 0 }}>{o}</span>
             {status ? <EcoStatusPill status={status} /> : <button className="btn btn--sm" disabled={busy === o} onClick={() => apply(o)}>{busy === o ? '…' : 'Apply'}</button>}
           </div>
         )

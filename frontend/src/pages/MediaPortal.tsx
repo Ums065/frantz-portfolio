@@ -40,8 +40,8 @@ function MediaEventCalendar({ requests, reload }: { requests: EcoReq[]; reload: 
         const status = statusByEvent.get(ev.title)
         return (
           <div key={ev.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', background: 'rgba(0,0,0,0.18)', border: '1px solid var(--line)', borderRadius: 10, padding: '10px 14px' }}>
-            <div>
-              <div style={{ color: 'var(--ivory)', fontSize: 13.5, fontWeight: 600 }}>{ev.title}</div>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ color: 'var(--ivory)', fontSize: 13.5, fontWeight: 600, overflowWrap: 'anywhere' }}>{ev.title}</div>
               <div style={{ color: 'var(--muted)', fontSize: 12 }}>{[ev.event_date, ev.location].filter(Boolean).join(' · ')}</div>
             </div>
             {status
