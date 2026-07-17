@@ -3130,16 +3130,17 @@ section#challenge .challenge-features .ns-gain p {
   }
   .admin-table--stack tbody tr:hover td { background: transparent; }
   .admin-table--stack td {
-    display: flex;
+    display: flex !important;
     align-items: center;
     justify-content: space-between;
     gap: 12px;
     border: none !important;
-    padding: 8px 12px;
-    white-space: normal;
-    text-align: right;
-    min-width: 0;
-    max-width: none;
+    padding: 8px 12px !important;
+    white-space: normal !important;
+    text-align: right !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    vertical-align: middle !important;
   }
   .admin-table--stack td::before {
     content: attr(data-label);

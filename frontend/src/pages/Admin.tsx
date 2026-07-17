@@ -3103,17 +3103,17 @@ function CommunityAdmin() {
 
       {error && <p style={{ color: '#e08a8a', fontSize: 13 }}>{error}</p>}
 
-      <Table head={['Title', 'Audience', 'Pinned', 'Comments', 'Author', 'Date', 'Actions']}>
+      <Table stack head={['Title', 'Audience', 'Pinned', 'Comments', 'Author', 'Date', 'Actions']}>
         {threads.map((row) => (
           <tr key={row.id} style={rowS}>
-            <td style={{ ...tdS, whiteSpace: 'normal', overflowWrap: 'anywhere', maxWidth: 280 }}>{row.title}</td>
-            <td style={tdS}>{row.audience}</td>
-            <td style={tdS}>{row.is_pinned ? 'Yes' : '—'}</td>
-            <td style={tdS}>{row.comment_count ?? 0}</td>
-            <td style={tdS}>{row.author_name}</td>
-            <td style={tdS}>{row.created_at}</td>
+            <td data-label="Title" style={{ ...tdS, whiteSpace: 'normal', overflowWrap: 'anywhere', maxWidth: 280 }}>{row.title}</td>
+            <td data-label="Audience" style={tdS}>{row.audience}</td>
+            <td data-label="Pinned" style={tdS}>{row.is_pinned ? 'Yes' : '—'}</td>
+            <td data-label="Comments" style={tdS}>{row.comment_count ?? 0}</td>
+            <td data-label="Author" style={tdS}>{row.author_name}</td>
+            <td data-label="Date" style={tdS}>{row.created_at}</td>
             <td style={tdS}>
-              <div style={{ display: 'flex', gap: 6 }}>
+              <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
                 <button className="btn btn--sm" onClick={() => setEditing(row)}>Edit</button>
                 <button className="btn btn--sm" onClick={() => removeThread(row.id)} style={{ borderColor: '#7a3b3b', color: '#e08a8a' }}>Delete</button>
               </div>
@@ -3122,13 +3122,13 @@ function CommunityAdmin() {
         ))}
       </Table>
 
-      <Table head={['Thread', 'Author', 'Comment', 'Date', 'Actions']}>
+      <Table stack head={['Thread', 'Author', 'Comment', 'Date', 'Actions']}>
         {comments.map((row) => (
           <tr key={row.id} style={rowS}>
-            <td style={tdS}>{threadTitleById[row.thread_id] || `Thread #${row.thread_id}`}</td>
-            <td style={tdS}>{row.author_name}</td>
-            <td style={{ ...tdS, maxWidth: 380 }}>{row.body}</td>
-            <td style={tdS}>{row.created_at}</td>
+            <td data-label="Thread" style={tdS}>{threadTitleById[row.thread_id] || `Thread #${row.thread_id}`}</td>
+            <td data-label="Author" style={tdS}>{row.author_name}</td>
+            <td data-label="Comment" style={{ ...tdS, whiteSpace: 'normal', overflowWrap: 'anywhere', maxWidth: 380 }}>{row.body}</td>
+            <td data-label="Date" style={tdS}>{row.created_at}</td>
             <td style={tdS}>
               <button className="btn btn--sm" onClick={() => removeComment(row.id)} style={{ borderColor: '#7a3b3b', color: '#e08a8a' }}>Delete</button>
             </td>
@@ -4113,10 +4113,10 @@ function DataTable<T>({ head, rows, renderRow, searchText, statusOf, statusOptio
   )
 }
 
-function Table({ head, children }: { head: string[]; children: React.ReactNode }) {
+function Table({ head, children, stack }: { head: string[]; children: React.ReactNode; stack?: boolean }) {
   return (
     <div className="glass admin-table-wrap" style={{ borderRadius: 14 }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5, minWidth: 640 }}>
+      <table className={stack ? 'admin-table--stack' : undefined} style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5, minWidth: 640 }}>
         <thead>
           <tr>{head.map((h) => <th key={h} style={thS}>{h}</th>)}</tr>
         </thead>
