@@ -3084,7 +3084,18 @@ section#challenge .challenge-features .ns-gain p {
   color: #d8d3c6;
   border-bottom: 1px solid rgba(201,168,76,0.08);
   line-height: 1.5;
+  /* Keep each cell on a single line so columns stay aligned and readable; the
+     table grows to its natural width and scrolls horizontally inside
+     .admin-table-wrap instead of crushing words character-by-character. */
+  white-space: nowrap;
+}
+/* Opt-in wrapping cell for long free text (messages, notes) — caps width and
+   wraps to a couple of lines instead of forcing a very wide table. */
+.admin-table td.admin-cell--wrap {
+  white-space: normal;
   overflow-wrap: anywhere;
+  min-width: 180px;
+  max-width: 280px;
 }
 .admin-table tbody tr:hover td { background: rgba(201,168,76,0.05); }
 .admin-table__empty {

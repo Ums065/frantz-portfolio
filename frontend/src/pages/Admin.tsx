@@ -936,7 +936,7 @@ export default function Admin() {
                   <td>{r.full_name}</td>
                   <td>{r.email}</td>
                   <td>{r.organization || '—'}</td>
-                  <td style={{ maxWidth: 240 }}>{r.message || '—'}</td>
+                  <td className="admin-cell--wrap">{r.message || '—'}</td>
                   <td>
                     <select value={r.status} onChange={(e) => setStatus(r.id, e.target.value)} style={selectS}>
                       <option value="new">new</option>
@@ -980,7 +980,7 @@ export default function Admin() {
                     <td>{o.order_no}</td>
                     <td>{o.customer_name}</td>
                     <td>{o.email}</td>
-                    <td style={{ maxWidth: 280 }}>{items}</td>
+                    <td className="admin-cell--wrap">{items}</td>
                     <td>${o.total}</td>
                     <td>{[o.payment_provider, o.payment_status, o.payment_method].filter(Boolean).join(' · ')}</td>
                     <td>
@@ -3105,7 +3105,7 @@ function CommunityAdmin() {
       <Table head={['Title', 'Audience', 'Pinned', 'Comments', 'Author', 'Date', 'Actions']}>
         {threads.map((row) => (
           <tr key={row.id} style={rowS}>
-            <td style={{ ...tdS, maxWidth: 280 }}>{row.title}</td>
+            <td style={{ ...tdS, whiteSpace: 'normal', overflowWrap: 'anywhere', maxWidth: 280 }}>{row.title}</td>
             <td style={tdS}>{row.audience}</td>
             <td style={tdS}>{row.is_pinned ? 'Yes' : '—'}</td>
             <td style={tdS}>{row.comment_count ?? 0}</td>
@@ -3223,7 +3223,7 @@ function RsvpsAdmin() {
               </select>
             </td>
             <td style={{ ...tdS, fontFamily: 'monospace', letterSpacing: '.04em' }}>{row.confirmation_code}</td>
-            <td style={{ ...tdS, maxWidth: 260 }}>{row.notes || '—'}</td>
+            <td style={{ ...tdS, whiteSpace: 'normal', overflowWrap: 'anywhere', maxWidth: 260 }}>{row.notes || '—'}</td>
             <td style={tdS}>{row.created_at}</td>
           </tr>
         ))}
@@ -4125,7 +4125,7 @@ function Table({ head, children }: { head: string[]; children: React.ReactNode }
 
 const wrapS: React.CSSProperties = { minHeight: '100vh', color: 'var(--white)', padding: '0 clamp(12px,4vw,24px) 60px', fontFamily: 'var(--f-body)' }
 const thS: React.CSSProperties = { textAlign: 'left', padding: '14px 16px', color: 'var(--gold-light)', fontWeight: 600, borderBottom: '1px solid var(--line)', textTransform: 'uppercase', fontSize: 11, letterSpacing: '.06em' }
-const tdS: React.CSSProperties = { padding: '13px 16px', verticalAlign: 'top', color: '#d8d3c6', overflowWrap: 'anywhere', wordBreak: 'break-word' }
+const tdS: React.CSSProperties = { padding: '13px 16px', verticalAlign: 'top', color: '#d8d3c6', whiteSpace: 'nowrap' }
 const rowS: React.CSSProperties = { borderBottom: '1px solid rgba(201,168,76,0.08)' }
 const selectS: React.CSSProperties = { background: '#15130c', color: '#e7d8a8', border: '1px solid var(--line)', borderRadius: 6, padding: '4px 8px' }
 

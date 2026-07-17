@@ -98,7 +98,7 @@ export default function BusinessRequestsAdminPanel() {
             <td style={{ fontWeight: 600 }}>{r.business_name}</td>
             <td>{LABEL[r.request_type] || r.request_type}</td>
             <td style={{ color: 'var(--muted)' }}>{[r.student_name, r.school_name].filter(Boolean).join(' · ') || '—'}</td>
-            <td style={{ maxWidth: 240 }}><span style={clamp}>{r.message || '—'}</span></td>
+            <td className="admin-cell--wrap"><span style={clamp}>{r.message || '—'}</span></td>
             <td><Pill status={r.status} /></td>
             <td style={{ whiteSpace: 'nowrap', color: 'var(--muted)' }}>{fmt(r.created_ts)}</td>
             <td><button className="btn btn--sm" onClick={(e) => { e.stopPropagation(); setOpen(r) }}>Review</button></td>

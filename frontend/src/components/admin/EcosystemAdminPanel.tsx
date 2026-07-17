@@ -224,7 +224,7 @@ export default function EcosystemAdminPanel() {
                 <td style={{ fontWeight: 600 }}>{r.org_name}</td>
                 <td style={{ textTransform: 'capitalize' }}>{r.role}</td>
                 <td style={{ textTransform: 'capitalize' }}>{cap(r.req_type)}</td>
-                <td style={{ maxWidth: 260 }}><span style={{ display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical', overflow: 'hidden', color: 'var(--muted)' } as React.CSSProperties}>{r.message || '—'}</span></td>
+                <td className="admin-cell--wrap"><span style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', color: 'var(--muted)' } as React.CSSProperties}>{r.message || '—'}</span></td>
                 <td><Pill status={r.status} /></td>
                 <td style={{ whiteSpace: 'nowrap', color: 'var(--muted)' }}>{fmt(r.created_ts)}</td>
                 <td><button className="btn btn--sm" onClick={(e) => { e.stopPropagation(); setOpenReq(r) }}>Review</button></td>
