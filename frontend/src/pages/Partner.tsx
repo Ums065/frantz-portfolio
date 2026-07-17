@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import EcosystemPortal, {
   S, StatTile, Section, DownloadList, EcoDocuments, EcoRequests, EcoAnnouncements, EcoAssignments,
-  EcoEventCalendar, LogoUploader, RequestButton, unseenAnnCount, markAnnSeen, type EcoReq, type EcoAssign, type PortalConfig,
+  EcoEventCalendar, EcoMessages, LogoUploader, RequestButton, unseenAnnCount, markAnnSeen, type EcoReq, type EcoAssign, type PortalConfig,
 } from './portal/EcosystemPortal'
 
 /* Partner Portal — helps grow the movement: toolkit + marketing resources,
@@ -107,6 +107,16 @@ const config: PortalConfig = {
           </>
         )
       },
+    },
+    {
+      key: 'messages',
+      label: 'Messages',
+      badge: (data) => Number(data?.messages_unread || 0),
+      render: (_data, reload) => (
+        <Section title="Messages with the program team">
+          <EcoMessages fetchUrl="ecosystem/partner/messages" sendUrl="ecosystem/partner/message" sendPayload={(body) => ({ body })} mine="user" onLoaded={reload} />
+        </Section>
+      ),
     },
     {
       key: 'updates',

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { api } from '../lib/api'
 import EcosystemPortal, {
   Section, EcoDocuments, EcoRequests, EcoAnnouncements, EcoAssignments, EcoStatusPill,
-  EcoEventCalendar, RequestButton, unseenAnnCount, markAnnSeen, type EcoReq, type EcoAssign, type PortalConfig,
+  EcoEventCalendar, EcoMessages, RequestButton, unseenAnnCount, markAnnSeen, type EcoReq, type EcoAssign, type PortalConfig,
 } from './portal/EcosystemPortal'
 
 /* Volunteer Portal — contribute time & expertise: opportunities, assignments,
@@ -174,6 +174,16 @@ const config: PortalConfig = {
           </Section>
         )
       },
+    },
+    {
+      key: 'messages',
+      label: 'Messages',
+      badge: (data) => Number(data?.messages_unread || 0),
+      render: (_data, reload) => (
+        <Section title="Messages with the program team">
+          <EcoMessages fetchUrl="ecosystem/volunteer/messages" sendUrl="ecosystem/volunteer/message" sendPayload={(body) => ({ body })} mine="user" onLoaded={reload} />
+        </Section>
+      ),
     },
     {
       key: 'updates',

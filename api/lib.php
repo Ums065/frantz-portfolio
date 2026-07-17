@@ -4159,6 +4159,7 @@ function ecosystem_dashboard_payload(string $role, array $user): array
     $out['requests'] = ecosystem_requests_for_user((int) $user['id']);
     $out['announcements'] = ecosystem_announcements_for_role($role);
     $out['assignments'] = ecosystem_assignments_for_user((int) $user['id']);
+    $out['messages_unread'] = ecosystem_messages_unread((int) $user['id'], 'user');
     return $out;
 }
 
@@ -4202,6 +4203,12 @@ function ecosystem_shared_ensure_schema(): void
     $pdo->exec("CREATE TABLE IF NOT EXISTS ecosystem_announcements (
         id INT AUTO_INCREMENT PRIMARY KEY, audience VARCHAR(20) NOT NULL DEFAULT 'all', title VARCHAR(180) NOT NULL,
         body TEXT DEFAULT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, INDEX idx_ecoann_aud (audience)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    // Direct 1:1 message thread between the admin team and an ecosystem account.
+    $pdo->exec("CREATE TABLE IF NOT EXISTS ecosystem_messages (
+        id INT AUTO_INCREMENT PRIMARY KEY, user_id INT NOT NULL, sender VARCHAR(10) NOT NULL,
+        body TEXT NOT NULL, read_by_admin TINYINT NOT NULL DEFAULT 0, read_by_user TINYINT NOT NULL DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, INDEX idx_ecomsg_user (user_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     // Admin-created assignments handed to a specific ecosystem account (e.g. assign a
     // volunteer to an event / a student mentoring slot). Feature C.
@@ -4288,6 +4295,58 @@ function ecosystem_assignment_respond(int $userId, int $id, string $action, stri
         notify('Assignment ' . $label, 'A volunteer has ' . $label . ' the assignment "' . (string) $a['title'] . '".' . ($note !== '' ? "\n\nNote: " . $note : ''));
     }
     return ecosystem_assignments_for_user($userId);
+}
+
+/* ---- Direct messaging: admin ⇄ ecosystem account (one thread per account) ---- */
+
+/** The full message thread for an account, oldest first. */
+function ecosystem_messages_for_user(int $userId): array
+{
+    ecosystem_shared_ensure_schema();
+    $s = db()->prepare('SELECT id, sender, body, UNIX_TIMESTAMP(created_at) AS created_ts FROM ecosystem_messages WHERE user_id = ? ORDER BY created_at ASC, id ASC');
+    $s->execute([$userId]);
+    return array_map(static fn(array $r): array => [
+        'id' => (int) $r['id'], 'sender' => (string) $r['sender'], 'body' => (string) $r['body'], 'created_ts' => (int) $r['created_ts'],
+    ], $s->fetchAll());
+}
+
+/** Unread messages for one side ('admin' reads user-sent; 'user' reads admin-sent). */
+function ecosystem_messages_unread(int $userId, string $reader): int
+{
+    ecosystem_shared_ensure_schema();
+    $col = $reader === 'admin' ? 'read_by_admin' : 'read_by_user';
+    $other = $reader === 'admin' ? 'user' : 'admin';
+    $s = db()->prepare("SELECT COUNT(*) FROM ecosystem_messages WHERE user_id = ? AND sender = ? AND $col = 0");
+    $s->execute([$userId, $other]);
+    return (int) $s->fetchColumn();
+}
+
+/** Mark the thread read for one side (called when they open it). */
+function ecosystem_messages_mark_read(int $userId, string $reader): void
+{
+    ecosystem_shared_ensure_schema();
+    $col = $reader === 'admin' ? 'read_by_admin' : 'read_by_user';
+    db()->prepare("UPDATE ecosystem_messages SET $col = 1 WHERE user_id = ?")->execute([$userId]);
+}
+
+/** Post a message from 'admin' or 'user'; notifies the other side. */
+function ecosystem_send_message(int $userId, string $sender, string $body): array
+{
+    ecosystem_shared_ensure_schema();
+    $body = trim($body);
+    if ($body === '') json(['error' => 'Please type a message first.'], 422);
+    $sender = $sender === 'admin' ? 'admin' : 'user';
+    // The sender has implicitly seen their own message.
+    $ra = $sender === 'admin' ? 1 : 0;
+    $ru = $sender === 'user' ? 1 : 0;
+    db()->prepare('INSERT INTO ecosystem_messages (user_id, sender, body, read_by_admin, read_by_user) VALUES (?,?,?,?,?)')
+        ->execute([$userId, $sender, mb_substr($body, 0, 4000), $ra, $ru]);
+    if ($sender === 'admin') {
+        if (function_exists('ecosystem_notify_user')) ecosystem_notify_user($userId, 'New message from the program team', $body);
+    } else {
+        if (function_exists('notify')) notify('New message from an ecosystem account', $body);
+    }
+    return ecosystem_messages_for_user($userId);
 }
 
 /** Merge recognition stats (hours / events_supported / students_mentored) into an

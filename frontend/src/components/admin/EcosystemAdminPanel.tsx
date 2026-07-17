@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { api } from '../../lib/api'
+import { EcoMessages } from '../../pages/portal/EcosystemPortal'
 
 /* Admin management for the ecosystem roles (sponsor / partner / media / volunteer)
    + business accounts. Record-friendly: filterable tables with a detail drawer,
@@ -566,6 +567,16 @@ function AccountModal({ acct, onClose, onApprovalChange }: { acct: EcoAccount; o
           ))}
           {assigns.length === 0 && <p style={{ color: 'var(--muted)', fontSize: 13, margin: 0 }}>No assignments yet.</p>}
         </div>
+      </div>
+
+      <div style={sect}>
+        <label style={lbl}>Direct Messages</label>
+        <EcoMessages
+          fetchUrl={`admin/ecosystem/messages/${uid}`}
+          sendUrl="admin/ecosystem/message"
+          sendPayload={(body) => ({ user_id: uid, body })}
+          mine="admin"
+        />
       </div>
     </Modal>
   )

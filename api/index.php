@@ -1512,6 +1512,19 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             ecosystem_assignment_delete((int) $m[1]);
             json(['message' => 'Assignment removed.']);
         }
+        // Direct messaging: admin side of the thread with an ecosystem account.
+        case $method === 'GET' && preg_match('#^admin/ecosystem/messages/(\d+)$#', $route, $m) === 1: {
+            require_admin();
+            ecosystem_messages_mark_read((int) $m[1], 'admin');
+            json(['messages' => ecosystem_messages_for_user((int) $m[1])]);
+        }
+        case $key === 'POST admin/ecosystem/message': {
+            require_admin();
+            $b = body();
+            $uid = (int) (field($b, 'user_id') ?: 0);
+            if ($uid <= 0) json(['error' => 'A recipient is required.'], 422);
+            json(['messages' => ecosystem_send_message($uid, 'admin', (string) field($b, 'body'))], 201);
+        }
 
         /* ---------------- DEMO ONE-CLICK LOGIN (presentations; DEMO_MODE=off to disable) ---------------- */
         case $key === 'GET demo/accounts': {
@@ -1570,6 +1583,16 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             $b = body();
             $assignments = ecosystem_assignment_respond((int) $u['id'], (int) $m[2], (string) field($b, 'action'), trim((string) field($b, 'note')));
             json(['message' => 'Assignment updated.', 'assignments' => $assignments]);
+        }
+        // Direct messaging: the account's own thread with the program team.
+        case $method === 'GET' && preg_match('#^ecosystem/(sponsor|partner|media|volunteer)/messages$#', $route, $m) === 1: {
+            $u = require_ecosystem($m[1]);
+            ecosystem_messages_mark_read((int) $u['id'], 'user');
+            json(['messages' => ecosystem_messages_for_user((int) $u['id'])]);
+        }
+        case $method === 'POST' && preg_match('#^ecosystem/(sponsor|partner|media|volunteer)/message$#', $route, $m) === 1: {
+            $u = require_ecosystem($m[1]);
+            json(['messages' => ecosystem_send_message((int) $u['id'], 'user', (string) field(body(), 'body'))], 201);
         }
 
         /* ---------------- OUR PARTNERS (dynamic content directory) ---------------- */

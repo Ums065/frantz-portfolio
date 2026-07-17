@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
 import EcosystemPortal, {
   Section, DownloadList, EcoDocuments, EcoRequests, EcoAnnouncements, EcoAssignments,
-  EcoStatusPill, LogoUploader, RequestButton, unseenAnnCount, markAnnSeen, type EcoReq, type EcoAssign, type PortalConfig,
+  EcoStatusPill, EcoMessages, LogoUploader, RequestButton, unseenAnnCount, markAnnSeen, type EcoReq, type EcoAssign, type PortalConfig,
 } from './portal/EcosystemPortal'
 
 /* Media Portal — a press room for journalists & outlets: official statistics,
@@ -152,6 +152,16 @@ const config: PortalConfig = {
           </>
         )
       },
+    },
+    {
+      key: 'messages',
+      label: 'Messages',
+      badge: (data) => Number(data?.messages_unread || 0),
+      render: (_data, reload) => (
+        <Section title="Messages with the program team">
+          <EcoMessages fetchUrl="ecosystem/media/messages" sendUrl="ecosystem/media/message" sendPayload={(body) => ({ body })} mine="user" onLoaded={reload} />
+        </Section>
+      ),
     },
     {
       key: 'updates',

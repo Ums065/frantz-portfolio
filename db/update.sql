@@ -324,6 +324,25 @@ CALL add_column_if_missing('ecosystem_documents', 'label', 'varchar(160) NOT NUL
 CALL add_column_if_missing('ecosystem_documents', 'file_url', 'varchar(400) NOT NULL', 'label');
 CALL add_column_if_missing('ecosystem_documents', 'created_at', 'timestamp NULL DEFAULT CURRENT_TIMESTAMP', 'file_url');
 
+-- ---------- ecosystem_messages ----------
+CREATE TABLE IF NOT EXISTS `ecosystem_messages` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `user_id` int NOT NULL,
+  `sender` varchar(10) NOT NULL,
+  `body` text NOT NULL,
+  `read_by_admin` tinyint NOT NULL DEFAULT '0',
+  `read_by_user` tinyint NOT NULL DEFAULT '0',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_ecomsg_user` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CALL add_column_if_missing('ecosystem_messages', 'user_id', 'int NOT NULL', 'id');
+CALL add_column_if_missing('ecosystem_messages', 'sender', 'varchar(10) NOT NULL', 'user_id');
+CALL add_column_if_missing('ecosystem_messages', 'body', 'text NOT NULL', 'sender');
+CALL add_column_if_missing('ecosystem_messages', 'read_by_admin', 'tinyint NOT NULL DEFAULT ''0''', 'body');
+CALL add_column_if_missing('ecosystem_messages', 'read_by_user', 'tinyint NOT NULL DEFAULT ''0''', 'read_by_admin');
+CALL add_column_if_missing('ecosystem_messages', 'created_at', 'timestamp NULL DEFAULT CURRENT_TIMESTAMP', 'read_by_user');
+
 -- ---------- ecosystem_requests ----------
 CREATE TABLE IF NOT EXISTS `ecosystem_requests` (
   `id` int NOT NULL AUTO_INCREMENT,

@@ -186,6 +186,55 @@ export function EcoEventCalendar({ role, requests, reload, label, prefix }: { ro
   )
 }
 
+export interface EcoMessage { id: number; sender: string; body: string; created_ts: number }
+/** Direct message thread (admin ⇄ ecosystem account). Generic: the caller
+   supplies the fetch/send endpoints, the payload builder, and which side "me"
+   is — so the same chat renders on both the admin panel and the dashboards. */
+export function EcoMessages({ fetchUrl, sendUrl, sendPayload, mine, onLoaded }: {
+  fetchUrl: string; sendUrl: string; sendPayload: (body: string) => Record<string, unknown>; mine: 'admin' | 'user'; onLoaded?: () => void
+}) {
+  const [msgs, setMsgs] = useState<EcoMessage[]>([])
+  const [text, setText] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [ready, setReady] = useState(false)
+  const load = useCallback(() => api.get<{ messages: EcoMessage[] }>(fetchUrl)
+    .then((d) => { setMsgs(d.messages || []); setReady(true) })
+    .catch(() => setReady(true)), [fetchUrl])
+  useEffect(() => { void load().then(() => onLoaded?.()) }, [load]) // eslint-disable-line react-hooks/exhaustive-deps
+  const send = async () => {
+    const b = text.trim()
+    if (!b) return
+    setBusy(true)
+    try { const d = await api.post<{ messages: EcoMessage[] }>(sendUrl, sendPayload(b)); setMsgs(d.messages || []); setText('') }
+    catch (e) { window.fcToast?.(e instanceof Error ? e.message : 'Could not send your message.') }
+    finally { setBusy(false) }
+  }
+  return (
+    <div style={{ display: 'grid', gap: 12 }}>
+      <div style={{ display: 'grid', gap: 10, maxHeight: 380, overflowY: 'auto', padding: '4px 2px' }}>
+        {!ready ? <p style={{ color: 'var(--muted)', fontSize: 13, margin: 0 }}>Loading…</p>
+          : msgs.length === 0 ? <p style={{ color: 'var(--muted)', fontSize: 13, margin: 0 }}>No messages yet. Start the conversation below.</p>
+          : msgs.map((m) => {
+            const isMine = m.sender === mine
+            return (
+              <div key={m.id} style={{ display: 'flex', justifyContent: isMine ? 'flex-end' : 'flex-start' }}>
+                <div style={{ maxWidth: '80%', background: isMine ? 'linear-gradient(180deg, rgba(40,33,18,0.7), rgba(20,17,10,0.7))' : 'rgba(255,255,255,0.04)', border: '1px solid var(--line)', borderRadius: 12, padding: '8px 12px' }}>
+                  <div style={{ fontSize: 10, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--gold-light)', marginBottom: 2 }}>{isMine ? 'You' : (m.sender === 'admin' ? 'Program team' : 'Them')}</div>
+                  <div style={{ color: '#ece6d8', fontSize: 13.5, lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{m.body}</div>
+                  <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 3 }}>{ecoDate(m.created_ts)}</div>
+                </div>
+              </div>
+            )
+          })}
+      </div>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <input style={{ ...S.input, flex: 1 }} value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send() } }} placeholder="Type a message…" />
+        <button className="btn btn--sm btn--solid" disabled={busy || !text.trim()} onClick={send}>{busy ? '…' : 'Send'}</button>
+      </div>
+    </div>
+  )
+}
+
 /** A titled card section with an optional action on the right. */
 export function Section({ title, children, right }: { title: string; children: React.ReactNode; right?: React.ReactNode }) {
   return (

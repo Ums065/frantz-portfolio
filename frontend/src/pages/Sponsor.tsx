@@ -1,6 +1,6 @@
 import EcosystemPortal, {
   Section, DownloadList, EcoDocuments, EcoRequests, EcoAnnouncements, EcoAssignments,
-  LogoUploader, RequestButton, unseenAnnCount, markAnnSeen, type EcoAssign, type PortalConfig,
+  LogoUploader, RequestButton, EcoMessages, unseenAnnCount, markAnnSeen, type EcoAssign, type PortalConfig,
 } from './portal/EcosystemPortal'
 
 /* Sponsor Portal — an investment portal: package + recognition, branding, live
@@ -101,6 +101,16 @@ const config: PortalConfig = {
           </Section>
         )
       },
+    },
+    {
+      key: 'messages',
+      label: 'Messages',
+      badge: (data) => Number(data?.messages_unread || 0),
+      render: (_data, reload) => (
+        <Section title="Messages with the program team">
+          <EcoMessages fetchUrl="ecosystem/sponsor/messages" sendUrl="ecosystem/sponsor/message" sendPayload={(body) => ({ body })} mine="user" onLoaded={reload} />
+        </Section>
+      ),
     },
     {
       key: 'updates',
