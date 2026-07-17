@@ -7,6 +7,7 @@ import { resolveDashboardRoute } from '../lib/dashboardRoute'
 import OfferStepper, { type OfferStage, type OfferEvent } from '../components/OfferStepper'
 import { unseenAnnCount, markAnnSeen, unseenReqCount, markReqSeen } from './portal/EcosystemPortal'
 import { useLiveRefresh } from '../hooks/useLiveRefresh'
+import { statHint } from '../lib/statHints'
 
 /* Business Portal — access, review & opportunity requests for a verified business.
    The business is NOT a judge: it cannot rate, score or rank students, and cannot
@@ -676,7 +677,7 @@ function DetailBlock({ label, children }: { label: string; children: React.React
 
 function StatTile({ label, value }: { label: string; value: number }) {
   return (
-    <div style={{ ...cardS, textAlign: 'center' }}>
+    <div data-hint={statHint(label)} style={{ ...cardS, textAlign: 'center', position: 'relative' }}>
       <div className="gold-text" style={{ fontFamily: 'var(--f-serif)', fontSize: 32, fontWeight: 800 }}>{value}</div>
       <div style={{ ...eyebrow, marginTop: 4 }}>{label}</div>
     </div>

@@ -7,6 +7,7 @@ import { useAuth } from '../context/AuthContext'
 import { FRANTZ_SIGNATURE } from '../lib/brandAssets'
 import { useSeo } from '../hooks/useSeo'
 import { resolveDashboardRoute } from '../lib/dashboardRoute'
+import { statHint } from '../lib/statHints'
 import { awards } from '../lib/awards'
 import TermsAgreement from '../components/TermsAgreement'
 import DashboardGuide from '../components/DashboardGuide'
@@ -2832,7 +2833,7 @@ export default function NewSchool() {
                   </div>
                   <div className="ns-dashboard-hero__stats" aria-label="Quick stats">
                     {dashboardHero.stats.map((stat) => (
-                      <div className="ns-dashboard-hero__stat" key={stat.label}>
+                      <div className="ns-dashboard-hero__stat" key={stat.label} data-hint={statHint(stat.label)}>
                         <span>{stat.label}</span>
                         <strong>{String(stat.value)}</strong>
                       </div>

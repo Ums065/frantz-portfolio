@@ -5,6 +5,7 @@ import { api } from '../../lib/api'
 import { useAuth } from '../../context/AuthContext'
 import { useSeo } from '../../hooks/useSeo'
 import { useLiveRefresh } from '../../hooks/useLiveRefresh'
+import { statHint } from '../../lib/statHints'
 import { resolveDashboardRoute } from '../../lib/dashboardRoute'
 
 /* Shared shell for the ecosystem role portals (Sponsor / Partner / Media /
@@ -21,9 +22,9 @@ export const S = {
   eyebrow: { fontSize: 11.5, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--gold)' } as React.CSSProperties,
 }
 
-export function StatTile({ label, value }: { label: string; value: number | string }) {
+export function StatTile({ label, value, hint }: { label: string; value: number | string; hint?: string }) {
   return (
-    <div style={{ position: 'relative', textAlign: 'center', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--line)', borderRadius: 14, padding: '18px 14px', overflow: 'hidden' }}>
+    <div data-hint={statHint(label, hint)} style={{ position: 'relative', textAlign: 'center', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--line)', borderRadius: 14, padding: '18px 14px' }}>
       <div aria-hidden="true" style={{ position: 'absolute', top: 0, left: '18%', right: '18%', height: 2, background: 'linear-gradient(90deg,transparent,var(--gold),transparent)', opacity: 0.7 }} />
       <div className="gold-text" style={{ fontFamily: 'var(--f-serif)', fontSize: 32, fontWeight: 800, lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{value}</div>
       <div style={{ ...S.eyebrow, marginTop: 6, color: 'var(--muted)' }}>{label}</div>
