@@ -3563,7 +3563,7 @@ function business_request_types(): array { return ['implementation', 'contact_sc
 function business_requests_for_user(int $userId): array
 {
     business_ensure_schema();
-    $stmt = db()->prepare('SELECT id, request_type, submission_id, student_id, student_name, school_name, message, status, admin_note, UNIX_TIMESTAMP(created_at) AS created_ts FROM business_requests WHERE business_user_id = ? ORDER BY created_at DESC');
+    $stmt = db()->prepare('SELECT id, request_type, submission_id, student_id, student_name, school_name, message, status, admin_note, UNIX_TIMESTAMP(created_at) AS created_ts, UNIX_TIMESTAMP(reviewed_at) AS reviewed_ts FROM business_requests WHERE business_user_id = ? ORDER BY created_at DESC');
     $stmt->execute([$userId]);
     return array_map(static fn(array $r): array => [
         'id' => (int) $r['id'],
@@ -3576,6 +3576,7 @@ function business_requests_for_user(int $userId): array
         'status' => $r['status'],
         'admin_note' => (string) ($r['admin_note'] ?? ''),
         'created_ts' => (int) $r['created_ts'],
+        'reviewed_ts' => (int) ($r['reviewed_ts'] ?? 0),
     ], $stmt->fetchAll());
 }
 
@@ -3724,6 +3725,7 @@ function business_request_update(int $id, string $status, string $note, int $adm
     if (!in_array($status, ['pending', 'approved', 'declined', 'info_needed'], true)) json(['error' => 'Invalid status.'], 422);
     // Rejecting requires a reason (mandatory), so the business owner always learns why.
     if ($status === 'declined' && trim($note) === '') json(['error' => 'A reason is required when declining a request.'], 422);
+    if ($status === 'info_needed' && trim($note) === '') json(['error' => 'Please write what information you need from the business.'], 422);
     $own = db()->prepare('SELECT business_user_id, request_type, student_id FROM business_requests WHERE id = ? LIMIT 1');
     $own->execute([$id]);
     $req = $own->fetch();
@@ -4393,9 +4395,9 @@ function ecosystem_documents_for_user(int $userId): array
 function ecosystem_requests_for_user(int $userId): array
 {
     ecosystem_shared_ensure_schema();
-    $s = db()->prepare('SELECT id, req_type, message, status, admin_note, UNIX_TIMESTAMP(created_at) AS created_ts FROM ecosystem_requests WHERE user_id = ? ORDER BY created_at DESC');
+    $s = db()->prepare('SELECT id, req_type, message, status, admin_note, UNIX_TIMESTAMP(created_at) AS created_ts, UNIX_TIMESTAMP(reviewed_at) AS reviewed_ts FROM ecosystem_requests WHERE user_id = ? ORDER BY created_at DESC');
     $s->execute([$userId]);
-    return array_map(static fn(array $r): array => ['id' => (int) $r['id'], 'req_type' => $r['req_type'], 'message' => (string) ($r['message'] ?? ''), 'status' => $r['status'], 'admin_note' => (string) ($r['admin_note'] ?? ''), 'created_ts' => (int) $r['created_ts']], $s->fetchAll());
+    return array_map(static fn(array $r): array => ['id' => (int) $r['id'], 'req_type' => $r['req_type'], 'message' => (string) ($r['message'] ?? ''), 'status' => $r['status'], 'admin_note' => (string) ($r['admin_note'] ?? ''), 'created_ts' => (int) $r['created_ts'], 'reviewed_ts' => (int) ($r['reviewed_ts'] ?? 0)], $s->fetchAll());
 }
 
 /** Applicant reply to a "Needs Info" request: append their answer to the message
@@ -4580,6 +4582,10 @@ function ecosystem_request_update(int $id, string $status, string $note, int $ad
 {
     ecosystem_shared_ensure_schema();
     if (!in_array($status, ['pending', 'approved', 'declined', 'info_needed'], true)) json(['error' => 'Invalid status.'], 422);
+    // A reason is mandatory when declining (and when asking for more info, so the
+    // applicant always knows what to do) — the requester sees it in their dashboard.
+    if ($status === 'declined' && trim($note) === '') json(['error' => 'A reason is required when declining a request.'], 422);
+    if ($status === 'info_needed' && trim($note) === '') json(['error' => 'Please write what information you need from the applicant.'], 422);
     // Look up the owner + request type first so we can notify them (Feature E).
     $own = db()->prepare('SELECT user_id, req_type FROM ecosystem_requests WHERE id = ? LIMIT 1');
     $own->execute([$id]);

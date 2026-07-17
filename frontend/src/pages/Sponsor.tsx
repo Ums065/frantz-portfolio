@@ -1,6 +1,6 @@
 import EcosystemPortal, {
   Section, DownloadList, EcoDocuments, EcoRequests, EcoAnnouncements, EcoAssignments,
-  LogoUploader, RequestButton, EcoMessages, unseenAnnCount, markAnnSeen, type EcoAssign, type PortalConfig,
+  LogoUploader, RequestButton, EcoMessages, unseenAnnCount, markAnnSeen, unseenReqCount, markReqSeen, type EcoAssign, type PortalConfig,
 } from './portal/EcosystemPortal'
 
 /* Sponsor Portal — an investment portal: package + recognition, branding, live
@@ -115,8 +115,8 @@ const config: PortalConfig = {
     {
       key: 'updates',
       label: 'Updates',
-      badge: (data) => unseenAnnCount('sponsor', data?.announcements),
-      onActivate: (data) => markAnnSeen('sponsor', data?.announcements),
+      badge: (data) => unseenAnnCount('sponsor', data?.announcements) + unseenReqCount('sponsor', data?.requests),
+      onActivate: (data) => { markAnnSeen('sponsor', data?.announcements); markReqSeen('sponsor', data?.requests) },
       render: (data, reload) => (
         <>
           <Section title="Announcements"><EcoAnnouncements items={data?.announcements} /></Section>

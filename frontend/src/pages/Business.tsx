@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { useSeo } from '../hooks/useSeo'
 import { resolveDashboardRoute } from '../lib/dashboardRoute'
 import OfferStepper, { type OfferStage, type OfferEvent } from '../components/OfferStepper'
-import { unseenAnnCount, markAnnSeen } from './portal/EcosystemPortal'
+import { unseenAnnCount, markAnnSeen, unseenReqCount, markReqSeen } from './portal/EcosystemPortal'
 import { useLiveRefresh } from '../hooks/useLiveRefresh'
 
 /* Business Portal — access, review & opportunity requests for a verified business.
@@ -67,6 +67,7 @@ interface BizRequest {
   status: string
   admin_note: string
   created_ts: number
+  reviewed_ts?: number
 }
 interface BizOffer {
   id: number
@@ -180,10 +181,11 @@ export default function Business() {
   // Keep interview/offer/announcement counters live without a manual refresh.
   useLiveRefresh(() => { void loadDashboard(); void loadOffers() }, { enabled: !!user && (isBusiness || isAdmin) && approved })
 
-  // Clear the Updates announcement notification once that tab is opened.
+  // Clear the notification badges once their tab is opened.
   const [, setAnnBump] = useState(0)
   useEffect(() => {
     if (tab === 'updates') { markAnnSeen('business', data?.announcements ?? []); setAnnBump((x) => x + 1) }
+    if (tab === 'requests') { markReqSeen('business', data?.requests ?? []); setAnnBump((x) => x + 1) }
   }, [tab, data])
 
   const submitRequest = async () => {
@@ -340,11 +342,12 @@ export default function Business() {
   const updatesCount = documents.length + announcements.length
   const activePipeline = offers.filter((o) => !o.stage?.rejected && o.stage?.key !== 'confirmed').length
   const annUnseen = unseenAnnCount('business', announcements)
+  const reqUnseen = unseenReqCount('business', requests)
   const NAV: Array<{ key: Tab; label: string; badge?: number }> = [
     { key: 'interviews', label: `Interviews (${interviews.length})` },
     { key: 'solutions', label: `Student Solutions (${solutionInterviews.length})` },
     { key: 'pipeline', label: `Internship Offers${offers.length ? ` (${offers.length})` : ''}` },
-    { key: 'requests', label: `My Requests (${requests.length})` },
+    { key: 'requests', label: `My Requests (${requests.length})`, badge: reqUnseen },
     { key: 'updates', label: `Updates${updatesCount ? ` (${updatesCount})` : ''}`, badge: annUnseen },
     { key: 'profile', label: 'Business Profile' },
   ]

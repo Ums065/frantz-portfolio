@@ -347,10 +347,14 @@ function RequestModal({ req, onClose, onDone }: { req: EcoReq; onClose: () => vo
       <label style={{ ...lbl, marginTop: 12 }}>Note to the applicant <span style={{ textTransform: 'none', color: 'var(--muted)', fontWeight: 400 }}>(for “Needs Info”, write what you need)</span></label>
       <textarea style={{ ...inp, minHeight: 70, resize: 'vertical' }} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Optional note — the applicant sees this…" />
       <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
-        {([['approved', 'Approve'], ['info_needed', 'Needs Info'], ['declined', 'Decline']] as const).map(([st, l]) => (
-          <button key={st} className={`btn btn--sm${req.status === st ? ' btn--solid' : ''}`} disabled={!!busy} onClick={() => act(st)}>{busy === st ? '…' : l}{req.status === st ? ' ✓' : ''}</button>
-        ))}
+        {([['approved', 'Approve'], ['info_needed', 'Needs Info'], ['declined', 'Decline']] as const).map(([st, l]) => {
+          const needsNote = (st === 'declined' || st === 'info_needed') && !note.trim()
+          return (
+            <button key={st} className={`btn btn--sm${req.status === st ? ' btn--solid' : ''}`} disabled={!!busy || needsNote} title={needsNote ? 'Add a reason/note first' : ''} onClick={() => act(st)}>{busy === st ? '…' : l}{req.status === st ? ' ✓' : ''}</button>
+          )
+        })}
       </div>
+      {!note.trim() && <p style={{ color: 'var(--muted)', fontSize: 11.5, margin: '6px 0 0' }}>A note is required to Decline or request more info.</p>}
       {/* One-click: approve the request AND hand the person an assignment for it. */}
       <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--line)' }}>
         <button className="btn btn--sm btn--solid" disabled={!!busy} style={{ width: '100%' }} onClick={approveAssign}>

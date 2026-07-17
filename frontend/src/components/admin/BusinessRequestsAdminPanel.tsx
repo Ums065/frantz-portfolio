@@ -171,10 +171,14 @@ function BizRequestModal({ req, onClose, onDone }: { req: BizAdminRequest; onClo
       <textarea style={{ ...inp, minHeight: 70, resize: 'vertical' }} value={note} onChange={(e) => setNote(e.target.value)} placeholder="The business sees this note…" />
       {err && <p style={{ color: '#ff9a9a', fontSize: 12.5, margin: '8px 0 0' }}>{err}</p>}
       <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
-        {([['approved', 'Approve'], ['info_needed', 'Needs Info'], ['declined', 'Decline']] as const).map(([st, l]) => (
-          <button key={st} className={`btn btn--sm${req.status === st ? ' btn--solid' : ''}`} disabled={!!busy} onClick={() => act(st)}>{busy === st ? '…' : l}{req.status === st ? ' ✓' : ''}</button>
-        ))}
+        {([['approved', 'Approve'], ['info_needed', 'Needs Info'], ['declined', 'Decline']] as const).map(([st, l]) => {
+          const needsNote = (st === 'declined' || st === 'info_needed') && !note.trim()
+          return (
+            <button key={st} className={`btn btn--sm${req.status === st ? ' btn--solid' : ''}`} disabled={!!busy || needsNote} title={needsNote ? 'Add a reason/note first' : ''} onClick={() => act(st)}>{busy === st ? '…' : l}{req.status === st ? ' ✓' : ''}</button>
+          )
+        })}
       </div>
+      {!note.trim() && <p style={{ color: 'var(--muted)', fontSize: 11.5, margin: '6px 0 0' }}>A note is required to Decline or request more info.</p>}
     </Modal>
   )
 }

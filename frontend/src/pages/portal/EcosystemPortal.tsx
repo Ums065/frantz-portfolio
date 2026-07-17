@@ -57,13 +57,26 @@ export function markAnnSeen(role: string, anns?: Array<{ created_ts: number }>):
   if (!anns?.length) return
   try { localStorage.setItem(`fc_ann_seen_${role}`, String(anns.reduce((m, a) => Math.max(m, a.created_ts || 0), 0))) } catch { /* ignore */ }
 }
+
+/* Unseen request-decision notifications: requests the admin has just
+   approved / declined / marked needs-info that the requester hasn't seen. */
+export function unseenReqCount(role: string, reqs?: Array<{ status: string; reviewed_ts?: number }>): number {
+  if (!reqs?.length) return 0
+  let seen = 0
+  try { seen = Number(localStorage.getItem(`fc_req_seen_${role}`) || 0) } catch { /* ignore */ }
+  return reqs.filter((r) => ['declined', 'info_needed', 'approved'].includes((r.status || '').toLowerCase()) && (r.reviewed_ts || 0) > seen).length
+}
+export function markReqSeen(role: string, reqs?: Array<{ reviewed_ts?: number }>): void {
+  if (!reqs?.length) return
+  try { localStorage.setItem(`fc_req_seen_${role}`, String(reqs.reduce((m, r) => Math.max(m, r.reviewed_ts || 0), 0))) } catch { /* ignore */ }
+}
 const ecoStatus = (s: string): React.CSSProperties => {
   const m: Record<string, string> = { approved: 'var(--gold-light)', declined: '#ff9a9a', info_needed: 'var(--gold)', pending: 'var(--muted)' }
   return { color: m[s] || 'var(--muted)', fontWeight: 700, fontSize: 11, textTransform: 'uppercase', letterSpacing: '.05em', flex: '0 0 auto' }
 }
 
 export interface EcoDoc { id: number; doc_type: string; label: string; url: string; created_ts: number }
-export interface EcoReq { id: number; req_type: string; message: string; status: string; admin_note: string; created_ts: number }
+export interface EcoReq { id: number; req_type: string; message: string; status: string; admin_note: string; created_ts: number; reviewed_ts?: number }
 export interface EcoAnn { id: number; title: string; body: string; created_ts: number }
 export interface EcoAssign { id: number; title: string; detail: string; assign_date: string | null; status: string; volunteer_note: string; created_ts: number; responded_ts: number }
 

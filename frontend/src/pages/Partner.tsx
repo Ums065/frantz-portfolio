@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import EcosystemPortal, {
   S, StatTile, Section, DownloadList, EcoDocuments, EcoRequests, EcoAnnouncements, EcoAssignments,
-  EcoEventCalendar, EcoMessages, LogoUploader, RequestButton, unseenAnnCount, markAnnSeen, type EcoReq, type EcoAssign, type PortalConfig,
+  EcoEventCalendar, EcoMessages, LogoUploader, RequestButton, unseenAnnCount, markAnnSeen, unseenReqCount, markReqSeen, type EcoReq, type EcoAssign, type PortalConfig,
 } from './portal/EcosystemPortal'
 
 /* Partner Portal — helps grow the movement: toolkit + marketing resources,
@@ -121,8 +121,8 @@ const config: PortalConfig = {
     {
       key: 'updates',
       label: 'Updates',
-      badge: (data) => unseenAnnCount('partner', data?.announcements),
-      onActivate: (data) => markAnnSeen('partner', data?.announcements),
+      badge: (data) => unseenAnnCount('partner', data?.announcements) + unseenReqCount('partner', data?.requests),
+      onActivate: (data) => { markAnnSeen('partner', data?.announcements); markReqSeen('partner', data?.requests) },
       render: (data, reload) => (
         <>
           <Section title="Announcements"><EcoAnnouncements items={data?.announcements} /></Section>
