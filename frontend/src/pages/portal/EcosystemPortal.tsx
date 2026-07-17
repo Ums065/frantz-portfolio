@@ -241,7 +241,7 @@ export function EcoMessages({ fetchUrl, sendUrl, sendPayload, mine, onLoaded }: 
           })}
       </div>
       <div style={{ display: 'flex', gap: 8 }}>
-        <input style={{ ...S.input, flex: 1 }} value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send() } }} placeholder="Type a message…" />
+        <input style={{ ...S.input, flex: 1, minWidth: 0 }} value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send() } }} placeholder="Type a message…" />
         <button className="btn btn--sm btn--solid" disabled={busy || !text.trim()} onClick={send}>{busy ? '…' : 'Send'}</button>
       </div>
     </div>

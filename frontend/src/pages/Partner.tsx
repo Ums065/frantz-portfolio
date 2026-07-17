@@ -15,7 +15,7 @@ function ReferralCard({ code }: { code: string }) {
   const copy = async () => { try { await navigator.clipboard.writeText(link); setCopied(true); setTimeout(() => setCopied(false), 1500) } catch { /* ignore */ } }
   return (
     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-      <input readOnly value={link} style={{ ...S.input, flex: 1, minWidth: 240 }} onFocus={(e) => e.currentTarget.select()} />
+      <input readOnly value={link} style={{ ...S.input, flex: '1 1 200px', minWidth: 0 }} onFocus={(e) => e.currentTarget.select()} />
       <button className="btn btn--sm btn--solid" onClick={copy}>{copied ? 'Copied ✓' : 'Copy'}</button>
     </div>
   )
