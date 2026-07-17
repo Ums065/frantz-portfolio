@@ -693,7 +693,7 @@ export default function Admin() {
           <span className="ns-rankrow__name">{kind === 'student' ? p.full_name : p.teacher_full_name}</span>
           <span className="ns-rankrow__meta">{kind === 'student' ? `${p.interview_count ?? 0}/10 · ${p.submission_status || '—'}` : `${p.students_total ?? 0} students`}</span>
           <span className="ns-rankrow__pts">{(kind === 'student' ? (p.final_score ?? p.student_points) : p.teacher_points) ?? 0} pts</span>
-          <span className="ns-rankrow__go" aria-hidden="true">?</span>
+          <span className="ns-rankrow__go" aria-hidden="true">→</span>
         </button>
       ))}
     </div>
@@ -895,7 +895,7 @@ export default function Admin() {
                       <span className="admin-stat__label">{card.label}</span>
                       <strong>{card.value === undefined ? 'Open' : card.value}</strong>
                       <p>{card.hint}</p>
-                      <span className="admin-stat__go" aria-hidden="true">?</span>
+                      <span className="admin-stat__go" aria-hidden="true">→</span>
                     </button>
                   ))}
                 </div>
@@ -1274,7 +1274,7 @@ export default function Admin() {
                         <td>{s.final_score ?? s.student_points ?? 0}</td>
                         <td>{s.interview_count ?? 0}/10</td>
                         <td>{s.submission_status || '—'}</td>
-                        <td><span className="admin-linkcell">View ?</span></td>
+                        <td><span className="admin-linkcell">View →</span></td>
                       </tr>
                     )}
                   />
@@ -1294,7 +1294,7 @@ export default function Admin() {
                         <td>{t.students_total ?? 0}</td>
                         <td>{t.teacher_points ?? 0}</td>
                         <td>{t.status || '—'}</td>
-                        <td><span className="admin-linkcell">View ?</span></td>
+                        <td><span className="admin-linkcell">View →</span></td>
                       </tr>
                     )}
                   />
@@ -1997,7 +1997,7 @@ function AwardsAdmin() {
             <td style={tdS}>{a.title}</td>
             <td style={tdS}>{a.year || '—'}</td>
             <td style={tdS}>{a.level || '—'}</td>
-            <td style={tdS}>{a.is_featured ? '?' : '—'}</td>
+            <td style={tdS}>{a.is_featured ? '★' : '—'}</td>
             <td style={tdS}>{a.sort_order}</td>
             <td style={tdS}>
               <div style={{ display: 'flex', gap: 6 }}>
@@ -2183,7 +2183,7 @@ function PostsAdmin() {
             <td style={tdS}>{p.cover_image ? <img src={p.cover_image} alt="" style={{ width: 52, height: 32, objectFit: 'cover', borderRadius: 4 }} /> : '—'}</td>
             <td style={tdS}>{p.title}</td>
             <td style={tdS}>{p.category || '—'}</td>
-            <td style={tdS}>{p.is_featured ? '?' : '—'}</td>
+            <td style={tdS}>{p.is_featured ? '★' : '—'}</td>
             <td style={tdS}>{p.published_at}</td>
             <td style={tdS}><div style={{ display: 'flex', gap: 6 }}>
               <button className="btn btn--sm" onClick={() => setEditing(p)}>Edit</button>
@@ -2841,7 +2841,7 @@ function TestimonialsAdmin() {
             <td style={{ ...tdS, maxWidth: 300 }}>{row.quote}</td>
             <td style={tdS}>{row.author_name}</td>
             <td style={tdS}>{row.company || '—'}</td>
-            <td style={tdS}>{row.is_featured ? '?' : '—'}</td>
+            <td style={tdS}>{row.is_featured ? '★' : '—'}</td>
             <td style={tdS}>{row.sort_order}</td>
             <td style={tdS}>
               <div style={{ display: 'flex', gap: 6 }}>
@@ -2967,7 +2967,7 @@ function MediaAdmin() {
           <tr key={row.id} style={rowS}>
             <td style={tdS}>{row.title}</td>
             <td style={tdS}>{row.type}</td>
-            <td style={tdS}>{row.is_featured ? '?' : '—'}</td>
+            <td style={tdS}>{row.is_featured ? '★' : '—'}</td>
             <td style={tdS}>{row.published_at || '—'}</td>
             <td style={tdS}>
               <div style={{ display: 'flex', gap: 6 }}>
