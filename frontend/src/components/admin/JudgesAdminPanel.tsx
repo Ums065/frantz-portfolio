@@ -239,17 +239,17 @@ export default function JudgesAdminPanel() {
         {filteredJudges.length === 0 ? <p className="msub">No judges match.</p> : (
           <>
             <div className="admin-table-wrap">
-              <table className="admin-table">
+              <table className="admin-table admin-table--stack">
                 <thead><tr>
                   <th style={{ width: 34 }}><input type="checkbox" checked={allJChecked} onChange={toggleAllJ} aria-label="Select all judges" /></th>
                   <th>Name</th><th>Email</th><th>Submitted</th><th></th>
                 </tr></thead>
                 <tbody>{jView.map((j) => (
                   <tr key={j.id} onClick={() => openJudge(j)} style={{ cursor: 'pointer' }}>
-                    <td onClick={(e) => e.stopPropagation()}><input type="checkbox" checked={jSel.has(j.user_id)} onChange={() => toggleJ(j.user_id)} aria-label={`Select ${j.display_name}`} /></td>
-                    <td><strong className="gold-text">{j.display_name}</strong></td>
-                    <td>{j.email}</td>
-                    <td>{j.reviews_submitted}</td>
+                    <td className="admin-table__check" onClick={(e) => e.stopPropagation()}><input type="checkbox" checked={jSel.has(j.user_id)} onChange={() => toggleJ(j.user_id)} aria-label={`Select ${j.display_name}`} /></td>
+                    <td data-label="Name"><strong className="gold-text">{j.display_name}</strong></td>
+                    <td data-label="Email" className="admin-cell--wrap">{j.email}</td>
+                    <td data-label="Submitted">{j.reviews_submitted}</td>
                     <td style={{ textAlign: 'right', color: 'var(--gold)' }}>Manage ›</td>
                   </tr>
                 ))}</tbody>
@@ -265,15 +265,15 @@ export default function JudgesAdminPanel() {
         <h3 className="gold-text">Reported Concerns ({reports.filter((r) => r.status === 'open').length} open)</h3>
         {reports.length === 0 ? <p className="msub">No reports.</p> : (
           <div className="admin-table-wrap">
-            <table className="admin-table"><thead><tr><th>When</th><th>Reporter</th><th>Student</th><th>Reason</th><th>Notes</th><th>Status</th><th></th></tr></thead>
+            <table className="admin-table admin-table--stack"><thead><tr><th>When</th><th>Reporter</th><th>Student</th><th>Reason</th><th>Notes</th><th>Status</th><th></th></tr></thead>
               <tbody>{reports.map((r) => (
                 <tr key={r.id}>
-                  <td className="msub" style={{ fontSize: 12 }}>{r.created_at}</td>
-                  <td>{r.reporter_name || '—'}</td>
-                  <td>{r.student_name ? `${r.student_name} · ${r.participant_id}` : '—'}</td>
-                  <td>{r.reason}</td>
-                  <td style={{ maxWidth: 240 }}>{r.notes || '—'}</td>
-                  <td><span className={`status-pill ${r.status === 'open' ? 'status-pill--new' : 'status-pill--approved'}`}>{r.status}</span></td>
+                  <td data-label="When" className="msub" style={{ fontSize: 12 }}>{r.created_at}</td>
+                  <td data-label="Reporter">{r.reporter_name || '—'}</td>
+                  <td data-label="Student">{r.student_name ? `${r.student_name} · ${r.participant_id}` : '—'}</td>
+                  <td data-label="Reason">{r.reason}</td>
+                  <td data-label="Notes" className="admin-cell--wrap">{r.notes || '—'}</td>
+                  <td data-label="Status"><span className={`status-pill ${r.status === 'open' ? 'status-pill--new' : 'status-pill--approved'}`}>{r.status}</span></td>
                   <td>{r.status === 'open' && <><button className="btn btn--sm" onClick={() => setReportStatus(r.id, 'reviewed')}>Reviewed</button> <button className="btn btn--sm" onClick={() => setReportStatus(r.id, 'dismissed')}>Dismiss</button></>}</td>
                 </tr>
               ))}</tbody>
@@ -304,20 +304,20 @@ export default function JudgesAdminPanel() {
         {filteredResults.length === 0 ? <p className="msub">No projects match.</p> : (
           <>
             <div className="admin-table-wrap">
-              <table className="admin-table">
+              <table className="admin-table admin-table--stack">
                 <thead><tr>
                   <th style={{ width: 34 }}><input type="checkbox" checked={allRChecked} onChange={toggleAllR} aria-label="Select all results" /></th>
                   <th>#</th><th>Student</th><th>School</th><th>Automatic</th><th>Judge Avg</th><th>Final</th>
                 </tr></thead>
                 <tbody>{rView.map((r) => (
                   <tr key={r.submission_id}>
-                    <td><input type="checkbox" checked={rSel.has(r.submission_id)} onChange={() => toggleR(r.submission_id)} aria-label={`Select ${r.student_name}`} /></td>
-                    <td>{r.rank_position}</td>
-                    <td>{r.student_name} · {r.participant_id}</td>
-                    <td>{r.school_name}</td>
-                    <td>{r.automatic}</td>
-                    <td>{r.judge_average ?? '—'}</td>
-                    <td><strong className="gold-text">{r.final}</strong></td>
+                    <td className="admin-table__check"><input type="checkbox" checked={rSel.has(r.submission_id)} onChange={() => toggleR(r.submission_id)} aria-label={`Select ${r.student_name}`} /></td>
+                    <td data-label="Rank">{r.rank_position}</td>
+                    <td data-label="Student">{r.student_name} · {r.participant_id}</td>
+                    <td data-label="School">{r.school_name}</td>
+                    <td data-label="Automatic">{r.automatic}</td>
+                    <td data-label="Judge Avg">{r.judge_average ?? '—'}</td>
+                    <td data-label="Final"><strong className="gold-text">{r.final}</strong></td>
                   </tr>
                 ))}</tbody>
               </table>
@@ -411,15 +411,15 @@ export default function JudgesAdminPanel() {
                 ) : (
                   <>
                     <div className="admin-table-wrap">
-                      <table className="admin-table">
+                      <table className="admin-table admin-table--stack">
                         <thead><tr><th>Student</th><th>School</th><th>Status</th><th>Scored On</th><th style={{ textAlign: 'right' }}>Score</th></tr></thead>
                         <tbody>{detail.reviews.map((r) => (
                           <tr key={r.submission_id}>
-                            <td><strong>{r.student_name}</strong><div className="msub" style={{ fontSize: 12 }}>{r.participant_id}</div></td>
-                            <td>{r.school_name}</td>
-                            <td><span className={`status-pill ${r.status === 'submitted' ? 'status-pill--approved' : 'status-pill--new'}`}>{r.status}</span></td>
-                            <td className="msub" style={{ fontSize: 12 }}>{fmtDate(r.updated_epoch)}</td>
-                            <td style={{ textAlign: 'right' }}><strong className="gold-text" style={{ fontSize: 16 }}>{r.total}</strong><span className="msub"> / {detail.max_total}</span></td>
+                            <td data-label="Student"><strong>{r.student_name}</strong><div className="msub" style={{ fontSize: 12 }}>{r.participant_id}</div></td>
+                            <td data-label="School">{r.school_name}</td>
+                            <td data-label="Status"><span className={`status-pill ${r.status === 'submitted' ? 'status-pill--approved' : 'status-pill--new'}`}>{r.status}</span></td>
+                            <td data-label="Scored On" className="msub" style={{ fontSize: 12 }}>{fmtDate(r.updated_epoch)}</td>
+                            <td data-label="Score" style={{ textAlign: 'right' }}><strong className="gold-text" style={{ fontSize: 16 }}>{r.total}</strong><span className="msub"> / {detail.max_total}</span></td>
                           </tr>
                         ))}</tbody>
                       </table>

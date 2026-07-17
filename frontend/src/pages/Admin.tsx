@@ -1398,6 +1398,7 @@ export default function Admin() {
               {(subSchool || subFrom || subTo || subStarred) && <button type="button" className="btn btn--sm" onClick={() => { setSubSchool(''); setSubFrom(''); setSubTo(''); setSubStarred(false) }}>Clear filters</button>}
             </div>
             <DataTable
+              stack
               head={['#', 'Participant', 'Student', 'Problem', 'Status', 'Score', '★', '']}
               rows={subFiltered}
               searchPlaceholder="Search submissions…"
@@ -1414,16 +1415,16 @@ export default function Admin() {
                 return (
                   <tr key={s.id}>{checkbox}
                     <td className="admin-table__idx">{index}</td>
-                    <td className="admin-table__uid">{s.participant_id || '—'}</td>
-                    <td><button type="button" className="admin-linkcell" onClick={() => setNsDetail({ kind: 'project', record: s })}>{s.student_name}</button></td>
-                    <td style={{ maxWidth: 300 }}>
-                      <button type="button" className="admin-linkcell" onClick={() => setNsDetail({ kind: 'project', record: s })}>
+                    <td className="admin-table__uid" data-label="Participant">{s.participant_id || '—'}</td>
+                    <td data-label="Student"><button type="button" className="admin-linkcell" onClick={() => setNsDetail({ kind: 'project', record: s })}>{s.student_name}</button></td>
+                    <td data-label="Problem" className="admin-cell--wrap">
+                      <button type="button" className="admin-linkcell" style={{ textAlign: 'inherit' }} onClick={() => setNsDetail({ kind: 'project', record: s })}>
                         {s.problem_identified ? `${String(s.problem_identified).slice(0, 80)}${String(s.problem_identified).length > 80 ? '…' : ''}` : 'View details'}
                       </button>
                     </td>
-                    <td><StatusPill status={st} /></td>
-                    <td>{s.score ?? '—'}</td>
-                    <td>
+                    <td data-label="Status"><StatusPill status={st} /></td>
+                    <td data-label="Score">{s.score ?? '—'}</td>
+                    <td data-label="Star">
                       <button type="button" className={`ns-star${Number(s.is_starred) ? ' is-on' : ''}`} title={Number(s.is_starred) ? 'Unstar' : 'Star'} aria-label="Toggle star" onClick={() => void toggleStar('submission', s.id, !Number(s.is_starred))}>{Number(s.is_starred) ? '★' : '☆'}</button>
                     </td>
                     <td>
@@ -3978,10 +3979,12 @@ interface DataTableProps<T> {
   rowId?: (row: T) => number
   rowSelectable?: (row: T) => boolean
   bulkActions?: BulkAction[]
+  /** On phones, render each row as a stacked card (cells need data-label). */
+  stack?: boolean
 }
 
 /** List table with search, status filter, result counter, pagination, and optional bulk selection/actions. */
-function DataTable<T>({ head, rows, renderRow, searchText, statusOf, statusOptions, searchPlaceholder, pageSize = 10, rowId, rowSelectable, bulkActions }: DataTableProps<T>) {
+function DataTable<T>({ head, rows, renderRow, searchText, statusOf, statusOptions, searchPlaceholder, pageSize = 10, rowId, rowSelectable, bulkActions, stack }: DataTableProps<T>) {
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [page, setPage] = useState(1)
@@ -4072,7 +4075,7 @@ function DataTable<T>({ head, rows, renderRow, searchText, statusOf, statusOptio
       )}
 
       <div className="admin-table-wrap glass">
-        <table className="admin-table">
+        <table className={`admin-table${stack ? ' admin-table--stack' : ''}`}>
           <thead>
             <tr>
               {bulkEnabled && (
