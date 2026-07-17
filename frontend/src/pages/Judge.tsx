@@ -420,7 +420,7 @@ export default function Judge() {
             queue.length === 0 ? (
               <div className="glass" style={{ padding: 22 }}><p style={{ color: 'var(--muted)', margin: 0 }}>No submitted projects to review yet.</p></div>
             ) : (
-              <div className="glass" style={{ padding: 6, overflowX: 'auto' }}>
+              <div className="glass admin-table-wrap" style={{ padding: 6 }}>
                 <table className="admin-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead><tr><th style={thS}>Student</th><th style={thS}>School</th><th style={thS}>Grade</th><th style={thS}>Teacher</th><th style={thS}>Status</th><th style={thS}>Score</th><th style={thS} /></tr></thead>
                   <tbody>
@@ -454,7 +454,7 @@ export default function Judge() {
                       {group.length === 0 ? (
                         <p className="msub" style={{ margin: 0 }}>{st === 'draft' ? 'No drafts in progress.' : 'No completed evaluations yet.'}</p>
                       ) : (
-                        <div className="glass" style={{ padding: 6, overflowX: 'auto' }}>
+                        <div className="glass admin-table-wrap" style={{ padding: 6 }}>
                           <table className="admin-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
                             <thead><tr><th style={thS}>Student</th><th style={thS}>School</th><th style={thS}>Total</th><th style={thS} /></tr></thead>
                             <tbody>
