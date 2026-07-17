@@ -2261,14 +2261,14 @@ function AnalyticsAdmin() {
   ] as const
 
   return (
-    <div style={{ display: 'grid', gap: 18 }}>
+    <div style={{ display: 'grid', gap: 18, minWidth: 0 }}>
       {data?.traffic && (
-        <div className="glass" style={{ padding: 22, borderRadius: 14 }}>
+        <div className="glass" style={{ padding: 22, borderRadius: 14, minWidth: 0 }}>
           <div className="dashboard-section-head" style={{ marginBottom: 18 }}>
             <h3 className="gold-text">Website Traffic</h3>
             <span style={{ color: 'var(--muted)', fontSize: 12 }}>First-party page views — daily reach &amp; total visits</span>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 14, marginBottom: 20 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(150px,100%),1fr))', gap: 14, marginBottom: 20 }}>
             {([
               ['Total visits', data.traffic.total],
               ['Visits today', data.traffic.today],
@@ -2293,7 +2293,7 @@ function AnalyticsAdmin() {
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(160px,1fr))', gap: 14 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(160px,100%),1fr))', gap: 14 }}>
         {cards.map(([label, value]) => (
           <div key={label} className="glass" style={{ padding: 18, borderRadius: 14 }}>
             <div style={{ color: 'var(--muted)', fontSize: 11, letterSpacing: '.12em', textTransform: 'uppercase' }}>{label}</div>
@@ -2304,7 +2304,7 @@ function AnalyticsAdmin() {
 
       {error && <p style={{ color: '#e08a8a', fontSize: 13 }}>{error}</p>}
 
-      <div className="glass" style={{ padding: 22, borderRadius: 14 }}>
+      <div className="glass" style={{ padding: 22, borderRadius: 14, minWidth: 0 }}>
         <div className="dashboard-section-head" style={{ marginBottom: 18 }}>
           <h3 className="gold-text">Request Breakdown</h3>
           <span style={{ color: 'var(--muted)', fontSize: 12 }}>Latest counts from the live database</span>
@@ -2312,14 +2312,14 @@ function AnalyticsAdmin() {
         <SeriesBars rows={data?.request_types || []} />
       </div>
 
-      <div className="dashboard-cards" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))' }}>
-        <div className="glass" style={{ padding: 22, borderRadius: 14 }}>
+      <div className="dashboard-cards" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(min(280px,100%),1fr))' }}>
+        <div className="glass" style={{ padding: 22, borderRadius: 14, minWidth: 0 }}>
           <div className="dashboard-section-head" style={{ marginBottom: 18 }}>
             <h3 className="gold-text">Request Status</h3>
           </div>
           <SeriesBars rows={data?.request_statuses || []} />
         </div>
-        <div className="glass" style={{ padding: 22, borderRadius: 14 }}>
+        <div className="glass" style={{ padding: 22, borderRadius: 14, minWidth: 0 }}>
           <div className="dashboard-section-head" style={{ marginBottom: 18 }}>
             <h3 className="gold-text">Order Status</h3>
           </div>
@@ -2327,7 +2327,7 @@ function AnalyticsAdmin() {
         </div>
       </div>
 
-      <div className="glass" style={{ padding: 22, borderRadius: 14 }}>
+      <div className="glass" style={{ padding: 22, borderRadius: 14, minWidth: 0 }}>
         <div className="dashboard-section-head" style={{ marginBottom: 18 }}>
           <h3 className="gold-text">Content Mix</h3>
         </div>
@@ -2396,13 +2396,13 @@ function TrafficAdmin() {
   )
 
   return (
-    <div style={{ display: 'grid', gap: 18 }}>
-      <div className="glass" style={{ padding: 22, borderRadius: 14 }}>
+    <div style={{ display: 'grid', gap: 18, minWidth: 0 }}>
+      <div className="glass" style={{ padding: 22, borderRadius: 14, minWidth: 0 }}>
         <div className="dashboard-section-head" style={{ marginBottom: 18 }}>
           <h3 className="gold-text">Website Traffic</h3>
           <span style={{ color: 'var(--muted)', fontSize: 12 }}>First-party page views — who visits, how often, and where they land</span>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 14 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(150px,100%),1fr))', gap: 14 }}>
           {tile('Total visits', t.total, 'All page views ever')}
           {tile('Visits today', t.today)}
           {tile('Last 7 days', t.last_7)}
@@ -2414,17 +2414,17 @@ function TrafficAdmin() {
         </div>
       </div>
 
-      <div className="glass" style={{ padding: 22, borderRadius: 14 }}>
+      <div className="glass" style={{ padding: 22, borderRadius: 14, minWidth: 0 }}>
         <div style={{ marginBottom: 12, fontSize: 12, color: '#e9e1d0', textTransform: 'uppercase', letterSpacing: '.08em' }}>Daily visits (last 30 days)</div>
         <DailyTraffic rows={t.daily} />
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 18 }}>
-        <div className="glass" style={{ padding: 22, borderRadius: 14 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(280px,100%),1fr))', gap: 18 }}>
+        <div className="glass" style={{ padding: 22, borderRadius: 14, minWidth: 0 }}>
           <div style={{ marginBottom: 12, fontSize: 12, color: '#e9e1d0', textTransform: 'uppercase', letterSpacing: '.08em' }}>Top pages (30 days)</div>
           <SeriesBars rows={t.top_pages || []} />
         </div>
-        <div className="glass" style={{ padding: 22, borderRadius: 14 }}>
+        <div className="glass" style={{ padding: 22, borderRadius: 14, minWidth: 0 }}>
           <div style={{ marginBottom: 12, fontSize: 12, color: '#e9e1d0', textTransform: 'uppercase', letterSpacing: '.08em' }}>Where visitors come from (30 days)</div>
           <SeriesBars rows={t.top_referrers || []} />
         </div>
@@ -2755,10 +2755,10 @@ function SeriesBars({ rows }: { rows: Array<{ label: string; value: number }> })
   return (
     <div style={{ display: 'grid', gap: 12 }}>
       {rows.map((row) => (
-        <div key={row.label}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 12, marginBottom: 6 }}>
-            <span style={{ color: '#e9e1d0', textTransform: 'uppercase', letterSpacing: '.08em' }}>{row.label}</span>
-            <strong style={{ color: 'var(--gold-light)' }}>{row.value}</strong>
+        <div key={row.label} style={{ minWidth: 0 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 12, marginBottom: 6, minWidth: 0 }}>
+            <span title={row.label} style={{ color: '#e9e1d0', textTransform: 'uppercase', letterSpacing: '.08em', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.label}</span>
+            <strong style={{ color: 'var(--gold-light)', flex: '0 0 auto' }}>{row.value}</strong>
           </div>
           <div style={{ height: 8, borderRadius: 999, background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}>
             <div style={{ width: `${(row.value / max) * 100}%`, height: '100%', background: 'var(--gold-grad)' }} />
@@ -3091,7 +3091,7 @@ function CommunityAdmin() {
   const threadTitleById = Object.fromEntries(threads.map((row) => [row.id, row.title]))
 
   return (
-    <div style={{ display: 'grid', gap: 18 }}>
+    <div style={{ display: 'grid', gap: 18, minWidth: 0 }}>
       <div className="glass" style={{ padding: 20, borderRadius: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
         <div>
           <h3 className="gold-text">Community Board</h3>
@@ -3195,7 +3195,7 @@ function RsvpsAdmin() {
   }
 
   return (
-    <div style={{ display: 'grid', gap: 18 }}>
+    <div style={{ display: 'grid', gap: 18, minWidth: 0 }}>
       <div className="glass" style={{ padding: 20, borderRadius: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
         <div>
           <h3 className="gold-text">Event RSVPs</h3>
@@ -3541,7 +3541,7 @@ function InventoryAdmin() {
   const submitLabel = bulkBusy ? 'Working...' : busyId ? 'Saving...' : 'Save Product'
 
   return (
-    <div style={{ display: 'grid', gap: 18 }}>
+    <div style={{ display: 'grid', gap: 18, minWidth: 0 }}>
       <div className="glass" style={{ padding: 20, borderRadius: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
         <div>
           <h3 className="gold-text">Products & Inventory</h3>
@@ -3819,7 +3819,7 @@ function InventoryAdminLegacy() {
   const lowStock = rows.filter((row) => row.status !== 'in').length
 
   return (
-    <div style={{ display: 'grid', gap: 18 }}>
+    <div style={{ display: 'grid', gap: 18, minWidth: 0 }}>
       <div className="glass" style={{ padding: 20, borderRadius: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
         <div>
           <h3 className="gold-text">Inventory</h3>

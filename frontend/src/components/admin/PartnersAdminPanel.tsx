@@ -73,7 +73,7 @@ export default function PartnersAdminPanel() {
             <label style={lbl}>Hero heading<input value={page.hero.subtitle} onChange={(e) => setPage({ ...page, hero: { ...page.hero, subtitle: e.target.value } })} style={inp} /></label>
             <label style={{ ...lbl, gridColumn: '1 / -1' }}>Hero tagline<input value={page.hero.tagline} onChange={(e) => setPage({ ...page, hero: { ...page.hero, tagline: e.target.value } })} style={inp} /></label>
           </div>
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 10 }}>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 10, flexWrap: 'wrap' }}>
             {page.hero.image ? <img src={page.hero.image} alt="" style={{ width: 90, height: 56, objectFit: 'cover', borderRadius: 8 }} /> : <span style={{ width: 90, height: 56, borderRadius: 8, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.05)', border: '1px dashed var(--line)', color: 'var(--muted)', fontSize: 10 }}>No image</span>}
             <label className="btn btn--sm" style={{ cursor: 'pointer' }}>Upload hero image<input type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={async (e) => { const f = e.target.files?.[0] || null; e.target.value = ''; if (!f) return; try { const d = await api.upload<{ url: string }>('admin/upload', f); setPage((pg) => pg ? { ...pg, hero: { ...pg.hero, image: d.url } } : pg) } catch { /* ignore */ } }} /></label>
             {page.hero.image && <button className="btn btn--sm" type="button" onClick={() => setPage({ ...page, hero: { ...page.hero, image: '' } })}>Remove</button>}
@@ -81,9 +81,9 @@ export default function PartnersAdminPanel() {
           <div style={{ marginTop: 12, fontSize: 11, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--muted)' }}>Impact stats</div>
           <div style={{ display: 'grid', gap: 8, marginTop: 6 }}>
             {page.stats.map((s, i) => (
-              <div key={i} style={{ display: 'flex', gap: 8 }}>
+              <div key={i} style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <input value={s.value} onChange={(e) => setStat(i, { value: e.target.value })} placeholder="Value (e.g. 25+)" style={{ ...inp, flex: '0 0 120px' }} />
-                <input value={s.label} onChange={(e) => setStat(i, { label: e.target.value })} placeholder="Label (e.g. Partner Organizations)" style={inp} />
+                <input value={s.label} onChange={(e) => setStat(i, { label: e.target.value })} placeholder="Label (e.g. Partner Organizations)" style={{ ...inp, minWidth: 0, flex: '1 1 160px' }} />
                 <button className="btn btn--sm" type="button" style={{ color: '#e08a8a', borderColor: '#e08a8a' }} onClick={() => removeStat(i)}>✕</button>
               </div>
             ))}

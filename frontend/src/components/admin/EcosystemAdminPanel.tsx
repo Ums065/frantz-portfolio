@@ -532,7 +532,7 @@ function AccountModal({ acct, onClose, onApprovalChange }: { acct: EcoAccount; o
 
       <div style={sect}>
         <label style={lbl}>Documents</label>
-        <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: 8 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '140px minmax(0,1fr)', gap: 8 }}>
           <select style={inp} value={docType} onChange={(e) => setDocType(e.target.value)}>{['invoice', 'receipt', 'tax', 'agreement', 'report', 'certificate', 'press', 'handbook', 'document'].map((t) => <option key={t} value={t}>{t}</option>)}</select>
           <input style={inp} value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Label (optional)" />
         </div>
