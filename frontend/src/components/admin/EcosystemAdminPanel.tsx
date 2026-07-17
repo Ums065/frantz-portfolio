@@ -149,6 +149,7 @@ export default function EcosystemAdminPanel() {
   const [err, setErr] = useState('')
   const [openReq, setOpenReq] = useState<EcoReq | null>(null)
   const [openAcct, setOpenAcct] = useState<EcoAccount | null>(null)
+  const [openAssign, setOpenAssign] = useState<EcoAccount | null>(null)
 
   const loadReqs = () => api.get<{ requests: EcoReq[] }>('admin/ecosystem/requests').then((d) => setReqs(d.requests || [])).catch((e) => setErr(String(e)))
   const loadAccounts = () => api.get<{ accounts: EcoAccount[] }>('admin/ecosystem/accounts').then((d) => setAccounts(d.accounts || [])).catch(() => {})
@@ -258,7 +259,10 @@ export default function EcosystemAdminPanel() {
                 <td style={{ textTransform: 'capitalize' }}>{a.role}</td>
                 <td style={{ color: 'var(--muted)' }}>{a.email}</td>
                 <td><Pill status={a.approval_status} /></td>
-                <td><button className="btn btn--sm" onClick={(e) => { e.stopPropagation(); setOpenAcct(a) }}>Manage</button></td>
+                <td style={{ whiteSpace: 'nowrap' }}>
+                  {a.approval_status === 'approved' && <button className="btn btn--sm" style={{ marginRight: 6 }} onClick={(e) => { e.stopPropagation(); setOpenAssign(a) }}>Assign</button>}
+                  <button className="btn btn--sm" onClick={(e) => { e.stopPropagation(); setOpenAcct(a) }}>Manage</button>
+                </td>
               </tr>
             )}
           />
@@ -269,7 +273,41 @@ export default function EcosystemAdminPanel() {
 
       {openReq && <RequestModal req={openReq} onClose={() => setOpenReq(null)} onDone={(list) => { setReqs(list); setOpenReq(null) }} />}
       {openAcct && <AccountModal acct={openAcct} onClose={() => setOpenAcct(null)} onApprovalChange={loadAccounts} />}
+      {openAssign && <AssignModal acct={openAssign} onClose={() => setOpenAssign(null)} />}
     </div>
+  )
+}
+
+/* ---------- quick-assign: hand a task to an account without opening Manage ---------- */
+function AssignModal({ acct, onClose }: { acct: EcoAccount; onClose: () => void }) {
+  const [title, setTitle] = useState('')
+  const [detail, setDetail] = useState('')
+  const [date, setDate] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [done, setDone] = useState(false)
+  const save = async () => {
+    if (!title.trim()) return
+    setBusy(true)
+    try {
+      await api.post('admin/ecosystem/assignment', { user_id: acct.user_id, role: acct.role, title, detail, assign_date: date })
+      setDone(true); window.fcToast?.(`Assigned to ${acct.org_name}.`)
+      setTimeout(onClose, 700)
+    } catch { setBusy(false) }
+  }
+  return (
+    <Modal title={`Assign a task · ${acct.org_name}`} onClose={onClose}>
+      <p style={{ color: 'var(--muted)', fontSize: 12.5, margin: '0 0 12px', lineHeight: 1.5 }}>They'll be emailed and see it in their <strong>My Assignments</strong> tab, where they can accept, decline, or mark it complete.</p>
+      <label style={lbl}>Task title *</label>
+      <input style={inp} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Mentor Aarav Sharma" autoFocus />
+      <label style={{ ...lbl, marginTop: 10 }}>Details</label>
+      <textarea style={{ ...inp, minHeight: 66, resize: 'vertical' }} value={detail} onChange={(e) => setDetail(e.target.value)} placeholder="What they need to do…" />
+      <label style={{ ...lbl, marginTop: 10 }}>Date (optional)</label>
+      <input style={inp} type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 14 }}>
+        <button className="btn btn--sm" disabled={busy} onClick={onClose}>Cancel</button>
+        <button className="btn btn--sm btn--solid" disabled={busy || done || !title.trim()} onClick={save}>{done ? 'Assigned ✓' : busy ? 'Assigning…' : 'Assign'}</button>
+      </div>
+    </Modal>
   )
 }
 
@@ -278,10 +316,22 @@ function RequestModal({ req, onClose, onDone }: { req: EcoReq; onClose: () => vo
   const [note, setNote] = useState(req.admin_note || '')
   const [busy, setBusy] = useState('')
   const [showProfile, setShowProfile] = useState(false)
+  // A sensible assignment title from the request (strip the "Interested in: " /
+  // "Register to help: " prefixes an applied opportunity/event carries).
+  const assignTitle = (req.message || '').replace(/^(interested in:|register to help:|attend:)\s*/i, '').trim() || cap(req.req_type)
   const act = async (status: string) => {
     setBusy(status)
     try { const d = await api.put<{ requests: EcoReq[] }>(`admin/ecosystem/request/${req.id}`, { status, admin_note: note }); onDone(d.requests || []) }
     catch { setBusy('') }
+  }
+  const approveAssign = async () => {
+    setBusy('assign')
+    try {
+      const d = await api.put<{ requests: EcoReq[] }>(`admin/ecosystem/request/${req.id}`, { status: 'approved', admin_note: note })
+      await api.post('admin/ecosystem/assignment', { user_id: req.user_id, role: req.role, title: assignTitle, detail: note })
+      window.fcToast?.(`Approved & assigned "${assignTitle}".`)
+      onDone(d.requests || [])
+    } catch { setBusy('') }
   }
   return (
     <Modal title={`${cap(req.req_type)} · ${req.org_name}`} onClose={onClose}>
@@ -299,6 +349,13 @@ function RequestModal({ req, onClose, onDone }: { req: EcoReq; onClose: () => vo
         {([['approved', 'Approve'], ['info_needed', 'Needs Info'], ['declined', 'Decline']] as const).map(([st, l]) => (
           <button key={st} className={`btn btn--sm${req.status === st ? ' btn--solid' : ''}`} disabled={!!busy} onClick={() => act(st)}>{busy === st ? '…' : l}{req.status === st ? ' ✓' : ''}</button>
         ))}
+      </div>
+      {/* One-click: approve the request AND hand the person an assignment for it. */}
+      <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--line)' }}>
+        <button className="btn btn--sm btn--solid" disabled={!!busy} style={{ width: '100%' }} onClick={approveAssign}>
+          {busy === 'assign' ? 'Assigning…' : `✓ Approve & Assign — "${assignTitle.length > 34 ? assignTitle.slice(0, 34) + '…' : assignTitle}"`}
+        </button>
+        <p style={{ color: 'var(--muted)', fontSize: 11.5, margin: '6px 0 0', lineHeight: 1.4 }}>Approves this request and instantly creates an assignment in their dashboard — no need to open their account.</p>
       </div>
     </Modal>
   )
