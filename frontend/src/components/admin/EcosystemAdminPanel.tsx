@@ -101,7 +101,7 @@ export function EcoTable<T>({ head, rows, renderRow, searchText, filters = [], s
         </div>
       )}
       <div className="admin-table-wrap glass">
-        <table className="admin-table">
+        <table className="admin-table admin-table--stack">
           <thead><tr>
             {bulkEnabled && <th className="admin-table__check"><input type="checkbox" aria-label="Select all on page" checked={allPageSel} onChange={togglePage} /></th>}
             {head.map((h, i) => <th key={h || i}>{h}</th>)}
@@ -221,12 +221,12 @@ export default function EcosystemAdminPanel() {
               <tr key={r.id} style={{ cursor: 'pointer' }} onClick={() => setOpenReq(r)}>
                 {checkbox}
                 <td className="admin-table__idx">{index}</td>
-                <td style={{ fontWeight: 600 }}>{r.org_name}</td>
-                <td style={{ textTransform: 'capitalize' }}>{r.role}</td>
-                <td style={{ textTransform: 'capitalize' }}>{cap(r.req_type)}</td>
-                <td className="admin-cell--wrap"><span style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', color: 'var(--muted)' } as React.CSSProperties}>{r.message || '—'}</span></td>
-                <td><Pill status={r.status} /></td>
-                <td style={{ whiteSpace: 'nowrap', color: 'var(--muted)' }}>{fmt(r.created_ts)}</td>
+                <td data-label="Account" style={{ fontWeight: 600 }}>{r.org_name}</td>
+                <td data-label="Role" style={{ textTransform: 'capitalize' }}>{r.role}</td>
+                <td data-label="Type" style={{ textTransform: 'capitalize' }}>{cap(r.req_type)}</td>
+                <td data-label="Request" className="admin-cell--wrap"><span style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', color: 'var(--muted)' } as React.CSSProperties}>{r.message || '—'}</span></td>
+                <td data-label="Status"><Pill status={r.status} /></td>
+                <td data-label="Date" style={{ whiteSpace: 'nowrap', color: 'var(--muted)' }}>{fmt(r.created_ts)}</td>
                 <td><button className="btn btn--sm" onClick={(e) => { e.stopPropagation(); setOpenReq(r) }}>Review</button></td>
               </tr>
             )}
@@ -258,10 +258,10 @@ export default function EcosystemAdminPanel() {
               <tr key={a.user_id} style={{ cursor: 'pointer' }} onClick={() => setOpenAcct(a)}>
                 {checkbox}
                 <td className="admin-table__idx">{index}</td>
-                <td style={{ fontWeight: 600 }}>{a.org_name}</td>
-                <td style={{ textTransform: 'capitalize' }}>{a.role}</td>
-                <td style={{ color: 'var(--muted)' }}>{a.email}</td>
-                <td><Pill status={a.approval_status} /></td>
+                <td data-label="Organization" style={{ fontWeight: 600 }}>{a.org_name}</td>
+                <td data-label="Role" style={{ textTransform: 'capitalize' }}>{a.role}</td>
+                <td data-label="Email" className="admin-cell--wrap" style={{ color: 'var(--muted)' }}>{a.email}</td>
+                <td data-label="Approval"><Pill status={a.approval_status} /></td>
                 <td style={{ whiteSpace: 'nowrap' }}>
                   {a.approval_status === 'approved' && <button className="btn btn--sm" style={{ marginRight: 6 }} onClick={(e) => { e.stopPropagation(); setOpenAssign(a) }}>Assign</button>}
                   <button className="btn btn--sm" onClick={(e) => { e.stopPropagation(); setOpenAcct(a) }}>Manage</button>

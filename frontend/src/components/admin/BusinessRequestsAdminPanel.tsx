@@ -95,12 +95,12 @@ export default function BusinessRequestsAdminPanel() {
           <tr key={r.id} style={{ cursor: 'pointer' }} onClick={() => setOpen(r)}>
             {checkbox}
             <td className="admin-table__idx">{index}</td>
-            <td style={{ fontWeight: 600 }}>{r.business_name}</td>
-            <td>{LABEL[r.request_type] || r.request_type}</td>
-            <td style={{ color: 'var(--muted)' }}>{[r.student_name, r.school_name].filter(Boolean).join(' · ') || '—'}</td>
-            <td className="admin-cell--wrap"><span style={clamp}>{r.message || '—'}</span></td>
-            <td><Pill status={r.status} /></td>
-            <td style={{ whiteSpace: 'nowrap', color: 'var(--muted)' }}>{fmt(r.created_ts)}</td>
+            <td data-label="Business" style={{ fontWeight: 600 }}>{r.business_name}</td>
+            <td data-label="Type">{LABEL[r.request_type] || r.request_type}</td>
+            <td data-label="Student / School" style={{ color: 'var(--muted)' }}>{[r.student_name, r.school_name].filter(Boolean).join(' · ') || '—'}</td>
+            <td data-label="Request" className="admin-cell--wrap"><span style={clamp}>{r.message || '—'}</span></td>
+            <td data-label="Status"><Pill status={r.status} /></td>
+            <td data-label="Date" style={{ whiteSpace: 'nowrap', color: 'var(--muted)' }}>{fmt(r.created_ts)}</td>
             <td><button className="btn btn--sm" onClick={(e) => { e.stopPropagation(); setOpen(r) }}>Review</button></td>
           </tr>
         )}

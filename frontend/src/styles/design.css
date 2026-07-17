@@ -3110,6 +3110,58 @@ section#challenge .challenge-features .ns-gain p {
   max-width: 280px;
 }
 .admin-table tbody tr:hover td { background: rgba(201,168,76,0.05); }
+
+/* ------------------------------------------------------------------
+   Stacked "card" table on phones (.admin-table--stack): instead of a wide
+   table that scrolls and clips, each row becomes a card and each cell shows
+   its column name (from data-label) + value. Nothing is cut off.
+   ------------------------------------------------------------------ */
+@media (max-width: 640px) {
+  .admin-table--stack { min-width: 0 !important; }
+  .admin-table--stack thead { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .admin-table--stack tbody { display: block; }
+  .admin-table--stack tbody tr {
+    display: block;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: rgba(255,255,255,0.02);
+    margin-bottom: 10px;
+    padding: 4px 2px;
+  }
+  .admin-table--stack tbody tr:hover td { background: transparent; }
+  .admin-table--stack td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    border: none !important;
+    padding: 8px 12px;
+    white-space: normal;
+    text-align: right;
+    min-width: 0;
+    max-width: none;
+  }
+  .admin-table--stack td::before {
+    content: attr(data-label);
+    flex: 0 0 40%;
+    text-align: left;
+    color: var(--gold-light);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+  /* Cells with no data-label (index, action buttons) show their content full width. */
+  .admin-table--stack td:not([data-label])::before,
+  .admin-table--stack td[data-label='']::before { content: none; }
+  .admin-table--stack td.admin-table__check { justify-content: flex-start; }
+  .admin-table--stack td.admin-table__check::before { content: 'Select'; flex: 0 0 40%; text-align: left; color: var(--gold-light); font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; }
+  .admin-table--stack td.admin-cell--wrap { display: flex; }
+  /* The row-number cell is redundant in card view. */
+  .admin-table--stack td.admin-table__idx { display: none; }
+  /* Action-button cell: let buttons sit right-aligned on their own line. */
+  .admin-table--stack td:last-child { justify-content: flex-end; }
+}
 .admin-table__empty {
   text-align: center;
   color: var(--muted);
