@@ -136,7 +136,12 @@ export default function Business() {
 
   const [data, setData] = useState<BizDashboard | null>(null)
   const [err, setErr] = useState('')
-  const [tab, setTab] = useState<Tab>('interviews')
+  // Persist the active tab in the URL hash so a refresh keeps you on it.
+  const [tab, setTabState] = useState<Tab>(() => {
+    const keys: Tab[] = ['interviews', 'solutions', 'pipeline', 'requests', 'updates', 'profile']
+    try { const h = window.location.hash.replace(/^#/, '') as Tab; return keys.includes(h) ? h : 'interviews' } catch { return 'interviews' }
+  })
+  const setTab = (k: Tab) => { setTabState(k); try { window.history.replaceState(null, '', `#${k}`) } catch { /* ignore */ } }
   const [navOpen, setNavOpen] = useState(false)
 
   // request modal

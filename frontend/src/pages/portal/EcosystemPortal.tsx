@@ -351,7 +351,14 @@ export interface PortalConfig {
 /** Business-style authenticated frame: collapsible sidebar of tabs + stat tiles. */
 function TabbedDashboard({ config, data, reload, logout, orgName }: { config: PortalConfig; data: any; reload: () => void; logout: () => void; orgName: string }) {
   const tabs = config.tabs!
-  const [tab, setTab] = useState(tabs[0].key)
+  const validKeys = tabs.map((t) => t.key)
+  // Remember the active tab in the URL hash so a page refresh keeps you where
+  // you were (instead of snapping back to the first tab) — and the tab is
+  // shareable/deep-linkable.
+  const [tab, setTabState] = useState(() => {
+    try { const h = decodeURIComponent(window.location.hash.replace(/^#/, '')); return validKeys.includes(h) ? h : tabs[0].key } catch { return tabs[0].key }
+  })
+  const setTab = (k: string) => { setTabState(k); try { window.history.replaceState(null, '', `#${k}`) } catch { /* ignore */ } }
   const [navOpen, setNavOpen] = useState(false)
   const [, setSeenBump] = useState(0)
   const active = tabs.find((t) => t.key === tab) ?? tabs[0]
