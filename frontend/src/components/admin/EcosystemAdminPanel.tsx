@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { api } from '../../lib/api'
+import { statHint } from '../../lib/statHints'
 import { EcoMessages } from '../../pages/portal/EcosystemPortal'
 
 /* Admin management for the ecosystem roles (sponsor / partner / media / volunteer)
@@ -31,12 +32,13 @@ export function Pill({ status }: { status: string }) {
   return <span style={{ display: 'inline-block', color: c, border: `1px solid ${c}`, borderRadius: 999, padding: '2px 9px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', whiteSpace: 'nowrap' }}>{cap(status)}</span>
 }
 
-/* Counter strip (parity with the admin DataTable sections' StatChips). */
-export function EcoStatChips({ items }: { items: Array<{ label: string; value: number | string; tone?: 'gold' | 'green' | 'red' | 'blue' | 'muted' }> }) {
+/* Counter strip (parity with the admin DataTable sections' StatChips).
+   Hovering a chip shows a short description of what the counter means. */
+export function EcoStatChips({ items }: { items: Array<{ label: string; value: number | string; tone?: 'gold' | 'green' | 'red' | 'blue' | 'muted'; hint?: string }> }) {
   return (
     <div className="admin-statchips">
       {items.map((it) => (
-        <div key={it.label} className={`admin-statchip${it.tone ? ` admin-statchip--${it.tone}` : ''}`}>
+        <div key={it.label} className={`admin-statchip${it.tone ? ` admin-statchip--${it.tone}` : ''}`} data-hint={statHint(it.label, it.hint)}>
           <strong>{it.value}</strong><span>{it.label}</span>
         </div>
       ))}

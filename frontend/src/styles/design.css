@@ -3216,6 +3216,52 @@ section#challenge .challenge-features .ns-gain p {
 .admin-statchip--green { border-color: rgba(143,191,150,0.28); }
 .admin-statchip--red { border-color: rgba(224,144,127,0.28); }
 
+/* Hover description: explains what each counter means. */
+.admin-statchip { position: relative; }
+.admin-statchip[data-hint] { cursor: help; }
+.admin-statchip[data-hint]::after {
+  content: attr(data-hint);
+  position: absolute;
+  bottom: calc(100% + 9px);
+  left: 50%;
+  transform: translateX(-50%) translateY(4px);
+  width: max-content;
+  max-width: 230px;
+  padding: 8px 11px;
+  border-radius: 9px;
+  background: #17130c;
+  border: 1px solid rgba(201,168,76,0.32);
+  color: #ece6d8;
+  font-family: var(--f-body);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.45;
+  letter-spacing: 0;
+  text-transform: none;
+  text-align: center;
+  white-space: normal;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.16s ease, transform 0.16s ease;
+  z-index: 60;
+  box-shadow: 0 12px 34px -12px rgba(0,0,0,0.75);
+}
+.admin-statchip[data-hint]::before {
+  content: '';
+  position: absolute;
+  bottom: calc(100% + 3px);
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: rgba(201,168,76,0.32);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.16s ease;
+  z-index: 61;
+}
+.admin-statchip[data-hint]:hover::after { opacity: 1; transform: translateX(-50%) translateY(0); }
+.admin-statchip[data-hint]:hover::before { opacity: 1; }
+
 /* --- Row kebab (3-dot) menu --- */
 .row-menu { display: inline-flex; }
 .row-menu__trigger {

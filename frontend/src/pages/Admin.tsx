@@ -5,6 +5,7 @@ import { api, type AnalyticsPayload, type AwardRow, type CommunityCommentRow, ty
 import { useAuth } from '../context/AuthContext'
 import { useSeo } from '../hooks/useSeo'
 import { useLiveRefresh } from '../hooks/useLiveRefresh'
+import { statHint } from '../lib/statHints'
 import { resolveDashboardRoute } from '../lib/dashboardRoute'
 import SponsorsAdminPanel from '../components/admin/SponsorsAdminPanel'
 import GalleryAdminPanel from '../components/admin/GalleryAdminPanel'
@@ -3879,13 +3880,14 @@ function StatusPill({ status }: { status: string }) {
   return <span className={`status-pill ${cls}`}>{status}</span>
 }
 
-interface StatChipItem { label: string; value: number | string; tone?: 'gold' | 'green' | 'red' | 'blue' | 'muted' }
-/** In-tab "actual counter" strip — the full breakdown, distinct from the sidebar notification badges. */
+interface StatChipItem { label: string; value: number | string; tone?: 'gold' | 'green' | 'red' | 'blue' | 'muted'; hint?: string }
+/** In-tab "actual counter" strip — the full breakdown, distinct from the sidebar notification badges.
+ *  Hovering a chip shows a short description of what the counter means. */
 function StatChips({ items }: { items: StatChipItem[] }) {
   return (
     <div className="admin-statchips">
       {items.map((it) => (
-        <div key={it.label} className={`admin-statchip${it.tone ? ` admin-statchip--${it.tone}` : ''}`}>
+        <div key={it.label} className={`admin-statchip${it.tone ? ` admin-statchip--${it.tone}` : ''}`} data-hint={statHint(it.label, it.hint)}>
           <strong>{it.value}</strong>
           <span>{it.label}</span>
         </div>
