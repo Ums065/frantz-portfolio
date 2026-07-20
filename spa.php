@@ -100,8 +100,18 @@ try {
     // its NotFound page; only the status code changes so search engines drop it.
     if (!$known) { http_response_code(404); echo $html; exit; }
 
-    // Valid app route with no public meta to change: serve shell as-is.
-    if ($title === null) { echo $html; exit; }
+    // Valid app/auth route (dashboards, profile, reset): no public meta, but
+    // force noindex so these never appear in search results even if a crawler
+    // ignores robots.txt. Defense-in-depth alongside the robots.txt Disallow.
+    if ($title === null) {
+        $out = preg_replace(
+            '#(<meta\s+name="robots"\s+content=")[^"]*(")#i',
+            '${1}noindex, nofollow${2}',
+            $html
+        );
+        echo $out ?? $html;
+        exit;
+    }
 
     $fullTitle = $title . ' — ' . SITE;
     $descOut = $desc ?? 'Frantz Coutard — Technology Innovator, Visionary, Community Builder. From Community to Legacy.';
@@ -152,6 +162,30 @@ try {
             . '</script>' . "\n</head>";
         $html = str_replace('</head>', $ld, $html);
     }
+
+    // Breadcrumb structured data (breadcrumb rich results). Home > [Blog >] Page.
+    $crumbs = [['name' => 'Home', 'item' => SITE_URL . '/']];
+    if ($post !== null) {
+        $crumbs[] = ['name' => 'Blog', 'item' => SITE_URL . '/blog'];
+    }
+    $crumbs[] = ['name' => $title, 'item' => $canonical];
+    $breadcrumb = [
+        '@context' => 'https://schema.org',
+        '@type' => 'BreadcrumbList',
+        'itemListElement' => [],
+    ];
+    foreach ($crumbs as $i => $c) {
+        $breadcrumb['itemListElement'][] = [
+            '@type' => 'ListItem',
+            'position' => $i + 1,
+            'name' => $c['name'],
+            'item' => $c['item'],
+        ];
+    }
+    $bcLd = '<script type="application/ld+json">'
+        . json_encode($breadcrumb, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)
+        . '</script>' . "\n</head>";
+    $html = str_replace('</head>', $bcLd, $html);
 
     echo $html;
 } catch (Throwable $e) {
