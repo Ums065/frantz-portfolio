@@ -3030,7 +3030,11 @@ section#challenge .challenge-features .ns-gain p {
 .admin-achievement__hint { color: var(--muted); font-size: 12px; margin-top: 2px; }
 
 /* --- Toolbar (search + filter + count) --- */
-.admin-panel { display: flex; flex-direction: column; gap: 12px; }
+/* min-width:0 lets the panel shrink below its content when it is a grid/flex
+   item (it holds an overflow-x table). Without it the panel keeps its full
+   table width, overflows .admin-main, and .admin-page{overflow:hidden} clips
+   it — so the table looks cut off and unscrollable on desktop. */
+.admin-panel { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .admin-toolbar {
   display: flex;
   align-items: center;

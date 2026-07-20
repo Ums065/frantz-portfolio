@@ -54,7 +54,10 @@ export default function BusinessRequestsAdminPanel() {
   // A confirmed internship = fully consented by student + parent — a program win.
   const confirmedInternships = rows.filter((r) => r.request_type === 'internship' && r.parent_consent === 'accepted').length
   const bulkApprove = async (ids: number[]) => {
-    for (const id of ids) { try { await api.put(`admin/business-request/${id}`, { status: 'approved', admin_note: '' }) } catch { /* skip */ } }
+    // Only approve rows that aren't already approved, so re-selecting an approved
+    // row and hitting "Approve selected" doesn't re-fire its notification email.
+    const toApprove = ids.filter((id) => rows.find((r) => r.id === id)?.status !== 'approved')
+    for (const id of toApprove) { try { await api.put(`admin/business-request/${id}`, { status: 'approved', admin_note: '' }) } catch { /* skip */ } }
     void load()
   }
 
@@ -89,7 +92,6 @@ export default function BusinessRequestsAdminPanel() {
           { label: 'statuses', options: ['pending', 'approved', 'info_needed', 'declined'], valueOf: (r) => r.status },
         ]}
         rowId={(r) => r.id}
-        rowSelectable={(r) => r.status === 'pending'}
         bulkActions={[{ label: 'Approve selected', onClick: bulkApprove }]}
         renderRow={(r, checkbox, index) => (
           <tr key={r.id} style={{ cursor: 'pointer' }} onClick={() => setOpen(r)}>
