@@ -89,11 +89,11 @@ export default function OfferStepper({ stage, timeline, compact }: { stage: Offe
   // when the whole flow is confirmed). Never overshoots the active dot.
   const fillPct = terminalDone ? 100 : STEP_CENTERS[activeIndex]
   const displayPct = terminalDone ? 100 : [25, 50, 75, 100][activeIndex]
-  // On a rejected flow the steps that succeeded before the stop stay gold; only
-  // the hop into the declined step turns red. So the gold rail runs to the last
-  // completed dot, then a short red segment reaches the declined dot.
-  const goldPct = rejected ? (activeIndex > 0 ? STEP_CENTERS[activeIndex - 1] : 0) : fillPct
-  const redFromPct = goldPct
+  // A rejected flow paints the ENTIRE progressed rail red (from the start up to
+  // the declined dot), so the whole tracker reads as "failed" at a glance rather
+  // than gold-then-a-small-red-hop.
+  const goldPct = rejected ? 0 : fillPct
+  const redFromPct = 0
   const redToPct = STEP_CENTERS[activeIndex]
 
   return (
@@ -128,8 +128,11 @@ export default function OfferStepper({ stage, timeline, compact }: { stage: Offe
             const isDone = terminalDone ? i <= activeIndex : i < activeIndex
             const isActive = !rejected && !terminalDone && i === activeIndex
             const isRejectedHere = rejected && i === activeIndex
-            const bg = isRejectedHere ? '#e08a8a' : isDone ? 'var(--gold)' : isActive ? 'var(--gold-light)' : 'rgba(255,255,255,0.16)'
-            const ring = isRejectedHere ? '#e08a8a' : (isDone || isActive) ? 'var(--gold)' : 'rgba(255,255,255,0.2)'
+            // On a rejected flow, the already-completed dots turn red too so the
+            // whole progressed portion is consistently red.
+            const doneCol = rejected ? '#e08a8a' : 'var(--gold)'
+            const bg = isRejectedHere ? '#e08a8a' : isDone ? doneCol : isActive ? 'var(--gold-light)' : 'rgba(255,255,255,0.16)'
+            const ring = isRejectedHere ? '#e08a8a' : (isDone || isActive) ? doneCol : 'rgba(255,255,255,0.2)'
             const lit = isDone || isActive || isRejectedHere
             return (
               <div key={label} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1, minWidth: 0 }}>
@@ -142,7 +145,8 @@ export default function OfferStepper({ stage, timeline, compact }: { stage: Offe
                   fontSize: 10, color: '#1c1a14', fontWeight: 900,
                 }}>{isDone ? '✓' : isRejectedHere ? '✕' : ''}</span>
                 <span style={{
-                  fontSize: 10.5, marginTop: 6, color: lit ? 'var(--ivory)' : 'var(--muted)',
+                  fontSize: 10.5, marginTop: 6,
+                  color: rejected && lit ? '#e8c9c9' : lit ? 'var(--ivory)' : 'var(--muted)',
                   fontWeight: isActive || isRejectedHere ? 700 : lit ? 600 : 400, textAlign: 'center', lineHeight: 1.2,
                 }}>{label}</span>
               </div>
