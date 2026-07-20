@@ -530,6 +530,9 @@ export default function Admin() {
   const rejectedAccounts = reviewableAccounts.filter((m) => (m.approval_status || 'pending') === 'rejected').length
   const approvalQueueCount = reviewableAccounts.filter((m) => (m.approval_status || 'pending') !== 'approved').length
   const approvedAccounts = reviewableAccounts.filter((m) => (m.approval_status || 'pending') === 'approved').length
+  // Distinct roles present in the account list, for the role dropdown filter.
+  const memberRoles = [...new Set((data?.members ?? []).map((m) => (m.role || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b))
+  const reviewableRoles = [...new Set(reviewableAccounts.map((m) => (m.role || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b))
 
   // Per-status breakdowns for the in-tab "actual counter" strips.
   const reqRows = data?.requests ?? []
@@ -1059,6 +1062,9 @@ export default function Admin() {
               searchText={(m) => `${m.full_name} ${m.email} ${m.role} ${m.id}`}
               statusOf={(m) => (isAdmin(m.role) ? 'approved' : (m.approval_status || 'pending'))}
               statusOptions={['approved', 'pending', 'rejected']}
+              filter2Of={(m) => m.role}
+              filter2Options={memberRoles}
+              filter2AllLabel="All roles"
               rowId={(m) => m.id}
               rowSelectable={(m) => !isAdmin(m.role)}
               bulkActions={[
@@ -1113,6 +1119,9 @@ export default function Admin() {
               searchText={(m) => `${m.full_name} ${m.email} ${m.role} ${m.id}`}
               statusOf={(m) => (m.approval_status || 'pending')}
               statusOptions={['pending', 'rejected']}
+              filter2Of={(m) => m.role}
+              filter2Options={reviewableRoles}
+              filter2AllLabel="All roles"
               rowId={(m) => m.id}
               bulkActions={[
                 { label: 'Approve selected', onClick: (ids) => bulkSetApproval(ids, 'approved') },
@@ -3974,6 +3983,10 @@ interface DataTableProps<T> {
   searchText?: (row: T) => string
   statusOf?: (row: T) => string
   statusOptions?: string[]
+  /** Optional second dropdown filter (e.g. by role). */
+  filter2Of?: (row: T) => string
+  filter2Options?: string[]
+  filter2AllLabel?: string
   searchPlaceholder?: string
   pageSize?: number
   rowId?: (row: T) => number
@@ -3984,9 +3997,10 @@ interface DataTableProps<T> {
 }
 
 /** List table with search, status filter, result counter, pagination, and optional bulk selection/actions. */
-function DataTable<T>({ head, rows, renderRow, searchText, statusOf, statusOptions, searchPlaceholder, pageSize = 10, rowId, rowSelectable, bulkActions, stack }: DataTableProps<T>) {
+function DataTable<T>({ head, rows, renderRow, searchText, statusOf, statusOptions, filter2Of, filter2Options, filter2AllLabel, searchPlaceholder, pageSize = 10, rowId, rowSelectable, bulkActions, stack }: DataTableProps<T>) {
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
+  const [filter2, setFilter2] = useState('all')
   const [page, setPage] = useState(1)
   const [selected, setSelected] = useState<Set<number>>(new Set())
 
@@ -3997,9 +4011,10 @@ function DataTable<T>({ head, rows, renderRow, searchText, statusOf, statusOptio
     return rows.filter((row) => {
       if (q && searchText && !searchText(row).toLowerCase().includes(q)) return false
       if (statusFilter !== 'all' && statusOf && (statusOf(row) || '').toLowerCase() !== statusFilter) return false
+      if (filter2 !== 'all' && filter2Of && (filter2Of(row) || '').toLowerCase() !== filter2) return false
       return true
     })
-  }, [rows, query, statusFilter, searchText, statusOf])
+  }, [rows, query, statusFilter, filter2, searchText, statusOf, filter2Of])
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize))
   const safePage = Math.min(page, pageCount)
@@ -4050,6 +4065,16 @@ function DataTable<T>({ head, rows, renderRow, searchText, statusOf, statusOptio
           >
             <option value="all">All statuses</option>
             {statusOptions.map((s) => <option key={s} value={s.toLowerCase()}>{s}</option>)}
+          </select>
+        )}
+        {filter2Options && filter2Options.length > 0 && filter2Of && (
+          <select
+            className="admin-toolbar__filter"
+            value={filter2}
+            onChange={(e) => { setFilter2(e.target.value); setPage(1) }}
+          >
+            <option value="all">{filter2AllLabel || 'All'}</option>
+            {filter2Options.map((s) => <option key={s} value={s.toLowerCase()}>{s}</option>)}
           </select>
         )}
         <span className="admin-toolbar__count">
