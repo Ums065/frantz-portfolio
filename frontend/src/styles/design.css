@@ -3117,11 +3117,15 @@ section#challenge .challenge-features .ns-gain p {
    its column name (from data-label) + value. Nothing is cut off.
    ------------------------------------------------------------------ */
 @media (max-width: 640px) {
-  .admin-table--stack { min-width: 0 !important; }
+  /* The table must become a plain block that fills its wrap; left as display:table
+     it shrink-to-fits to content max-content (e.g. a clamped one-line message),
+     which then overflows .admin-table-wrap and clips each card on the right. */
+  .admin-table--stack { display: block; width: 100%; min-width: 0 !important; }
   .admin-table--stack thead { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); }
-  .admin-table--stack tbody { display: block; }
+  .admin-table--stack tbody { display: block; width: 100%; }
   .admin-table--stack tbody tr {
     display: block;
+    width: 100%;
     border: 1px solid var(--line);
     border-radius: 12px;
     background: rgba(255,255,255,0.02);
