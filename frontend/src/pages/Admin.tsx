@@ -719,11 +719,13 @@ export default function Admin() {
   }
 
   // Overview = a complete, clickable map of every section. Each card jumps to the
-  // tab (filter) that shows that data; New School roster cards open the New School
-  // dashboard where that data lives. `value` undefined renders an "Open" chip.
+  // tab (filter) that shows that data, staying inside the admin dashboard; the
+  // New School roster cards open the in-admin School Dashboard tab (optionally
+  // pre-selecting the students/teachers/parents roster). `value` undefined
+  // renders an "Open" chip.
   const cnt = data?.counts ?? {}
   const nsSum: Record<string, number> = nsData?.summary ?? {}
-  type OvCard = { label: string; value?: number; hint: string; icon: string; tab?: TabKey; to?: string }
+  type OvCard = { label: string; value?: number; hint: string; icon: string; tab?: TabKey; to?: string; roster?: 'students' | 'teachers' | 'parents' }
   const overviewGroups: Array<{ title: string; cards: OvCard[] }> = [
     { title: 'People', cards: [
       { label: 'User Accounts', value: data?.members.length ?? 0, hint: 'All registered users', icon: 'members', tab: 'members' },
@@ -734,10 +736,10 @@ export default function Admin() {
       { label: 'Newsletter', value: data?.subscribers.length ?? 0, hint: 'Subscribers', icon: 'subscribers', tab: 'subscribers' },
     ] },
     { title: 'New School', cards: [
-      { label: 'Schools', value: nsSum.schools ?? 0, hint: 'Registered schools', icon: 'school', to: '/new-school/dashboard' },
-      { label: 'Students', value: nsSum.students ?? 0, hint: 'Registered students', icon: 'students', to: '/new-school/dashboard' },
-      { label: 'Teachers', value: nsSum.teachers ?? 0, hint: 'Registered teachers', icon: 'teachers', to: '/new-school/dashboard' },
-      { label: 'Parents', value: nsSum.parents ?? 0, hint: 'Linked parents', icon: 'parents', to: '/new-school/dashboard' },
+      { label: 'Schools', value: nsSum.schools ?? 0, hint: 'Registered schools', icon: 'school', tab: 'ns-schools' },
+      { label: 'Students', value: nsSum.students ?? 0, hint: 'Registered students', icon: 'students', tab: 'ns-schools', roster: 'students' },
+      { label: 'Teachers', value: nsSum.teachers ?? 0, hint: 'Registered teachers', icon: 'teachers', tab: 'ns-schools', roster: 'teachers' },
+      { label: 'Parents', value: nsSum.parents ?? 0, hint: 'Linked parents', icon: 'parents', tab: 'ns-schools', roster: 'parents' },
       { label: 'Student Submissions', value: nsSubmissions.length, hint: 'Projects to review', icon: 'ns-submissions', tab: 'ns-submissions' },
       { label: 'Business Interviews', value: nsInterviews.length, hint: 'Logged interviews', icon: 'ns-interviews', tab: 'ns-interviews' },
       { label: 'Messages', hint: 'Chat with users', icon: 'ns-chat', tab: 'ns-chat' },
@@ -761,7 +763,10 @@ export default function Admin() {
       { label: 'Gallery', value: cnt.gallery ?? 0, hint: 'Submitted files', icon: 'gallery', tab: 'gallery' },
     ] },
   ]
-  const openOvCard = (card: OvCard) => { if (card.tab) setTab(card.tab); else if (card.to) navigate(card.to) }
+  const openOvCard = (card: OvCard) => {
+    if (card.roster) setSchoolRosterTab(card.roster)
+    if (card.tab) setTab(card.tab); else if (card.to) navigate(card.to)
+  }
 
   if (loading) {
     return (
