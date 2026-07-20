@@ -2,6 +2,7 @@
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { api, type InventoryRow } from '../lib/api'
 import { useSeo } from '../hooks/useSeo'
+import { useJsonLd } from '../hooks/useJsonLd'
 import { BRAND_LOGO } from '../lib/brandAssets'
 import '../styles/store.css'
 
@@ -344,6 +345,34 @@ export default function Store() {
   const [selectedProduct, setSelectedProduct] = useState<InventoryRow | null>(null)
   const [portraitByProduct, setPortraitByProduct] = useState<Record<string, boolean>>({})
   const checkoutFormRef = useRef<HTMLFormElement | null>(null)
+
+  // Product structured data (rich results): an ItemList of the live catalog with
+  // price + availability, so Google can show price/stock in search.
+  const visibleProducts = rows.filter((r) => r.visibility === 'live')
+  useJsonLd('products', visibleProducts.length ? {
+    '@context': 'https://schema.org',
+    '@type': 'ItemList',
+    itemListElement: visibleProducts.map((r, i) => ({
+      '@type': 'ListItem',
+      position: i + 1,
+      item: {
+        '@type': 'Product',
+        name: r.name,
+        image: r.image ? (/^https?:\/\//i.test(r.image) ? r.image : `https://frantzcoutard.com${r.image.startsWith('/') ? '' : '/'}${r.image}`) : undefined,
+        description: r.tagline || r.description || undefined,
+        category: r.category || undefined,
+        offers: {
+          '@type': 'Offer',
+          price: r.price,
+          priceCurrency: (payCfg.currency || 'usd').toUpperCase(),
+          availability: r.stock_status === 'out'
+            ? 'https://schema.org/OutOfStock'
+            : 'https://schema.org/InStock',
+          url: 'https://frantzcoutard.com/store',
+        },
+      },
+    })),
+  } : null)
 
   useEffect(() => {
     let active = true

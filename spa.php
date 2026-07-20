@@ -64,25 +64,43 @@ try {
         '/content-disclaimer' => ['Content Disclaimer', 'Disclaimer covering the content published on FrantzCoutard.com.', null],
     ];
 
-    $title = null; $desc = null; $image = null;
+    // App / auth-gated routes: valid pages (return 200) but no public meta —
+    // they are noindex dashboards, so we serve the shell unchanged.
+    $appRoutes = [
+        '/dashboard', '/profile', '/reset-password', '/admin', '/judge/dashboard',
+        '/business', '/sponsor', '/partner-portal', '/media-portal', '/volunteer',
+        '/demo', '/new-school/dashboard',
+    ];
+
+    $title = null; $desc = null; $image = null; $post = null; $known = false;
 
     if (isset($routes[$path])) {
         [$title, $desc, $image] = $routes[$path];
+        $known = true;
+    } elseif (in_array($path, $appRoutes, true) || preg_match('#^/new-school/parent/#', $path)) {
+        $known = true; // valid app route, no meta injection
     } elseif (preg_match('#^/blog/(\d+)$#', $path, $m)) {
-        // Single blog post — pull the real title/excerpt/cover from the DB.
+        // Single blog post — pull the real title/excerpt/cover/date from the DB.
         require_once __DIR__ . '/api/config.php';
         header('Content-Type: text/html; charset=utf-8'); // config.php sets JSON; restore HTML
-        $stmt = db()->prepare('SELECT title, excerpt, cover_image FROM posts WHERE id = ?');
+        $stmt = db()->prepare('SELECT title, excerpt, cover_image, published_at FROM posts WHERE id = ?');
         $stmt->execute([(int) $m[1]]);
         $post = $stmt->fetch();
         if ($post) {
             $title = (string) $post['title'];
             $desc = $post['excerpt'] !== null && $post['excerpt'] !== '' ? (string) $post['excerpt'] : null;
             $image = $post['cover_image'] !== null && $post['cover_image'] !== '' ? (string) $post['cover_image'] : null;
+            $known = true;
         }
+        // else: post id doesn't exist → genuine 404 (handled below)
     }
 
-    // Unknown route (or missing post): serve the shell unchanged; the SPA renders it.
+    // Soft-404 fix: a URL that matches no real route (the SPA's NotFound catch-all,
+    // or a deleted blog post) must return HTTP 404, not 200. The SPA still renders
+    // its NotFound page; only the status code changes so search engines drop it.
+    if (!$known) { http_response_code(404); echo $html; exit; }
+
+    // Valid app route with no public meta to change: serve shell as-is.
     if ($title === null) { echo $html; exit; }
 
     $fullTitle = $title . ' — ' . SITE;
@@ -109,6 +127,30 @@ try {
     foreach ($reps as [$pattern, $replacement]) {
         $out = preg_replace($pattern, $replacement, $html);
         if ($out !== null) $html = $out; // keep previous on regex failure
+    }
+
+    // Blog post → BlogPosting structured data (article rich results). Injected
+    // just before </head> so crawlers get it without running JavaScript.
+    if ($post !== null) {
+        $schema = [
+            '@context' => 'https://schema.org',
+            '@type' => 'BlogPosting',
+            'headline' => $title,
+            'description' => $descOut,
+            'image' => $imgOut,
+            'datePublished' => !empty($post['published_at']) ? substr((string) $post['published_at'], 0, 10) : null,
+            'author' => ['@type' => 'Person', 'name' => SITE],
+            'publisher' => [
+                '@type' => 'Organization',
+                'name' => SITE,
+                'logo' => ['@type' => 'ImageObject', 'url' => DEFAULT_IMAGE],
+            ],
+            'mainEntityOfPage' => $canonical,
+        ];
+        $ld = '<script type="application/ld+json">'
+            . json_encode($schema, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)
+            . '</script>' . "\n</head>";
+        $html = str_replace('</head>', $ld, $html);
     }
 
     echo $html;

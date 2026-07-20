@@ -4,6 +4,7 @@ import { api, type EventItem } from '../lib/api'
 import { loadSavedItems, toggleSavedItem } from '../lib/memberStorage'
 import { useAuth } from '../context/AuthContext'
 import { useSeo } from '../hooks/useSeo'
+import { useJsonLd } from '../hooks/useJsonLd'
 
 const monthAbbr = (d: string) => new Date(d + 'T00:00:00').toLocaleString('en-US', { month: 'short' })
 const dayNum = (d: string) => new Date(d + 'T00:00:00').getDate()
@@ -40,6 +41,26 @@ export default function Events() {
   }, [])
 
   const safeEvents = Array.isArray(events) ? events : []
+
+  // Event structured data (rich results): an ItemList of upcoming Events.
+  useJsonLd('events', safeEvents.length ? {
+    '@context': 'https://schema.org',
+    '@type': 'ItemList',
+    itemListElement: safeEvents.filter((e) => !e.is_past).map((e, i) => ({
+      '@type': 'ListItem',
+      position: i + 1,
+      item: {
+        '@type': 'Event',
+        name: e.title,
+        startDate: e.event_date,
+        eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
+        eventStatus: 'https://schema.org/EventScheduled',
+        location: e.location ? { '@type': 'Place', name: e.location } : undefined,
+        performer: e.role ? { '@type': 'Person', name: 'Frantz Coutard' } : undefined,
+        organizer: { '@type': 'Organization', name: 'Frantz Coutard', url: 'https://frantzcoutard.com' },
+      },
+    })),
+  } : null)
 
   useEffect(() => {
     if (!activeEvent) return
