@@ -172,7 +172,7 @@ export default function Media() {
           <div className="blog-list-grid media-list">
             {(featured ? [featured, ...items.filter((item) => item.id !== featured.id)] : items).map((item) => (
               <article className="glass blog-card reveal" key={item.id}>
-                <div className="blog-card__img"><img src={item.image || '/assets/abstract-gold-network.webp'} alt="" loading="lazy" decoding="async" /></div>
+                <div className="blog-card__img"><img src={item.image || '/assets/abstract-gold-network.webp'} alt={item.title || 'Media asset'} loading="lazy" decoding="async" /></div>
                 <div className="blog-card__body">
                   <div className="kicker"><span className="cat">{item.type}</span><span>&bull;</span><span>{item.published_at || 'Current'}</span></div>
                   <h3>{item.title}</h3>

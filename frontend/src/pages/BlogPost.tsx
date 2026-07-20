@@ -71,7 +71,7 @@ export default function BlogPost() {
                   </button>
                 </div>
                 <div className="legacy__photo" style={{ aspectRatio: '16/7', marginBottom: 30 }}>
-                  <img src={post.cover_image || cover} alt="" loading="eager" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <img src={post.cover_image || cover} alt={post.title || 'Article cover'} loading="eager" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </div>
                 <div className="post-article__body">
                   {(post.body || post.excerpt).split('\n\n').map((para, i) => <p key={i}>{para}</p>)}

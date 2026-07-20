@@ -271,7 +271,7 @@ function FieldError({ msg, full = false }: { msg?: string; full?: boolean }) {
 /** Avatar contents: the uploaded photo if present, otherwise the name's first letter.
  *  Drop this inside any existing avatar/initial <span> to show profile photos everywhere. */
 const avatarInner = (name: any, photo?: string | null): ReactNode =>
-  photo ? <img className="ns-avatar-img" src={photo} alt="" loading="lazy" /> : String(name || '?').trim().charAt(0).toUpperCase()
+  photo ? <img className="ns-avatar-img" src={photo} alt={name ? `${name} profile photo` : 'Profile photo'} loading="lazy" /> : String(name || '?').trim().charAt(0).toUpperCase()
 
 /** Profile photo upload card shown in each role's Profile tab. Image only, max 5 MB,
  *  stored once on the user account (users.avatar_url) so it appears everywhere. */

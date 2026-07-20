@@ -213,7 +213,7 @@ export default function Partners() {
               {founding[0] ? (
                 <div className="ofounding">
                   <span className="opill">Founding Partner</span>
-                  <div style={{ margin: '14px 0' }}>{founding[0].logo_url ? <img src={founding[0].logo_url} alt="" style={{ maxHeight: 54 }} /> : <span className="ologomark" style={{ width: 54, height: 54, fontSize: 20 }}>{initials(founding[0].name)}</span>}</div>
+                  <div style={{ margin: '14px 0' }}>{founding[0].logo_url ? <img src={founding[0].logo_url} alt={`${founding[0].name} logo`} style={{ maxHeight: 54 }} /> : <span className="ologomark" style={{ width: 54, height: 54, fontSize: 20 }}>{initials(founding[0].name)}</span>}</div>
                   <h3>{founding[0].name}</h3>
                   <p>{founding[0].blurb || 'Building stronger futures and creating opportunity for all.'}</p>
                   {founding[0].website && <a className="obtn obtn--dark" href={founding[0].website} target="_blank" rel="noreferrer">View Profile</a>}
@@ -245,7 +245,7 @@ export default function Partners() {
                 <p>We are proud to recognize organizations that go above and beyond to support our mission and make a lasting impact in our communities.</p>
               </div>
               <div className="ospot__feat">
-                <div className="ospot__logo">{spotlight.logo_url ? <img src={spotlight.logo_url} alt="" style={{ maxWidth: '80%', maxHeight: 90 }} /> : <span className="ologomark" style={{ width: 70, height: 70, fontSize: 26 }}>{initials(spotlight.name)}</span>}</div>
+                <div className="ospot__logo">{spotlight.logo_url ? <img src={spotlight.logo_url} alt={`${spotlight.name} logo`} style={{ maxWidth: '80%', maxHeight: 90 }} /> : <span className="ologomark" style={{ width: 70, height: 70, fontSize: 26 }}>{initials(spotlight.name)}</span>}</div>
                 <div>
                   {spotlight.partner_type && <span className="opill" style={{ background: '#2c5540', color: '#cfe0d4' }}>{spotlight.partner_type}</span>}
                   <h3 style={{ color: '#fff', fontSize: 22, margin: '10px 0 8px' }}>{spotlight.name}</h3>

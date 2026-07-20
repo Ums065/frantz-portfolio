@@ -648,7 +648,7 @@ export default function Home() {
               {awardHighlights.map((a) => (
                 <div className="award" key={a.title}>
                   <span className="award-photo">
-                    <img src={a.image} alt="" loading="lazy" decoding="async" />
+                    <img src={a.image} alt={a.title || 'Award'} loading="lazy" decoding="async" />
                     <span className="am medal"><svg viewBox="0 0 54 54" fill="none" stroke="currentColor" strokeWidth={1.5} style={{ width: 18, height: 18, color: 'var(--gold)' }}><circle cx="27" cy="22" r="13" /><path d="M22 37l-3 9 8-4 8 4-3-9" /></svg></span>
                   </span>
                   <div><h4>{a.title}</h4><p>{a.copy}</p></div>
@@ -816,7 +816,7 @@ export default function Home() {
           <div className="blog-grid">
             {featured && (
               <article className="glass post feature reveal d1">
-                <div className="post__img"><img src={featured.cover_image || abstractNetwork} alt="" loading="lazy" decoding="async" /></div>
+                <div className="post__img"><img src={featured.cover_image || abstractNetwork} alt={featured.title || 'Featured article'} loading="lazy" decoding="async" /></div>
                 <div className="post__body">
                   <div className="kicker"><span className="cat">{featured.category}</span><span>&bull;</span><span>{fmtMonthYear(featured.published_at)}</span></div>
                   <h3>{featured.title}</h3>
@@ -827,7 +827,7 @@ export default function Home() {
             )}
             {rest.map((p, i) => (
               <article className={`glass post reveal d${i + 2}`} key={p.id}>
-                <div className="post__img"><img src={p.cover_image || (i === 0 ? signatureWordmark : brandMarks)} alt="" loading="lazy" decoding="async" /></div>
+                <div className="post__img"><img src={p.cover_image || (i === 0 ? signatureWordmark : brandMarks)} alt={p.title || 'Article'} loading="lazy" decoding="async" /></div>
                 <div className="post__body">
                   <div className="kicker"><span className="cat">{p.category}</span><span>&bull;</span><span>{fmtMonthYear(p.published_at)}</span></div>
                   <h3>{p.title}</h3>

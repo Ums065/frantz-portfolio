@@ -58,7 +58,7 @@ export default function Blog() {
               const saved = savedArticles.includes(String(p.id))
               return (
                 <article className="glass blog-card reveal" key={p.id}>
-                  <div className="blog-card__img"><img src={p.cover_image || cover} alt="" loading="lazy" decoding="async" /></div>
+                  <div className="blog-card__img"><img src={p.cover_image || cover} alt={p.title || 'Blog post cover'} loading="lazy" decoding="async" /></div>
                   <div className="blog-card__body">
                     <div className="kicker"><span className="cat">{p.category}</span><span>&bull;</span><span>{fmt(p.published_at)}</span></div>
                     <h3>{p.title}</h3>
