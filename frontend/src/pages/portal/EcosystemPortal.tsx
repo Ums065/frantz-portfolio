@@ -16,7 +16,7 @@ import { resolveDashboardRoute } from '../../lib/dashboardRoute'
 
 export const S = {
   wrap: { minHeight: '100vh', color: 'var(--white)', padding: '0 clamp(14px,4vw,24px) 64px', fontFamily: 'var(--f-body)' } as React.CSSProperties,
-  card: { background: 'rgba(255,255,255,0.035)', border: '1px solid var(--line)', borderRadius: 16, padding: 'clamp(16px,3vw,22px)', boxShadow: '0 1px 0 rgba(255,255,255,0.03) inset, 0 18px 40px -30px rgba(0,0,0,0.7)' } as React.CSSProperties,
+  card: { background: 'rgba(255,255,255,0.035)', border: '1px solid var(--line)', borderRadius: 16, padding: 'clamp(16px,3vw,22px)', boxShadow: '0 1px 0 rgba(255,255,255,0.03) inset, 0 18px 40px -30px rgba(0,0,0,0.7)', minWidth: 0, maxWidth: '100%', overflowWrap: 'anywhere' } as React.CSSProperties,
   label: { display: 'block', fontSize: 12, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--gold-light)', marginBottom: 6 } as React.CSSProperties,
   input: { width: '100%', background: 'rgba(0,0,0,0.25)', border: '1px solid var(--line)', borderRadius: 9, padding: '11px 13px', color: 'var(--ivory)', fontSize: 14 } as React.CSSProperties,
   eyebrow: { fontSize: 11.5, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--gold)' } as React.CSSProperties,
@@ -436,9 +436,9 @@ function TabbedDashboard({ config, data, reload, logout, orgName }: { config: Po
         <span className="admin-mobilebar__hint">{navOpen ? 'Tap to close' : active.label}</span>
       </button>
       <aside className="admin-sidebar glass">
-        <div className="admin-sidebar__brand">
+        <div className="admin-sidebar__brand" style={{ minWidth: 0 }}>
           <span className="admin-kicker" style={S.eyebrow}>{config.title}</span>
-          <strong className="gold-text">{orgName}</strong>
+          <strong className="gold-text" style={{ overflowWrap: 'anywhere' }}>{orgName}</strong>
         </div>
         <nav className="admin-nav" onClick={() => setNavOpen(false)}>
           <div className="admin-nav__group">
@@ -463,11 +463,11 @@ function TabbedDashboard({ config, data, reload, logout, orgName }: { config: Po
           <h1 className="gold-text" style={{ fontFamily: 'var(--f-serif)', fontSize: 'clamp(22px,4vw,28px)', margin: '4px 0 0' }}>{active.label}</h1>
         </header>
         {tiles.length > 0 && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: 14, marginBottom: 20 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(130px,100%),1fr))', gap: 14, marginBottom: 20, minWidth: 0 }}>
             {tiles.map((t) => <StatTile key={t.label} label={t.label} value={t.value} />)}
           </div>
         )}
-        <div style={{ display: 'grid', gap: 16 }}>{active.render(data, reload, { logout })}</div>
+        <div style={{ display: 'grid', gap: 16, minWidth: 0 }}>{active.render(data, reload, { logout })}</div>
       </main>
     </div>
   )
