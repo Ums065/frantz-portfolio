@@ -338,7 +338,7 @@ export default function Store() {
   const [checkoutForm, setCheckoutForm] = useState<CheckoutForm>(emptyCheckoutForm)
   const [checkoutOpen, setCheckoutOpen] = useState(false)
   const [checkoutStep, setCheckoutStep] = useState<CheckoutStep>('details')
-  const [payCfg, setPayCfg] = useState<{ methods: string[]; currency: string; razorpay_key_id: string; paypal_client_id: string }>({ methods: [], currency: 'usd', razorpay_key_id: '', paypal_client_id: '' })
+  const [payCfg, setPayCfg] = useState<{ methods: string[]; currency: string; paypal_client_id: string }>({ methods: [], currency: 'usd', paypal_client_id: '' })
   const [provider, setProvider] = useState('')
   const [cartOpen, setCartOpen] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState<InventoryRow | null>(null)
@@ -415,7 +415,7 @@ export default function Store() {
 
   // Which payment providers are enabled (only those with keys configured).
   useEffect(() => {
-    api.get<{ methods: string[]; currency: string; razorpay_key_id: string; paypal_client_id: string }>('store/payment-methods')
+    api.get<{ methods: string[]; currency: string; paypal_client_id: string }>('store/payment-methods')
       .then((cfg) => { setPayCfg(cfg); setProvider((p) => p || cfg.methods[0] || '') })
       .catch(() => {})
   }, [])
@@ -578,15 +578,6 @@ export default function Store() {
     window.fcToast?.('Item removed from cart.')
   }
 
-  const loadRazorpay = (): Promise<boolean> => new Promise((resolve) => {
-    if ((window as unknown as { Razorpay?: unknown }).Razorpay) return resolve(true)
-    const s = document.createElement('script')
-    s.src = 'https://checkout.razorpay.com/v1/checkout.js'
-    s.onload = () => resolve(true)
-    s.onerror = () => resolve(false)
-    document.body.appendChild(s)
-  })
-
   const handleCheckout = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setCheckoutBusy(true)
@@ -606,39 +597,6 @@ export default function Store() {
         address: combineAddress(checkoutForm),
         items: cartRows.map((item) => ({ id: item.row.product_id, qty: item.qty })),
       })
-
-      if (response.mode === 'razorpay') {
-        const ok = await loadRazorpay()
-        if (!ok) throw new Error('Could not load Razorpay checkout.')
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const rz = new (window as any).Razorpay({
-          key: response.razorpay_key_id,
-          order_id: response.razorpay_order_id,
-          amount: response.amount,
-          currency: response.currency,
-          name: 'Frantz Coutard Store',
-          description: `Order ${response.order_no}`,
-          prefill: { name: response.customer_name, email: response.customer_email },
-          theme: { color: '#c9a24c' },
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          handler: async (r: any) => {
-            try {
-              const v = await api.post<{ message: string; order_no: string; payment_status: string }>('store/checkout/razorpay-verify', {
-                order_no: response.order_no,
-                razorpay_order_id: r.razorpay_order_id,
-                razorpay_payment_id: r.razorpay_payment_id,
-                razorpay_signature: r.razorpay_signature,
-              })
-              finishSuccess(v.order_no, v.message)
-            } catch (e) {
-              setCheckoutError(e instanceof Error ? e.message : 'Payment verification failed.')
-            }
-          },
-          modal: { ondismiss: () => setCheckoutError('Payment was not completed.') },
-        })
-        rz.open()
-        return
-      }
 
       window.location.href = response.checkout_url
     } catch (err) {
@@ -1002,19 +960,17 @@ export default function Store() {
                       style={{ cursor: 'pointer', background: 'none', font: 'inherit', color: 'inherit' }}
                     >
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 10h18" /></svg>
-                      <span>{m === 'stripe' ? 'Card — Stripe' : m === 'razorpay' ? 'Razorpay (UPI / Card)' : 'PayPal'}</span>
+                      <span>{m === 'stripe' ? 'Card — Stripe' : 'PayPal'}</span>
                     </button>
                   ))}
                 </div>
                 <p style={{ color: 'var(--muted)', fontSize: 12.5, lineHeight: 1.7, margin: '0 0 20px' }}>
-                  {provider === 'razorpay'
-                    ? 'Review the shipping address above, then complete payment in the secure Razorpay window.'
-                    : 'Review the shipping address above, then proceed to the secure hosted payment page.'}
+                  Review the shipping address above, then proceed to the secure hosted payment page.
                 </p>
                 <div className="co-actions">
                   <button className="btn btn--ghost" type="button" onClick={() => setCheckoutStep('details')} disabled={checkoutBusy}>Back to Address</button>
                   <button className="btn btn--solid" type="submit" disabled={checkoutBusy || cartRows.length === 0 || !provider}>
-                    {checkoutBusy ? 'Processing…' : provider === 'razorpay' ? 'Pay with Razorpay' : 'Proceed to Payment'}
+                    {checkoutBusy ? 'Processing…' : 'Proceed to Payment'}
                   </button>
                 </div>
               </section>

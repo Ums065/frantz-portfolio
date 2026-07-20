@@ -1095,20 +1095,6 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
                     $response['mode'] = 'redirect';
                     $response['checkout_url'] = $sessionUrl;
                     $response['message'] = 'Redirecting to PayPal.';
-                } elseif ($provider === 'razorpay') {
-                    $amountMinor = (int) round(((float) $totals['total']) * 100);
-                    $rz = storefront_razorpay_create_order($amountMinor, $currency, $orderNo);
-                    if (!$rz['ok']) { $pdo->rollBack(); json(['error' => (string) ($rz['error'] ?? 'Razorpay order could not be created.')], 502); }
-                    $sessionId = (string) ($rz['order']['id'] ?? '');
-                    if ($sessionId === '') { $pdo->rollBack(); json(['error' => 'Razorpay order id missing.'], 502); }
-                    $response['mode'] = 'razorpay';
-                    $response['razorpay_order_id'] = $sessionId;
-                    $response['razorpay_key_id'] = storefront_razorpay_key_id();
-                    $response['amount'] = $amountMinor;
-                    $response['currency'] = strtoupper($currency);
-                    $response['customer_name'] = $name;
-                    $response['customer_email'] = $email;
-                    $response['message'] = 'Complete payment with Razorpay.';
                 }
 
                 $update = $pdo->prepare('UPDATE orders SET payment_session_id = ?, payment_url = ?, payment_status = ?, updated_at = NOW() WHERE id = ?');
@@ -1159,8 +1145,8 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
                 json(['error' => 'Payment session does not match the order reference.'], 422);
             }
 
-            // L1: bind + amount-check the Stripe confirmation the same way as Razorpay/
-            // PayPal — go through storefront_mark_order_paid() instead of a bespoke UPDATE.
+            // L1: bind + amount-check the Stripe confirmation the same way as PayPal —
+            // go through storefront_mark_order_paid() instead of a bespoke UPDATE.
             $paymentIntentId = '';
             if (isset($session['payment_intent'])) {
                 if (is_string($session['payment_intent'])) {
@@ -1181,26 +1167,6 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
                 'order_no' => $orderNo,
                 'payment_status' => 'paid',
             ]);
-        }
-
-        // Razorpay: verify the payment signature client-side handshake returned, then mark paid.
-        case $key === 'POST store/checkout/razorpay-verify': {
-            $b = body();
-            $orderNo = field($b, 'order_no');
-            $rzpOrderId = field($b, 'razorpay_order_id');
-            $paymentId = field($b, 'razorpay_payment_id');
-            $signature = field($b, 'razorpay_signature');
-            if ($orderNo === '' || $rzpOrderId === '' || $paymentId === '' || $signature === '') {
-                json(['error' => 'Missing payment verification fields.'], 422);
-            }
-            if (!storefront_razorpay_verify_signature($rzpOrderId, $paymentId, $signature)) {
-                json(['error' => 'Payment could not be verified.'], 400);
-            }
-            storefront_ensure_orders_payment_schema();
-            // Bind the Razorpay order id to this order (the amount is correct by
-            // construction: the Razorpay order was created server-side for this order).
-            storefront_mark_order_paid($orderNo, 'razorpay', 'razorpay', $paymentId, $rzpOrderId, ['expect_session' => $rzpOrderId]);
-            json(['message' => 'Payment confirmed.', 'order_no' => $orderNo, 'payment_status' => 'paid']);
         }
 
         // PayPal: capture the approved order on return, then mark paid.

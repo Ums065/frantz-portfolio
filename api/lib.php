@@ -1358,34 +1358,6 @@ function storefront_stripe_checkout_session_detail(string $sessionId): array
     return storefront_stripe_api_request('GET', '/v1/checkout/sessions/' . rawurlencode($sessionId) . '?expand[]=payment_intent');
 }
 
-/* ==================== Razorpay ==================== */
-function storefront_razorpay_key_id(): string { return trim((string) env('RAZORPAY_KEY_ID', '')); }
-function storefront_razorpay_secret(): string { return trim((string) env('RAZORPAY_KEY_SECRET', '')); }
-function storefront_razorpay_enabled(): bool { return storefront_razorpay_key_id() !== '' && storefront_razorpay_secret() !== ''; }
-
-/** Create a Razorpay Order (amount in minor units, e.g. paise/cents). */
-function storefront_razorpay_create_order(int $amountMinor, string $currency, string $orderNo): array
-{
-    if (!storefront_razorpay_enabled()) return ['ok' => false, 'error' => 'Razorpay is not configured.'];
-    $auth = base64_encode(storefront_razorpay_key_id() . ':' . storefront_razorpay_secret());
-    $body = json_encode(['amount' => $amountMinor, 'currency' => strtoupper($currency), 'receipt' => $orderNo, 'notes' => ['order_no' => $orderNo]]);
-    $res = mail_http_request('https://api.razorpay.com/v1/orders', 'POST', $body, ['Authorization: Basic ' . $auth, 'Content-Type: application/json', 'Accept: application/json']);
-    $data = json_decode($res['body'], true);
-    if (!$res['ok'] || !is_array($data) || empty($data['id'])) {
-        $msg = is_array($data) && isset($data['error']['description']) ? (string) $data['error']['description'] : 'Razorpay order could not be created.';
-        return ['ok' => false, 'error' => $msg];
-    }
-    return ['ok' => true, 'order' => $data];
-}
-
-/** Verify a Razorpay payment signature: HMAC_SHA256(order_id|payment_id, secret). */
-function storefront_razorpay_verify_signature(string $rzpOrderId, string $paymentId, string $signature): bool
-{
-    if (!storefront_razorpay_enabled() || $signature === '') return false;
-    $expected = hash_hmac('sha256', $rzpOrderId . '|' . $paymentId, storefront_razorpay_secret());
-    return hash_equals($expected, $signature);
-}
-
 /* ==================== PayPal (Orders v2, approve+capture) ==================== */
 function storefront_paypal_client_id(): string { return trim((string) env('PAYPAL_CLIENT_ID', '')); }
 function storefront_paypal_secret(): string { return trim((string) env('PAYPAL_SECRET', '')); }
@@ -1441,7 +1413,6 @@ function storefront_payment_methods(): array
 {
     $m = [];
     if (storefront_stripe_enabled()) $m[] = 'stripe';
-    if (storefront_razorpay_enabled()) $m[] = 'razorpay';
     if (storefront_paypal_enabled()) $m[] = 'paypal';
     return $m;
 }
@@ -1452,7 +1423,6 @@ function storefront_payment_config(): array
     return [
         'methods' => storefront_payment_methods(),
         'currency' => storefront_currency(),
-        'razorpay_key_id' => storefront_razorpay_enabled() ? storefront_razorpay_key_id() : '',
         'paypal_client_id' => storefront_paypal_enabled() ? storefront_paypal_client_id() : '',
     ];
 }
@@ -1503,7 +1473,7 @@ function storefront_release_expired_reservations(int $maxAgeMinutes = 30): void
 }
 
 /**
- * Idempotently mark an order paid (used by razorpay-verify + paypal-capture).
+ * Idempotently mark an order paid (used by stripe confirm + paypal-capture).
  *
  * When $verify is provided the payment is validated INSIDE the row lock before
  * the order is flipped to paid, closing the C-3/C-4 payment-binding holes:
