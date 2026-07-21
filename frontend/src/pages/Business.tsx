@@ -16,7 +16,7 @@ import { statHint } from '../lib/statHints'
    internship-hiring / volunteer) that all go to the Admin for review + consent. */
 
 const WRAP_S: React.CSSProperties = { minHeight: '100vh', color: 'var(--white)', padding: '0 clamp(12px,4vw,24px) 60px', fontFamily: 'var(--f-body)' }
-const cardS: React.CSSProperties = { background: 'rgba(255,255,255,0.04)', border: '1px solid var(--line)', borderRadius: 14, padding: 20 }
+const cardS: React.CSSProperties = { background: 'rgba(255,255,255,0.04)', border: '1px solid var(--line)', borderRadius: 14, padding: 20, minWidth: 0, maxWidth: '100%', overflowWrap: 'anywhere' }
 const labelS: React.CSSProperties = { display: 'block', fontSize: 12, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--gold-light)', marginBottom: 6 }
 const inputS: React.CSSProperties = { width: '100%', background: 'rgba(0,0,0,0.25)', border: '1px solid var(--line)', borderRadius: 9, padding: '11px 13px', color: 'var(--ivory)', fontSize: 14 }
 const eyebrow: React.CSSProperties = { fontSize: 11, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--gold)' }
@@ -273,16 +273,16 @@ export default function Business() {
           ) : (
             <form onSubmit={doRegister} style={{ padding: '18px 30px 30px', display: 'grid', gap: 14 }}>
               <div><label style={labelS}>Business name *</label><input style={inputS} required value={f.business_name} onChange={(e) => setF({ ...f, business_name: e.target.value })} placeholder="e.g. Barclays Center" /></div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(150px,100%), 1fr))', gap: 12 }}>
                 <div><label style={labelS}>Category</label><input style={inputS} value={f.category} onChange={(e) => setF({ ...f, category: e.target.value })} placeholder="Retail, Food, Healthcare…" /></div>
                 <div><label style={labelS}>Borough / County</label><input style={inputS} value={f.borough} onChange={(e) => setF({ ...f, borough: e.target.value })} placeholder="Bronx, Brooklyn…" /></div>
               </div>
               <div><label style={labelS}>Your name (contact) *</label><input style={inputS} required value={f.full_name} onChange={(e) => setF({ ...f, full_name: e.target.value })} /></div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(150px,100%), 1fr))', gap: 12 }}>
                 <div><label style={labelS}>Email *</label><input style={inputS} type="email" required value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} /></div>
                 <div><label style={labelS}>Phone</label><input style={inputS} value={f.contact_phone} onChange={(e) => setF({ ...f, contact_phone: e.target.value })} /></div>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(150px,100%), 1fr))', gap: 12 }}>
                 <div><label style={labelS}>Website</label><input style={inputS} value={f.website} onChange={(e) => setF({ ...f, website: e.target.value })} placeholder="https://…" /></div>
                 <div><label style={labelS}>Password *</label><input style={inputS} type="password" required value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} placeholder="6+ characters" /></div>
               </div>
@@ -393,7 +393,7 @@ export default function Business() {
           {err && <p style={{ color: '#ff9a9a', fontSize: 13, marginBottom: 14 }}>{err}</p>}
 
           {/* Impact tiles always on top */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 14, marginBottom: 22 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(150px,100%),1fr))', gap: 14, marginBottom: 22 }}>
             <StatTile label="Interviews" value={impact.interviews} />
             <StatTile label="Students Engaged" value={impact.students} />
             <StatTile label="Solutions Received" value={impact.solutions} />
@@ -474,7 +474,7 @@ export default function Business() {
                           <span style={{ fontSize: 16 }}>🎉</span>
                           <strong style={{ color: '#8fd6a3', fontSize: 13.5 }}>Confirmed — you can now contact them directly</strong>
                         </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 12 }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(220px,100%),1fr))', gap: 12 }}>
                           <ContactCard title={`Student · ${o.student_name}`} email={o.contact.student_email} phone={o.contact.student_phone} />
                           <ContactCard title={`Parent / Guardian${o.contact.parent_name ? ` · ${o.contact.parent_name}` : ''}`} email={o.contact.parent_email} phone={o.contact.parent_phone} />
                         </div>
@@ -578,7 +578,7 @@ export default function Business() {
                   <label style={labelS}>Role / job title *</label>
                   <input style={inputS} value={draft.job_title || ''} onChange={(e) => setDraft({ ...draft, job_title: e.target.value })} placeholder="e.g. Marketing Intern" />
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(150px,100%),1fr))', gap: 12 }}>
                   <div><label style={labelS}>Location</label><input style={inputS} value={draft.location || ''} onChange={(e) => setDraft({ ...draft, location: e.target.value })} placeholder="On-site / Remote / Brooklyn" /></div>
                   <div><label style={labelS}>Duration</label><input style={inputS} value={draft.duration || ''} onChange={(e) => setDraft({ ...draft, duration: e.target.value })} placeholder="e.g. 8 weeks (summer)" /></div>
                   <div><label style={labelS}>Stipend / pay</label><input style={inputS} value={draft.stipend || ''} onChange={(e) => setDraft({ ...draft, stipend: e.target.value })} placeholder="e.g. $15/hr or Unpaid" /></div>
@@ -605,8 +605,8 @@ export default function Business() {
       {detail && (
         <div onClick={() => setDetail(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', display: 'grid', placeItems: 'center', padding: 20, zIndex: 60 }}>
           <div onClick={(e) => e.stopPropagation()} className="glass" style={{ maxWidth: 640, width: '100%', maxHeight: '86vh', overflowY: 'auto', padding: 26, borderRadius: 16 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
-              <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
+              <div style={{ minWidth: 0 }}>
                 <span style={eyebrow}>Interview · Visit #{detail.visit_number}</span>
                 <h3 className="gold-text" style={{ fontFamily: 'var(--f-serif)', fontSize: 22, margin: '4px 0 0' }}>
                   {detail.student_name}{detail.verified && <span title="Signed / verified visit" style={{ color: 'var(--gold)', marginLeft: 6 }}>✓</span>}
@@ -618,7 +618,7 @@ export default function Business() {
               <button className="btn btn--sm" onClick={() => setDetail(null)} aria-label="Close">✕</button>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12, margin: '18px 0' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(150px,100%),1fr))', gap: 12, margin: '18px 0' }}>
               {detailStat('Visited', detail.date_of_visit || '—')}
               {detailStat('Category', detail.business_category || '—')}
               {detailStat('Solution', detail.solution ? 'Submitted' : detail.solution_pending ? 'In progress' : 'None yet')}
@@ -796,11 +796,11 @@ function ProfileEditor({ profile, onSaved }: { profile: BizProfile; onSaved: (p:
   return (
     <form onSubmit={save} style={{ ...cardS, display: 'grid', gap: 14, maxWidth: 620 }}>
       <div><label style={labelS}>Business name *</label><input style={inputS} required value={p.business_name} onChange={(e) => set('business_name', e.target.value)} /></div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(150px,100%), 1fr))', gap: 12 }}>
         <div><label style={labelS}>Category</label><input style={inputS} value={p.category || ''} onChange={(e) => set('category', e.target.value)} /></div>
         <div><label style={labelS}>Borough / County</label><input style={inputS} value={p.borough || ''} onChange={(e) => set('borough', e.target.value)} /></div>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(150px,100%), 1fr))', gap: 12 }}>
         <div><label style={labelS}>Contact name</label><input style={inputS} value={p.contact_name || ''} onChange={(e) => set('contact_name', e.target.value)} /></div>
         <div><label style={labelS}>Phone</label><input style={inputS} value={p.contact_phone || ''} onChange={(e) => set('contact_phone', e.target.value)} /></div>
       </div>

@@ -54,7 +54,7 @@ const config: PortalConfig = {
               <ReferralCard code={ref.code || ''} />
             </Section>
             <Section title="Referral Breakdown">
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', gap: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(120px,100%),1fr))', gap: 12 }}>
                 <StatTile label="Partners" value={by.partner ?? 0} />
                 <StatTile label="Members" value={by.member ?? 0} />
                 <StatTile label="Sponsors" value={by.sponsor ?? 0} />
