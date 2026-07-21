@@ -930,6 +930,7 @@ export default function Admin() {
               { label: 'Closed', value: reqBy('closed'), tone: 'muted' },
             ]} />
             <DataTable
+              stack
               head={['Type', 'Name', 'Email', 'Org', 'Message', 'Status', 'Date', '']}
               rows={data?.requests ?? []}
               searchPlaceholder="Search requests…"
@@ -940,12 +941,12 @@ export default function Admin() {
               bulkActions={[{ label: 'Delete selected', danger: true, onClick: (ids) => bulkDelete('admin/request', ids, 'request') }]}
               renderRow={(r, checkbox) => (
                 <tr key={r.id}>{checkbox}
-                  <td>{r.request_type}</td>
-                  <td>{r.full_name}</td>
-                  <td>{r.email}</td>
-                  <td>{r.organization || '—'}</td>
-                  <td className="admin-cell--wrap">{r.message || '—'}</td>
-                  <td>
+                  <td data-label="Type">{r.request_type}</td>
+                  <td data-label="Name">{r.full_name}</td>
+                  <td data-label="Email">{r.email}</td>
+                  <td data-label="Org">{r.organization || '—'}</td>
+                  <td data-label="Message" className="admin-cell--wrap">{r.message || '—'}</td>
+                  <td data-label="Status">
                     <select value={r.status} onChange={(e) => setStatus(r.id, e.target.value)} style={selectS}>
                       <option value="new">new</option>
                       <option value="reviewed">reviewed</option>
@@ -953,7 +954,7 @@ export default function Admin() {
                       <option value="closed">closed</option>
                     </select>
                   </td>
-                  <td>{r.created_at}</td>
+                  <td data-label="Date">{r.created_at}</td>
                   <td><RowMenu actions={[{ label: 'Delete request', danger: true, onClick: () => void deleteRow(`admin/request/${r.id}`, 'Delete this request? This cannot be undone.') }]} /></td>
                 </tr>
               )}
@@ -972,6 +973,7 @@ export default function Admin() {
               { label: 'Revenue', value: `$${orderRevenue.toFixed(2)}`, tone: 'gold' },
             ]} />
             <DataTable
+              stack
               head={['Order #', 'Customer', 'Email', 'Items', 'Total', 'Payment', 'Order Status', 'Date', '']}
               rows={data?.orders ?? []}
               searchPlaceholder="Search orders…"
@@ -985,13 +987,13 @@ export default function Admin() {
                 try { items = (JSON.parse(o.items) as Array<{ name: string; qty: number; size: string }>).map((it) => `${it.qty}× ${it.name} (${it.size})`).join(', ') } catch { items = '—' }
                 return (
                   <tr key={o.id}>{checkbox}
-                    <td>{o.order_no}</td>
-                    <td>{o.customer_name}</td>
-                    <td>{o.email}</td>
-                    <td className="admin-cell--wrap">{items}</td>
-                    <td>${o.total}</td>
-                    <td>{[o.payment_provider, o.payment_status, o.payment_method].filter(Boolean).join(' · ')}</td>
-                    <td>
+                    <td data-label="Order #">{o.order_no}</td>
+                    <td data-label="Customer">{o.customer_name}</td>
+                    <td data-label="Email">{o.email}</td>
+                    <td data-label="Items" className="admin-cell--wrap">{items}</td>
+                    <td data-label="Total">${o.total}</td>
+                    <td data-label="Payment">{[o.payment_provider, o.payment_status, o.payment_method].filter(Boolean).join(' · ')}</td>
+                    <td data-label="Order Status">
                       <select value={o.status} onChange={(e) => setOrderStatus(o.id, e.target.value)} style={selectS}>
                         <option value="pending">pending</option>
                         <option value="paid">paid</option>
@@ -999,7 +1001,7 @@ export default function Admin() {
                         <option value="cancelled">cancelled</option>
                       </select>
                     </td>
-                    <td>{o.created_at}</td>
+                    <td data-label="Date">{o.created_at}</td>
                     <td><RowMenu actions={[{ label: 'Delete order', danger: true, onClick: () => void deleteRow(`admin/order/${o.id}`, `Delete order ${o.order_no}? This permanently removes the record.`) }]} /></td>
                   </tr>
                 )
@@ -1012,6 +1014,7 @@ export default function Admin() {
           <>
             <StatChips items={[{ label: 'Subscribers', value: data?.subscribers.length ?? 0, tone: 'gold' }]} />
             <DataTable
+              stack
               head={['Email', 'Subscribed', '']}
               rows={data?.subscribers ?? []}
               searchPlaceholder="Search subscribers…"
@@ -1020,8 +1023,8 @@ export default function Admin() {
               bulkActions={[{ label: 'Remove selected', danger: true, onClick: (ids) => bulkDelete('admin/subscriber', ids, 'subscriber') }]}
               renderRow={(s, checkbox) => (
                 <tr key={s.id}>{checkbox}
-                  <td>{s.email}</td>
-                  <td>{s.created_at}</td>
+                  <td data-label="Email">{s.email}</td>
+                  <td data-label="Subscribed">{s.created_at}</td>
                   <td><RowMenu actions={[{ label: 'Remove subscriber', danger: true, onClick: () => void deleteRow(`admin/subscriber/${s.id}`, `Remove ${s.email} from the newsletter list?`) }]} /></td>
                 </tr>
               )}
@@ -1212,7 +1215,7 @@ export default function Admin() {
                   </div>
                 ) : (
                   <div className="admin-table-wrap glass">
-                    <table className="admin-table">
+                    <table className="admin-table admin-table--stack">
                       <thead>
                         <tr><th className="admin-table__idx">#</th><th>School</th><th>District</th><th>Status</th><th>Students</th><th></th></tr>
                       </thead>
@@ -1220,10 +1223,10 @@ export default function Admin() {
                         {pagedSchools.map((s: any, i: number) => (
                           <tr key={s.id} className="admin-row--clickable" onClick={() => { setSchoolDashId(String(s.id)); setSchoolRosterTab('students') }}>
                             <td className="admin-table__idx">{(schoolsSafePage - 1) * SCHOOLS_PAGE_SIZE + i + 1}</td>
-                            <td>{s.school_name}</td>
-                            <td>{s.school_district || '—'}</td>
-                            <td><StatusPill status={(s.status || '').toLowerCase()} /></td>
-                            <td>{studentsInSchool(Number(s.id)).length}</td>
+                            <td data-label="School">{s.school_name}</td>
+                            <td data-label="District">{s.school_district || '—'}</td>
+                            <td data-label="Status"><StatusPill status={(s.status || '').toLowerCase()} /></td>
+                            <td data-label="Students">{studentsInSchool(Number(s.id)).length}</td>
                             <td><span className="admin-linkcell">Open →</span></td>
                           </tr>
                         ))}
@@ -1274,6 +1277,7 @@ export default function Admin() {
 
                 {schoolRosterTab === 'students' && (
                   <DataTable
+                    stack
                     head={['#', 'Rank', 'Student', 'Participant', 'Points', 'Interviews', 'Status', '']}
                     rows={studentsInSchool(Number(selectedDashSchool.id)).slice().sort(byRank)}
                     searchPlaceholder="Search students…"
@@ -1282,12 +1286,12 @@ export default function Admin() {
                     renderRow={(s: any, _cb: any, i?: number) => (
                       <tr key={s.id} className="admin-row--clickable" onClick={() => openStudentProfile(Number(s.id))}>
                         <td className="admin-table__idx">{i}</td>
-                        <td>#{s.rank_position ?? '—'}</td>
-                        <td>{s.full_name}</td>
-                        <td className="admin-table__uid">{s.participant_id || '—'}</td>
-                        <td>{s.final_score ?? s.student_points ?? 0}</td>
-                        <td>{s.interview_count ?? 0}/10</td>
-                        <td>{s.submission_status || '—'}</td>
+                        <td data-label="Rank">#{s.rank_position ?? '—'}</td>
+                        <td data-label="Student">{s.full_name}</td>
+                        <td data-label="Participant" className="admin-table__uid">{s.participant_id || '—'}</td>
+                        <td data-label="Points">{s.final_score ?? s.student_points ?? 0}</td>
+                        <td data-label="Interviews">{s.interview_count ?? 0}/10</td>
+                        <td data-label="Status">{s.submission_status || '—'}</td>
                         <td><span className="admin-linkcell">View →</span></td>
                       </tr>
                     )}
@@ -1295,6 +1299,7 @@ export default function Admin() {
                 )}
                 {schoolRosterTab === 'teachers' && (
                   <DataTable
+                    stack
                     head={['#', 'Rank', 'Teacher', 'Students', 'Points', 'Status', '']}
                     rows={teachersInSchool(Number(selectedDashSchool.id)).slice().sort(byRank)}
                     searchPlaceholder="Search teachers…"
@@ -1303,11 +1308,11 @@ export default function Admin() {
                     renderRow={(t: any, _cb: any, i?: number) => (
                       <tr key={t.id} className="admin-row--clickable" onClick={() => openTeacherProfile(Number(t.id))}>
                         <td className="admin-table__idx">{i}</td>
-                        <td>#{t.rank_position ?? '—'}</td>
-                        <td>{t.teacher_full_name}</td>
-                        <td>{t.students_total ?? 0}</td>
-                        <td>{t.teacher_points ?? 0}</td>
-                        <td>{t.status || '—'}</td>
+                        <td data-label="Rank">#{t.rank_position ?? '—'}</td>
+                        <td data-label="Teacher">{t.teacher_full_name}</td>
+                        <td data-label="Students">{t.students_total ?? 0}</td>
+                        <td data-label="Points">{t.teacher_points ?? 0}</td>
+                        <td data-label="Status">{t.status || '—'}</td>
                         <td><span className="admin-linkcell">View →</span></td>
                       </tr>
                     )}
@@ -1315,6 +1320,7 @@ export default function Admin() {
                 )}
                 {schoolRosterTab === 'parents' && (
                   <DataTable
+                    stack
                     head={['#', 'Parent', 'Student', 'Relationship', 'Link status']}
                     rows={parentsInSchool(Number(selectedDashSchool.id))}
                     searchPlaceholder="Search parents…"
@@ -1323,10 +1329,10 @@ export default function Admin() {
                     renderRow={(p: any, _cb: any, i?: number) => (
                       <tr key={p.id} className={p.student_id ? 'admin-row--clickable' : ''} onClick={() => p.student_id && openStudentProfile(Number(p.student_id))}>
                         <td className="admin-table__idx">{i}</td>
-                        <td>{p.parent_full_name || '—'}</td>
-                        <td>{p.student_name || '—'}</td>
-                        <td>{p.relationship || p.relationship_to_student || '—'}</td>
-                        <td>{p.link_status || '—'}</td>
+                        <td data-label="Parent">{p.parent_full_name || '—'}</td>
+                        <td data-label="Student">{p.student_name || '—'}</td>
+                        <td data-label="Relationship">{p.relationship || p.relationship_to_student || '—'}</td>
+                        <td data-label="Link status">{p.link_status || '—'}</td>
                       </tr>
                     )}
                   />
@@ -1354,6 +1360,7 @@ export default function Admin() {
                 <div className="ns-rank-section">
                   <h4 className="ns-rank-title">School ranking</h4>
                   <DataTable
+                    stack
                     head={['Rank', 'School', 'Students', 'Movement']}
                     rows={nsSchoolRankings}
                     searchPlaceholder="Search schools…"
@@ -1361,10 +1368,10 @@ export default function Admin() {
                     rowId={(s: any) => s.school_id}
                     renderRow={(s: any) => (
                       <tr key={s.school_id} className="admin-row--clickable" onClick={() => setRankSchoolId(String(s.school_id))}>
-                        <td><span className={`ns-rankrow__rank${(s.rank ?? 99) <= 3 ? ' is-top' : ''}`}>#{s.rank}</span></td>
-                        <td>{s.school_name}</td>
-                        <td>{s.student_count}</td>
-                        <td>{s.movement > 0 ? `? ${s.movement}` : s.movement < 0 ? `? ${Math.abs(s.movement)}` : '—'}</td>
+                        <td data-label="Rank"><span className={`ns-rankrow__rank${(s.rank ?? 99) <= 3 ? ' is-top' : ''}`}>#{s.rank}</span></td>
+                        <td data-label="School">{s.school_name}</td>
+                        <td data-label="Students">{s.student_count}</td>
+                        <td data-label="Movement">{s.movement > 0 ? `? ${s.movement}` : s.movement < 0 ? `? ${Math.abs(s.movement)}` : '—'}</td>
                       </tr>
                     )}
                   />
@@ -1479,6 +1486,7 @@ export default function Admin() {
               {(intSchool || intCategory || intFrom || intTo || intStarred) && <button type="button" className="btn btn--sm" onClick={() => { setIntSchool(''); setIntCategory(''); setIntFrom(''); setIntTo(''); setIntStarred(false) }}>Clear filters</button>}
             </div>
             <DataTable
+              stack
               head={['#', 'Student', 'Participant', 'Business', 'Visit', 'Date', '★', '']}
               rows={intFiltered}
               searchPlaceholder="Search interviews…"
@@ -1486,12 +1494,12 @@ export default function Admin() {
               renderRow={(b, _checkbox, index) => (
                 <tr key={b.id} className="admin-row--clickable" onClick={() => setNsDetail({ kind: 'interview', record: b })}>
                   <td className="admin-table__idx">{index}</td>
-                  <td>{b.student_name}</td>
-                  <td className="admin-table__uid">{b.participant_id || '—'}</td>
-                  <td>{b.business_name}</td>
-                  <td>{b.visit_number ?? '—'}</td>
-                  <td>{b.date_of_visit || b.created_at || '—'}</td>
-                  <td onClick={(e) => e.stopPropagation()}>
+                  <td data-label="Student">{b.student_name}</td>
+                  <td className="admin-table__uid" data-label="Participant">{b.participant_id || '—'}</td>
+                  <td data-label="Business">{b.business_name}</td>
+                  <td data-label="Visit">{b.visit_number ?? '—'}</td>
+                  <td data-label="Date">{b.date_of_visit || b.created_at || '—'}</td>
+                  <td data-label="Star" onClick={(e) => e.stopPropagation()}>
                     <button type="button" className={`ns-star${Number(b.is_starred) ? ' is-on' : ''}`} title={Number(b.is_starred) ? 'Unstar' : 'Star'} aria-label="Toggle star" onClick={() => void toggleStar('interview', b.id, !Number(b.is_starred))}>{Number(b.is_starred) ? '★' : '☆'}</button>
                   </td>
                   <td onClick={(e) => e.stopPropagation()}>
@@ -1740,12 +1748,12 @@ export default function Admin() {
             {(nsEdu?.history ?? []).length > 0 && (
               <div style={{ marginTop: 24 }}>
                 <h3 className="gold-text" style={{ fontSize: 16, marginBottom: 10 }}>Claimed history</h3>
-                <Table head={['School', 'Members', 'Claimed']}>
+                <Table stack head={['School', 'Members', 'Claimed']}>
                   {(nsEdu?.history ?? []).map((s: any) => (
                     <tr key={s.id}>
-                      <td style={tdS}>{s.school_name}</td>
-                      <td style={tdS}>{s.user_count}</td>
-                      <td style={tdS}>{s.claimed_at || '—'}</td>
+                      <td style={tdS} data-label="School">{s.school_name}</td>
+                      <td style={tdS} data-label="Members">{s.user_count}</td>
+                      <td style={tdS} data-label="Claimed">{s.claimed_at || '—'}</td>
                     </tr>
                   ))}
                 </Table>
@@ -2004,15 +2012,15 @@ function AwardsAdmin() {
         <button className="btn btn--sm btn--solid" onClick={() => setEditing({ ...emptyAward, sort_order: rows.length + 1 })}>+ Add Award</button>
       </div>
 
-      <Table head={['', 'Title', 'Year', 'Level', 'Featured', 'Order', 'Actions']}>
+      <Table stack head={['', 'Title', 'Year', 'Level', 'Featured', 'Order', 'Actions']}>
         {rows.map((a) => (
           <tr key={a.id} style={rowS}>
-            <td style={tdS}>{a.image ? <img src={a.image} alt="" style={{ width: 40, height: 52, objectFit: 'cover', borderRadius: 4 }} /> : '—'}</td>
-            <td style={tdS}>{a.title}</td>
-            <td style={tdS}>{a.year || '—'}</td>
-            <td style={tdS}>{a.level || '—'}</td>
-            <td style={tdS}>{a.is_featured ? '★' : '—'}</td>
-            <td style={tdS}>{a.sort_order}</td>
+            <td style={tdS}>{a.image ? <img src={a.image} alt={a.title ? `${a.title} award` : 'Award image'} style={{ width: 40, height: 52, objectFit: 'cover', borderRadius: 4 }} /> : '—'}</td>
+            <td style={tdS} data-label="Title">{a.title}</td>
+            <td style={tdS} data-label="Year">{a.year || '—'}</td>
+            <td style={tdS} data-label="Level">{a.level || '—'}</td>
+            <td style={tdS} data-label="Featured">{a.is_featured ? '★' : '—'}</td>
+            <td style={tdS} data-label="Order">{a.sort_order}</td>
             <td style={tdS}>
               <div style={{ display: 'flex', gap: 6 }}>
                 <button className="btn btn--sm" onClick={() => setEditing(a)}>Edit</button>
@@ -2111,14 +2119,14 @@ function EventsAdmin() {
         <p style={{ color: 'var(--muted)', fontSize: 13 }}>{rows.length} events · shown on the Events page &amp; home</p>
         <button className="btn btn--sm btn--solid" onClick={() => setEditing({ ...emptyEvent })}>+ Add Event</button>
       </div>
-      <Table head={['Title', 'Location', 'Role', 'Date', 'Past', 'Actions']}>
+      <Table stack head={['Title', 'Location', 'Role', 'Date', 'Past', 'Actions']}>
         {rows.map((ev) => (
           <tr key={ev.id} style={rowS}>
-            <td style={tdS}>{ev.title}</td>
-            <td style={tdS}>{ev.location || '—'}</td>
-            <td style={tdS}>{ev.role || '—'}</td>
-            <td style={tdS}>{ev.event_date}</td>
-            <td style={tdS}>{ev.is_past ? 'Yes' : '—'}</td>
+            <td style={tdS} data-label="Title">{ev.title}</td>
+            <td style={tdS} data-label="Location">{ev.location || '—'}</td>
+            <td style={tdS} data-label="Role">{ev.role || '—'}</td>
+            <td style={tdS} data-label="Date">{ev.event_date}</td>
+            <td style={tdS} data-label="Past">{ev.is_past ? 'Yes' : '—'}</td>
             <td style={tdS}><div style={{ display: 'flex', gap: 6 }}>
               <button className="btn btn--sm" onClick={() => setEditing(ev)}>Edit</button>
               <button className="btn btn--sm" onClick={() => remove(ev.id)} style={{ borderColor: '#7a3b3b', color: '#e08a8a' }}>Delete</button>
@@ -2191,14 +2199,14 @@ function PostsAdmin() {
         <p style={{ color: 'var(--muted)', fontSize: 13 }}>{rows.length} articles · shown on the Blog page &amp; home</p>
         <button className="btn btn--sm btn--solid" onClick={() => setEditing({ ...emptyPost })}>+ Add Article</button>
       </div>
-      <Table head={['', 'Title', 'Category', 'Featured', 'Published', 'Actions']}>
+      <Table stack head={['', 'Title', 'Category', 'Featured', 'Published', 'Actions']}>
         {rows.map((p) => (
           <tr key={p.id} style={rowS}>
-            <td style={tdS}>{p.cover_image ? <img src={p.cover_image} alt="" style={{ width: 52, height: 32, objectFit: 'cover', borderRadius: 4 }} /> : '—'}</td>
-            <td style={tdS}>{p.title}</td>
-            <td style={tdS}>{p.category || '—'}</td>
-            <td style={tdS}>{p.is_featured ? '★' : '—'}</td>
-            <td style={tdS}>{p.published_at}</td>
+            <td style={tdS}>{p.cover_image ? <img src={p.cover_image} alt={p.title ? `${p.title} cover` : 'Post cover'} style={{ width: 52, height: 32, objectFit: 'cover', borderRadius: 4 }} /> : '—'}</td>
+            <td style={tdS} data-label="Title">{p.title}</td>
+            <td style={tdS} data-label="Category">{p.category || '—'}</td>
+            <td style={tdS} data-label="Featured">{p.is_featured ? '★' : '—'}</td>
+            <td style={tdS} data-label="Published">{p.published_at}</td>
             <td style={tdS}><div style={{ display: 'flex', gap: 6 }}>
               <button className="btn btn--sm" onClick={() => setEditing(p)}>Edit</button>
               <button className="btn btn--sm" onClick={() => remove(p.id)} style={{ borderColor: '#7a3b3b', color: '#e08a8a' }}>Delete</button>
@@ -2468,10 +2476,10 @@ function TrafficAdmin() {
                   <p className="msub" style={{ fontSize: 12, marginTop: 0 }}>Visitor ID <code>{selToken.slice(0, 12)}…</code> · {visits?.length || 0} page views (latest 200)</p>
                   {!visits ? <p className="msub">Loading…</p> : visits.length === 0 ? <p className="msub">No visits.</p> : (
                     <div className="admin-table-wrap">
-                      <table className="admin-table">
+                      <table className="admin-table admin-table--stack">
                         <thead><tr><th>When (ET)</th><th>Page</th><th>Came from</th></tr></thead>
                         <tbody>{visits.map((v, i) => (
-                          <tr key={i}><td className="msub" style={{ fontSize: 12 }}>{fmtTs(v.ts)}</td><td>{v.path}</td><td className="msub" style={{ fontSize: 12 }}>{v.referrer || '(direct)'}</td></tr>
+                          <tr key={i}><td className="msub" style={{ fontSize: 12 }} data-label="When (ET)">{fmtTs(v.ts)}</td><td data-label="Page">{v.path}</td><td className="msub" style={{ fontSize: 12 }} data-label="Came from">{v.referrer || '(direct)'}</td></tr>
                         ))}</tbody>
                       </table>
                     </div>
@@ -2481,18 +2489,18 @@ function TrafficAdmin() {
                 <>
                   <p className="msub" style={{ fontSize: 12, marginTop: 0 }}>{vd.total} visitor{vd.total === 1 ? '' : 's'} — click one to see every visit. Visitors are anonymous first-party IDs.</p>
                   <div className="admin-table-wrap">
-                    <table className="admin-table">
+                    <table className="admin-table admin-table--stack">
                       <thead><tr><th>User</th><th>Visitor ID</th><th>Visits</th><th>First seen</th><th>Last seen</th><th>Last page</th></tr></thead>
                       <tbody>{vd.visitors.map((v) => (
                         <tr key={v.token} onClick={() => setSelToken(v.token)} style={{ cursor: 'pointer' }}>
-                          <td>{v.user_name
+                          <td data-label="User">{v.user_name
                             ? <><strong>{v.user_name}</strong><div className="msub" style={{ fontSize: 12 }}>{v.user_email}{v.user_role ? ` · ${v.user_role}` : ''}</div></>
                             : <span className="msub">Anonymous</span>}</td>
-                          <td><code style={{ fontSize: 12 }}>{v.token.slice(0, 10)}…</code></td>
-                          <td><strong className="gold-text">{v.visits}</strong></td>
-                          <td className="msub" style={{ fontSize: 12 }}>{fmtTs(v.first_seen)}</td>
-                          <td className="msub" style={{ fontSize: 12 }}>{fmtTs(v.last_seen)}</td>
-                          <td className="msub" style={{ fontSize: 12 }}>{v.last_path}</td>
+                          <td data-label="Visitor ID"><code style={{ fontSize: 12 }}>{v.token.slice(0, 10)}…</code></td>
+                          <td data-label="Visits"><strong className="gold-text">{v.visits}</strong></td>
+                          <td className="msub" style={{ fontSize: 12 }} data-label="First seen">{fmtTs(v.first_seen)}</td>
+                          <td className="msub" style={{ fontSize: 12 }} data-label="Last seen">{fmtTs(v.last_seen)}</td>
+                          <td className="msub" style={{ fontSize: 12 }} data-label="Last page">{v.last_path}</td>
                         </tr>
                       ))}</tbody>
                     </table>
@@ -2849,14 +2857,14 @@ function TestimonialsAdmin() {
         <button className="btn btn--sm btn--solid" onClick={() => setEditing({ ...emptyTestimonial, sort_order: rows.length + 1 })}>+ Add Testimonial</button>
       </div>
 
-      <Table head={['Quote', 'Author', 'Company', 'Featured', 'Order', 'Actions']}>
+      <Table stack head={['Quote', 'Author', 'Company', 'Featured', 'Order', 'Actions']}>
         {rows.map((row) => (
           <tr key={row.id} style={rowS}>
-            <td style={{ ...tdS, maxWidth: 300 }}>{row.quote}</td>
-            <td style={tdS}>{row.author_name}</td>
-            <td style={tdS}>{row.company || '—'}</td>
-            <td style={tdS}>{row.is_featured ? '★' : '—'}</td>
-            <td style={tdS}>{row.sort_order}</td>
+            <td style={{ ...tdS, maxWidth: 300 }} data-label="Quote">{row.quote}</td>
+            <td style={tdS} data-label="Author">{row.author_name}</td>
+            <td style={tdS} data-label="Company">{row.company || '—'}</td>
+            <td style={tdS} data-label="Featured">{row.is_featured ? '★' : '—'}</td>
+            <td style={tdS} data-label="Order">{row.sort_order}</td>
             <td style={tdS}>
               <div style={{ display: 'flex', gap: 6 }}>
                 <button className="btn btn--sm" onClick={() => setEditing(row)}>Edit</button>
@@ -2976,13 +2984,13 @@ function MediaAdmin() {
         <button className="btn btn--sm btn--solid" onClick={() => setEditing({ ...emptyMedia, sort_order: rows.length + 1 })}>+ Add Media</button>
       </div>
 
-      <Table head={['Title', 'Type', 'Featured', 'Published', 'Actions']}>
+      <Table stack head={['Title', 'Type', 'Featured', 'Published', 'Actions']}>
         {rows.map((row) => (
           <tr key={row.id} style={rowS}>
-            <td style={tdS}>{row.title}</td>
-            <td style={tdS}>{row.type}</td>
-            <td style={tdS}>{row.is_featured ? '★' : '—'}</td>
-            <td style={tdS}>{row.published_at || '—'}</td>
+            <td style={tdS} data-label="Title">{row.title}</td>
+            <td style={tdS} data-label="Type">{row.type}</td>
+            <td style={tdS} data-label="Featured">{row.is_featured ? '★' : '—'}</td>
+            <td style={tdS} data-label="Published">{row.published_at || '—'}</td>
             <td style={tdS}>
               <div style={{ display: 'flex', gap: 6 }}>
                 <button className="btn btn--sm" onClick={() => setEditing(row)}>Edit</button>
@@ -3220,16 +3228,16 @@ function RsvpsAdmin() {
 
       {error && <p style={{ color: '#e08a8a', fontSize: 13 }}>{error}</p>}
 
-      <Table head={['Event', 'Name', 'Email', 'Status', 'Code', 'Notes', 'Date']}>
+      <Table stack head={['Event', 'Name', 'Email', 'Status', 'Code', 'Notes', 'Date']}>
         {rows.map((row) => (
           <tr key={row.id} style={rowS}>
-            <td style={tdS}>
+            <td style={tdS} data-label="Event">
               <div style={{ fontWeight: 600, color: '#f0e3bf' }}>{row.event_title || `Event #${row.event_id}`}</div>
               <div style={{ color: 'var(--muted)', fontSize: 12 }}>{row.location || '—'}{row.event_date ? ` · ${row.event_date}` : ''}</div>
             </td>
-            <td style={tdS}>{row.full_name}</td>
-            <td style={tdS}>{row.email}</td>
-            <td style={tdS}>
+            <td style={tdS} data-label="Name">{row.full_name}</td>
+            <td style={tdS} data-label="Email">{row.email}</td>
+            <td style={tdS} data-label="Status">
               <select value={row.status} onChange={(e) => update(row.id, e.target.value)} style={selectS} disabled={busyId === row.id}>
                 <option value="going">going</option>
                 <option value="maybe">maybe</option>
@@ -3237,9 +3245,9 @@ function RsvpsAdmin() {
                 <option value="cancelled">cancelled</option>
               </select>
             </td>
-            <td style={{ ...tdS, fontFamily: 'monospace', letterSpacing: '.04em' }}>{row.confirmation_code}</td>
-            <td style={{ ...tdS, whiteSpace: 'normal', overflowWrap: 'anywhere', maxWidth: 260 }}>{row.notes || '—'}</td>
-            <td style={tdS}>{row.created_at}</td>
+            <td style={{ ...tdS, fontFamily: 'monospace', letterSpacing: '.04em' }} data-label="Code">{row.confirmation_code}</td>
+            <td style={{ ...tdS, whiteSpace: 'normal', overflowWrap: 'anywhere', maxWidth: 260 }} data-label="Notes">{row.notes || '—'}</td>
+            <td style={tdS} data-label="Date">{row.created_at}</td>
           </tr>
         ))}
       </Table>
@@ -3581,7 +3589,7 @@ function InventoryAdmin() {
       )}
 
       <div className="admin-table-wrap glass">
-        <table className="admin-table">
+        <table className="admin-table admin-table--stack">
           <thead>
             <tr>
               <th className="admin-table__check">
@@ -3619,24 +3627,24 @@ function InventoryAdmin() {
                           disabled={isBusy}
                         />
                       </td>
-                      <td>
+                      <td data-label="Product">
                         <div style={{ fontWeight: 600, color: '#f0e3bf' }}>{row.name}</div>
                         <div style={{ color: 'var(--muted)', fontSize: 12, lineHeight: 1.5 }}>
                           {row.product_id} - {row.category || 'Uncategorized'}
                         </div>
                       </td>
-                      <td>
+                      <td data-label="Visibility">
                         <span style={badgePill(row.visibility === 'hidden' ? 'muted' : row.visibility === 'upcoming' ? 'amber' : 'green')}>
                           {row.visibility}
                         </span>
                       </td>
-                      <td>{row.stock}</td>
-                      <td>{row.low_stock_threshold}</td>
-                      <td>
+                      <td data-label="Stock">{row.stock}</td>
+                      <td data-label="Threshold">{row.low_stock_threshold}</td>
+                      <td data-label="Status">
                         <span style={badgePill(tone.tone)}>{tone.label}</span>
                       </td>
-                      <td>${Number(row.price || 0).toFixed(2)}</td>
-                      <td>{row.updated_at || '-'}</td>
+                      <td data-label="Price">${Number(row.price || 0).toFixed(2)}</td>
+                      <td data-label="Updated">{row.updated_at || '-'}</td>
                       <td>
                         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
                           <button className="btn btn--sm" onClick={() => openEditProduct(row)} disabled={isBusy}>Edit</button>

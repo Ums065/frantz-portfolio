@@ -3149,6 +3149,9 @@ section#challenge .challenge-features .ns-gain p {
     min-width: 0 !important;
     max-width: none !important;
     vertical-align: middle !important;
+    /* Break long unbreakable values (emails, URLs) so a card never forces the
+       stacked table wider than its wrap. */
+    overflow-wrap: anywhere;
   }
   .admin-table--stack td::before {
     content: attr(data-label);
@@ -3163,7 +3166,9 @@ section#challenge .challenge-features .ns-gain p {
   /* Cells with no data-label (index, action buttons) show their content full width. */
   .admin-table--stack td:not([data-label])::before,
   .admin-table--stack td[data-label='']::before { content: none; }
-  .admin-table--stack td.admin-table__check { justify-content: flex-start; }
+  /* Override the 38px checkbox-column width from the desktop table so the
+     "Select" label has room instead of breaking one letter per line. */
+  .admin-table--stack td.admin-table__check { justify-content: flex-start; width: auto !important; }
   .admin-table--stack td.admin-table__check::before { content: 'Select'; flex: 0 0 40%; text-align: left; color: var(--gold-light); font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; }
   .admin-table--stack td.admin-cell--wrap { display: flex; }
   /* The row-number cell is redundant in card view. */
