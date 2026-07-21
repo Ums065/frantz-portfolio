@@ -41,8 +41,8 @@ export default function ResetPassword() {
     e.preventDefault()
     setError('')
 
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters.')
+    if (password.length < 8 || !/[A-Za-z]/.test(password) || !/\d/.test(password)) {
+      setError('Password must be at least 8 characters and include a letter and a number.')
       return
     }
     if (password !== confirm) {
@@ -93,7 +93,7 @@ export default function ResetPassword() {
                     <input
                       type="password"
                       required
-                      minLength={6}
+                      minLength={8}
                       placeholder="At least 6 characters"
                       autoComplete="new-password"
                       value={password}
@@ -105,7 +105,7 @@ export default function ResetPassword() {
                     <input
                       type="password"
                       required
-                      minLength={6}
+                      minLength={8}
                       placeholder="Repeat the password"
                       autoComplete="new-password"
                       value={confirm}

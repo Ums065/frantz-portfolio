@@ -182,6 +182,19 @@ function rate_limit(string $action, int $max, int $windowSeconds, ?string $id = 
     }
 }
 
+/**
+ * Central password-policy check (audit INFO-1). Requires at least 8 characters
+ * with a letter AND a number. Sends HTTP 422 and exits on failure. Call this at
+ * every place a password is set or changed (register, reset, profile, change,
+ * admin-created accounts) so the rule lives in one spot.
+ */
+function assert_password_strength(string $pass): void
+{
+    if (strlen($pass) < 8 || !preg_match('/[A-Za-z]/', $pass) || !preg_match('/\d/', $pass)) {
+        json(['error' => 'Password must be at least 8 characters and include a letter and a number.'], 422);
+    }
+}
+
 /** Whether email verification is enforced (default off preserves current behavior). */
 function email_verification_required(): bool
 {
@@ -4038,7 +4051,7 @@ function ecosystem_register(string $role, array $b): array
     if ($org === '') $org = $fullName; // volunteers may register as individuals
     if (mb_strlen($fullName) < 3) json(['error' => 'Your name is required (at least 3 characters).'], 422);
     if ($role !== 'volunteer' && trim((string) field($b, 'org_name')) === '') json(['error' => 'Organization name is required.'], 422);
-    if (strlen($pass) < 6) json(['error' => 'Password must be at least 6 characters.'], 422);
+    assert_password_strength($pass);
 
     $user = new_school_upsert_user_account($fullName, $email, $pass, $role);
     $details = ecosystem_details_from_body($role, $b);
@@ -4467,6 +4480,16 @@ function attribute_referral(int $userId, ?string $code): void
         $own = db()->prepare('SELECT 1 FROM ecosystem_accounts WHERE user_id = ? AND UPPER(referral_code) = ? LIMIT 1');
         $own->execute([$userId, $code]);
         if ($own->fetchColumn()) return;
+        // L6: also block cross-role self-referral — the same person (same email) using a
+        // code that belongs to ANOTHER of their own accounts in a different role.
+        $cross = db()->prepare(
+            'SELECT 1 FROM ecosystem_accounts ea
+               JOIN users owner ON owner.id = ea.user_id
+               JOIN users me ON me.id = ?
+             WHERE UPPER(ea.referral_code) = ? AND LOWER(owner.email) = LOWER(me.email) LIMIT 1'
+        );
+        $cross->execute([$userId, $code]);
+        if ($cross->fetchColumn()) return;
         db()->prepare(
             "UPDATE users SET referred_by_code = ?
              WHERE id = ? AND (referred_by_code IS NULL OR referred_by_code = '')"

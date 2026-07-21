@@ -39,7 +39,7 @@ try {
             $pass  = field($b, 'password');
 
             if ($name === '') json(['error' => 'Full name is required.'], 422);
-            if (strlen($pass) < 6) json(['error' => 'Password must be at least 6 characters.'], 422);
+            assert_password_strength($pass);
 
             $pdo = db();
             $exists = $pdo->prepare('SELECT * FROM users WHERE email = ? LIMIT 1');
@@ -132,6 +132,7 @@ try {
             rate_limit('auth_login', 12, 900); // H2: throttle password brute-force per IP
             $b     = body();
             $email = require_email(field($b, 'email'));
+            rate_limit('auth_login_acct', 15, 900, strtolower($email)); // H2: also throttle per-account (defeats IP rotation)
             $pass  = field($b, 'password');
 
             $pdo = db();
@@ -223,9 +224,7 @@ try {
             if ($token === '') {
                 json(['error' => 'Reset token is required.'], 422);
             }
-            if (strlen($pass) < 6) {
-                json(['error' => 'Password must be at least 6 characters.'], 422);
-            }
+            assert_password_strength($pass);
 
             $u = consume_password_reset($token);
             if (!$u) {
@@ -348,9 +347,7 @@ try {
             if ($name === '') {
                 json(['error' => 'Full name is required.'], 422);
             }
-            if ($pass !== '' && strlen($pass) < 6) {
-                json(['error' => 'Password must be at least 6 characters.'], 422);
-            }
+            if ($pass !== '') assert_password_strength($pass);
 
             if ($pass !== '') {
                 $stmt = db()->prepare('UPDATE users SET full_name = ?, password_hash = ? WHERE id = ?');
@@ -424,6 +421,7 @@ try {
         }
 
         case $key === 'POST event-rsvp': {
+            rate_limit('event_rsvp', 12, 3600); // anti-spam
             $b = body();
             $eventId = (int) ($b['event_id'] ?? 0);
             if ($eventId <= 0) json(['error' => 'Event is required.'], 422);
@@ -473,6 +471,7 @@ try {
         }
 
         case $key === 'POST community/thread': {
+            rate_limit('community_thread', 10, 3600); // anti-spam
             $user = require_login();
             $b = body();
             $title = field($b, 'title');
@@ -591,6 +590,7 @@ try {
 
         /* ---------------- FORMS ---------------- */
         case $key === 'POST subscribe': {
+            rate_limit('subscribe', 6, 3600); // anti-spam
             $email = require_email(field(body(), 'email'));
             // idempotent — duplicates are fine
             $stmt = db()->prepare('INSERT IGNORE INTO subscribers (email) VALUES (?)');
@@ -672,6 +672,7 @@ try {
         }
 
         case $key === 'POST sponsorship/application': {
+            rate_limit('sponsorship_apply', 6, 3600); // anti-spam
             sponsor_ensure_schema();
             $program = sponsor_current_program();
             $levels = sponsor_level_index((int) $program['id']);
@@ -802,6 +803,7 @@ try {
         }
 
         case $key === 'POST gallery/submission': {
+            rate_limit('gallery_submit', 8, 3600); // anti-spam
             $u = require_login();
             gallery_ensure_schema();
 
@@ -937,7 +939,7 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
         }
 
         case $key === 'POST request': {
-
+            rate_limit('service_request', 8, 3600); // anti-spam
             $b    = body();
             $type = field($b, 'request_type') ?: 'General Request';
             $name = field($b, 'full_name') ?: field($b, 'name');
@@ -960,6 +962,7 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
         }
 
         case $key === 'POST contact': {
+            rate_limit('contact', 6, 3600); // anti-spam
             $b    = body();
             $name = field($b, 'full_name') ?: field($b, 'name');
             $email = require_email(field($b, 'email'));

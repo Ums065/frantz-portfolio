@@ -71,7 +71,7 @@ export const vZip = (v: string) =>
   !v.trim() ? REQUIRED_MSG : /^[A-Za-z0-9][A-Za-z0-9 -]{2,9}$/.test(v.trim()) ? '' : 'Enter a valid ZIP / postal code.'
 export const vUrl = (v: string, required = false) =>
   !v.trim() ? (required ? REQUIRED_MSG : '') : /^https?:\/\/[^\s.]+\.[^\s]+$/.test(v.trim()) ? '' : 'Enter a full URL (https://…).'
-export const vPassword = (v: string) => (!v ? REQUIRED_MSG : v.length >= 6 ? '' : 'Password must be at least 6 characters.')
+export const vPassword = (v: string) => (!v ? REQUIRED_MSG : (v.length >= 8 && /[A-Za-z]/.test(v) && /\d/.test(v)) ? '' : 'Password must be at least 8 characters and include a letter and a number.')
 export const vUsername = (v: string) =>
   !v.trim()
     ? REQUIRED_MSG

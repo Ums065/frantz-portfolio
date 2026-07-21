@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 function new_school_upsert_user_account(string $fullName, string $email, string $password, string $role): array
 {
+    if ($password !== '') assert_password_strength($password); // INFO-1: strong password on every registration
     $pdo = db();
     $stmt = $pdo->prepare('SELECT * FROM users WHERE email = ? LIMIT 1');
     $stmt->execute([$email]);
@@ -770,11 +771,10 @@ function new_school_handle_route(string $method, string $route): bool
         case $key === 'POST new-school/profile/password': {
             // Any logged-in user changes their own password (verify current, then set new).
             $user = require_login();
+            rate_limit('change_password', 10, 900, (string) ($user['id'] ?? '')); // throttle current-password guessing
             $current = (string) field($body, 'current_password');
             $next = (string) field($body, 'new_password');
-            if (strlen($next) < 6) {
-                json(['error' => 'New password must be at least 6 characters.'], 422);
-            }
+            assert_password_strength($next);
             $row = db()->prepare('SELECT password_hash FROM users WHERE id = ? LIMIT 1');
             $row->execute([(int) $user['id']]);
             $hash = (string) ($row->fetchColumn() ?: '');
@@ -4561,9 +4561,7 @@ function new_school_handle_route(string $method, string $route): bool
             if ($dup->fetchColumn()) {
                 json(['error' => 'That email is already used by another account.'], 409);
             }
-            if ($password !== '' && strlen($password) < 6) {
-                json(['error' => 'Password must be at least 6 characters.'], 422);
-            }
+            if ($password !== '') assert_password_strength($password);
 
             if ($password !== '') {
                 db()->prepare('UPDATE users SET full_name = ?, email = ?, password_hash = ? WHERE id = ?')
