@@ -19,6 +19,7 @@ import { PasswordField } from '../lib/registrationForm'
 import { DASHBOARD_FAQ } from '../lib/dashboardGuide'
 import { CHALLENGE_TERMS_VERSION } from '../lib/terms'
 import { recordTermsAcceptance } from '../lib/recordTermsAcceptance'
+import { NEW_SCHOOL_RESOURCES } from '../lib/resources'
 
 const isAdminRole = (role?: string) => ['admin', 'super_admin', 'editor'].includes(role || '')
 
@@ -508,7 +509,7 @@ function SchoolRankBoard({ schools, mySchoolId, hidden }: { schools: any[]; mySc
 }
 
 type RegistrationTag = 'community' | 'student' | 'parent' | 'school' | 'teacher' | 'business' | 'sponsor' | 'partner' | 'media' | 'volunteer'
-type DashboardTabKey = 'overview' | 'profile' | 'activity' | 'rankings' | 'records' | 'approvals' | 'reviews' | 'notifications' | 'data' | 'chat' | 'faq'
+type DashboardTabKey = 'overview' | 'profile' | 'activity' | 'rankings' | 'records' | 'approvals' | 'reviews' | 'notifications' | 'data' | 'chat' | 'faq' | 'resources'
 type SchoolRecordsTabKey = 'students' | 'teachers' | 'interviews' | 'approvals' | 'projects'
 type DashboardTabConfig = { key: DashboardTabKey; label: string; hint: string; badge?: string }
 
@@ -903,6 +904,7 @@ const dashboardTabsByRole: Record<string, DashboardTabConfig[]> = {
     { key: 'activity', label: 'My Work', hint: 'Do your tasks and submit' },
     { key: 'rankings', label: 'Rankings', hint: 'See who is leading' },
     { key: 'chat', label: 'Chat', hint: 'Talk to the team' },
+    { key: 'resources', label: 'Handbooks', hint: 'Download guides' },
     { key: 'faq', label: 'Help', hint: 'Questions and answers' },
     { key: 'notifications', label: 'Alerts', hint: 'Your new updates' },
   ],
@@ -921,6 +923,7 @@ const dashboardTabsByRole: Record<string, DashboardTabConfig[]> = {
     { key: 'rankings', label: 'Rankings', hint: 'See who is leading' },
     { key: 'records', label: 'Records', hint: 'Students and their work' },
     { key: 'chat', label: 'Chat', hint: 'Talk to the team' },
+    { key: 'resources', label: 'Handbooks', hint: 'Download guides' },
     { key: 'faq', label: 'Help', hint: 'Questions and answers' },
     { key: 'notifications', label: 'Alerts', hint: 'Your new updates' },
   ],
@@ -931,6 +934,7 @@ const dashboardTabsByRole: Record<string, DashboardTabConfig[]> = {
     { key: 'rankings', label: 'Rankings', hint: 'See who is leading' },
     { key: 'records', label: 'Records', hint: 'Students and their work' },
     { key: 'chat', label: 'Chat', hint: 'Talk to the team' },
+    { key: 'resources', label: 'Handbooks', hint: 'Download guides' },
     { key: 'faq', label: 'Help', hint: 'Questions and answers' },
     { key: 'notifications', label: 'Alerts', hint: 'Your new updates' },
   ],
@@ -2962,6 +2966,26 @@ export default function NewSchool() {
                 <div className="glass ns-empty reveal in">
                   <h3>No dashboard data available</h3>
                   <p>Your account is approved, but no role-specific records were found yet.</p>
+                </div>
+              )}
+
+              {dashboardTab === 'resources' && dashboardRole && (
+                <div className="ns-dash-grid">
+                  <article className="glass ns-dash-card ns-dash-card--wide reveal in">
+                    <div className="ns-dash-card__head"><span className="eyebrow">Handbooks &amp; Guides</span></div>
+                    <p className="ns-muted" style={{ margin: '0 0 12px' }}>Official handbooks and program guides you can download and share.</p>
+                    <div style={{ display: 'grid', gap: 12, minWidth: 0 }}>
+                      {NEW_SCHOOL_RESOURCES.map((r) => (
+                        <div key={r.url} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', background: 'rgba(0,0,0,0.18)', border: '1px solid var(--line)', borderRadius: 10, padding: '12px 14px' }}>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontWeight: 700, color: 'var(--ivory)', overflowWrap: 'anywhere' }}>{r.label}</div>
+                            <div style={{ color: 'var(--muted)', fontSize: 12.5, overflowWrap: 'anywhere' }}>{r.description}</div>
+                          </div>
+                          <a className="btn btn--sm btn--solid" href={r.url} download>⬇ Download</a>
+                        </div>
+                      ))}
+                    </div>
+                  </article>
                 </div>
               )}
 

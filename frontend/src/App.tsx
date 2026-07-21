@@ -19,6 +19,7 @@ const Media = lazy(() => import('./pages/Media'))
 const NewSchool = lazy(() => import('./pages/NewSchool'))
 const Profile = lazy(() => import('./pages/Profile'))
 const Projects = lazy(() => import('./pages/Projects'))
+const Resources = lazy(() => import('./pages/Resources'))
 const Store = lazy(() => import('./pages/Store'))
 const Admin = lazy(() => import('./pages/Admin'))
 const Legal = lazy(() => import('./pages/Legal'))
@@ -114,6 +115,7 @@ export default function App() {
           <Route path="/events" element={<RoutedPage pageKey="events"><Events /></RoutedPage>} />
           <Route path="/media" element={<RoutedPage pageKey="media"><Media /></RoutedPage>} />
           <Route path="/contact" element={<RoutedPage pageKey="contact"><Contact /></RoutedPage>} />
+          <Route path="/resources" element={<RoutedPage pageKey="resources"><Resources /></RoutedPage>} />
 
           <Route path="/become-a-founding-sponsor" element={<RoutedPage pageKey="become-a-founding-sponsor"><FoundingSponsor /></RoutedPage>} />
           <Route path="/founding-sponsors" element={<RoutedPage pageKey="founding-sponsors"><FoundingSponsors /></RoutedPage>} />

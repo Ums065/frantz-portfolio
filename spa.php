@@ -50,6 +50,7 @@ try {
         '/blog' => ['Blog & News', 'Insights from Frantz Coutard on technology, entrepreneurship, and community - plus news shaping local commerce.', null],
         '/events' => ['Events', 'Where to find Frantz Coutard next - keynotes, panels, and community gatherings.', null],
         '/contact' => ['Contact', 'Get in touch with Frantz Coutard and the team for partnerships, press, speaking, and community initiatives.', '/assets/fc-logo.webp'],
+        '/resources' => ['Resources & Handbooks', 'Download official handbooks, the New School program guide, and media, partnership, and sponsorship kits.', null],
         '/media' => ['Media Center', 'Press kits, interview assets, photos, video clips, and testimonial highlights for Frantz Coutard.', '/assets/gallery-speaking-stage.webp'],
         '/projects' => ['Projects', "TrendCatch Network, TrendCatch Player Technology, TrendCatch Gives Back, and Unlock A Cause - the flagship projects driving Frantz Coutard's ecosystem.", '/assets/project-trendcatch-network.webp'],
         '/store' => ['Merch Collection', 'Admin-managed merch catalog with live, sold out, and upcoming product states.', null],

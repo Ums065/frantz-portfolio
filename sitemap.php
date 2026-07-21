@@ -45,6 +45,7 @@ $staticPages = [
     ['/awards', 'monthly', '0.7'],
     ['/events', 'weekly', '0.7'],
     ['/contact', 'monthly', '0.7'],
+    ['/resources', 'monthly', '0.7'],
     ['/partner', 'monthly', '0.7'],
     ['/media', 'monthly', '0.6'],
     ['/become-a-founding-sponsor', 'monthly', '0.6'],
