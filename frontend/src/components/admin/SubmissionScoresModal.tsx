@@ -62,7 +62,7 @@ export default function SubmissionScoresModal({ submissionId, studentName, onClo
 
             {data.scores.length === 0 ? <p className="msub">No judge has scored this submission yet.</p> : (
               <div className="admin-table-wrap">
-                <table className="admin-table">
+                <table className="admin-table admin-table--stack">
                   <thead>
                     <tr>
                       <th>Judge</th>
@@ -74,10 +74,10 @@ export default function SubmissionScoresModal({ submissionId, studentName, onClo
                   <tbody>
                     {data.scores.map((s) => (
                       <tr key={s.judge_user_id}>
-                        <td>{s.judge_name}{s.notes ? <div className="msub" style={{ fontSize: 11, marginTop: 3 }} title={String(s.notes)}>📝 {String(s.notes).slice(0, 60)}{String(s.notes).length > 60 ? '…' : ''}</div> : null}</td>
-                        {data.categories.map((c) => <td key={c.key}>{s[c.key] as number}</td>)}
-                        <td><strong>{s.total}</strong></td>
-                        <td><span className={`status-pill ${s.status === 'submitted' ? 'status-pill--approved' : 'status-pill--new'}`}>{s.status}</span></td>
+                        <td data-label="Judge">{s.judge_name}{s.notes ? <div className="msub" style={{ fontSize: 11, marginTop: 3 }} title={String(s.notes)}>📝 {String(s.notes).slice(0, 60)}{String(s.notes).length > 60 ? '…' : ''}</div> : null}</td>
+                        {data.categories.map((c) => <td key={c.key} data-label={`${c.label} /${c.max}`}>{s[c.key] as number}</td>)}
+                        <td data-label="Total"><strong>{s.total}</strong></td>
+                        <td data-label="Status"><span className={`status-pill ${s.status === 'submitted' ? 'status-pill--approved' : 'status-pill--new'}`}>{s.status}</span></td>
                       </tr>
                     ))}
                   </tbody>
@@ -90,16 +90,16 @@ export default function SubmissionScoresModal({ submissionId, studentName, onClo
               <details style={{ marginTop: 14 }}>
                 <summary style={{ cursor: 'pointer', fontWeight: 700 }} className="gold-text">Score Audit Trail ({data.audit.length})</summary>
                 <div className="admin-table-wrap" style={{ marginTop: 8 }}>
-                  <table className="admin-table">
+                  <table className="admin-table admin-table--stack">
                     <thead><tr><th>When</th><th>Judge</th><th>Action</th><th>Old</th><th>New</th></tr></thead>
                     <tbody>
                       {data.audit.map((a, i) => (
                         <tr key={i}>
-                          <td className="msub" style={{ fontSize: 12 }}>{a.created_at}</td>
-                          <td>{a.judge_name}</td>
-                          <td>{a.action}</td>
-                          <td>{a.old_total ?? '—'}</td>
-                          <td>{a.new_total ?? '—'}</td>
+                          <td className="msub" style={{ fontSize: 12 }} data-label="When">{a.created_at}</td>
+                          <td data-label="Judge">{a.judge_name}</td>
+                          <td data-label="Action">{a.action}</td>
+                          <td data-label="Old">{a.old_total ?? '—'}</td>
+                          <td data-label="New">{a.new_total ?? '—'}</td>
                         </tr>
                       ))}
                     </tbody>

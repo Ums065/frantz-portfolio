@@ -2064,7 +2064,7 @@ function AwardsAdmin() {
 
             <div className="field"><label>Image</label>
               <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                {editing.image && <img src={editing.image} alt="" style={{ width: 54, height: 70, objectFit: 'cover', borderRadius: 6, border: '1px solid var(--line)' }} />}
+                {editing.image && <img src={editing.image} alt="Award image preview" style={{ width: 54, height: 70, objectFit: 'cover', borderRadius: 6, border: '1px solid var(--line)' }} />}
                 <label className="btn btn--sm" style={{ cursor: 'pointer' }}>
                   {uploading ? 'Uploading…' : 'Upload Image'}
                   <input type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) onUpload(f) }} />
@@ -2234,7 +2234,7 @@ function PostsAdmin() {
               <textarea className="fld-area" style={{ minHeight: 160 }} value={editing.body} onChange={(e) => set({ body: e.target.value })} /></div>
             <div className="field"><label>Cover image</label>
               <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                {editing.cover_image && <img src={editing.cover_image} alt="" style={{ width: 80, height: 50, objectFit: 'cover', borderRadius: 6, border: '1px solid var(--line)' }} />}
+                {editing.cover_image && <img src={editing.cover_image} alt="Cover image preview" style={{ width: 80, height: 50, objectFit: 'cover', borderRadius: 6, border: '1px solid var(--line)' }} />}
                 <label className="btn btn--sm" style={{ cursor: 'pointer' }}>
                   {uploading ? 'Uploading…' : 'Upload Cover'}
                   <input type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) onUpload(f) }} />
@@ -2896,7 +2896,7 @@ function TestimonialsAdmin() {
             </div>
             <div className="field"><label>Image</label>
               <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                {editing.image && <img src={editing.image} alt="" style={{ width: 54, height: 54, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--line)' }} />}
+                {editing.image && <img src={editing.image} alt="Media image preview" style={{ width: 54, height: 54, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--line)' }} />}
                 <label className="btn btn--sm" style={{ cursor: 'pointer' }}>
                   {uploading ? 'Uploading…' : 'Upload Image'}
                   <input type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) onUpload(f) }} />
@@ -3028,7 +3028,7 @@ function MediaAdmin() {
             </div>
             <div className="field"><label>Image</label>
               <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                {editing.image && <img src={editing.image} alt="" style={{ width: 72, height: 54, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--line)' }} />}
+                {editing.image && <img src={editing.image} alt="Image preview" style={{ width: 72, height: 54, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--line)' }} />}
                 <label className="btn btn--sm" style={{ cursor: 'pointer' }}>
                   {uploading ? 'Uploading…' : 'Upload Image'}
                   <input type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) onUpload(f) }} />

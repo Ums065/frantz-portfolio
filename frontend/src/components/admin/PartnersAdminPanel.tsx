@@ -74,7 +74,7 @@ export default function PartnersAdminPanel() {
             <label style={{ ...lbl, gridColumn: '1 / -1' }}>Hero tagline<input value={page.hero.tagline} onChange={(e) => setPage({ ...page, hero: { ...page.hero, tagline: e.target.value } })} style={inp} /></label>
           </div>
           <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 10, flexWrap: 'wrap' }}>
-            {page.hero.image ? <img src={page.hero.image} alt="" style={{ width: 90, height: 56, objectFit: 'cover', borderRadius: 8 }} /> : <span style={{ width: 90, height: 56, borderRadius: 8, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.05)', border: '1px dashed var(--line)', color: 'var(--muted)', fontSize: 10 }}>No image</span>}
+            {page.hero.image ? <img src={page.hero.image} alt="Hero image preview" style={{ width: 90, height: 56, objectFit: 'cover', borderRadius: 8 }} /> : <span style={{ width: 90, height: 56, borderRadius: 8, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.05)', border: '1px dashed var(--line)', color: 'var(--muted)', fontSize: 10 }}>No image</span>}
             <label className="btn btn--sm" style={{ cursor: 'pointer' }}>Upload hero image<input type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={async (e) => { const f = e.target.files?.[0] || null; e.target.value = ''; if (!f) return; try { const d = await api.upload<{ url: string }>('admin/upload', f); setPage((pg) => pg ? { ...pg, hero: { ...pg.hero, image: d.url } } : pg) } catch { /* ignore */ } }} /></label>
             {page.hero.image && <button className="btn btn--sm" type="button" onClick={() => setPage({ ...page, hero: { ...page.hero, image: '' } })}>Remove</button>}
           </div>
@@ -115,7 +115,7 @@ export default function PartnersAdminPanel() {
               <thead><tr><th></th><th>Name</th><th>Type</th><th>Industry</th><th>Location</th><th>Since</th><th>Flags</th><th>Status</th><th></th></tr></thead>
               <tbody>{filtered.map((r) => (
                 <tr key={r.id} onClick={() => { setEditing({ ...r }); setErr(''); setMsg('') }} style={{ cursor: 'pointer' }}>
-                  <td>{r.logo_url ? <img src={r.logo_url} alt="" style={{ width: 34, height: 34, objectFit: 'contain', background: '#fff', borderRadius: 6 }} /> : <span className="msub">—</span>}</td>
+                  <td>{r.logo_url ? <img src={r.logo_url} alt={r.name ? `${r.name} logo` : 'Partner logo'} style={{ width: 34, height: 34, objectFit: 'contain', background: '#fff', borderRadius: 6 }} /> : <span className="msub">—</span>}</td>
                   <td><strong>{r.name}</strong></td>
                   <td>{r.partner_type || '—'}</td>
                   <td>{r.industry || '—'}</td>
@@ -141,7 +141,7 @@ export default function PartnersAdminPanel() {
             </div>
             <div style={{ padding: '18px 22px', display: 'grid', gap: 12 }}>
               <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
-                {editing.logo_url ? <img src={editing.logo_url} alt="" style={{ width: 64, height: 64, objectFit: 'contain', background: '#fff', borderRadius: 10, padding: 4 }} /> : <span style={{ width: 64, height: 64, borderRadius: 10, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.05)', border: '1px dashed var(--line)', color: 'var(--muted)', fontSize: 11 }}>No logo</span>}
+                {editing.logo_url ? <img src={editing.logo_url} alt="Logo preview" style={{ width: 64, height: 64, objectFit: 'contain', background: '#fff', borderRadius: 10, padding: 4 }} /> : <span style={{ width: 64, height: 64, borderRadius: 10, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.05)', border: '1px dashed var(--line)', color: 'var(--muted)', fontSize: 11 }}>No logo</span>}
                 <label className="btn btn--sm" style={{ cursor: 'pointer' }}>{busy ? 'Uploading…' : 'Upload logo'}<input type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(e) => { const f = e.target.files?.[0] || null; e.target.value = ''; uploadLogo(f) }} /></label>
               </div>
               <label style={lbl}>Name<input value={editing.name || ''} onChange={(e) => set({ name: e.target.value })} style={inp} /></label>
