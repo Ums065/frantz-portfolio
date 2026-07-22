@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import { useAuth } from '../context/AuthContext'
 import { useSeo } from '../hooks/useSeo'
+import SheetImport from '../components/SheetImport'
 import {
   RESEARCH_CATEGORIES, EMPTY_ENTRY_FORM,
   type ResearchCategory, type ResearchEntry, type CategoryConfig,
@@ -86,6 +87,12 @@ export default function Fellow() {
     } catch (err) {
       setMsg(err instanceof Error ? err.message : 'Could not save.')
     } finally { setBusy(false) }
+  }
+
+  const importRows = async (rowsIn: Record<string, string>[]) => {
+    if (!activeCat) return
+    await api.post('fellow/import', { category: activeCat.key, rows: rowsIn })
+    loadEntries(activeCat.key); loadOverview()
   }
 
   const removeEntry = async (id: number) => {
@@ -215,6 +222,12 @@ export default function Fellow() {
                   <button className="btn btn--solid" disabled={busy} onClick={() => void save()}>{busy ? 'Saving…' : editId ? 'Update entry' : 'Add entry'}</button>
                   {editId && <button className="btn" onClick={resetForm}>Cancel</button>}
                 </div>
+              </section>
+
+              <section style={cardS}>
+                <h2 style={{ fontSize: 13, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--gold)', margin: '0 0 6px' }}>Import from a sheet</h2>
+                <p style={{ color: 'var(--muted)', fontSize: 13, margin: '0 0 12px' }}>Already have a spreadsheet? Upload it and the rows will be added to <strong>{activeCat.label}</strong>.</p>
+                <SheetImport onImport={importRows} />
               </section>
 
               <section style={cardS}>

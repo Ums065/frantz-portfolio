@@ -7618,3 +7618,39 @@ function research_push_school(int $id): array
 
     return ['school_id' => (int) $school['id'], 'school_name' => $schoolName];
 }
+
+/**
+ * Bulk-import research rows from an uploaded sheet (CSV/Excel parsed client-side
+ * into JSON). Each row is an assoc array of our field keys. Rows without a title
+ * are skipped. Capped at 2000 rows per import. Returns the number inserted.
+ */
+function research_bulk_import(int $fellowUserId, string $category, array $rows): int
+{
+    research_ensure_schema();
+    if (!in_array($category, research_categories(), true)) json(['error' => 'Unknown research category.'], 422);
+    if ($fellowUserId <= 0) json(['error' => 'A Fellow account is required.'], 422);
+    if (count($rows) > 2000) json(['error' => 'Please import at most 2000 rows at a time.'], 422);
+
+    $cap = static function ($v, int $n): ?string {
+        $t = mb_substr(trim((string) $v), 0, $n);
+        return $t === '' ? null : $t;
+    };
+    $stmt = db()->prepare(
+        'INSERT INTO research_entries (fellow_user_id, category, title, organization, contact_name, email, phone, website, location, source_url, notes)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?)'
+    );
+    $n = 0;
+    foreach ($rows as $r) {
+        if (!is_array($r)) continue;
+        $title = mb_substr(trim((string) ($r['title'] ?? '')), 0, 200);
+        if ($title === '') continue; // skip blank rows
+        $stmt->execute([
+            $fellowUserId, $category, $title,
+            $cap($r['organization'] ?? '', 200), $cap($r['contact_name'] ?? '', 160),
+            $cap($r['email'] ?? '', 200), $cap($r['phone'] ?? '', 60), $cap($r['website'] ?? '', 300),
+            $cap($r['location'] ?? '', 160), $cap($r['source_url'] ?? '', 500), $cap($r['notes'] ?? '', 5000),
+        ]);
+        $n++;
+    }
+    return $n;
+}

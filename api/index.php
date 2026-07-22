@@ -1532,7 +1532,29 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             json(['message' => 'Response saved.', 'assignments' => $list]);
         }
 
+        case $key === 'POST fellow/import': {
+            $u = require_login();
+            if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
+            rate_limit('research_import', 20, 3600, (string) $u['id']);
+            $b = body();
+            $rows = is_array($b['rows'] ?? null) ? $b['rows'] : [];
+            if (!$rows) json(['error' => 'No rows to import.'], 422);
+            $cat = (string) field($b, 'category');
+            $n = research_bulk_import((int) $u['id'], $cat, $rows);
+            json(['message' => "Imported $n rows.", 'imported' => $n, 'entries' => research_entries_for_fellow((int) $u['id'], $cat)], 201);
+        }
+
         // Admin side of the Research Workspace.
+        case $key === 'POST admin/research/import': {
+            require_admin();
+            $b = body();
+            $rows = is_array($b['rows'] ?? null) ? $b['rows'] : [];
+            if (!$rows) json(['error' => 'No rows to import.'], 422);
+            $fid = (int) (field($b, 'fellow_user_id') ?: 0);
+            if ($fid <= 0) json(['error' => 'Choose a Fellow to attribute the import to.'], 422);
+            $n = research_bulk_import($fid, (string) field($b, 'category'), $rows);
+            json(['message' => "Imported $n rows.", 'imported' => $n], 201);
+        }
         case $key === 'POST admin/fellow/create': {
             require_admin();
             $b = body();

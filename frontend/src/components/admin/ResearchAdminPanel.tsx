@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../../lib/api'
 import { Pill, Modal, EcoTable, EcoStatChips } from './EcosystemAdminPanel'
+import SheetImport from '../SheetImport'
 import { RESEARCH_CATEGORIES, CATEGORY_LABEL, type ResearchCategory, type ResearchEntry } from '../../lib/fellowFields'
 
 /* Admin side of the Youth Community Impact Fellow research workspace: create Fellow
@@ -49,6 +50,7 @@ export default function ResearchAdminPanel() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(280px,100%),1fr))', gap: 14, minWidth: 0 }}>
         <CreateFellowCard onDone={(f) => setFellows(f)} />
         <AssignCard fellows={fellows} />
+        <ImportCard fellows={fellows} onDone={() => void load()} />
       </div>
 
       <EcoStatChips items={[
@@ -164,6 +166,38 @@ function AssignCard({ fellows }: { fellows: Fellow[] }) {
         <button className="btn btn--sm btn--solid" disabled={busy || !fellows.length} onClick={() => void submit()}>{busy ? 'Sending…' : 'Assign task'}</button>
         {!fellows.length && <p style={{ fontSize: 12, color: 'var(--muted)', margin: 0 }}>Create a Fellow account first.</p>}
         {note && <p style={{ fontSize: 12.5, color: note.includes('sent') ? '#8fd6a3' : '#ff9a9a', margin: 0 }}>{note}</p>}
+      </div>
+    </div>
+  )
+}
+
+function ImportCard({ fellows, onDone }: { fellows: Fellow[]; onDone: () => void }) {
+  const [user_id, setUid] = useState('')
+  const [category, setCategory] = useState<ResearchCategory>('school_contact')
+
+  const doImport = async (rows: Record<string, string>[]) => {
+    if (!user_id) throw new Error('Choose a Fellow to attribute the import to.')
+    await api.post('admin/research/import', { fellow_user_id: Number(user_id), category, rows })
+    onDone()
+  }
+
+  return (
+    <div style={{ background: 'rgba(255,255,255,0.035)', border: '1px solid var(--line)', borderRadius: 14, padding: 16, minWidth: 0 }}>
+      <h3 style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: 'var(--gold)', margin: '0 0 12px' }}>Import a sheet (CSV / Excel)</h3>
+      <div style={{ display: 'grid', gap: 10 }}>
+        <div><label style={lbl}>Attribute to Fellow</label>
+          <select style={inp} value={user_id} onChange={(e) => setUid(e.target.value)}>
+            <option value="">Choose a Fellow…</option>
+            {fellows.map((f) => <option key={f.id} value={f.id}>{f.full_name}</option>)}
+          </select>
+        </div>
+        <div><label style={lbl}>Import into category</label>
+          <select style={inp} value={category} onChange={(e) => setCategory(e.target.value as ResearchCategory)}>
+            {RESEARCH_CATEGORIES.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
+          </select>
+        </div>
+        <SheetImport onImport={doImport} disabled={!user_id} />
+        {!fellows.length && <p style={{ fontSize: 12, color: 'var(--muted)', margin: 0 }}>Create a Fellow account first.</p>}
       </div>
     </div>
   )
