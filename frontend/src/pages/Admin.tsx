@@ -14,6 +14,7 @@ import AdminNavIcon from '../components/admin/AdminNavIcon'
 import NsProfileModal, { type ProfileView } from '../components/admin/NsProfileModal'
 import JudgesAdminPanel from '../components/admin/JudgesAdminPanel'
 import PartnersAdminPanel from '../components/admin/PartnersAdminPanel'
+import ResearchAdminPanel from '../components/admin/ResearchAdminPanel'
 import BusinessRequestsAdminPanel from '../components/admin/BusinessRequestsAdminPanel'
 import EcosystemAdminPanel from '../components/admin/EcosystemAdminPanel'
 import SubmissionScoresModal from '../components/admin/SubmissionScoresModal'
@@ -25,6 +26,7 @@ type TabKey =
   | 'members' | 'approvals' | 'business-requests' | 'ecosystem' | 'sponsors' | 'partners' | 'awards' | 'events' | 'blog'
   | 'testimonials' | 'media' | 'gallery' | 'community' | 'rsvps' | 'inventory'
   | 'ns-schools' | 'ns-ranking' | 'ns-submissions' | 'ns-interviews' | 'ns-chat' | 'ns-trendcatch' | 'ns-judges' | 'ns-timeline'
+  | 'research'
 
 interface NavItem { key: TabKey; label: string }
 const NAV_GROUPS: Array<{ group: string; items: NavItem[] }> = [
@@ -69,6 +71,7 @@ const NAV_GROUPS: Array<{ group: string; items: NavItem[] }> = [
     { key: 'media', label: 'Media Library' },
     { key: 'gallery', label: 'Gallery' },
     { key: 'partners', label: 'Partners' },
+    { key: 'research', label: 'Research (Fellow)' },
   ] },
 ]
 
@@ -1765,6 +1768,7 @@ export default function Admin() {
         {tab === 'sponsors' && <SponsorsAdminPanel />}
 
         {tab === 'partners' && <PartnersAdminPanel />}
+        {tab === 'research' && <ResearchAdminPanel />}
         {tab === 'business-requests' && <BusinessRequestsAdminPanel />}
         {tab === 'ecosystem' && <EcosystemAdminPanel />}
         {tab === 'awards' && <AwardsAdmin />}

@@ -3255,10 +3255,12 @@ function roles_ensure_enum(): void
             "SELECT COLUMN_TYPE FROM information_schema.COLUMNS
              WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'role' LIMIT 1"
         )->fetchColumn();
-        if (is_string($col) && stripos($col, "'business'") === false) {
+        // Re-run the ALTER whenever a newer role is missing (keyed on the latest
+        // role added — 'fellow') so existing databases pick up new roles.
+        if (is_string($col) && (stripos($col, "'business'") === false || stripos($col, "'fellow'") === false)) {
             db()->exec(
                 "ALTER TABLE users MODIFY role
-                 ENUM('member','vip','editor','admin','super_admin','student','parent','school','teacher','judge','business','sponsor','partner','media','volunteer')
+                 ENUM('member','vip','editor','admin','super_admin','student','parent','school','teacher','judge','business','sponsor','partner','media','volunteer','fellow')
                  NOT NULL DEFAULT 'member'"
             );
         }
@@ -7351,3 +7353,245 @@ function queue_themed_mail(string $kind, string $to, array $built, array $attach
 }
 
 
+
+/* ============================================================
+   Research Workspace — the "Youth Community Impact Fellow" tool.
+   A Fellow (role 'fellow') collects research into one flexible table
+   (research_entries) across 5 categories; admins review/approve, push
+   verified school contacts into new_school_schools, and export to CSV.
+   ============================================================ */
+
+/** The five research categories the Fellow works across. */
+function research_categories(): array
+{
+    return ['school_contact', 'partner_prospect', 'funder', 'content_creator', 'research_note'];
+}
+
+/** Self-healing schema for the research workspace (see business_ensure_schema pattern). */
+function research_ensure_schema(): void
+{
+    static $ready = false;
+    if ($ready) return;
+    $pdo = db();
+    $pdo->exec("CREATE TABLE IF NOT EXISTS research_entries (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        fellow_user_id INT NOT NULL,
+        assignment_id INT DEFAULT NULL,
+        category VARCHAR(24) NOT NULL,
+        title VARCHAR(200) NOT NULL,
+        organization VARCHAR(200) DEFAULT NULL,
+        contact_name VARCHAR(160) DEFAULT NULL,
+        email VARCHAR(200) DEFAULT NULL,
+        phone VARCHAR(60) DEFAULT NULL,
+        website VARCHAR(300) DEFAULT NULL,
+        location VARCHAR(160) DEFAULT NULL,
+        source_url VARCHAR(500) DEFAULT NULL,
+        notes TEXT DEFAULT NULL,
+        status VARCHAR(16) NOT NULL DEFAULT 'submitted',
+        admin_note TEXT DEFAULT NULL,
+        pushed_school_id INT DEFAULT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_research_fellow (fellow_user_id),
+        INDEX idx_research_cat (category),
+        INDEX idx_research_status (status)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    $ready = true;
+}
+
+/** Normalize one entry row for the API (ints/strings, unix ts). */
+function research_row(array $r): array
+{
+    return [
+        'id' => (int) $r['id'],
+        'fellow_user_id' => (int) $r['fellow_user_id'],
+        'assignment_id' => $r['assignment_id'] !== null ? (int) $r['assignment_id'] : null,
+        'category' => (string) $r['category'],
+        'title' => (string) $r['title'],
+        'organization' => (string) ($r['organization'] ?? ''),
+        'contact_name' => (string) ($r['contact_name'] ?? ''),
+        'email' => (string) ($r['email'] ?? ''),
+        'phone' => (string) ($r['phone'] ?? ''),
+        'website' => (string) ($r['website'] ?? ''),
+        'location' => (string) ($r['location'] ?? ''),
+        'source_url' => (string) ($r['source_url'] ?? ''),
+        'notes' => (string) ($r['notes'] ?? ''),
+        'status' => (string) $r['status'],
+        'admin_note' => (string) ($r['admin_note'] ?? ''),
+        'pushed_school_id' => $r['pushed_school_id'] !== null ? (int) $r['pushed_school_id'] : null,
+        'fellow_name' => (string) ($r['fellow_name'] ?? ''),
+        'created_ts' => (int) ($r['created_ts'] ?? 0),
+        'updated_ts' => (int) ($r['updated_ts'] ?? 0),
+    ];
+}
+
+/** Pull the writable fields out of a request body, trimmed + length-capped. */
+function research_fields_from_body(array $b): array
+{
+    $cap = static function (string $v, int $n): ?string {
+        $t = mb_substr(trim($v), 0, $n);
+        return $t === '' ? null : $t;
+    };
+    return [
+        'title' => mb_substr(trim((string) field($b, 'title')), 0, 200),
+        'organization' => $cap((string) field($b, 'organization'), 200),
+        'contact_name' => $cap((string) field($b, 'contact_name'), 160),
+        'email' => $cap((string) field($b, 'email'), 200),
+        'phone' => $cap((string) field($b, 'phone'), 60),
+        'website' => $cap((string) field($b, 'website'), 300),
+        'location' => $cap((string) field($b, 'location'), 160),
+        'source_url' => $cap((string) field($b, 'source_url'), 500),
+        'notes' => $cap((string) field($b, 'notes'), 5000),
+    ];
+}
+
+/** A Fellow's own entries, optionally filtered by category. */
+function research_entries_for_fellow(int $userId, ?string $category = null): array
+{
+    research_ensure_schema();
+    $sql = 'SELECT *, UNIX_TIMESTAMP(created_at) AS created_ts, UNIX_TIMESTAMP(updated_at) AS updated_ts
+            FROM research_entries WHERE fellow_user_id = ?';
+    $args = [$userId];
+    if ($category !== null && in_array($category, research_categories(), true)) {
+        $sql .= ' AND category = ?';
+        $args[] = $category;
+    }
+    $sql .= ' ORDER BY created_at DESC';
+    $s = db()->prepare($sql);
+    $s->execute($args);
+    return array_map('research_row', $s->fetchAll());
+}
+
+/** Per-category counts for a Fellow (for progress tiles). */
+function research_counts_for_fellow(int $userId): array
+{
+    research_ensure_schema();
+    $s = db()->prepare('SELECT category, COUNT(*) AS n FROM research_entries WHERE fellow_user_id = ? GROUP BY category');
+    $s->execute([$userId]);
+    $out = array_fill_keys(research_categories(), 0);
+    foreach ($s->fetchAll() as $r) $out[(string) $r['category']] = (int) $r['n'];
+    $out['total'] = array_sum($out);
+    return $out;
+}
+
+/** Create a research entry owned by the given Fellow. Returns the new id. */
+function research_entry_add(int $userId, string $category, array $f, ?int $assignmentId = null): int
+{
+    research_ensure_schema();
+    if (!in_array($category, research_categories(), true)) json(['error' => 'Unknown research category.'], 422);
+    if (($f['title'] ?? '') === '') json(['error' => 'A name/title is required.'], 422);
+    db()->prepare(
+        'INSERT INTO research_entries (fellow_user_id, assignment_id, category, title, organization, contact_name, email, phone, website, location, source_url, notes)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)'
+    )->execute([
+        $userId, $assignmentId, $category, $f['title'], $f['organization'], $f['contact_name'],
+        $f['email'], $f['phone'], $f['website'], $f['location'], $f['source_url'], $f['notes'],
+    ]);
+    return (int) db()->lastInsertId();
+}
+
+/** Update a Fellow's own entry (content). Ownership enforced by fellow_user_id. */
+function research_entry_update_own(int $id, int $userId, array $f): void
+{
+    research_ensure_schema();
+    $chk = db()->prepare('SELECT 1 FROM research_entries WHERE id = ? AND fellow_user_id = ? LIMIT 1');
+    $chk->execute([$id, $userId]);
+    if (!$chk->fetchColumn()) json(['error' => 'Entry not found.'], 404);
+    if (($f['title'] ?? '') === '') json(['error' => 'A name/title is required.'], 422);
+    db()->prepare(
+        'UPDATE research_entries SET title = ?, organization = ?, contact_name = ?, email = ?, phone = ?,
+            website = ?, location = ?, source_url = ?, notes = ? WHERE id = ? AND fellow_user_id = ?'
+    )->execute([
+        $f['title'], $f['organization'], $f['contact_name'], $f['email'], $f['phone'],
+        $f['website'], $f['location'], $f['source_url'], $f['notes'], $id, $userId,
+    ]);
+}
+
+/** Delete a Fellow's own entry. */
+function research_entry_delete_own(int $id, int $userId): void
+{
+    research_ensure_schema();
+    db()->prepare('DELETE FROM research_entries WHERE id = ? AND fellow_user_id = ?')->execute([$id, $userId]);
+}
+
+/** Admin: all entries with optional filters + the fellow's display name. */
+function research_all_for_admin(array $filters = []): array
+{
+    research_ensure_schema();
+    $sql = 'SELECT r.*, u.full_name AS fellow_name, UNIX_TIMESTAMP(r.created_at) AS created_ts, UNIX_TIMESTAMP(r.updated_at) AS updated_ts
+            FROM research_entries r LEFT JOIN users u ON u.id = r.fellow_user_id WHERE 1=1';
+    $args = [];
+    if (!empty($filters['category']) && in_array($filters['category'], research_categories(), true)) {
+        $sql .= ' AND r.category = ?';
+        $args[] = $filters['category'];
+    }
+    if (!empty($filters['status'])) { $sql .= ' AND r.status = ?'; $args[] = $filters['status']; }
+    if (!empty($filters['fellow_user_id'])) { $sql .= ' AND r.fellow_user_id = ?'; $args[] = (int) $filters['fellow_user_id']; }
+    $sql .= ' ORDER BY r.created_at DESC';
+    $s = db()->prepare($sql);
+    $s->execute($args);
+    return array_map('research_row', $s->fetchAll());
+}
+
+/** Admin: set an entry's status + optional admin note. */
+function research_entry_set_status(int $id, string $status, string $adminNote = ''): void
+{
+    research_ensure_schema();
+    if (!in_array($status, ['submitted', 'verified', 'approved', 'rejected', 'duplicate'], true)) json(['error' => 'Invalid status.'], 422);
+    db()->prepare('UPDATE research_entries SET status = ?, admin_note = ? WHERE id = ?')
+        ->execute([$status, mb_substr($adminNote, 0, 2000) ?: null, $id]);
+}
+
+/** Admin: list of Fellow accounts (id, name, email). */
+function research_fellows(): array
+{
+    roles_ensure_enum();
+    $rows = db()->query("SELECT id, full_name, email FROM users WHERE role = 'fellow' ORDER BY full_name")->fetchAll();
+    return array_map(static function (array $r): array {
+        return ['id' => (int) $r['id'], 'full_name' => (string) $r['full_name'], 'email' => (string) $r['email']];
+    }, $rows);
+}
+
+/**
+ * Admin: push a verified school_contact entry into new_school_schools as an
+ * unclaimed TrendCatch EDU school (mirrors POST admin/new-school/school/create).
+ */
+function research_push_school(int $id): array
+{
+    research_ensure_schema();
+    $s = db()->prepare('SELECT * FROM research_entries WHERE id = ? LIMIT 1');
+    $s->execute([$id]);
+    $e = $s->fetch();
+    if (!$e) json(['error' => 'Entry not found.'], 404);
+    if ((string) $e['category'] !== 'school_contact') json(['error' => 'Only school-contact entries can be pushed to Schools.'], 422);
+
+    $schoolName = trim((string) $e['title']);
+    if ($schoolName === '') json(['error' => 'This entry has no school name.'], 422);
+    $email = trim((string) ($e['email'] ?? ''));
+    $website = trim((string) ($e['website'] ?? ''));
+
+    $school = new_school_find_or_create_edu_school($schoolName, $email, $website);
+    if (!$school) json(['error' => 'Could not create the school.'], 422);
+    if ((int) ($school['user_id'] ?? 0) > 0 || (string) ($school['claim_status'] ?? '') === 'claimed') {
+        json(['error' => 'That school already has a principal and cannot be overwritten.'], 409);
+    }
+
+    $principal = trim((string) ($e['contact_name'] ?? '')) ?: (string) ($school['principal_name'] ?? '');
+    $district = trim((string) ($e['location'] ?? '')) ?: (string) ($school['school_district'] ?? '');
+    $phone = trim((string) ($e['phone'] ?? '')) ?: (string) ($school['main_phone'] ?? '');
+    $adminEmail = $email ?: (string) ($school['administrator_email'] ?? '');
+    $website = $website ?: (string) ($school['school_website'] ?? '');
+
+    db()->prepare(
+        'UPDATE new_school_schools
+         SET school_district = ?, main_phone = ?, principal_name = ?, administrator_name = ?,
+             administrator_email = ?, school_website = ?, status = "approved",
+             origin = "trendcatch_edu", claim_status = "unclaimed", user_id = NULL, updated_at = NOW()
+         WHERE id = ?'
+    )->execute([$district, $phone, $principal, $principal, $adminEmail, $website, (int) $school['id']]);
+
+    db()->prepare('UPDATE research_entries SET status = "approved", pushed_school_id = ? WHERE id = ?')
+        ->execute([(int) $school['id'], $id]);
+
+    return ['school_id' => (int) $school['id'], 'school_name' => $schoolName];
+}

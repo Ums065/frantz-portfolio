@@ -1481,6 +1481,125 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             ecosystem_assignment_delete((int) $m[1]);
             json(['message' => 'Assignment removed.']);
         }
+
+        /* ---- Research Workspace: Youth Community Impact Fellow ---- */
+        // Fellow-facing (own data only).
+        case $key === 'GET fellow/overview': {
+            $u = require_login();
+            if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
+            json([
+                'counts' => research_counts_for_fellow((int) $u['id']),
+                'assignments' => ecosystem_assignments_for_user((int) $u['id']),
+                'recent' => array_slice(research_entries_for_fellow((int) $u['id']), 0, 10),
+            ]);
+        }
+        case $key === 'GET fellow/entries': {
+            $u = require_login();
+            if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
+            $cat = isset($_GET['category']) ? (string) $_GET['category'] : null;
+            json(['entries' => research_entries_for_fellow((int) $u['id'], $cat)]);
+        }
+        case $key === 'POST fellow/entry': {
+            $u = require_login();
+            if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
+            $b = body();
+            $id = research_entry_add(
+                (int) $u['id'],
+                (string) field($b, 'category'),
+                research_fields_from_body($b),
+                ($aid = (int) (field($b, 'assignment_id') ?: 0)) > 0 ? $aid : null
+            );
+            json(['message' => 'Saved.', 'id' => $id, 'entries' => research_entries_for_fellow((int) $u['id'], (string) field($b, 'category'))], 201);
+        }
+        case $method === 'PUT' && preg_match('#^fellow/entry/(\d+)$#', $route, $m) === 1: {
+            $u = require_login();
+            if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
+            $b = body();
+            research_entry_update_own((int) $m[1], (int) $u['id'], research_fields_from_body($b));
+            json(['message' => 'Updated.']);
+        }
+        case $method === 'DELETE' && preg_match('#^fellow/entry/(\d+)$#', $route, $m) === 1: {
+            $u = require_login();
+            if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
+            research_entry_delete_own((int) $m[1], (int) $u['id']);
+            json(['message' => 'Deleted.']);
+        }
+        case $method === 'PUT' && preg_match('#^fellow/assignment/(\d+)/respond$#', $route, $m) === 1: {
+            $u = require_login();
+            if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
+            $b = body();
+            $list = ecosystem_assignment_respond((int) $u['id'], (int) $m[1], (string) field($b, 'action'), (string) field($b, 'note'));
+            json(['message' => 'Response saved.', 'assignments' => $list]);
+        }
+
+        // Admin side of the Research Workspace.
+        case $key === 'POST admin/fellow/create': {
+            require_admin();
+            $b = body();
+            $name = require_name_field(field($b, 'full_name'), 'Full name', 3);
+            $email = require_email(field($b, 'email'));
+            $pass = (string) field($b, 'password');
+            $user = new_school_upsert_user_account($name, $email, $pass, 'fellow');
+            db()->prepare("UPDATE users SET role = 'fellow', approval_status = 'approved', email_verified_at = COALESCE(email_verified_at, NOW()) WHERE id = ?")
+                ->execute([(int) $user['id']]);
+            json(['message' => 'Fellow account created.', 'fellows' => research_fellows()], 201);
+        }
+        case $key === 'GET admin/research': {
+            require_admin();
+            json([
+                'entries' => research_all_for_admin([
+                    'category' => $_GET['category'] ?? '',
+                    'status' => $_GET['status'] ?? '',
+                    'fellow_user_id' => $_GET['fellow_user_id'] ?? '',
+                ]),
+                'fellows' => research_fellows(),
+            ]);
+        }
+        case $method === 'PUT' && preg_match('#^admin/research/entry/(\d+)$#', $route, $m) === 1: {
+            require_admin();
+            $b = body();
+            research_entry_set_status((int) $m[1], (string) field($b, 'status'), (string) field($b, 'admin_note'));
+            json(['message' => 'Updated.']);
+        }
+        case $method === 'POST' && preg_match('#^admin/research/entry/(\d+)/push-school$#', $route, $m) === 1: {
+            require_admin();
+            $res = research_push_school((int) $m[1]);
+            json(['message' => 'Pushed to Schools as an unclaimed TrendCatch EDU school.', 'result' => $res]);
+        }
+        case $key === 'GET admin/research/export': {
+            require_admin();
+            $cat = isset($_GET['category']) ? (string) $_GET['category'] : '';
+            $rows = array_map(static function (array $e): array {
+                return [
+                    'id' => $e['id'], 'category' => $e['category'], 'title' => $e['title'],
+                    'organization' => $e['organization'], 'contact_name' => $e['contact_name'],
+                    'email' => $e['email'], 'phone' => $e['phone'], 'website' => $e['website'],
+                    'location' => $e['location'], 'source_url' => $e['source_url'], 'notes' => $e['notes'],
+                    'status' => $e['status'], 'fellow' => $e['fellow_name'],
+                ];
+            }, research_all_for_admin(['category' => $cat]));
+            $suffix = $cat !== '' ? $cat : 'all';
+            json(['filename' => 'research-' . $suffix . '.csv', 'rows' => $rows, 'csv' => new_school_rows_to_csv($rows)]);
+        }
+        case $key === 'POST admin/research/assignment': {
+            require_admin();
+            $b = body();
+            $uid = (int) (field($b, 'user_id') ?: 0);
+            if ($uid <= 0) json(['error' => 'Choose a Fellow.'], 422);
+            if (trim((string) field($b, 'title')) === '') json(['error' => 'Title is required.'], 422);
+            ecosystem_assignment_add($uid, 'fellow', (string) field($b, 'title'), (string) field($b, 'detail'), (string) field($b, 'assign_date'));
+            json(['message' => 'Assignment created.', 'assignments' => ecosystem_assignments_for_user($uid)], 201);
+        }
+        case $method === 'PUT' && preg_match('#^admin/research/assignment/(\d+)$#', $route, $m) === 1: {
+            require_admin();
+            ecosystem_assignment_set_status((int) $m[1], (string) field(body(), 'status'));
+            json(['message' => 'Assignment updated.']);
+        }
+        case $method === 'DELETE' && preg_match('#^admin/research/assignment/(\d+)$#', $route, $m) === 1: {
+            require_admin();
+            ecosystem_assignment_delete((int) $m[1]);
+            json(['message' => 'Assignment removed.']);
+        }
         // Direct messaging: admin side of the thread with an ecosystem account.
         case $method === 'GET' && preg_match('#^admin/ecosystem/messages/(\d+)$#', $route, $m) === 1: {
             require_admin();

@@ -10,6 +10,7 @@ export function resolveDashboardRoute(role?: string | null): string {
   if (normalized === 'partner') return '/partner-portal'
   if (normalized === 'media') return '/media-portal'
   if (normalized === 'volunteer') return '/volunteer'
+  if (normalized === 'fellow') return '/fellow'
   if (NEW_SCHOOL_ROLES.has(normalized)) return '/new-school/dashboard'
   return '/dashboard'
 }
