@@ -30,48 +30,54 @@ type TabKey =
 
 interface NavItem { key: TabKey; label: string }
 const NAV_GROUPS: Array<{ group: string; items: NavItem[] }> = [
+  // Grouped by area of work so related tools sit together and the sidebar scans
+  // top-to-bottom in rough order of daily use.
   { group: 'Overview', items: [
     { key: 'overview', label: 'Overview' },
     { key: 'analytics', label: 'Analytics' },
     { key: 'traffic', label: 'Traffic' },
   ] },
-  { group: 'People', items: [
+  { group: 'Accounts', items: [
     { key: 'members', label: 'User Accounts' },
     { key: 'approvals', label: 'Account Approvals' },
-    { key: 'business-requests', label: 'Business Requests' },
-    { key: 'ecosystem', label: 'Ecosystem' },
+  ] },
+  { group: 'Inbox', items: [
     { key: 'contacts', label: 'Contact Messages' },
+    { key: 'requests', label: 'Service Requests' },
     { key: 'subscribers', label: 'Newsletter' },
   ] },
-  { group: 'Schools', items: [
+  { group: 'New School Challenge', items: [
     { key: 'ns-schools', label: 'School Dashboard' },
-    { key: 'ns-ranking', label: 'Ranking' },
     { key: 'ns-submissions', label: 'Student Submissions' },
+    { key: 'ns-ranking', label: 'Ranking' },
     { key: 'ns-judges', label: 'Judges & Scoring' },
-    { key: 'ns-timeline', label: 'Challenge Timeline' },
     { key: 'ns-interviews', label: 'Business Interviews' },
+    { key: 'ns-timeline', label: 'Challenge Timeline' },
     { key: 'ns-chat', label: 'Messages' },
     { key: 'ns-trendcatch', label: 'TrendCatch EDU' },
   ] },
-  { group: 'Commerce', items: [
+  { group: 'Partnerships & Outreach', items: [
+    { key: 'business-requests', label: 'Business Requests' },
+    { key: 'ecosystem', label: 'Ecosystem' },
+    { key: 'sponsors', label: 'Founding Sponsors' },
+    { key: 'partners', label: 'Partners' },
+    { key: 'research', label: 'Research (Fellow)' },
+  ] },
+  { group: 'Store', items: [
     { key: 'orders', label: 'Store Orders' },
     { key: 'inventory', label: 'Products & Inventory' },
-    { key: 'sponsors', label: 'Founding Sponsors' },
   ] },
-  { group: 'Engagement', items: [
-    { key: 'requests', label: 'Service Requests' },
-    { key: 'rsvps', label: 'Event RSVPs' },
-    { key: 'community', label: 'Community' },
-  ] },
-  { group: 'Content', items: [
+  { group: 'Content & Media', items: [
     { key: 'awards', label: 'Awards' },
     { key: 'events', label: 'Events' },
     { key: 'blog', label: 'Blog Posts' },
     { key: 'testimonials', label: 'Testimonials' },
     { key: 'media', label: 'Media Library' },
     { key: 'gallery', label: 'Gallery' },
-    { key: 'partners', label: 'Partners' },
-    { key: 'research', label: 'Research (Fellow)' },
+  ] },
+  { group: 'Engagement', items: [
+    { key: 'rsvps', label: 'Event RSVPs' },
+    { key: 'community', label: 'Community' },
   ] },
 ]
 
