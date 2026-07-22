@@ -109,7 +109,7 @@ interface OrderRow {
 }
 interface Submissions {
   requests: RequestRow[]; subscribers: SubRow[]; contacts: ContactRow[]; members: MemberRow[]; orders: OrderRow[]
-  counts?: Partial<Record<'awards' | 'events' | 'blog' | 'testimonials' | 'media' | 'gallery' | 'inventory' | 'community' | 'rsvps' | 'sponsors' | 'business_requests' | 'ecosystem_requests' | 'sponsors_pending' | 'internships_confirmed', number>>
+  counts?: Partial<Record<'awards' | 'events' | 'blog' | 'testimonials' | 'media' | 'gallery' | 'inventory' | 'community' | 'rsvps' | 'sponsors' | 'business_requests' | 'ecosystem_requests' | 'sponsors_pending' | 'internships_confirmed' | 'research_pending', number>>
 }
 
 interface DetailField {
@@ -718,6 +718,7 @@ export default function Admin() {
     members: pendingAccounts,
     'business-requests': data?.counts?.business_requests ?? 0,
     ecosystem: data?.counts?.ecosystem_requests ?? 0,
+    research: data?.counts?.research_pending ?? 0,
     requests: reqBy('new'),
     orders: ordBy('pending'),
     sponsors: data?.counts?.sponsors_pending ?? 0,

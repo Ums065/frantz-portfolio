@@ -1803,6 +1803,7 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
                     // Pending counts that drive the sidebar "needs attention" badges.
                     'business_requests'  => $countWhere("SELECT COUNT(*) FROM business_requests WHERE status = 'pending'"),
                     'ecosystem_requests' => $countWhere("SELECT COUNT(*) FROM ecosystem_requests WHERE status = 'pending'"),
+                    'research_pending'   => $countWhere("SELECT COUNT(*) FROM research_entries WHERE status = 'submitted'"),
                     'sponsors_pending'   => $countWhere("SELECT COUNT(*) FROM sponsor_applications WHERE approval_status = 'pending_review'"),
                     // Fully-consented internships — a headline achievement for the program.
                     'internships_confirmed' => $countWhere("SELECT COUNT(*) FROM business_requests WHERE request_type = 'internship' AND parent_consent = 'accepted'"),
