@@ -202,6 +202,71 @@ const ICONS: Record<string, ReactNode> = {
       <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" />
     </>
   ),
+  // Website traffic / visitors — globe.
+  traffic: (
+    <>
+      <circle cx="12" cy="12" r="10" />
+      <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
+      <path d="M2 12h20" />
+    </>
+  ),
+  // Business opportunity requests — briefcase.
+  'business-requests': (
+    <>
+      <path d="M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+      <rect width="20" height="14" x="2" y="6" rx="2" />
+    </>
+  ),
+  // Ecosystem (sponsor/partner/media/volunteer network) — connected nodes.
+  ecosystem: (
+    <>
+      <circle cx="18" cy="5" r="3" />
+      <circle cx="6" cy="12" r="3" />
+      <circle cx="18" cy="19" r="3" />
+      <line x1="8.59" x2="15.42" y1="13.51" y2="17.49" />
+      <line x1="15.41" x2="8.59" y1="6.51" y2="10.49" />
+    </>
+  ),
+  // Partners directory — link / connection.
+  partners: (
+    <>
+      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+    </>
+  ),
+  // Research (Fellow) — magnifying glass (finding/collecting).
+  research: (
+    <>
+      <circle cx="11" cy="11" r="8" />
+      <path d="m21 21-4.3-4.3" />
+    </>
+  ),
+  // TrendCatch EDU umbrella program — umbrella.
+  'ns-trendcatch': (
+    <>
+      <path d="M22 12a10.06 10.06 0 0 0-20 0Z" />
+      <path d="M12 12v8a2 2 0 0 0 4 0" />
+      <path d="M12 2v1" />
+    </>
+  ),
+  // Judges & scoring — gavel.
+  'ns-judges': (
+    <>
+      <path d="m14.5 12.5-8 8a2.119 2.119 0 1 1-3-3l8-8" />
+      <path d="m16 16 6-6" />
+      <path d="m8 8 6-6" />
+      <path d="m9 7 8 8" />
+      <path d="m21 11-8-8" />
+    </>
+  ),
+  // Challenge timeline / milestones — signpost.
+  'ns-timeline': (
+    <>
+      <path d="M12 13v8" />
+      <path d="M12 3v3" />
+      <path d="M18 6a2 2 0 0 1 1.387.56l2.307 2.22a1 1 0 0 1 0 1.44l-2.307 2.22A2 2 0 0 1 18 15H7a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z" />
+    </>
+  ),
 }
 
 export default function AdminNavIcon({ name }: { name: string }) {
