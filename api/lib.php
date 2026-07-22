@@ -7587,6 +7587,7 @@ function research_push_school(int $id): array
     $e = $s->fetch();
     if (!$e) json(['error' => 'Entry not found.'], 404);
     if ((string) $e['category'] !== 'school_contact') json(['error' => 'Only school-contact entries can be pushed to Schools.'], 422);
+    if (!empty($e['pushed_school_id'])) json(['error' => 'This entry has already been pushed to Schools.'], 409);
 
     $schoolName = trim((string) $e['title']);
     if ($schoolName === '') json(['error' => 'This entry has no school name.'], 422);

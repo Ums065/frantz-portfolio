@@ -286,6 +286,10 @@ try {
 
         case str_starts_with($route, 'new-school/') || str_starts_with($route, 'admin/new-school/'): {
             new_school_handle_route($method, $route);
+            // new_school_handle_route() exits (json) for any route it matches; if it
+            // returns, no new-school route matched — 404 instead of falling through
+            // into the next case (which would run the wrong handler).
+            json(['error' => 'Not found.'], 404);
         }
 
         case $key === 'GET user/dashboard': {
@@ -1202,6 +1206,7 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
         }
 
         case $key === 'POST order': {
+            rate_limit('guest_order', 5, 3600); // anti-abuse: this path decrements stock without a payment step
             $b     = body();
             $name  = field($b, 'customer_name') ?: field($b, 'name');
             $email = require_email(field($b, 'email'));
@@ -1779,11 +1784,11 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
                 catch (Throwable $e) { return 0; }
             };
             json([
-                'requests'    => db()->query('SELECT * FROM requests ORDER BY created_at DESC LIMIT 200')->fetchAll(),
-                'subscribers' => db()->query('SELECT * FROM subscribers ORDER BY created_at DESC LIMIT 200')->fetchAll(),
-                'contacts'    => db()->query('SELECT * FROM contact_messages ORDER BY created_at DESC LIMIT 200')->fetchAll(),
-                'members'     => db()->query('SELECT id, full_name, email, role, approval_status, approval_note, approval_reviewed_at, created_at, updated_at FROM users ORDER BY CASE approval_status WHEN "pending" THEN 0 WHEN "rejected" THEN 1 ELSE 2 END, created_at DESC LIMIT 200')->fetchAll(),
-                'orders'      => db()->query('SELECT * FROM orders ORDER BY created_at DESC LIMIT 200')->fetchAll(),
+                'requests'    => db()->query('SELECT * FROM requests ORDER BY created_at DESC LIMIT 2000')->fetchAll(),
+                'subscribers' => db()->query('SELECT * FROM subscribers ORDER BY created_at DESC LIMIT 2000')->fetchAll(),
+                'contacts'    => db()->query('SELECT * FROM contact_messages ORDER BY created_at DESC LIMIT 2000')->fetchAll(),
+                'members'     => db()->query('SELECT id, full_name, email, role, approval_status, approval_note, approval_reviewed_at, created_at, updated_at FROM users ORDER BY CASE approval_status WHEN "pending" THEN 0 WHEN "rejected" THEN 1 ELSE 2 END, created_at DESC LIMIT 2000')->fetchAll(),
+                'orders'      => db()->query('SELECT * FROM orders ORDER BY created_at DESC LIMIT 2000')->fetchAll(),
                 'counts'      => [
                     'awards'       => $countOf('awards'),
                     'events'       => $countOf('events'),

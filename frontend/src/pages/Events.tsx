@@ -29,14 +29,15 @@ export default function Events() {
   const [rsvpBusy, setRsvpBusy] = useState(false)
   const [rsvpError, setRsvpError] = useState('')
   const [rsvpSuccess, setRsvpSuccess] = useState('')
+  const [loadErr, setLoadErr] = useState(false)
 
   useSeo({ title: 'Events', description: 'Where to find Frantz Coutard next - keynotes, panels, and community gatherings.' })
 
   useEffect(() => {
     window.scrollTo(0, 0)
     api.get<{ events: EventItem[] }>('events')
-      .then((d) => setEvents(Array.isArray(d.events) ? d.events : []))
-      .catch(() => setEvents([]))
+      .then((d) => { setEvents(Array.isArray(d.events) ? d.events : []); setLoadErr(false) })
+      .catch(() => { setEvents([]); setLoadErr(true) })
     setSavedEvents(loadSavedItems('event').map((item) => item.id))
   }, [])
 
@@ -138,6 +139,7 @@ export default function Events() {
 
   return (
     <main className="page">
+      {loadErr && <div className="wrap"><p style={{ color: '#e08a8a', textAlign: 'center', fontSize: 13, margin: '12px auto 0' }}>Couldn’t load events right now — please refresh the page.</p></div>}
       <section className="page-hero">
         <div className="wrap" style={{ textAlign: 'center' }}>
           <div className="eyebrow reveal in">Events &amp; Appearances</div>

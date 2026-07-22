@@ -57,8 +57,10 @@ export default function BusinessRequestsAdminPanel() {
     // Only approve rows that aren't already approved, so re-selecting an approved
     // row and hitting "Approve selected" doesn't re-fire its notification email.
     const toApprove = ids.filter((id) => rows.find((r) => r.id === id)?.status !== 'approved')
-    for (const id of toApprove) { try { await api.put(`admin/business-request/${id}`, { status: 'approved', admin_note: '' }) } catch { /* skip */ } }
+    let failed = 0
+    for (const id of toApprove) { try { await api.put(`admin/business-request/${id}`, { status: 'approved', admin_note: '' }) } catch { failed++ } }
     void load()
+    window.fcToast?.(failed ? `${failed} of ${toApprove.length} could not be approved.` : `Approved ${toApprove.length}.`)
   }
 
   return (

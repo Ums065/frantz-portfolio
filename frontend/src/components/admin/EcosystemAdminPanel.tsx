@@ -165,12 +165,16 @@ export default function EcosystemAdminPanel() {
   const reqBy = (s: string) => reqs.filter((r) => r.status === s).length
   const acctBy = (s: string) => accounts.filter((a) => a.approval_status === s).length
   const bulkApproveReqs = async (ids: number[]) => {
-    for (const id of ids) { try { await api.put(`admin/ecosystem/request/${id}`, { status: 'approved', admin_note: '' }) } catch { /* skip */ } }
+    let failed = 0
+    for (const id of ids) { try { await api.put(`admin/ecosystem/request/${id}`, { status: 'approved', admin_note: '' }) } catch { failed++ } }
     void loadReqs()
+    window.fcToast?.(failed ? `${failed} of ${ids.length} could not be approved.` : `Approved ${ids.length}.`)
   }
   const bulkApproveAccounts = async (ids: number[]) => {
-    for (const id of ids) { try { await api.put(`admin/user/${id}/approval`, { approval_status: 'approved' }) } catch { /* skip */ } }
+    let failed = 0
+    for (const id of ids) { try { await api.put(`admin/user/${id}/approval`, { approval_status: 'approved' }) } catch { failed++ } }
     void loadAccounts()
+    window.fcToast?.(failed ? `${failed} of ${ids.length} could not be approved.` : `Approved ${ids.length}.`)
   }
 
   const TABS: Array<{ key: Tab; label: string; badge?: number }> = [

@@ -12,38 +12,16 @@ function new_school_upsert_user_account(string $fullName, string $email, string 
     $passwordHash = password_hash($password, PASSWORD_DEFAULT);
 
     if ($existing) {
+        // SECURITY: an existing account must never be overwritten by an
+        // unauthenticated registration — doing so would reset another person's
+        // password/role (account takeover). The happy path for every registration
+        // is a brand-new email (INSERT below); a duplicate email means the person
+        // already has an account and must sign in (or use "Forgot password")
+        // instead. Admin-tier emails get their own message.
         if (in_array((string) $existing['role'], ['admin', 'super_admin', 'editor'], true)) {
             json(['error' => 'That email is already reserved for an administrator account.'], 409);
         }
-
-        $existingApproval = (string) ($existing['approval_status'] ?? 'pending');
-        $nextApproval = $existingApproval === 'approved' ? 'approved' : 'pending';
-
-        $update = $pdo->prepare(
-            'UPDATE users
-             SET full_name = ?,
-                 password_hash = ?,
-                 role = ?,
-                 approval_status = ?,
-                 approval_note = CASE WHEN ? = "approved" THEN approval_note ELSE NULL END,
-                 approval_reviewed_by_user_id = CASE WHEN ? = "approved" THEN approval_reviewed_by_user_id ELSE NULL END,
-                 approval_reviewed_at = CASE WHEN ? = "approved" THEN approval_reviewed_at ELSE NULL END,
-                 email_verified_at = COALESCE(email_verified_at, NOW()),
-                 email_verification_otp_hash = NULL,
-                 email_verification_otp_expires_at = NULL,
-                 email_verification_otp_sent_at = NULL,
-                 email_verification_otp_attempts = 0
-             WHERE id = ?'
-        );
-        $update->execute([$fullName, $passwordHash, $role, $nextApproval, $nextApproval, $nextApproval, $nextApproval, $existing['id']]);
-
-        $fresh = $pdo->prepare('SELECT * FROM users WHERE id = ? LIMIT 1');
-        $fresh->execute([(int) $existing['id']]);
-        $user = $fresh->fetch();
-        if (!$user) {
-            json(['error' => 'Unable to load the saved account.'], 500);
-        }
-        return $user;
+        json(['error' => 'An account with this email already exists. Please log in instead — or use “Forgot password” if you don’t remember it.'], 409);
     }
 
     $insert = $pdo->prepare(

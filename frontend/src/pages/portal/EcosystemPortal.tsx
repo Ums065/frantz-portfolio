@@ -344,7 +344,7 @@ export function LogoUploader({ role, current, reload }: { role: string; current?
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
       <div style={{ width: 60, height: 60, borderRadius: 12, background: 'rgba(255,255,255,0.06)', border: '1px solid var(--line)', display: 'grid', placeItems: 'center', overflow: 'hidden' }}>
-        {current ? <img src={current} alt="logo" style={{ maxWidth: '90%', maxHeight: '90%', objectFit: 'contain' }} /> : <span style={{ color: 'var(--muted)', fontSize: 10 }}>No logo</span>}
+        {current ? <img src={current} alt="Your organization logo" style={{ maxWidth: '90%', maxHeight: '90%', objectFit: 'contain' }} /> : <span style={{ color: 'var(--muted)', fontSize: 10 }}>No logo</span>}
       </div>
       <label className="btn btn--sm" style={{ cursor: 'pointer' }}>{busy ? 'Uploading…' : (current ? 'Replace logo' : 'Upload logo')}
         <input type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={async (e) => { const f = e.target.files?.[0] || null; e.target.value = ''; if (!f) return; setBusy(true); try { await api.upload(`ecosystem/${role}/logo`, f); reload() } catch { /* ignore */ } finally { setBusy(false) } }} />

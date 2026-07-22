@@ -10,14 +10,15 @@ const fmt = (d: string) => new Date(d + 'T00:00:00').toLocaleString('en-US', { m
 export default function Blog() {
   const [posts, setPosts] = useState<Post[]>([])
   const [savedArticles, setSavedArticles] = useState<string[]>([])
+  const [loadErr, setLoadErr] = useState(false)
 
   useSeo({ title: 'Blog & News', description: 'Insights from Frantz Coutard on technology, entrepreneurship, and community - plus news shaping local commerce.' })
 
   useEffect(() => {
     window.scrollTo(0, 0)
     api.get<{ posts: Post[] }>('posts')
-      .then((d) => setPosts(Array.isArray(d.posts) ? d.posts : []))
-      .catch(() => setPosts([]))
+      .then((d) => { setPosts(Array.isArray(d.posts) ? d.posts : []); setLoadErr(false) })
+      .catch(() => { setPosts([]); setLoadErr(true) })
     setSavedArticles(loadSavedItems('article').map((item) => item.id))
   }, [])
 
@@ -36,6 +37,7 @@ export default function Blog() {
 
   return (
     <main className="page">
+      {loadErr && <div className="wrap"><p style={{ color: '#e08a8a', textAlign: 'center', fontSize: 13, margin: '12px auto 0' }}>Couldn’t load the latest articles right now — please refresh the page.</p></div>}
       <section className="page-hero">
         <div className="wrap" style={{ textAlign: 'center' }}>
           <div className="eyebrow reveal in">Blog, News &amp; Articles</div>

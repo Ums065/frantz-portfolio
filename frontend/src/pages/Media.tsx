@@ -37,6 +37,7 @@ export default function Media() {
   const [media, setMedia] = useState<MediaRow[]>([])
   const [testimonials, setTestimonials] = useState<TestimonialRow[]>([])
   const [galleryItems, setGalleryItems] = useState<PublicGalleryItemRow[]>([])
+  const [loadErr, setLoadErr] = useState(false)
 
   useSeo({
     title: 'Media Center',
@@ -47,8 +48,8 @@ export default function Media() {
   useEffect(() => {
     window.scrollTo(0, 0)
     api.get<{ media: MediaRow[] }>('media')
-      .then((d) => setMedia(Array.isArray(d.media) ? d.media : []))
-      .catch(() => setMedia([]))
+      .then((d) => { setMedia(Array.isArray(d.media) ? d.media : []); setLoadErr(false) })
+      .catch(() => { setMedia([]); setLoadErr(true) })
     api.get<{ testimonials: TestimonialRow[] }>('testimonials')
       .then((d) => setTestimonials(Array.isArray(d.testimonials) ? d.testimonials : []))
       .catch(() => setTestimonials([]))
@@ -120,6 +121,7 @@ export default function Media() {
 
   return (
     <main className="page">
+      {loadErr && <div className="wrap"><p style={{ color: '#e08a8a', textAlign: 'center', fontSize: 13, margin: '12px auto 0' }}>Couldn’t load media right now — please refresh the page.</p></div>}
       <section className="page-hero">
         <div className="wrap" style={{ textAlign: 'center' }}>
           <div className="eyebrow reveal in">Media Center</div>
