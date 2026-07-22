@@ -132,13 +132,12 @@ export default function Fellow() {
 
   return (
     <div className="admin-page" style={WRAP_S}>
-      <div className="admin-layout is-nav-collapsed">
-        <main className="admin-main">
-          <header className="admin-main__header glass" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+      <div style={{ maxWidth: 1040, margin: '0 auto', minWidth: 0, display: 'grid', gap: 12, paddingTop: 18 }}>
+          <header className="glass" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', padding: 'clamp(14px,3vw,20px)', borderRadius: 16 }}>
             <div style={{ minWidth: 0 }}>
               <span className="admin-kicker">Youth Community Impact Fellow</span>
               <h1 className="gold-text" style={{ fontFamily: 'var(--f-serif)', fontSize: 'clamp(20px,4vw,26px)', margin: '2px 0 0' }}>Research Workspace</h1>
-              <p style={{ color: 'var(--muted)', fontSize: 13 }}>Signed in as {user?.full_name}</p>
+              <p style={{ color: 'var(--muted)', fontSize: 13, margin: 0, overflowWrap: 'anywhere' }}>Signed in as {user?.full_name}</p>
             </div>
             <button className="btn btn--sm" onClick={() => void logout()}>Log out</button>
           </header>
@@ -249,7 +248,6 @@ export default function Fellow() {
               </section>
             </div>
           )}
-        </main>
       </div>
     </div>
   )
