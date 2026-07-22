@@ -4640,6 +4640,7 @@ function demo_roles(): array
         'partner' => 'Partner',
         'media' => 'Media',
         'volunteer' => 'Volunteer',
+        'fellow' => 'Fellow — Research Workspace',
         'member' => 'Community Member',
     ];
 }
@@ -4707,6 +4708,28 @@ function demo_ensure_accounts(): void
     $judge = demo_user('judge', 'Demo Judge');
     $pdo->prepare("INSERT INTO new_school_judges (user_id, display_name) VALUES (?, 'Demo Judge') ON DUPLICATE KEY UPDATE display_name=VALUES(display_name)")
         ->execute([(int) $judge['id']]);
+
+    // Youth Community Impact Fellow — research workspace, pre-seeded so the demo
+    // dashboard shows sample entries + an open assignment.
+    research_ensure_schema();
+    ecosystem_shared_ensure_schema();
+    $fellow = demo_user('fellow', 'Demo Fellow');
+    $fid = (int) $fellow['id'];
+    if ((int) $pdo->query('SELECT COUNT(*) FROM research_entries WHERE fellow_user_id = ' . $fid)->fetchColumn() === 0) {
+        $seed = [
+            ['school_contact', 'P.S. 154 Harriet Tubman School', 'Queens', 'Jane Principal', 'admin@ps154.demo', '718-555-0100'],
+            ['partner_prospect', 'Queens YMCA', 'Queens', 'Program Director', 'info@queensymca.demo', ''],
+            ['funder', 'Demo Community Foundation', 'New York', '', 'grants@democcf.demo', ''],
+            ['content_creator', '@PositiveYouthNYC', 'Instagram', '', '', ''],
+            ['research_note', 'Youth employment trends 2026', '', '', '', ''],
+        ];
+        $ins = $pdo->prepare('INSERT INTO research_entries (fellow_user_id, category, title, location, contact_name, email, phone, notes) VALUES (?,?,?,?,?,?,?,?)');
+        foreach ($seed as $s) $ins->execute([$fid, $s[0], $s[1], $s[2], $s[3], $s[4], $s[5], 'Demo sample entry.']);
+    }
+    if ((int) $pdo->query("SELECT COUNT(*) FROM ecosystem_assignments WHERE user_id = $fid AND role = 'fellow'")->fetchColumn() === 0) {
+        $pdo->prepare("INSERT INTO ecosystem_assignments (user_id, role, title, detail, status) VALUES (?, 'fellow', 'Verify 25 Queens schools', 'Find and verify contact info for 25 public schools in Queens, then enter each under School Contacts.', 'active')")
+            ->execute([$fid]);
+    }
 
     // School → Teacher → Student → Parent chain (all fully approved)
     $school = demo_user('school', 'Demo Principal');
