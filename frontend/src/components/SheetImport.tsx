@@ -94,7 +94,6 @@ export default function SheetImport({ onImport, disabled }: { onImport: (rows: R
   }
 
   const importable = buildRows().length
-  const sel: React.CSSProperties = { background: 'rgba(0,0,0,0.25)', border: '1px solid var(--line)', borderRadius: 8, padding: '6px 8px', color: 'var(--ivory)', fontSize: 12.5, maxWidth: '100%' }
 
   return (
     <div style={{ minWidth: 0 }}>
@@ -117,7 +116,7 @@ export default function SheetImport({ onImport, disabled }: { onImport: (rows: R
             {TARGET_FIELDS.map(({ key, label }) => (
               <label key={key} style={{ display: 'grid', gap: 4, minWidth: 0 }}>
                 <span style={{ fontSize: 11, color: 'var(--muted)' }}>{label}</span>
-                <select style={sel} value={mapping[key] ?? -1} onChange={(e) => setMapping({ ...mapping, [key]: Number(e.target.value) })}>
+                <select className="admin-select" style={{ fontSize: 12.5, padding: '6px 30px 6px 8px' }} value={mapping[key] ?? -1} onChange={(e) => setMapping({ ...mapping, [key]: Number(e.target.value) })}>
                   <option value={-1}>— skip —</option>
                   {headers.map((h, i) => <option key={i} value={i}>{h || `Column ${i + 1}`}</option>)}
                 </select>

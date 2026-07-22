@@ -3060,6 +3060,32 @@ section#challenge .challenge-features .ns-gain p {
   box-shadow: 0 0 0 3px rgba(201,168,76,0.12);
 }
 .admin-toolbar__filter option { background: #15130c; }
+
+/* Reusable dropdown: dark field + custom gold arrow + readable option list.
+   (Native <option> menus can only take a background/color — that fixes the
+   light-text-on-white unreadable dropdown seen on many browsers.) */
+.admin-select {
+  width: 100%;
+  background: rgba(0,0,0,0.4);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  color: #f4efe4;
+  font-family: inherit;
+  font-size: 14px;
+  padding: 10px 38px 10px 12px;
+  outline: none;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none' stroke='%23c9a84c' stroke-width='1.6'%3E%3Cpath d='M1 1.5 6 6.5 11 1.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.admin-select:focus { border-color: rgba(240,192,96,0.7); box-shadow: 0 0 0 3px rgba(201,168,76,0.12); }
+.admin-select option { background: #15130c; color: #f4efe4; }
+@media (max-width: 640px) { .admin-select { font-size: 16px; } } /* avoid iOS zoom-on-focus */
 .admin-toolbar__count {
   margin-left: auto;
   color: var(--muted);

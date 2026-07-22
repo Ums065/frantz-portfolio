@@ -155,7 +155,7 @@ function AssignCard({ fellows }: { fellows: Fellow[] }) {
       <h3 style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: 'var(--gold)', margin: '0 0 12px' }}>Assign a research task</h3>
       <div style={{ display: 'grid', gap: 10 }}>
         <div><label style={lbl}>Fellow</label>
-          <select style={inp} value={user_id} onChange={(e) => setUid(e.target.value)}>
+          <select className="admin-select" value={user_id} onChange={(e) => setUid(e.target.value)}>
             <option value="">Choose a Fellow…</option>
             {fellows.map((f) => <option key={f.id} value={f.id}>{f.full_name} ({f.email})</option>)}
           </select>
@@ -186,13 +186,13 @@ function ImportCard({ fellows, onDone }: { fellows: Fellow[]; onDone: () => void
       <h3 style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: 'var(--gold)', margin: '0 0 12px' }}>Import a sheet (CSV / Excel)</h3>
       <div style={{ display: 'grid', gap: 10 }}>
         <div><label style={lbl}>Attribute to Fellow</label>
-          <select style={inp} value={user_id} onChange={(e) => setUid(e.target.value)}>
+          <select className="admin-select" value={user_id} onChange={(e) => setUid(e.target.value)}>
             <option value="">Choose a Fellow…</option>
             {fellows.map((f) => <option key={f.id} value={f.id}>{f.full_name}</option>)}
           </select>
         </div>
         <div><label style={lbl}>Import into category</label>
-          <select style={inp} value={category} onChange={(e) => setCategory(e.target.value as ResearchCategory)}>
+          <select className="admin-select" value={category} onChange={(e) => setCategory(e.target.value as ResearchCategory)}>
             {RESEARCH_CATEGORIES.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
           </select>
         </div>
