@@ -231,7 +231,10 @@ try {
                 json(['error' => 'This reset link is invalid or has expired. Please request a new one.'], 400);
             }
 
-            $update = db()->prepare('UPDATE users SET password_hash = ? WHERE id = ?');
+            ensure_session_version_column();
+            // Bump session_version so any sessions opened before the reset (e.g. an
+            // attacker's) are invalidated. The user re-logs in with the new password.
+            $update = db()->prepare('UPDATE users SET password_hash = ?, session_version = session_version + 1 WHERE id = ?');
             $update->execute([password_hash($pass, PASSWORD_DEFAULT), (int) $u['id']]);
 
             json(['message' => 'Your password has been reset. You can now sign in with your new password.']);
@@ -354,8 +357,13 @@ try {
             if ($pass !== '') assert_password_strength($pass);
 
             if ($pass !== '') {
-                $stmt = db()->prepare('UPDATE users SET full_name = ?, password_hash = ? WHERE id = ?');
+                ensure_session_version_column();
+                $stmt = db()->prepare('UPDATE users SET full_name = ?, password_hash = ?, session_version = session_version + 1 WHERE id = ?');
                 $stmt->execute([$name, password_hash($pass, PASSWORD_DEFAULT), $u['id']]);
+                // Keep THIS session valid; only other sessions are evicted.
+                $nv = db()->prepare('SELECT session_version FROM users WHERE id = ?');
+                $nv->execute([(int) $u['id']]);
+                $_SESSION['sv'] = (int) $nv->fetchColumn();
             } else {
                 $stmt = db()->prepare('UPDATE users SET full_name = ? WHERE id = ?');
                 $stmt->execute([$name, $u['id']]);

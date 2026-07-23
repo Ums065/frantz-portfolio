@@ -759,9 +759,14 @@ function new_school_handle_route(string $method, string $route): bool
             if ($hash === '' || !password_verify($current, $hash)) {
                 json(['error' => 'Your current password is incorrect.'], 422);
             }
-            db()->prepare('UPDATE users SET password_hash = ?, updated_at = NOW() WHERE id = ?')
+            ensure_session_version_column();
+            db()->prepare('UPDATE users SET password_hash = ?, session_version = session_version + 1, updated_at = NOW() WHERE id = ?')
                 ->execute([password_hash($next, PASSWORD_DEFAULT), (int) $user['id']]);
-            json(['success' => true, 'message' => 'Password updated.']);
+            // Keep the current session logged in; evict this user's other sessions.
+            $nv = db()->prepare('SELECT session_version FROM users WHERE id = ?');
+            $nv->execute([(int) $user['id']]);
+            $_SESSION['sv'] = (int) $nv->fetchColumn();
+            json(['success' => true, 'message' => 'Password updated. Other devices have been signed out.']);
         }
 
         case preg_match('#^GET new-school/parent/([a-f0-9]+)$#i', $key, $m) === 1: {

@@ -111,6 +111,21 @@ function client_user_agent(): ?string
 }
 
 /** Currently logged-in user array, or null. */
+/** Self-healing: add users.session_version (bumped on password change to evict
+ *  other sessions). Idempotent, once per request; fails silently. */
+function ensure_session_version_column(): void
+{
+    static $ready = false;
+    if ($ready) return;
+    $ready = true;
+    try {
+        $has = db()->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'session_version'")->fetchColumn();
+        if ((int) $has === 0) db()->exec('ALTER TABLE users ADD COLUMN session_version INT NOT NULL DEFAULT 0');
+    } catch (Throwable $e) {
+        if (app_debug()) error_log('session_version column: ' . $e->getMessage());
+    }
+}
+
 function current_user(): ?array
 {
     if (empty($_SESSION['uid'])) {
@@ -125,7 +140,24 @@ function current_user(): ?array
         );
         $stmt->execute([$_SESSION['uid']]);
         $u = $stmt->fetch();
-        return $u ?: null;
+        if (!$u) return null;
+        // Session invalidation: if this session recorded a version (set at login)
+        // and the account's session_version has since been bumped (password reset/
+        // change), the session is stale — log it out. Fail-open: sessions that
+        // never recorded a version (created before this feature) are grandfathered,
+        // and any DB/column error skips the check so nobody is wrongly locked out.
+        if (isset($_SESSION['sv'])) {
+            try {
+                $svq = db()->prepare('SELECT session_version FROM users WHERE id = ?');
+                $svq->execute([(int) $_SESSION['uid']]);
+                $cur = $svq->fetchColumn();
+                if ($cur !== false && (int) $cur !== (int) $_SESSION['sv']) {
+                    logout_user();
+                    return null;
+                }
+            } catch (Throwable $e) { /* column may not exist yet — fail open */ }
+        }
+        return $u;
     } catch (Throwable $e) {
         if (app_debug()) {
             error_log('current_user() failed: ' . $e->getMessage());
@@ -770,6 +802,10 @@ function login_user(array $user): array
 {
     session_regenerate_id(true);
     $_SESSION['uid'] = (int) $user['id'];
+    // Record the account's session_version so a later password reset/change can
+    // invalidate this session (see current_user).
+    ensure_session_version_column();
+    $_SESSION['sv'] = (int) ($user['session_version'] ?? 0);
     unset(
         $user['password_hash'],
         $user['email_verification_otp_hash'],
