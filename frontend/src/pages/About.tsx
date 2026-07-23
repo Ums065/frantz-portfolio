@@ -179,7 +179,7 @@ export default function About() {
           <p className="legacy-close reveal d1">
             Through TrendCatch Network, TrendCatch Player Technology, Unlock A Cause, TrendCatch EDU, ShelfLink, and TrendCatch Gives Back Inc., Frantz is building technology platforms that strengthen communities, support economic growth, create opportunities, and improve lives. Guided by God, inspired by family, and committed to service - his mission is to leave behind something greater than himself.
           </p>
-          <img className="sig-line signature-mark reveal d1" src={FRANTZ_SIGNATURE} alt="Frantz Coutard signature" loading="lazy" decoding="async" style={{ margin: '8px auto 24px' }} />
+          <img className="sig-line signature-mark reveal d1" src={FRANTZ_SIGNATURE} alt="Frantz Coutard signature" loading="lazy" decoding="async" style={{ width: 'min(100%, 220px)', margin: '8px auto 24px' }} />
           <div className="reveal d2 about-cta">
             <Link className="btn btn--solid" to="/awards">View Awards &amp; Recognition</Link>
             <Link className="btn" to="/#speaking">Book Frantz to Speak</Link>
