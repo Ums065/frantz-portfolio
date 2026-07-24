@@ -1994,6 +1994,11 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
                     db()->query($sql)->fetchAll()
                 );
             };
+            // Safe variants: New School / internship tables may not exist on every
+            // install, so a missing table degrades to 0 / [] instead of a 500.
+            $countS = static function (string $sql) use ($count): int { try { return $count($sql); } catch (Throwable $e) { return 0; } };
+            $seriesS = static function (string $sql) use ($series): array { try { return $series($sql); } catch (Throwable $e) { return []; } };
+            business_ensure_schema(); // make sure student_consent/parent_consent columns exist
 
             // Website traffic (first-party page views). Ensure the table exists before querying
             // so the panel works even before db/update.sql has been run / before any visit.
@@ -2054,6 +2059,34 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
                     ['label' => 'Media', 'value' => $count('SELECT COUNT(*) FROM media_items')],
                     ['label' => 'Community', 'value' => $count('SELECT COUNT(*) FROM community_threads')],
                     ['label' => 'RSVPs', 'value' => $count('SELECT COUNT(*) FROM event_rsvps')],
+                ],
+                // Internship pipeline funnel — how offers move from approval to a confirmed placement.
+                'internship_funnel' => [
+                    ['label' => 'Offers approved', 'value' => $countS("SELECT COUNT(*) FROM business_requests WHERE request_type='internship' AND status='approved'")],
+                    ['label' => 'Student accepted', 'value' => $countS("SELECT COUNT(*) FROM business_requests WHERE request_type='internship' AND student_consent='accepted'")],
+                    ['label' => 'Parent consented', 'value' => $countS("SELECT COUNT(*) FROM business_requests WHERE request_type='internship' AND parent_consent='accepted'")],
+                    ['label' => 'Confirmed', 'value' => $countS("SELECT COUNT(*) FROM business_requests br LEFT JOIN new_school_students s ON s.id = br.student_id WHERE br.request_type='internship' AND (br.parent_consent='accepted' OR (s.age >= 18 AND br.student_consent='accepted'))")],
+                    ['label' => 'Declined', 'value' => $countS("SELECT COUNT(*) FROM business_requests WHERE request_type='internship' AND (status='declined' OR student_consent='declined' OR parent_consent='declined')")],
+                ],
+                // Top schools by total student points (auto + bonus from the points ledger).
+                'school_leaderboard' => $seriesS(
+                    "SELECT sc.school_name AS label, COALESCE(SUM(p.points),0) AS value
+                     FROM new_school_points p
+                     JOIN new_school_students st ON st.id = p.recipient_id AND p.recipient_role = 'student'
+                     JOIN new_school_schools sc ON sc.id = st.school_id
+                     GROUP BY sc.id ORDER BY value DESC, label ASC LIMIT 8"
+                ),
+                // Where students are in the challenge lifecycle.
+                'student_status' => $seriesS('SELECT overall_status AS label, COUNT(*) AS value FROM new_school_students GROUP BY overall_status ORDER BY value DESC'),
+                // New School headline counts.
+                'ns' => [
+                    'schools_approved' => $countS("SELECT COUNT(*) FROM new_school_schools WHERE status='approved'"),
+                    'schools_total'    => $countS('SELECT COUNT(*) FROM new_school_schools'),
+                    'teachers_approved'=> $countS("SELECT COUNT(*) FROM new_school_teachers WHERE status='approved'"),
+                    'students'         => $countS('SELECT COUNT(*) FROM new_school_students'),
+                    'submissions'      => $countS('SELECT COUNT(*) FROM new_school_submissions'),
+                    'submissions_done' => $countS("SELECT COUNT(*) FROM new_school_submissions WHERE status IN ('submitted','approved','winner')"),
+                    'interviews'       => $countS('SELECT COUNT(*) FROM new_school_business_interviews'),
                 ],
                 'traffic' => [
                     'total'        => $count('SELECT COUNT(*) FROM site_visits'),

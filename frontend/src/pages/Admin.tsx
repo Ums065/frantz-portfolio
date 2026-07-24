@@ -2367,6 +2367,55 @@ function AnalyticsAdmin() {
         </div>
         <SeriesBars rows={data?.content_mix || []} />
       </div>
+
+      {/* ---- New School Challenge analytics ---- */}
+      {data?.ns && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(150px,100%),1fr))', gap: 14 }}>
+          {([
+            ['Schools (approved)', `${data.ns.schools_approved} / ${data.ns.schools_total}`],
+            ['Teachers (approved)', data.ns.teachers_approved],
+            ['Students', data.ns.students],
+            ['Submissions', `${data.ns.submissions_done} / ${data.ns.submissions}`],
+            ['Interviews logged', data.ns.interviews],
+          ] as const).map(([label, value]) => (
+            <div key={label} className="glass" style={{ padding: 18, borderRadius: 14 }}>
+              <div style={{ color: 'var(--muted)', fontSize: 11, letterSpacing: '.12em', textTransform: 'uppercase' }}>{label}</div>
+              <div className="gold-text" style={{ fontFamily: 'var(--f-serif)', fontSize: 24, marginTop: 8 }}>{value}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="dashboard-cards" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(min(280px,100%),1fr))' }}>
+        {!!(data?.internship_funnel?.length) && (
+          <div className="glass" style={{ padding: 22, borderRadius: 14, minWidth: 0 }}>
+            <div className="dashboard-section-head" style={{ marginBottom: 18 }}>
+              <h3 className="gold-text">Internship Funnel</h3>
+              <span style={{ color: 'var(--muted)', fontSize: 12 }}>Offers approved → confirmed placements</span>
+            </div>
+            <SeriesBars rows={data!.internship_funnel!} />
+          </div>
+        )}
+        {!!(data?.student_status?.length) && (
+          <div className="glass" style={{ padding: 22, borderRadius: 14, minWidth: 0 }}>
+            <div className="dashboard-section-head" style={{ marginBottom: 18 }}>
+              <h3 className="gold-text">Student Lifecycle</h3>
+              <span style={{ color: 'var(--muted)', fontSize: 12 }}>Where students are in the challenge</span>
+            </div>
+            <SeriesBars rows={data!.student_status!} />
+          </div>
+        )}
+      </div>
+
+      {!!(data?.school_leaderboard?.length) && (
+        <div className="glass" style={{ padding: 22, borderRadius: 14, minWidth: 0 }}>
+          <div className="dashboard-section-head" style={{ marginBottom: 18 }}>
+            <h3 className="gold-text">School Leaderboard</h3>
+            <span style={{ color: 'var(--muted)', fontSize: 12 }}>Top schools by total student points</span>
+          </div>
+          <SeriesBars rows={data!.school_leaderboard!} />
+        </div>
+      )}
     </div>
   )
 }

@@ -365,6 +365,18 @@ export interface AnalyticsPayload {
   request_statuses: AnalyticsSeriesRow[]
   order_statuses: AnalyticsSeriesRow[]
   content_mix: AnalyticsSeriesRow[]
+  internship_funnel?: AnalyticsSeriesRow[]
+  school_leaderboard?: AnalyticsSeriesRow[]
+  student_status?: AnalyticsSeriesRow[]
+  ns?: {
+    schools_approved: number
+    schools_total: number
+    teachers_approved: number
+    students: number
+    submissions: number
+    submissions_done: number
+    interviews: number
+  }
   top_pages?: AnalyticsSeriesRow[]
   traffic?: {
     total: number
