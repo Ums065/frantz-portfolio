@@ -92,7 +92,7 @@ interface BizOffer {
   timeline: OfferEvent[]
   contact: { student_email: string; student_phone: string; parent_name: string; parent_email: string; parent_phone: string } | null
 }
-interface BizProfile { business_name: string; category: string | null; borough: string | null; contact_name: string | null; contact_phone: string | null; website: string | null; about: string | null }
+interface BizProfile { business_name: string; category: string | null; borough: string | null; contact_name: string | null; contact_phone: string | null; website: string | null; about: string | null; ein?: string | null; manager_name?: string | null; manager_phone?: string | null; manager_email?: string | null; available_days?: string | null; available_from?: string | null; available_to?: string | null }
 interface BizDoc { id: number; doc_type: string; label: string; file_url: string; created_ts: number }
 interface BizAnn { id: number; title: string; body: string; created_ts: number }
 interface BizDashboard {
@@ -159,7 +159,7 @@ export default function Business() {
   // auth panel
   const [mode, setMode] = useState<'login' | 'register'>('register')
   const [busy, setBusy] = useState('')
-  const [f, setF] = useState({ full_name: '', email: '', password: '', business_name: '', category: '', borough: '', contact_phone: '', website: '', about: '', avatar_url: '', agree: false })
+  const [f, setF] = useState({ full_name: '', email: '', password: '', business_name: '', category: '', borough: '', contact_phone: '', website: '', about: '', avatar_url: '', ein: '', available_days: '', available_from: '', available_to: '', agree: false })
   const [loginEmail, setLoginEmail] = useState('')
   const [loginPass, setLoginPass] = useState('')
 
@@ -228,6 +228,7 @@ export default function Business() {
         business_name: f.business_name.trim(), category: f.category.trim(), borough: f.borough.trim(),
         contact_phone: f.contact_phone.trim(), website: f.website.trim(), about: f.about.trim(),
         avatar_url: f.avatar_url,
+        ein: f.ein.trim(), available_days: f.available_days, available_from: f.available_from, available_to: f.available_to,
       })
       await refresh()
     } catch (e) { setErr(e instanceof Error ? e.message : 'Registration failed.') }
@@ -289,7 +290,10 @@ export default function Business() {
                 <div><label style={labelS}>Website</label><input style={inputS} value={f.website} onChange={(e) => setF({ ...f, website: e.target.value })} placeholder="https://…" /></div>
                 <div><label style={labelS}>Password *</label><input style={inputS} type="password" required value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} placeholder="6+ characters" /></div>
               </div>
+              <div><label style={labelS}>EIN (Employer Identification Number)</label><input style={inputS} value={f.ein} onChange={(e) => setF({ ...f, ein: e.target.value })} placeholder="e.g. 12-3456789 — for business authorization" /></div>
+              <AvailabilityFields days={f.available_days} from={f.available_from} to={f.available_to} onDays={(v) => setF({ ...f, available_days: v })} onFrom={(v) => setF({ ...f, available_from: v })} onTo={(v) => setF({ ...f, available_to: v })} />
               <div><label style={labelS}>About your business</label><textarea style={{ ...inputS, minHeight: 74, resize: 'vertical' }} value={f.about} onChange={(e) => setF({ ...f, about: e.target.value })} /></div>
+              <p style={{ color: 'var(--muted)', fontSize: 12, margin: '-4px 0 0' }}>You can add your manager’s information from the Profile tab once your account is approved.</p>
               <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', color: 'var(--ivory)', fontSize: 13 }}>
                 <input type="checkbox" checked={f.agree} onChange={(e) => setF({ ...f, agree: e.target.checked })} style={{ marginTop: 3 }} />
                 <span>I confirm I represent this business and agree to the platform terms.</span>
@@ -780,6 +784,43 @@ function SolutionCard({ interview, onReq }: { interview: BizInterview; onReq: (d
   )
 }
 
+const WEEK_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const
+
+/* Availability editor: which days of the week + from/to hours the business owner
+   is reachable at the shop/office. Days are stored as a comma-joined string. */
+function AvailabilityFields({ days, from, to, onDays, onFrom, onTo }: {
+  days: string; from: string; to: string
+  onDays: (v: string) => void; onFrom: (v: string) => void; onTo: (v: string) => void
+}) {
+  const selected = (days || '').split(',').map((d) => d.trim()).filter(Boolean)
+  const toggle = (d: string) => {
+    const next = selected.includes(d) ? selected.filter((x) => x !== d) : [...WEEK_DAYS].filter((w) => selected.includes(w) || w === d)
+    onDays(next.join(','))
+  }
+  return (
+    <div>
+      <label style={labelS}>Availability (optional)</label>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+        {WEEK_DAYS.map((d) => {
+          const on = selected.includes(d)
+          return (
+            <button key={d} type="button" onClick={() => toggle(d)} style={{
+              padding: '6px 12px', borderRadius: 999, cursor: 'pointer', fontSize: 12.5, fontWeight: 700,
+              border: `1px solid ${on ? 'var(--gold)' : 'var(--line)'}`,
+              background: on ? 'rgba(212,175,90,0.18)' : 'rgba(0,0,0,0.25)',
+              color: on ? 'var(--gold-light)' : 'var(--muted)',
+            }}>{d}</button>
+          )
+        })}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(140px,100%), 1fr))', gap: 12 }}>
+        <div><label style={{ ...labelS, textTransform: 'none', fontSize: 11.5 }}>Available from</label><input type="time" style={inputS} value={from || ''} onChange={(e) => onFrom(e.target.value)} /></div>
+        <div><label style={{ ...labelS, textTransform: 'none', fontSize: 11.5 }}>Available until</label><input type="time" style={inputS} value={to || ''} onChange={(e) => onTo(e.target.value)} /></div>
+      </div>
+    </div>
+  )
+}
+
 function ProfileEditor({ profile, onSaved }: { profile: BizProfile; onSaved: (p: BizProfile) => void }) {
   const [p, setP] = useState<BizProfile>(profile)
   const [busy, setBusy] = useState(false)
@@ -793,6 +834,8 @@ function ProfileEditor({ profile, onSaved }: { profile: BizProfile; onSaved: (p:
       const d = await api.put<BizDashboard>('business/profile', {
         business_name: p.business_name, category: p.category, borough: p.borough,
         contact_name: p.contact_name, contact_phone: p.contact_phone, website: p.website, about: p.about,
+        ein: p.ein, manager_name: p.manager_name, manager_phone: p.manager_phone, manager_email: p.manager_email,
+        available_days: p.available_days, available_from: p.available_from, available_to: p.available_to,
       })
       onSaved(d.profile || p); setMsg('Saved ✓')
     } catch (e) { setErr(e instanceof Error ? e.message : 'Could not save.') }
@@ -811,6 +854,16 @@ function ProfileEditor({ profile, onSaved }: { profile: BizProfile; onSaved: (p:
         <div><label style={labelS}>Phone</label><input style={inputS} value={p.contact_phone || ''} onChange={(e) => set('contact_phone', e.target.value)} /></div>
       </div>
       <div><label style={labelS}>Website</label><input style={inputS} value={p.website || ''} onChange={(e) => set('website', e.target.value)} placeholder="https://…" /></div>
+      <div><label style={labelS}>EIN (Employer Identification Number)</label><input style={inputS} value={p.ein || ''} onChange={(e) => set('ein', e.target.value)} placeholder="e.g. 12-3456789" /></div>
+      <div style={{ borderTop: '1px solid var(--line)', paddingTop: 14, display: 'grid', gap: 14 }}>
+        <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--gold-light)' }}>Manager information</div>
+        <div><label style={labelS}>Manager name</label><input style={inputS} value={p.manager_name || ''} onChange={(e) => set('manager_name', e.target.value)} /></div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(150px,100%), 1fr))', gap: 12 }}>
+          <div><label style={labelS}>Manager phone</label><input style={inputS} value={p.manager_phone || ''} onChange={(e) => set('manager_phone', e.target.value)} /></div>
+          <div><label style={labelS}>Manager email</label><input style={inputS} type="email" value={p.manager_email || ''} onChange={(e) => set('manager_email', e.target.value)} /></div>
+        </div>
+      </div>
+      <AvailabilityFields days={p.available_days || ''} from={p.available_from || ''} to={p.available_to || ''} onDays={(v) => set('available_days', v)} onFrom={(v) => set('available_from', v)} onTo={(v) => set('available_to', v)} />
       <div><label style={labelS}>About your business</label><textarea style={{ ...inputS, minHeight: 90, resize: 'vertical' }} value={p.about || ''} onChange={(e) => set('about', e.target.value)} /></div>
       <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
         <button className="btn btn--solid btn--sm" disabled={busy}>{busy ? 'Saving…' : 'Save Profile'}</button>

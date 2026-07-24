@@ -1316,11 +1316,13 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
 
             $user = new_school_upsert_user_account($fullName, $email, $pass, 'business');
             db()->prepare(
-                'INSERT INTO business_accounts (user_id, business_name, category, borough, contact_name, contact_phone, website, about)
-                 VALUES (?,?,?,?,?,?,?,?)
+                'INSERT INTO business_accounts (user_id, business_name, category, borough, contact_name, contact_phone, website, about, ein, manager_name, manager_phone, manager_email, available_days, available_from, available_to)
+                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                  ON DUPLICATE KEY UPDATE business_name=VALUES(business_name), category=VALUES(category),
                      borough=VALUES(borough), contact_name=VALUES(contact_name), contact_phone=VALUES(contact_phone),
-                     website=VALUES(website), about=VALUES(about), updated_at=NOW()'
+                     website=VALUES(website), about=VALUES(about), ein=VALUES(ein), manager_name=VALUES(manager_name),
+                     manager_phone=VALUES(manager_phone), manager_email=VALUES(manager_email), available_days=VALUES(available_days),
+                     available_from=VALUES(available_from), available_to=VALUES(available_to), updated_at=NOW()'
             )->execute([
                 (int) $user['id'], mb_substr($bizName, 0, 160),
                 mb_substr(trim((string) field($b, 'category')), 0, 80) ?: null,
@@ -1329,6 +1331,13 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
                 mb_substr(trim((string) field($b, 'contact_phone')), 0, 40) ?: null,
                 mb_substr(trim((string) field($b, 'website')), 0, 255) ?: null,
                 mb_substr(trim((string) field($b, 'about')), 0, 2000) ?: null,
+                mb_substr(trim((string) field($b, 'ein')), 0, 30) ?: null,
+                mb_substr(trim((string) field($b, 'manager_name')), 0, 120) ?: null,
+                mb_substr(trim((string) field($b, 'manager_phone')), 0, 40) ?: null,
+                mb_substr(trim((string) field($b, 'manager_email')), 0, 120) ?: null,
+                mb_substr(trim((string) field($b, 'available_days')), 0, 120) ?: null,
+                mb_substr(trim((string) field($b, 'available_from')), 0, 20) ?: null,
+                mb_substr(trim((string) field($b, 'available_to')), 0, 20) ?: null,
             ]);
             attribute_referral((int) $user['id'], field($b, 'ref')); // partner-referral attribution
             json([
@@ -1349,11 +1358,13 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             $bizName = trim((string) field($b, 'business_name'));
             if ($bizName === '') json(['error' => 'Business name is required.'], 422);
             db()->prepare(
-                'INSERT INTO business_accounts (user_id, business_name, category, borough, contact_name, contact_phone, website, about)
-                 VALUES (?,?,?,?,?,?,?,?)
+                'INSERT INTO business_accounts (user_id, business_name, category, borough, contact_name, contact_phone, website, about, ein, manager_name, manager_phone, manager_email, available_days, available_from, available_to)
+                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                  ON DUPLICATE KEY UPDATE business_name=VALUES(business_name), category=VALUES(category),
                      borough=VALUES(borough), contact_name=VALUES(contact_name), contact_phone=VALUES(contact_phone),
-                     website=VALUES(website), about=VALUES(about), updated_at=NOW()'
+                     website=VALUES(website), about=VALUES(about), ein=VALUES(ein), manager_name=VALUES(manager_name),
+                     manager_phone=VALUES(manager_phone), manager_email=VALUES(manager_email), available_days=VALUES(available_days),
+                     available_from=VALUES(available_from), available_to=VALUES(available_to), updated_at=NOW()'
             )->execute([
                 (int) $u['id'], mb_substr($bizName, 0, 160),
                 mb_substr(trim((string) field($b, 'category')), 0, 80) ?: null,
@@ -1362,6 +1373,13 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
                 mb_substr(trim((string) field($b, 'contact_phone')), 0, 40) ?: null,
                 mb_substr(trim((string) field($b, 'website')), 0, 255) ?: null,
                 mb_substr(trim((string) field($b, 'about')), 0, 2000) ?: null,
+                mb_substr(trim((string) field($b, 'ein')), 0, 30) ?: null,
+                mb_substr(trim((string) field($b, 'manager_name')), 0, 120) ?: null,
+                mb_substr(trim((string) field($b, 'manager_phone')), 0, 40) ?: null,
+                mb_substr(trim((string) field($b, 'manager_email')), 0, 120) ?: null,
+                mb_substr(trim((string) field($b, 'available_days')), 0, 120) ?: null,
+                mb_substr(trim((string) field($b, 'available_from')), 0, 20) ?: null,
+                mb_substr(trim((string) field($b, 'available_to')), 0, 20) ?: null,
             ]);
             json(business_dashboard_payload($u));
         }
@@ -1825,7 +1843,7 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
                     'research_pending'   => $countWhere("SELECT COUNT(*) FROM research_entries WHERE status = 'submitted'"),
                     'sponsors_pending'   => $countWhere("SELECT COUNT(*) FROM sponsor_applications WHERE approval_status = 'pending_review'"),
                     // Fully-consented internships — a headline achievement for the program.
-                    'internships_confirmed' => $countWhere("SELECT COUNT(*) FROM business_requests WHERE request_type = 'internship' AND parent_consent = 'accepted'"),
+                    'internships_confirmed' => $countWhere("SELECT COUNT(*) FROM business_requests br LEFT JOIN new_school_students s ON s.id = br.student_id WHERE br.request_type = 'internship' AND (br.parent_consent = 'accepted' OR (s.age >= 18 AND br.student_consent = 'accepted'))"),
                 ],
             ]);
         }

@@ -772,7 +772,11 @@ function JobOffers({ role, hidden }: { role: 'student' | 'parent'; hidden?: bool
     } catch (e) { window.fcToast?.(e instanceof Error ? e.message : 'Could not save your response.') } finally { setBusy(0) }
   }
   if (offers.length === 0) return null
-  const canAct = (o: JobOffer) => role === 'student' ? o.student_consent === 'pending' : o.parent_consent === 'pending'
+  // Adult students (18+) don't need parent consent (stage.parent_required === false),
+  // so the parent sees the offer for information only — no consent buttons.
+  const canAct = (o: JobOffer) => role === 'student'
+    ? o.student_consent === 'pending'
+    : (o.stage.parent_required !== false && o.parent_consent === 'pending')
   const acceptLabel = role === 'student' ? 'Accept offer' : 'Give consent'
   return (
     <>
@@ -816,6 +820,12 @@ function JobOffers({ role, hidden }: { role: 'student' | 'parent'; hidden?: bool
                   </div>
                 )}
                 {o.message && <p style={{ color: '#d8d3c6', fontSize: 13.5, lineHeight: 1.55, margin: '12px 0 0', whiteSpace: 'pre-wrap' }}>{o.message}</p>}
+
+                {role === 'parent' && o.stage.parent_required === false && (
+                  <p style={{ color: 'var(--gold-light)', fontSize: 12.5, lineHeight: 1.5, margin: '12px 0 0', background: 'rgba(212,175,90,0.1)', border: '1px solid rgba(212,175,90,0.25)', borderRadius: 8, padding: '8px 12px' }}>
+                    ℹ️ This student is 18 or older, so your consent isn’t required. This offer is shown for your information.
+                  </p>
+                )}
 
                 <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--line)' }}>
                   <OfferStepper stage={o.stage} timeline={o.timeline} />

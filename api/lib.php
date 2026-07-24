@@ -3380,6 +3380,21 @@ function business_ensure_schema(): void
     };
     $addCol('business_user_id', 'INT DEFAULT NULL');
     $addCol('business_website', 'VARCHAR(255) DEFAULT NULL');
+    // Self-heal new business-profile columns: EIN (for authorization), manager
+    // contact, and availability (which days + hours the owner is reachable).
+    $addColBiz = static function (string $col, string $def) use ($pdo): void {
+        try {
+            $has = $pdo->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'business_accounts' AND COLUMN_NAME = " . $pdo->quote($col))->fetchColumn();
+            if ((int) $has === 0) $pdo->exec("ALTER TABLE business_accounts ADD COLUMN $col $def");
+        } catch (Throwable $e) { if (app_debug()) error_log("business_accounts column $col: " . $e->getMessage()); }
+    };
+    $addColBiz('ein', 'VARCHAR(30) DEFAULT NULL');
+    $addColBiz('manager_name', 'VARCHAR(120) DEFAULT NULL');
+    $addColBiz('manager_phone', 'VARCHAR(40) DEFAULT NULL');
+    $addColBiz('manager_email', 'VARCHAR(120) DEFAULT NULL');
+    $addColBiz('available_days', 'VARCHAR(120) DEFAULT NULL');
+    $addColBiz('available_from', 'VARCHAR(20) DEFAULT NULL');
+    $addColBiz('available_to', 'VARCHAR(20) DEFAULT NULL');
     // Job-offer consent chain (internship/hiring): once admin approves the offer it
     // goes to the student, then the parent. pending | accepted | declined.
     $addColReq = static function (string $col, string $def) use ($pdo): void {
@@ -3448,14 +3463,21 @@ function business_offer_stage(array $r): array
     $pc = (string) ($r['parent_consent'] ?? 'pending');
     $by = (string) ($r['declined_by'] ?? '');
     $reason = (string) ($r['decline_reason'] ?? ($r['admin_note'] ?? ''));
-    if ($status === 'declined' || $by === 'admin') return ['key' => 'rejected_admin', 'label' => 'Rejected by Admin', 'progress' => 100, 'rejected' => true, 'by' => 'admin', 'reason' => $reason, 'next' => 'No further action.'];
-    if ($sc === 'declined' || $by === 'student') return ['key' => 'declined_student', 'label' => 'Declined by Student', 'progress' => 100, 'rejected' => true, 'by' => 'student', 'reason' => $reason, 'next' => 'No further action.'];
-    if ($pc === 'declined' || $by === 'parent') return ['key' => 'declined_parent', 'label' => 'Parent Consent Declined', 'progress' => 100, 'rejected' => true, 'by' => 'parent', 'reason' => $reason, 'next' => 'No further action.'];
-    if ($pc === 'accepted') return ['key' => 'confirmed', 'label' => 'Internship Confirmed', 'progress' => 100, 'rejected' => false, 'next' => 'The team will coordinate the next steps.'];
-    if ($sc === 'accepted') return ['key' => 'awaiting_parent', 'label' => 'Waiting for Parent Consent', 'progress' => 80, 'rejected' => false, 'next' => 'The parent/guardian needs to give consent.'];
-    if ($status === 'approved') return ['key' => 'awaiting_student', 'label' => 'Waiting for Student Response', 'progress' => 55, 'rejected' => false, 'next' => 'The student needs to accept the offer.'];
-    if ($status === 'info_needed') return ['key' => 'info_needed', 'label' => 'Admin Needs Information', 'progress' => 35, 'rejected' => false, 'next' => 'Respond to the admin\'s question.'];
-    return ['key' => 'awaiting_admin', 'label' => 'Waiting for Admin Approval', 'progress' => 25, 'rejected' => false, 'next' => 'An admin will review your offer.'];
+    // Students who are 18+ are legal adults: the parent/guardian is INFORMED of the
+    // internship but their consent is NOT required to confirm it. $pr is surfaced to
+    // the UI so the rail can show the parent step as "notified" rather than a gate.
+    $age = (int) ($r['age'] ?? 0);
+    $adult = $age >= 18;
+    $pr = !$adult;
+    if ($status === 'declined' || $by === 'admin') return ['key' => 'rejected_admin', 'label' => 'Rejected by Admin', 'progress' => 100, 'rejected' => true, 'by' => 'admin', 'reason' => $reason, 'next' => 'No further action.', 'parent_required' => $pr];
+    if ($sc === 'declined' || $by === 'student') return ['key' => 'declined_student', 'label' => 'Declined by Student', 'progress' => 100, 'rejected' => true, 'by' => 'student', 'reason' => $reason, 'next' => 'No further action.', 'parent_required' => $pr];
+    if (!$adult && ($pc === 'declined' || $by === 'parent')) return ['key' => 'declined_parent', 'label' => 'Parent Consent Declined', 'progress' => 100, 'rejected' => true, 'by' => 'parent', 'reason' => $reason, 'next' => 'No further action.', 'parent_required' => true];
+    if ($adult && $sc === 'accepted') return ['key' => 'confirmed', 'label' => 'Internship Confirmed', 'progress' => 100, 'rejected' => false, 'next' => 'The team will coordinate the next steps.', 'parent_required' => false];
+    if ($pc === 'accepted') return ['key' => 'confirmed', 'label' => 'Internship Confirmed', 'progress' => 100, 'rejected' => false, 'next' => 'The team will coordinate the next steps.', 'parent_required' => $pr];
+    if ($sc === 'accepted') return ['key' => 'awaiting_parent', 'label' => 'Waiting for Parent Consent', 'progress' => 80, 'rejected' => false, 'next' => 'The parent/guardian needs to give consent.', 'parent_required' => true];
+    if ($status === 'approved') return ['key' => 'awaiting_student', 'label' => 'Waiting for Student Response', 'progress' => 55, 'rejected' => false, 'next' => 'The student needs to accept the offer.', 'parent_required' => $pr];
+    if ($status === 'info_needed') return ['key' => 'info_needed', 'label' => 'Admin Needs Information', 'progress' => 35, 'rejected' => false, 'next' => 'Respond to the admin\'s question.', 'parent_required' => $pr];
+    return ['key' => 'awaiting_admin', 'label' => 'Waiting for Admin Approval', 'progress' => 25, 'rejected' => false, 'next' => 'An admin will review your offer.', 'parent_required' => $pr];
 }
 
 /** Business account row for a user id (or null). */
@@ -3690,6 +3712,13 @@ function business_dashboard_payload(array $user): array
             'contact_phone' => $account['contact_phone'],
             'website' => $account['website'],
             'about' => $account['about'],
+            'ein' => $account['ein'] ?? null,
+            'manager_name' => $account['manager_name'] ?? null,
+            'manager_phone' => $account['manager_phone'] ?? null,
+            'manager_email' => $account['manager_email'] ?? null,
+            'available_days' => $account['available_days'] ?? null,
+            'available_from' => $account['available_from'] ?? null,
+            'available_to' => $account['available_to'] ?? null,
         ],
         'interviews' => $interviews,
         'impact' => [
@@ -3835,6 +3864,7 @@ function business_offers_for_student(int $studentUserId): array
          ORDER BY br.created_at DESC"
     );
     $s->execute([(int) $st['id']]);
+    $age = (int) ($st['age'] ?? 0); // all offers belong to this one student
     return array_map(static fn(array $r): array => [
         'id' => (int) $r['id'], 'business_name' => (string) ($r['business_name'] ?? 'A local business'),
         'category' => (string) ($r['category'] ?? ''), 'contact_name' => (string) ($r['contact_name'] ?? ''),
@@ -3844,7 +3874,7 @@ function business_offers_for_student(int $studentUserId): array
         'working_hours' => (string) ($r['working_hours'] ?? ''), 'skills' => (string) ($r['skills'] ?? ''),
         'student_consent' => (string) $r['student_consent'], 'parent_consent' => (string) $r['parent_consent'],
         'decline_reason' => (string) ($r['decline_reason'] ?? ''), 'created_ts' => (int) $r['created_ts'],
-        'stage' => business_offer_stage($r), 'timeline' => business_offer_timeline((int) $r['id']),
+        'stage' => business_offer_stage($r + ['age' => $age]), 'timeline' => business_offer_timeline((int) $r['id']),
     ], $s->fetchAll());
 }
 
@@ -3856,7 +3886,7 @@ function business_offers_for_parent(int $parentUserId): array
     if (!$p) return [];
     $s = db()->prepare(
         "SELECT br.*, UNIX_TIMESTAMP(br.created_at) AS created_ts,
-                ba.business_name, ba.category, ba.contact_name, s.full_name AS student_name
+                ba.business_name, ba.category, ba.contact_name, s.full_name AS student_name, s.age
          FROM business_requests br
          LEFT JOIN business_accounts ba ON ba.user_id = br.business_user_id
          LEFT JOIN new_school_students s ON s.id = br.student_id
@@ -3895,8 +3925,25 @@ function business_student_respond(int $studentUserId, int $reqId, string $decisi
     business_offer_log($reqId, $dec === 'accepted' ? 'student_accepted' : 'student_declined', 'student', (string) ($st['full_name'] ?? 'Student'), $reason);
     $meta = business_offer_meta($reqId);
     $biz = (string) ($meta['business_name'] ?? 'the business');
-    if ($dec === 'accepted') {
-        // Ask the parent to consent.
+    $adult = (int) ($st['age'] ?? 0) >= 18; // 18+ interns confirm on their own; parent is informed, not gating
+    if ($dec === 'accepted' && $adult) {
+        // Adult student: acceptance confirms the internship outright — no parent gate.
+        business_offer_log($reqId, 'confirmed', 'system', 'System', '');
+        if ($meta && function_exists('ecosystem_notify_user')) {
+            ecosystem_notify_user((int) $meta['business_user_id'], 'Internship offer: accepted 🎉', "🎉 Your internship offer has been accepted by the student. As the student is 18+, no parent/guardian consent is required. The program team will coordinate the next steps with you.");
+        }
+        // Keep the parent informed (informational only — not a consent request).
+        new_school_add_notification((int) $st['id'], 'parent', 'job_offer_info', 'Internship confirmed', "Your child (18+) accepted an internship offer from $biz. As an adult student their acceptance is final — no consent is required from you. This message is for your information.", ['request_id' => $reqId]);
+        try {
+            $pp = db()->prepare('SELECT email, parent_full_name FROM new_school_parents WHERE student_id = ? LIMIT 1');
+            $pp->execute([(int) $st['id']]);
+            $prow = $pp->fetch();
+            if ($prow && !empty($prow['email']) && function_exists('mail_queue_enqueue')) {
+                mail_queue_enqueue('notification', (string) $prow['email'], 'Internship confirmed (for your information)', "Hi " . (string) ($prow['parent_full_name'] ?? 'there') . ",\n\nYour child (18 or older) has accepted an internship offer from $biz. As an adult student, their acceptance is final and no consent is required from you. This note is simply to keep you informed.\n\n— FrantzCoutard.com");
+            }
+        } catch (Throwable $e) { if (app_debug()) error_log('offer notify parent (adult info): ' . $e->getMessage()); }
+    } elseif ($dec === 'accepted') {
+        // Minor: ask the parent to consent.
         new_school_add_notification((int) $st['id'], 'parent', 'job_offer_consent', 'Consent needed: internship offer', "Your child accepted an internship offer from $biz. Please review and give consent in your dashboard.", ['request_id' => $reqId]);
         try {
             $pp = db()->prepare('SELECT email, parent_full_name FROM new_school_parents WHERE student_id = ? LIMIT 1');
@@ -3945,7 +3992,7 @@ function business_offers_pipeline(int $businessUserId): array
     business_ensure_schema();
     $s = db()->prepare(
         "SELECT br.*, UNIX_TIMESTAMP(br.created_at) AS created_ts,
-                s.full_name AS student_name_live, s.email AS student_email, s.phone_number AS student_phone,
+                s.full_name AS student_name_live, s.email AS student_email, s.phone_number AS student_phone, s.age,
                 sch.school_name,
                 p.parent_full_name, p.email AS parent_email, p.phone_number AS parent_phone
          FROM business_requests br
@@ -3958,9 +4005,11 @@ function business_offers_pipeline(int $businessUserId): array
     $s->execute([$businessUserId]);
     return array_map(static function (array $r): array {
         // Contact details are released to the business ONLY once the internship is
-        // fully confirmed (student accepted + parent/guardian consented) — before
-        // that the business must go through the program team.
-        $confirmed = (string) ($r['parent_consent'] ?? '') === 'accepted';
+        // fully confirmed — for minors that means student accepted + parent/guardian
+        // consented; for adult students (18+) the student's acceptance alone confirms.
+        $adultOffer = (int) ($r['age'] ?? 0) >= 18;
+        $confirmed = (string) ($r['parent_consent'] ?? '') === 'accepted'
+            || ($adultOffer && (string) ($r['student_consent'] ?? '') === 'accepted');
         $contact = $confirmed ? [
             'student_email' => (string) ($r['student_email'] ?? ''),
             'student_phone' => (string) ($r['student_phone'] ?? ''),

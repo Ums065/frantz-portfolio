@@ -14,6 +14,8 @@ export interface OfferStage {
   by?: string
   reason?: string
   next?: string
+  /** false for adult students (18+): the parent is informed but consent is not a gate. */
+  parent_required?: boolean
 }
 
 export interface OfferEvent {
@@ -95,6 +97,10 @@ export default function OfferStepper({ stage, timeline, compact }: { stage: Offe
   const goldPct = rejected ? 0 : fillPct
   const redFromPct = 0
   const redToPct = STEP_CENTERS[activeIndex]
+  // Adult students (18+): the parent step is informational, so relabel dot #3.
+  const stepLabels = stage.parent_required === false
+    ? [STEP_LABELS[0], STEP_LABELS[1], 'Parent Notified', STEP_LABELS[3]]
+    : STEP_LABELS
 
   return (
     <div style={{ display: 'grid', gap: compact ? 10 : 14 }}>
@@ -124,7 +130,7 @@ export default function OfferStepper({ stage, timeline, compact }: { stage: Offe
           )}
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: -13 }}>
-          {STEP_LABELS.map((label, i) => {
+          {stepLabels.map((label, i) => {
             const isDone = terminalDone ? i <= activeIndex : i < activeIndex
             const isActive = !rejected && !terminalDone && i === activeIndex
             const isRejectedHere = rejected && i === activeIndex
