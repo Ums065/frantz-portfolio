@@ -9,6 +9,7 @@ import { unseenAnnCount, markAnnSeen, unseenReqCount, markReqSeen } from './port
 import { useLiveRefresh } from '../hooks/useLiveRefresh'
 import { statHint } from '../lib/statHints'
 import ProfileSection, { AvatarPicker } from '../components/profile/ProfileSection'
+import OfferChat from '../components/OfferChat'
 
 /* Business Portal — access, review & opportunity requests for a verified business.
    The business is NOT a judge: it cannot rate, score or rank students, and cannot
@@ -91,6 +92,8 @@ interface BizOffer {
   stage: OfferStage
   timeline: OfferEvent[]
   contact: { student_email: string; student_phone: string; parent_name: string; parent_email: string; parent_phone: string } | null
+  resume_url?: string
+  student_user_id?: number
 }
 interface BizProfile { business_name: string; category: string | null; borough: string | null; contact_name: string | null; contact_phone: string | null; website: string | null; about: string | null; ein?: string | null; manager_name?: string | null; manager_phone?: string | null; manager_email?: string | null; available_days?: string | null; available_from?: string | null; available_to?: string | null }
 interface BizDoc { id: number; doc_type: string; label: string; file_url: string; created_ts: number }
@@ -485,9 +488,15 @@ export default function Business() {
                           <ContactCard title={`Student · ${o.student_name}`} email={o.contact.student_email} phone={o.contact.student_phone} />
                           <ContactCard title={`Parent / Guardian${o.contact.parent_name ? ` · ${o.contact.parent_name}` : ''}`} email={o.contact.parent_email} phone={o.contact.parent_phone} />
                         </div>
+                        {o.resume_url && (
+                          <p style={{ fontSize: 12.5, margin: '10px 0 0' }}>
+                            📄 <a href={o.resume_url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--gold-light)' }}>Download student’s résumé</a>
+                          </p>
+                        )}
                         <p style={{ color: 'var(--muted)', fontSize: 11.5, margin: '10px 0 0', lineHeight: 1.5 }}>Please coordinate respectfully and keep the program team informed. Working hours must respect school schedules and youth labor rules.</p>
                       </div>
                     )}
+                    {o.stage.key === 'confirmed' && <OfferChat base={`business/offer/${o.id}`} role="business" />}
                   </div>
                 ))}
             </div>

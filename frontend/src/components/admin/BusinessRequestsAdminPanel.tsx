@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { api } from '../../lib/api'
 import { Pill, Modal, EcoTable, EcoStatChips, ProfileModal } from './EcosystemAdminPanel'
 import OfferStepper, { type OfferStage, type OfferEvent } from '../OfferStepper'
+import OfferChat from '../OfferChat'
 
 /* Admin review of Business opportunity requests (implementation help / contact
    school / internship-hiring / volunteer). Table + filters + detail modal, so it
@@ -166,6 +167,9 @@ function BizRequestModal({ req, onClose, onDone }: { req: BizAdminRequest; onClo
       {isInternship && req.status !== 'approved' && !req.stage?.rejected && (
         <p style={{ color: 'var(--gold-light)', fontSize: 12.5, margin: '0 0 10px' }}>Approving this sends the offer to the student, then their parent/guardian for consent.</p>
       )}
+
+      {/* Oversight: the student ⇄ business chat (appears only once the internship is confirmed). */}
+      {isInternship && <OfferChat base={`admin/business-request/${req.id}`} role="admin" />}
 
       {req.message && <p style={{ color: '#d8d3c6', fontSize: 13.5, lineHeight: 1.6, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--line)', borderRadius: 10, padding: '10px 12px' }}>{req.message}</p>}
 

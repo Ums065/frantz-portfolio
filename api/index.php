@@ -1413,6 +1413,23 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             json(['timeline' => business_offer_timeline((int) $m[1])]);
         }
 
+        // Business ⇄ student chat on a confirmed internship offer the business owns.
+        case $method === 'GET' && preg_match('#^business/offer/(\d+)/messages$#', $route, $m) === 1: {
+            $u = require_business();
+            $r = business_offer_row((int) $m[1]);
+            if (!$r || (int) $r['business_user_id'] !== (int) $u['id']) json(['error' => 'Offer not found.'], 404);
+            $can = business_offer_is_confirmed($r);
+            json(['can_chat' => $can, 'messages' => $can ? business_offer_messages_list((int) $m[1]) : []]);
+        }
+        case $method === 'POST' && preg_match('#^business/offer/(\d+)/messages$#', $route, $m) === 1: {
+            $u = require_business();
+            $r = business_offer_row((int) $m[1]);
+            if (!$r || (int) $r['business_user_id'] !== (int) $u['id']) json(['error' => 'Offer not found.'], 404);
+            if (!business_offer_is_confirmed($r)) json(['error' => 'Chat opens once the internship is confirmed.'], 422);
+            business_offer_message_add((int) $m[1], 'business', (int) $u['id'], (string) field(body(), 'body'));
+            json(['messages' => business_offer_messages_list((int) $m[1])]);
+        }
+
         case $key === 'GET admin/business-requests': {
             require_admin();
             json(['requests' => business_requests_all()]);
@@ -1423,6 +1440,21 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             $b = body();
             business_request_update((int) $m[1], (string) field($b, 'status'), (string) field($b, 'admin_note'), (int) $admin['id']);
             json(['message' => 'Request updated.', 'requests' => business_requests_all()]);
+        }
+
+        // Admin oversight of an internship offer chat (read + post).
+        case $method === 'GET' && preg_match('#^admin/business-request/(\d+)/messages$#', $route, $m) === 1: {
+            require_admin();
+            $r = business_offer_row((int) $m[1]);
+            if (!$r) json(['error' => 'Offer not found.'], 404);
+            json(['can_chat' => business_offer_is_confirmed($r), 'messages' => business_offer_messages_list((int) $m[1])]);
+        }
+        case $method === 'POST' && preg_match('#^admin/business-request/(\d+)/messages$#', $route, $m) === 1: {
+            $admin = require_admin();
+            $r = business_offer_row((int) $m[1]);
+            if (!$r) json(['error' => 'Offer not found.'], 404);
+            business_offer_message_add((int) $m[1], 'admin', (int) $admin['id'], (string) field(body(), 'body'));
+            json(['messages' => business_offer_messages_list((int) $m[1])]);
         }
 
         // Global announcements feed for ANY logged-in user (audience 'all' + any

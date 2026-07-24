@@ -623,7 +623,28 @@ function new_school_handle_route(string $method, string $route): bool
             $decision = (string) field($b, 'decision');
             if (!in_array($decision, ['accept', 'decline'], true)) json(['error' => 'Choose accept or decline.'], 422);
             $reason = trim((string) field($b, 'reason'));
-            json(['message' => $decision === 'accept' ? 'Offer accepted — your parent/guardian will be asked to consent.' : 'Offer declined.', 'offers' => business_student_respond((int) $user['id'], (int) $m[1], $decision, $reason)]);
+            $resumeUrl = trim((string) field($b, 'resume_url'));
+            json(['message' => $decision === 'accept' ? 'Offer accepted — your parent/guardian will be asked to consent.' : 'Offer declined.', 'offers' => business_student_respond((int) $user['id'], (int) $m[1], $decision, $reason, $resumeUrl)]);
+        }
+        // Student ⇄ business chat on a confirmed internship offer.
+        case $method === 'GET' && preg_match('#^new-school/student/offer/(\d+)/messages$#', $route, $m) === 1: {
+            $user = require_login();
+            $st = new_school_fetch_student_by_user_id((int) $user['id']);
+            if (!$st) json(['error' => 'Student profile not found.'], 404);
+            $r = business_offer_row((int) $m[1]);
+            if (!$r || (int) $r['student_id'] !== (int) $st['id']) json(['error' => 'Offer not found.'], 404);
+            $can = business_offer_is_confirmed($r);
+            json(['can_chat' => $can, 'messages' => $can ? business_offer_messages_list((int) $m[1]) : []]);
+        }
+        case $method === 'POST' && preg_match('#^new-school/student/offer/(\d+)/messages$#', $route, $m) === 1: {
+            $user = require_login();
+            $st = new_school_fetch_student_by_user_id((int) $user['id']);
+            if (!$st) json(['error' => 'Student profile not found.'], 404);
+            $r = business_offer_row((int) $m[1]);
+            if (!$r || (int) $r['student_id'] !== (int) $st['id']) json(['error' => 'Offer not found.'], 404);
+            if (!business_offer_is_confirmed($r)) json(['error' => 'Chat opens once the internship is confirmed.'], 422);
+            business_offer_message_add((int) $m[1], 'student', (int) $user['id'], (string) field(body(), 'body'));
+            json(['messages' => business_offer_messages_list((int) $m[1])]);
         }
         case $key === 'GET new-school/parent/offers': {
             $user = require_login();

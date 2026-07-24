@@ -12,6 +12,7 @@ import { awards } from '../lib/awards'
 import TermsAgreement from '../components/TermsAgreement'
 import DashboardGuide from '../components/DashboardGuide'
 import OfferStepper, { Confetti, type OfferStage, type OfferEvent } from '../components/OfferStepper'
+import OfferChat from '../components/OfferChat'
 import ScholarshipWizard, { type ScholarshipAnswer } from '../components/ScholarshipWizard'
 import NsRecordDetail from '../components/NsRecordDetail'
 import ChallengeRegistration from '../components/ChallengeRegistration'
@@ -738,6 +739,7 @@ interface JobOffer {
   id: number; business_name: string; category: string; contact_name?: string; message: string
   job_title: string; location: string; duration: string; stipend: string; working_hours: string; skills: string
   student_name?: string; student_consent: string; parent_consent: string; decline_reason?: string; created_ts: number
+  resume_url?: string
   stage: OfferStage; timeline: OfferEvent[]
 }
 
@@ -754,22 +756,33 @@ function JobOffers({ role, hidden }: { role: 'student' | 'parent'; hidden?: bool
   const [offers, setOffers] = useState<JobOffer[]>([])
   const [busy, setBusy] = useState(0)
   const [celebrate, setCelebrate] = useState(false)
-  const [modal, setModal] = useState<{ offer: JobOffer; mode: 'consent' | 'decline'; forRole: 'student' | 'parent' } | null>(null)
+  const [modal, setModal] = useState<{ offer: JobOffer; mode: 'consent' | 'decline' | 'accept'; forRole: 'student' | 'parent' } | null>(null)
   const [reason, setReason] = useState('')
+  const [resumeUrl, setResumeUrl] = useState('')
+  const [resumeName, setResumeName] = useState('')
+  const [uploading, setUploading] = useState(false)
   useEffect(() => {
     let alive = true
     api.get<{ offers: JobOffer[] }>(`new-school/${role}/offers`).then((d) => { if (alive) setOffers(d.offers || []) }).catch(() => {})
     return () => { alive = false }
   }, [role])
-  const respond = async (id: number, decision: 'accept' | 'decline', why = '') => {
+  const respond = async (id: number, decision: 'accept' | 'decline', why = '', resume = '') => {
     setBusy(id)
     try {
-      const d = await api.post<{ offers: JobOffer[]; message?: string }>(`new-school/${role}/offer/${id}/respond`, { decision, reason: why })
+      const d = await api.post<{ offers: JobOffer[]; message?: string }>(`new-school/${role}/offer/${id}/respond`, { decision, reason: why, resume_url: resume })
       setOffers(d.offers || [])
       window.fcToast?.(d.message || 'Saved.')
       if (decision === 'accept') { setCelebrate(true); window.setTimeout(() => setCelebrate(false), 1700) }
-      setModal(null); setReason('')
+      setModal(null); setReason(''); setResumeUrl(''); setResumeName('')
     } catch (e) { window.fcToast?.(e instanceof Error ? e.message : 'Could not save your response.') } finally { setBusy(0) }
+  }
+  const pickResume = async (file?: File) => {
+    if (!file) return
+    setUploading(true)
+    try {
+      const { url } = await api.upload<{ url: string }>('new-school/upload', file)
+      setResumeUrl(url); setResumeName(file.name)
+    } catch (e) { window.fcToast?.(e instanceof Error ? e.message : 'Could not upload the résumé.') } finally { setUploading(false) }
   }
   if (offers.length === 0) return null
   // Adult students (18+) don't need parent consent (stage.parent_required === false),
@@ -831,11 +844,22 @@ function JobOffers({ role, hidden }: { role: 'student' | 'parent'; hidden?: bool
                   <OfferStepper stage={o.stage} timeline={o.timeline} />
                 </div>
 
+                {o.resume_url && (
+                  <p style={{ fontSize: 12.5, margin: '10px 0 0' }}>
+                    📄 <a href={o.resume_url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--gold-light)' }}>View submitted résumé</a>
+                  </p>
+                )}
+
                 {canAct(o) && (
                   <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
-                    <button className="btn btn--sm btn--solid" disabled={busy === o.id} onClick={() => role === 'parent' ? setModal({ offer: o, mode: 'consent', forRole: 'parent' }) : respond(o.id, 'accept')}>{busy === o.id ? '…' : acceptLabel}</button>
+                    <button className="btn btn--sm btn--solid" disabled={busy === o.id} onClick={() => role === 'parent' ? setModal({ offer: o, mode: 'consent', forRole: 'parent' }) : setModal({ offer: o, mode: 'accept', forRole: 'student' })}>{busy === o.id ? '…' : acceptLabel}</button>
                     <button className="btn btn--sm" disabled={busy === o.id} onClick={() => setModal({ offer: o, mode: 'decline', forRole: role })}>Decline</button>
                   </div>
+                )}
+
+                {/* Direct student ⇄ business chat opens once the internship is confirmed (student view only). */}
+                {o.stage.key === 'confirmed' && role === 'student' && (
+                  <OfferChat base={`new-school/student/offer/${o.id}`} role="student" />
                 )}
               </div>
             </div>
@@ -848,8 +872,25 @@ function JobOffers({ role, hidden }: { role: 'student' | 'parent'; hidden?: bool
           <div onClick={(e) => e.stopPropagation()} className="glass" style={{ maxWidth: 520, width: '100%', maxHeight: '88vh', overflowY: 'auto', padding: 26, borderRadius: 16 }}>
             <span className="eyebrow">{modal.offer.business_name}</span>
             <h3 style={{ fontFamily: 'var(--f-serif)', color: 'var(--gold-light)', fontSize: 22, margin: '4px 0 6px' }}>
-              {modal.mode === 'consent' ? 'Consent to this internship' : 'Decline this offer'}
+              {modal.mode === 'consent' ? 'Consent to this internship' : modal.mode === 'accept' ? 'Accept this internship' : 'Decline this offer'}
             </h3>
+
+            {modal.mode === 'accept' && (
+              <>
+                <p style={{ color: 'var(--muted)', fontSize: 13, lineHeight: 1.6, margin: '0 0 12px' }}>
+                  You’re accepting the internship at <strong style={{ color: 'var(--white)' }}>{modal.offer.business_name}</strong>. You can attach a résumé for the business to review (optional — PDF, DOC, or image, up to 5 MB).
+                </p>
+                <label className="btn btn--sm" style={{ display: 'inline-flex', cursor: 'pointer' }}>
+                  {uploading ? 'Uploading…' : resumeName ? 'Change résumé' : 'Upload résumé (optional)'}
+                  <input type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp" hidden disabled={uploading} onChange={(e) => pickResume(e.target.files?.[0])} />
+                </label>
+                {resumeName && <p style={{ color: 'var(--gold-light)', fontSize: 12.5, margin: '8px 0 0' }}>📄 {resumeName} attached</p>}
+                <div style={{ display: 'flex', gap: 10, marginTop: 18, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                  <button className="btn btn--sm" disabled={busy !== 0} onClick={() => setModal(null)}>Cancel</button>
+                  <button className="btn btn--sm btn--solid" disabled={busy !== 0 || uploading} onClick={() => respond(modal.offer.id, 'accept', '', resumeUrl)}>{busy !== 0 ? 'Saving…' : 'Accept offer'}</button>
+                </div>
+              </>
+            )}
 
             {modal.mode === 'consent' && (
               <>

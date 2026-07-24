@@ -3414,6 +3414,22 @@ function business_ensure_schema(): void
     $addColReq('skills', 'VARCHAR(400) DEFAULT NULL');
     $addColReq('decline_reason', 'TEXT DEFAULT NULL');
     $addColReq('declined_by', "VARCHAR(12) DEFAULT NULL");
+    // Résumé the student attaches when accepting an internship offer (shared to the business once confirmed).
+    $addColReq('resume_url', 'VARCHAR(255) DEFAULT NULL');
+    // Direct student ⇄ business chat (with admin oversight) once an offer is confirmed.
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS business_offer_messages (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            request_id INT NOT NULL,
+            sender_role ENUM('student','business','admin') NOT NULL,
+            sender_user_id INT DEFAULT NULL,
+            body TEXT NOT NULL,
+            read_by_student TINYINT(1) NOT NULL DEFAULT 0,
+            read_by_business TINYINT(1) NOT NULL DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_bom_req (request_id, created_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+    );
     // Full audit trail of every step in an offer's lifecycle (the timeline).
     $pdo->exec(
         "CREATE TABLE IF NOT EXISTS business_offer_events (
@@ -3874,6 +3890,7 @@ function business_offers_for_student(int $studentUserId): array
         'working_hours' => (string) ($r['working_hours'] ?? ''), 'skills' => (string) ($r['skills'] ?? ''),
         'student_consent' => (string) $r['student_consent'], 'parent_consent' => (string) $r['parent_consent'],
         'decline_reason' => (string) ($r['decline_reason'] ?? ''), 'created_ts' => (int) $r['created_ts'],
+        'resume_url' => (string) ($r['resume_url'] ?? ''),
         'stage' => business_offer_stage($r + ['age' => $age]), 'timeline' => business_offer_timeline((int) $r['id']),
     ], $s->fetchAll());
 }
@@ -3909,7 +3926,7 @@ function business_offers_for_parent(int $parentUserId): array
 }
 
 /** Student accepts/declines an internship offer. On accept → parent is asked to consent. */
-function business_student_respond(int $studentUserId, int $reqId, string $decision, string $reason = ''): array
+function business_student_respond(int $studentUserId, int $reqId, string $decision, string $reason = '', string $resumeUrl = ''): array
 {
     business_ensure_schema();
     $st = new_school_fetch_student_by_user_id($studentUserId);
@@ -3920,8 +3937,10 @@ function business_student_respond(int $studentUserId, int $reqId, string $decisi
     if (!$r) json(['error' => 'Offer not found.'], 404);
     if ((string) $r['student_consent'] !== 'pending') json(['error' => 'You have already responded to this offer.'], 409);
     $dec = $decision === 'accept' ? 'accepted' : 'declined';
-    db()->prepare('UPDATE business_requests SET student_consent = ?, declined_by = CASE WHEN ?="declined" THEN "student" ELSE declined_by END, decline_reason = CASE WHEN ?="declined" THEN ? ELSE decline_reason END WHERE id = ?')
-        ->execute([$dec, $dec, $dec, mb_substr($reason, 0, 2000) ?: null, $reqId]);
+    // Only store a résumé on accept, and only if it is a valid uploaded/URL path.
+    $resume = ($dec === 'accepted' && preg_match('#^(/api/uploads/|https?://)#', $resumeUrl)) ? mb_substr($resumeUrl, 0, 255) : null;
+    db()->prepare('UPDATE business_requests SET student_consent = ?, resume_url = CASE WHEN ?="accepted" AND ? IS NOT NULL THEN ? ELSE resume_url END, declined_by = CASE WHEN ?="declined" THEN "student" ELSE declined_by END, decline_reason = CASE WHEN ?="declined" THEN ? ELSE decline_reason END WHERE id = ?')
+        ->execute([$dec, $dec, $resume, $resume, $dec, $dec, mb_substr($reason, 0, 2000) ?: null, $reqId]);
     business_offer_log($reqId, $dec === 'accepted' ? 'student_accepted' : 'student_declined', 'student', (string) ($st['full_name'] ?? 'Student'), $reason);
     $meta = business_offer_meta($reqId);
     $biz = (string) ($meta['business_name'] ?? 'the business');
@@ -3986,13 +4005,25 @@ function business_parent_respond(int $parentUserId, int $reqId, string $decision
     return business_offers_for_parent($parentUserId);
 }
 
+/**
+ * True when an internship offer is fully confirmed: a minor needs parent consent,
+ * an adult (18+) confirms on their own acceptance. Single source of truth for the
+ * contact-release gate and the student ⇄ business chat gate.
+ */
+function business_offer_is_confirmed(array $r): bool
+{
+    $adult = (int) ($r['age'] ?? 0) >= 18;
+    return (string) ($r['parent_consent'] ?? '') === 'accepted'
+        || ($adult && (string) ($r['student_consent'] ?? '') === 'accepted');
+}
+
 /** All internship offers this business has made, with live stage + timeline (the Pipeline). */
 function business_offers_pipeline(int $businessUserId): array
 {
     business_ensure_schema();
     $s = db()->prepare(
         "SELECT br.*, UNIX_TIMESTAMP(br.created_at) AS created_ts,
-                s.full_name AS student_name_live, s.email AS student_email, s.phone_number AS student_phone, s.age,
+                s.full_name AS student_name_live, s.email AS student_email, s.phone_number AS student_phone, s.age, s.user_id AS student_user_id,
                 sch.school_name,
                 p.parent_full_name, p.email AS parent_email, p.phone_number AS parent_phone
          FROM business_requests br
@@ -4004,12 +4035,8 @@ function business_offers_pipeline(int $businessUserId): array
     );
     $s->execute([$businessUserId]);
     return array_map(static function (array $r): array {
-        // Contact details are released to the business ONLY once the internship is
-        // fully confirmed — for minors that means student accepted + parent/guardian
-        // consented; for adult students (18+) the student's acceptance alone confirms.
-        $adultOffer = (int) ($r['age'] ?? 0) >= 18;
-        $confirmed = (string) ($r['parent_consent'] ?? '') === 'accepted'
-            || ($adultOffer && (string) ($r['student_consent'] ?? '') === 'accepted');
+        // Contact + résumé are released to the business ONLY once the internship is confirmed.
+        $confirmed = business_offer_is_confirmed($r);
         $contact = $confirmed ? [
             'student_email' => (string) ($r['student_email'] ?? ''),
             'student_phone' => (string) ($r['student_phone'] ?? ''),
@@ -4028,11 +4055,78 @@ function business_offers_pipeline(int $businessUserId): array
             'status' => (string) $r['status'], 'student_consent' => (string) ($r['student_consent'] ?? 'pending'),
             'parent_consent' => (string) ($r['parent_consent'] ?? 'pending'), 'admin_note' => (string) ($r['admin_note'] ?? ''),
             'decline_reason' => (string) ($r['decline_reason'] ?? ''), 'created_ts' => (int) $r['created_ts'],
+            'resume_url' => $confirmed ? (string) ($r['resume_url'] ?? '') : '',
+            'student_user_id' => (int) ($r['student_user_id'] ?? 0),
             'stage' => business_offer_stage($r),
             'contact' => $contact,
             'timeline' => business_offer_timeline((int) $r['id']),
         ];
     }, $s->fetchAll());
+}
+
+/* ==================== Internship offer chat (student ⇄ business, admin oversight) ==================== */
+
+/** Fetch a raw internship offer row by id (or null). Includes the student's age + user id. */
+function business_offer_row(int $reqId): ?array
+{
+    business_ensure_schema();
+    $s = db()->prepare(
+        "SELECT br.*, s.user_id AS student_user_id, s.age, s.id AS ns_student_id
+         FROM business_requests br
+         LEFT JOIN new_school_students s ON s.id = br.student_id
+         WHERE br.id = ? AND br.request_type = 'internship' LIMIT 1"
+    );
+    $s->execute([$reqId]);
+    $r = $s->fetch();
+    return $r ?: null;
+}
+
+/** Messages on an internship offer thread, oldest first. */
+function business_offer_messages_list(int $reqId): array
+{
+    business_ensure_schema();
+    $s = db()->prepare(
+        "SELECT m.id, m.sender_role, m.body, UNIX_TIMESTAMP(m.created_at) AS ts, u.full_name AS sender_name
+         FROM business_offer_messages m
+         LEFT JOIN users u ON u.id = m.sender_user_id
+         WHERE m.request_id = ? ORDER BY m.created_at ASC, m.id ASC"
+    );
+    $s->execute([$reqId]);
+    return array_map(static fn(array $r): array => [
+        'id' => (int) $r['id'],
+        'sender_role' => (string) $r['sender_role'],
+        'sender_name' => (string) ($r['sender_name'] ?? ucfirst((string) $r['sender_role'])),
+        'body' => (string) $r['body'],
+        'ts' => (int) $r['ts'],
+    ], $s->fetchAll());
+}
+
+/** Append a message to an offer thread and notify the other parties. */
+function business_offer_message_add(int $reqId, string $senderRole, ?int $senderUserId, string $body): void
+{
+    business_ensure_schema();
+    $body = trim($body);
+    if ($body === '') json(['error' => 'Message cannot be empty.'], 422);
+    db()->prepare(
+        'INSERT INTO business_offer_messages (request_id, sender_role, sender_user_id, body, read_by_student, read_by_business)
+         VALUES (?,?,?,?,?,?)'
+    )->execute([
+        $reqId, $senderRole, $senderUserId, mb_substr($body, 0, 4000),
+        $senderRole === 'student' ? 1 : 0,
+        $senderRole === 'business' ? 1 : 0,
+    ]);
+    $r = business_offer_row($reqId);
+    if (!$r) return;
+    $biz = (int) ($r['business_user_id'] ?? 0);
+    $nsStudentId = (int) ($r['ns_student_id'] ?? $r['student_id'] ?? 0);
+    // Notify the student (unless they sent it).
+    if ($senderRole !== 'student' && $nsStudentId > 0) {
+        new_school_add_notification($nsStudentId, 'student', 'chat', 'New message on your internship', 'You have a new message about your internship offer. Open it to reply.', ['request_id' => $reqId]);
+    }
+    // Notify the business (unless they sent it).
+    if ($senderRole !== 'business' && $biz > 0 && function_exists('ecosystem_notify_user')) {
+        ecosystem_notify_user($biz, 'New message on an internship', 'You have a new message about a confirmed internship. Open your pipeline to reply.');
+    }
 }
 
 /* ==================== Ecosystem accounts (sponsor / partner / media / volunteer) ==================== */
