@@ -7,6 +7,7 @@ import { useSeo } from '../../hooks/useSeo'
 import { useLiveRefresh } from '../../hooks/useLiveRefresh'
 import { statHint } from '../../lib/statHints'
 import { resolveDashboardRoute } from '../../lib/dashboardRoute'
+import ProfileSection from '../../components/profile/ProfileSection'
 
 /* Shared shell for the ecosystem role portals (Sponsor / Partner / Media /
    Volunteer). Owns the login / register / pending / wrong-role states and the
@@ -413,7 +414,9 @@ export interface PortalConfig {
 
 /** Business-style authenticated frame: collapsible sidebar of tabs + stat tiles. */
 function TabbedDashboard({ config, data, reload, logout, orgName }: { config: PortalConfig; data: any; reload: () => void; logout: () => void; orgName: string }) {
-  const tabs = config.tabs!
+  // Append a shared "Profile" tab (personal photo + password) to every ecosystem
+  // role — one place, so Sponsor/Partner/Media/Volunteer all get it.
+  const tabs: PortalTab[] = [...config.tabs!, { key: 'profile', label: 'Profile', render: () => <ProfileSection /> }]
   const validKeys = tabs.map((t) => t.key)
   // Remember the active tab in the URL hash so a page refresh keeps you where
   // you were (instead of snapping back to the first tab) — and the tab is

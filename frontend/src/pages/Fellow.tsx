@@ -4,6 +4,7 @@ import { api } from '../lib/api'
 import { useAuth } from '../context/AuthContext'
 import { useSeo } from '../hooks/useSeo'
 import SheetImport from '../components/SheetImport'
+import ProfileSection from '../components/profile/ProfileSection'
 import {
   RESEARCH_CATEGORIES, EMPTY_ENTRY_FORM,
   type ResearchCategory, type ResearchEntry, type CategoryConfig,
@@ -18,7 +19,7 @@ interface Assignment {
   id: number; title: string; detail: string; assign_date: string | null
   status: string; volunteer_note: string; created_ts: number; responded_ts: number
 }
-type TabKey = 'overview' | ResearchCategory
+type TabKey = 'overview' | 'profile' | ResearchCategory
 type EntryForm = typeof EMPTY_ENTRY_FORM
 
 export default function Fellow() {
@@ -157,7 +158,10 @@ export default function Fellow() {
                 {c.tabLabel}{counts[c.key] ? ` (${counts[c.key]})` : ''}
               </button>
             ))}
+            <button type="button" role="tab" aria-selected={tab === 'profile'} className={`admin-ov-tab${tab === 'profile' ? ' is-active' : ''}`} onClick={() => setTab('profile')}>Profile</button>
           </div>
+
+          {tab === 'profile' && <ProfileSection />}
 
           {tab === 'overview' && (
             <div style={{ display: 'grid', gap: 16, minWidth: 0 }}>

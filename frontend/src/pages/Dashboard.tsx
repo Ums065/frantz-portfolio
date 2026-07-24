@@ -14,6 +14,7 @@ import {
 import { memberPerks } from '../lib/brandContent'
 import { useAuth } from '../context/AuthContext'
 import { useSeo } from '../hooks/useSeo'
+import { ProfilePhotoCard } from '../components/profile/ProfileSection'
 
 interface DashboardData {
   user: User
@@ -537,6 +538,8 @@ export default function Dashboard() {
           )}
 
           {tab === 'settings' && (
+            <div style={{ display: 'grid', gap: 16, minWidth: 0 }}>
+            <ProfilePhotoCard />
             <div className="glass dashboard-panel">
               <h2 className="gold-text">Profile Settings</h2>
               <form className="dashboard-form" onSubmit={saveProfile}>
@@ -556,6 +559,7 @@ export default function Dashboard() {
                 {error && <p className="dashboard-error">{error}</p>}
                 <button className="btn btn--solid" type="submit" disabled={busy}>{busy ? 'Saving...' : 'Save Changes'}</button>
               </form>
+            </div>
             </div>
           )}
         </div>

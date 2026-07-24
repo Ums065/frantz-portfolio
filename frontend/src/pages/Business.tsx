@@ -8,6 +8,7 @@ import OfferStepper, { type OfferStage, type OfferEvent } from '../components/Of
 import { unseenAnnCount, markAnnSeen, unseenReqCount, markReqSeen } from './portal/EcosystemPortal'
 import { useLiveRefresh } from '../hooks/useLiveRefresh'
 import { statHint } from '../lib/statHints'
+import ProfileSection from '../components/profile/ProfileSection'
 
 /* Business Portal — access, review & opportunity requests for a verified business.
    The business is NOT a judge: it cannot rate, score or rank students, and cannot
@@ -555,8 +556,11 @@ export default function Business() {
             </div>
           )}
 
-          {tab === 'profile' && data?.profile && (
-            <ProfileEditor profile={data.profile} onSaved={(p) => setData((d) => d ? { ...d, profile: p } : d)} />
+          {tab === 'profile' && (
+            <div style={{ display: 'grid', gap: 16, minWidth: 0 }}>
+              <ProfileSection />
+              {data?.profile && <ProfileEditor profile={data.profile} onSaved={(p) => setData((d) => d ? { ...d, profile: p } : d)} />}
+            </div>
           )}
         </main>
       </div>
