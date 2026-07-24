@@ -211,7 +211,7 @@ export default function Dashboard() {
         </div>
         <div className="dashboard-hero__panel">
           <div className="dashboard-hero__panel-top">
-            <div className="dashboard-hero__avatar" aria-hidden="true">{avatarInitial}</div>
+            <div className="dashboard-hero__avatar">{user.avatar_url ? <img src={user.avatar_url} alt="Your profile photo" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} /> : <span aria-hidden="true">{avatarInitial}</span>}</div>
             <div className="dashboard-hero__panel-copy">
               <span>Current account</span>
               <strong>{displayName || user.email}</strong>

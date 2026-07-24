@@ -79,11 +79,15 @@ try {
                     $update->execute([$name, $passwordHash, $nextApproval, $nextApproval, $nextApproval, $nextApproval, $existing['id']]);
                     $userId = (int) $existing['id'];
                 } else {
+                    // Optional profile photo picked during registration.
+                    $avatar = (string) field($b, 'avatar_url');
+                    $avatar = preg_match('#^(/api/uploads/|https?://)#', $avatar) ? mb_substr($avatar, 0, 255) : null;
                     $insert = $pdo->prepare(
                         'INSERT INTO users (
                             full_name,
                             email,
                             password_hash,
+                            avatar_url,
                             approval_status,
                             approval_note,
                             approval_reviewed_by_user_id,
@@ -93,9 +97,9 @@ try {
                             email_verification_otp_expires_at,
                             email_verification_otp_sent_at,
                             email_verification_otp_attempts
-                         ) VALUES (?, ?, ?, "pending", NULL, NULL, NULL, ' . $verifiedExpr . ', NULL, NULL, NULL, 0)'
+                         ) VALUES (?, ?, ?, ?, "pending", NULL, NULL, NULL, ' . $verifiedExpr . ', NULL, NULL, NULL, 0)'
                     );
-                    $insert->execute([$name, $email, $passwordHash]);
+                    $insert->execute([$name, $email, $passwordHash, $avatar]);
                     $userId = (int) $pdo->lastInsertId();
                 }
 

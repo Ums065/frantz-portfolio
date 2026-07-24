@@ -28,6 +28,41 @@ export function Avatar({ name, photo, size = 64 }: { name?: string | null; photo
   return <span style={base} aria-hidden="true">{String(name || '?').trim().charAt(0).toUpperCase()}</span>
 }
 
+/** Pre-account photo picker for registration forms. Uploads immediately and
+ *  hands back the URL via onChange; the form includes it as `avatar_url`. Optional. */
+export function AvatarPicker({ value, onChange, name }: { value: string; onChange: (url: string) => void; name?: string }) {
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const onPick = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    if (!file.type.startsWith('image/')) { setErr('Please choose an image file (JPG, PNG, or WebP).'); return }
+    if (file.size > MAX_PHOTO_BYTES) { setErr('Image must be 5 MB or smaller.'); return }
+    setErr(''); setBusy(true)
+    try {
+      const up = await api.upload<{ url: string }>('new-school/upload', file)
+      onChange(up.url)
+    } catch (e) { setErr(e instanceof Error ? e.message : 'Could not upload the photo.') }
+    finally { setBusy(false) }
+  }
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', minWidth: 0 }}>
+      <Avatar name={name} photo={value} size={56} />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <label className={`btn btn--sm${busy ? ' is-disabled' : ''}`} style={{ cursor: busy ? 'default' : 'pointer' }}>
+            {busy ? 'Uploading…' : value ? 'Change photo' : 'Add profile photo (optional)'}
+            <input type="file" accept="image/png,image/jpeg,image/webp" hidden disabled={busy} onChange={onPick} />
+          </label>
+          {value && <button type="button" className="btn btn--sm" disabled={busy} onClick={() => onChange('')}>Remove</button>}
+        </div>
+        {err && <p style={{ ...errS, margin: 0 }}>{err}</p>}
+      </div>
+    </div>
+  )
+}
+
 /** Upload / change / remove the user's profile photo (users.avatar_url). */
 export function ProfilePhotoCard() {
   const { user, refresh } = useAuth()

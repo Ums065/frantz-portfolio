@@ -3,6 +3,7 @@ import { api } from '../lib/api'
 import { useAuth } from '../context/AuthContext'
 import { CHALLENGE_TERMS_VERSION } from '../lib/terms'
 import TermsAgreement from './TermsAgreement'
+import { AvatarPicker } from './profile/ProfileSection'
 import {
   type FieldErrors,
   value, checked, fileValue, ageFromDob, uploadIfPresent, MAX_DOC_BYTES,
@@ -59,6 +60,7 @@ export default function ChallengeRegistration({ tag, onTagChange, token, showCom
 
   const [schools, setSchools] = useState<any[]>([])
   const [teachers, setTeachers] = useState<any[]>([])
+  const [avatarUrl, setAvatarUrl] = useState('')
   const [busy, setBusy] = useState('')
   // Referral: a friend's code from the ?ref= link prefills + attributes the signup.
   const [referralCode] = useState(() => {
@@ -189,6 +191,7 @@ export default function ChallengeRegistration({ tag, onTagChange, token, showCom
         password: value(fd, 'password'),
         phoneNumber: value(fd, 'phone_number'),
         ref: value(fd, 'ref') || referralCode,
+        avatarUrl,
       })
       window.fcToast?.(res.message || 'Welcome! Your account is ready.')
       form.reset()
@@ -270,6 +273,7 @@ export default function ChallengeRegistration({ tag, onTagChange, token, showCom
         student_acknowledgement: true,
         terms_signature: studentTermsSig,
         terms_version: CHALLENGE_TERMS_VERSION,
+        avatar_url: avatarUrl,
       }
       const res = await api.post<any>('new-school/student/register', payload)
       window.fcToast?.(res.message || 'Student registered.')
@@ -330,6 +334,7 @@ export default function ChallengeRegistration({ tag, onTagChange, token, showCom
         preferred_contact_method: value(fd, 'preferred_contact_method'),
         school_id: Number(value(fd, 'school_id') || 0) || undefined,
         teacher_id: Number(value(fd, 'teacher_id') || 0) || undefined,
+        avatar_url: avatarUrl,
       }
       const res = await api.post<any>('new-school/parent/consent', payload)
       window.fcToast?.(res.message || 'Parent consent saved.')
@@ -383,6 +388,7 @@ export default function ChallengeRegistration({ tag, onTagChange, token, showCom
         password: value(fd, 'password'),
         terms_signature: schoolTermsSig,
         terms_version: CHALLENGE_TERMS_VERSION,
+        avatar_url: avatarUrl,
       }
       const res = await api.post<any>('new-school/school/register', payload)
       window.fcToast?.(res.message || 'School registered.')
@@ -441,6 +447,7 @@ export default function ChallengeRegistration({ tag, onTagChange, token, showCom
         password: value(fd, 'password'),
         terms_signature: teacherTermsSig,
         terms_version: CHALLENGE_TERMS_VERSION,
+        avatar_url: avatarUrl,
       }
       const res = await api.post<any>('new-school/teacher/register', payload)
       window.fcToast?.(res.message || 'Teacher registered.')
@@ -483,6 +490,7 @@ export default function ChallengeRegistration({ tag, onTagChange, token, showCom
         email: value(fd, 'email'),
         password: value(fd, 'password'),
         phoneNumber: value(fd, 'phone_number'),
+        avatarUrl,
         orgName: value(fd, 'org_name'),
         website: value(fd, 'website'),
         about: value(fd, 'about'),
@@ -536,6 +544,11 @@ export default function ChallengeRegistration({ tag, onTagChange, token, showCom
       <p className="ns-registration-note">
         Admin accounts stay private. Public registration is available for students, parents through student ID or QR consent, schools, and teachers. Approved schools and teachers appear in the searchable dropdowns.
       </p>
+
+      <div className="glass" style={{ padding: '14px 16px', borderRadius: 12, margin: '0 0 14px', minWidth: 0 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: 'var(--gold-light)', marginBottom: 10 }}>Profile photo (optional)</div>
+        <AvatarPicker value={avatarUrl} onChange={setAvatarUrl} />
+      </div>
 
       <div className="ns-form-grid ns-form-grid--single">
         {showCommunity && (

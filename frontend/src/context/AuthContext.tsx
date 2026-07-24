@@ -8,6 +8,7 @@ export interface RegistrationInput {
   fullName: string
   email: string
   password: string
+  avatarUrl?: string
   studentUsername?: string
   age?: string
   dateOfBirth?: string
@@ -179,6 +180,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           parent_phone: input.parentPhone ?? '',
           parent_email: input.parentEmail ?? '',
           password: input.password,
+          avatar_url: input.avatarUrl ?? '',
         })
         break
       case 'parent':
@@ -193,6 +195,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           consent_checked: input.consentChecked ?? true,
           digital_signature: input.digitalSignature ?? input.fullName,
           password: input.password,
+          avatar_url: input.avatarUrl ?? '',
         })
         break
       case 'school':
@@ -206,6 +209,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           administrator_email: input.email,
           administrator_phone: input.administratorPhone ?? '',
           password: input.password,
+          avatar_url: input.avatarUrl ?? '',
         })
         break
       case 'teacher':
@@ -221,6 +225,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           role_department: input.roleDepartment ?? '',
           grade_level_supported: input.gradeLevelSupported ?? '',
           password: input.password,
+          avatar_url: input.avatarUrl ?? '',
         })
         break
       case 'business':
@@ -228,6 +233,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           full_name: input.fullName,
           email: input.email,
           password: input.password,
+          avatar_url: input.avatarUrl ?? '',
           business_name: input.orgName ?? '',
           category: input.category ?? '',
           borough: input.borough ?? '',
@@ -245,6 +251,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           full_name: input.fullName,
           email: input.email,
           password: input.password,
+          avatar_url: input.avatarUrl ?? '',
           org_name: input.orgName ?? '',
           contact_phone: input.phoneNumber ?? '',
           website: input.website ?? '',
@@ -267,6 +274,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           full_name: input.fullName,
           email: input.email,
           password: input.password,
+          avatar_url: input.avatarUrl ?? '',
           ref: input.ref ?? '',
         })
         break

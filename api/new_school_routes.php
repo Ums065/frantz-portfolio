@@ -28,12 +28,18 @@ function new_school_upsert_user_account(string $fullName, string $email, string 
         json(['error' => 'An account with this email already exists. Please log in instead — or use “Forgot password” if you don’t remember it.'], 409);
     }
 
+    // Optional profile photo chosen during registration (uploaded to /api/uploads
+    // first). Validate the URL shape; ignore anything else.
+    $avatar = (string) field(body(), 'avatar_url');
+    $avatar = preg_match('#^(/api/uploads/|https?://)#', $avatar) ? mb_substr($avatar, 0, 255) : null;
+
     $insert = $pdo->prepare(
         'INSERT INTO users (
             full_name,
             email,
             password_hash,
             role,
+            avatar_url,
             approval_status,
             approval_note,
             approval_reviewed_by_user_id,
@@ -43,9 +49,9 @@ function new_school_upsert_user_account(string $fullName, string $email, string 
             email_verification_otp_expires_at,
             email_verification_otp_sent_at,
             email_verification_otp_attempts
-         ) VALUES (?, ?, ?, ?, "pending", NULL, NULL, NULL, NOW(), NULL, NULL, NULL, 0)'
+         ) VALUES (?, ?, ?, ?, ?, "pending", NULL, NULL, NULL, NOW(), NULL, NULL, NULL, 0)'
     );
-    $insert->execute([$fullName, $email, $passwordHash, $role]);
+    $insert->execute([$fullName, $email, $passwordHash, $role, $avatar]);
 
     $fresh = $pdo->prepare('SELECT * FROM users WHERE id = ? LIMIT 1');
     $fresh->execute([(int) $pdo->lastInsertId()]);
