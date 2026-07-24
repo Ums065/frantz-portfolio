@@ -79,7 +79,7 @@ const ecoStatus = (s: string): React.CSSProperties => {
 
 export interface EcoDoc { id: number; doc_type: string; label: string; url: string; created_ts: number }
 export interface EcoReq { id: number; req_type: string; message: string; status: string; admin_note: string; created_ts: number; reviewed_ts?: number }
-export interface EcoAnn { id: number; title: string; body: string; created_ts: number }
+export interface EcoAnn { id: number; title: string; body: string; media_url?: string; created_ts: number }
 export interface EcoAssign { id: number; title: string; detail: string; assign_date: string | null; status: string; volunteer_note: string; created_ts: number; responded_ts: number }
 
 /* A small status pill shared across assignments + applications (opportunities /
@@ -280,6 +280,13 @@ export function EcoAnnouncements({ items }: { items?: EcoAnn[] }) {
         <div key={a.id} style={{ borderLeft: '2px solid var(--gold)', paddingLeft: 12 }}>
           <div style={{ color: 'var(--ivory)', fontWeight: 700, fontSize: 14 }}>{a.title}</div>
           {a.body && <div style={{ color: '#d8d3c6', fontSize: 13, marginTop: 2, lineHeight: 1.55 }}>{a.body}</div>}
+          {a.media_url && (
+            /\.(mp4|webm|mov|mkv|m4v)$/i.test(a.media_url)
+              ? <video src={a.media_url} controls preload="metadata" style={{ marginTop: 8, width: '100%', maxWidth: 480, borderRadius: 8, border: '1px solid var(--line)' }} />
+              : /\.pdf$/i.test(a.media_url)
+                ? <a className="btn btn--sm" href={a.media_url} target="_blank" rel="noreferrer" style={{ marginTop: 8, display: 'inline-flex' }}>📄 View attached PDF</a>
+                : <img src={a.media_url} alt="Announcement attachment" loading="lazy" style={{ marginTop: 8, width: '100%', maxWidth: 480, borderRadius: 8, border: '1px solid var(--line)', objectFit: 'cover' }} />
+          )}
           <div style={{ color: 'var(--muted)', fontSize: 11, marginTop: 3 }}>{ecoDate(a.created_ts)}</div>
         </div>
       ))}

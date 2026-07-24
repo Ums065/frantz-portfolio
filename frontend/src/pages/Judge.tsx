@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext'
 import { useSeo } from '../hooks/useSeo'
 import { HANDBOOK_SECTIONS, JUDGE_FAQ, JUDGE_SUPPORT } from '../lib/judgeHandbook'
 import ProfileSection from '../components/profile/ProfileSection'
+import AnnouncementsFeed from '../components/AnnouncementsFeed'
 
 const WRAP_S: React.CSSProperties = { minHeight: '100vh', color: 'var(--white)', padding: '0 24px 60px', fontFamily: 'var(--f-body)' }
 const thS: React.CSSProperties = { textAlign: 'left', padding: '14px 16px', color: 'var(--gold-light)', fontWeight: 600, borderBottom: '1px solid var(--line)', textTransform: 'uppercase', fontSize: 11, letterSpacing: '.06em' }
@@ -136,7 +137,7 @@ export default function Judge() {
   const navigate = useNavigate()
   useSeo({ title: 'Judge Dashboard', description: 'Score student competition submissions.', noindex: true })
 
-  type JudgeTab = 'queue' | 'reviews' | 'handbook' | 'faq' | 'chat' | 'profile'
+  type JudgeTab = 'queue' | 'reviews' | 'handbook' | 'faq' | 'chat' | 'profile' | 'announcements'
   const [tab, setTab] = useState<JudgeTab>('queue')
   const [navOpen, setNavOpen] = useState(false)
   const [queue, setQueue] = useState<QueueRow[]>([])
@@ -365,9 +366,10 @@ export default function Judge() {
     { key: 'handbook', label: 'Handbook & Rules' },
     { key: 'faq', label: 'FAQ' },
     { key: 'chat', label: 'Messages' },
+    { key: 'announcements', label: 'Announcements' },
     { key: 'profile', label: 'Profile' },
   ]
-  const LABELS: Record<JudgeTab, string> = { queue: 'Review Queue', reviews: 'My Reviews', handbook: 'Handbook & Rules', faq: 'Frequently Asked Questions', chat: 'Messages', profile: 'Profile' }
+  const LABELS: Record<JudgeTab, string> = { queue: 'Review Queue', reviews: 'My Reviews', handbook: 'Handbook & Rules', faq: 'Frequently Asked Questions', chat: 'Messages', profile: 'Profile', announcements: 'Announcements' }
   const activeLabel = LABELS[tab]
 
   return (
@@ -531,6 +533,10 @@ export default function Judge() {
 
           {tab === 'profile' && (
             <div style={{ maxWidth: 760 }}><ProfileSection /></div>
+          )}
+
+          {tab === 'announcements' && (
+            <div style={{ maxWidth: 760 }}><AnnouncementsFeed /></div>
           )}
 
           {/* Messages — real chat layout */}

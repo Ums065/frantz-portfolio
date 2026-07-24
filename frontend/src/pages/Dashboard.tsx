@@ -15,6 +15,7 @@ import { memberPerks } from '../lib/brandContent'
 import { useAuth } from '../context/AuthContext'
 import { useSeo } from '../hooks/useSeo'
 import { ProfilePhotoCard } from '../components/profile/ProfileSection'
+import AnnouncementsFeed from '../components/AnnouncementsFeed'
 
 interface DashboardData {
   user: User
@@ -353,6 +354,8 @@ export default function Dashboard() {
               </div>
             </div>
           )}
+
+          {tab === 'overview' && <div style={{ marginTop: 16 }}><AnnouncementsFeed /></div>}
 
           {tab === 'requests' && (
             <div className="glass dashboard-panel">

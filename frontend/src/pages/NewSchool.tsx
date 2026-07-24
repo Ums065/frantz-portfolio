@@ -20,6 +20,7 @@ import { DASHBOARD_FAQ } from '../lib/dashboardGuide'
 import { CHALLENGE_TERMS_VERSION } from '../lib/terms'
 import { recordTermsAcceptance } from '../lib/recordTermsAcceptance'
 import { NEW_SCHOOL_RESOURCES } from '../lib/resources'
+import AnnouncementsFeed from '../components/AnnouncementsFeed'
 
 const isAdminRole = (role?: string) => ['admin', 'super_admin', 'editor'].includes(role || '')
 
@@ -2967,6 +2968,10 @@ export default function NewSchool() {
                   <h3>No dashboard data available</h3>
                   <p>Your account is approved, but no role-specific records were found yet.</p>
                 </div>
+              )}
+
+              {dashboardTab === 'notifications' && dashboardRole && (
+                <div className="ns-dash-grid"><AnnouncementsFeed /></div>
               )}
 
               {dashboardTab === 'resources' && dashboardRole && (

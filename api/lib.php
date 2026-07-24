@@ -4225,8 +4225,14 @@ function ecosystem_shared_ensure_schema(): void
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     $pdo->exec("CREATE TABLE IF NOT EXISTS ecosystem_announcements (
         id INT AUTO_INCREMENT PRIMARY KEY, audience VARCHAR(20) NOT NULL DEFAULT 'all', title VARCHAR(180) NOT NULL,
-        body TEXT DEFAULT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, INDEX idx_ecoann_aud (audience)
+        body TEXT DEFAULT NULL, media_url VARCHAR(300) DEFAULT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, INDEX idx_ecoann_aud (audience)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    // Self-heal: add media_url to an existing announcements table.
+    try {
+        if ((int) $pdo->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ecosystem_announcements' AND COLUMN_NAME = 'media_url'")->fetchColumn() === 0) {
+            $pdo->exec('ALTER TABLE ecosystem_announcements ADD COLUMN media_url VARCHAR(300) DEFAULT NULL');
+        }
+    } catch (Throwable $e) { if (app_debug()) error_log('announcement media_url: ' . $e->getMessage()); }
     // Direct 1:1 message thread between the admin team and an ecosystem account.
     $pdo->exec("CREATE TABLE IF NOT EXISTS ecosystem_messages (
         id INT AUTO_INCREMENT PRIMARY KEY, user_id INT NOT NULL, sender VARCHAR(10) NOT NULL,
@@ -4467,9 +4473,9 @@ function ecosystem_create_request(array $user, string $role, array $b): array
 function ecosystem_announcements_for_role(string $role): array
 {
     ecosystem_shared_ensure_schema();
-    $s = db()->prepare("SELECT id, title, body, UNIX_TIMESTAMP(created_at) AS created_ts FROM ecosystem_announcements WHERE audience = 'all' OR audience = ? ORDER BY created_at DESC LIMIT 30");
+    $s = db()->prepare("SELECT id, title, body, media_url, UNIX_TIMESTAMP(created_at) AS created_ts FROM ecosystem_announcements WHERE audience = 'all' OR audience = ? ORDER BY created_at DESC LIMIT 30");
     $s->execute([$role]);
-    return array_map(static fn(array $r): array => ['id' => (int) $r['id'], 'title' => $r['title'], 'body' => (string) ($r['body'] ?? ''), 'created_ts' => (int) $r['created_ts']], $s->fetchAll());
+    return array_map(static fn(array $r): array => ['id' => (int) $r['id'], 'title' => $r['title'], 'body' => (string) ($r['body'] ?? ''), 'media_url' => (string) ($r['media_url'] ?? ''), 'created_ts' => (int) $r['created_ts']], $s->fetchAll());
 }
 
 function ecosystem_set_logo(array $user, string $url): array
@@ -4635,16 +4641,17 @@ function ecosystem_document_add(int $userId, string $role, string $docType, stri
         ->execute([$userId, $role, mb_substr($docType, 0, 40) ?: 'document', mb_substr($label, 0, 160) ?: 'Document', mb_substr($url, 0, 400)]);
 }
 function ecosystem_document_delete(int $id): void { ecosystem_shared_ensure_schema(); db()->prepare('DELETE FROM ecosystem_documents WHERE id = ?')->execute([$id]); }
-function ecosystem_announcement_add(string $audience, string $title, string $body): void
+function ecosystem_announcement_add(string $audience, string $title, string $body, string $mediaUrl = ''): void
 {
     ecosystem_shared_ensure_schema();
-    $audience = in_array($audience, ['all', 'sponsor', 'partner', 'media', 'volunteer', 'business', 'community'], true) ? $audience : 'all';
-    db()->prepare('INSERT INTO ecosystem_announcements (audience, title, body) VALUES (?,?,?)')->execute([$audience, mb_substr($title, 0, 180), mb_substr($body, 0, 4000) ?: null]);
+    $audience = in_array($audience, ['all', 'sponsor', 'partner', 'media', 'volunteer', 'business', 'community', 'student', 'parent', 'school', 'teacher', 'judge', 'fellow', 'member'], true) ? $audience : 'all';
+    $media = preg_match('#^(/api/uploads/|https?://)#', $mediaUrl) ? mb_substr($mediaUrl, 0, 300) : null;
+    db()->prepare('INSERT INTO ecosystem_announcements (audience, title, body, media_url) VALUES (?,?,?,?)')->execute([$audience, mb_substr($title, 0, 180), mb_substr($body, 0, 4000) ?: null, $media]);
 }
 function ecosystem_announcements_all(): array
 {
     ecosystem_shared_ensure_schema();
-    return array_map(static fn(array $r): array => ['id' => (int) $r['id'], 'audience' => $r['audience'], 'title' => $r['title'], 'body' => (string) ($r['body'] ?? ''), 'created_ts' => (int) $r['created_ts']], db()->query('SELECT *, UNIX_TIMESTAMP(created_at) AS created_ts FROM ecosystem_announcements ORDER BY created_at DESC')->fetchAll() ?: []);
+    return array_map(static fn(array $r): array => ['id' => (int) $r['id'], 'audience' => $r['audience'], 'title' => $r['title'], 'body' => (string) ($r['body'] ?? ''), 'media_url' => (string) ($r['media_url'] ?? ''), 'created_ts' => (int) $r['created_ts']], db()->query('SELECT *, UNIX_TIMESTAMP(created_at) AS created_ts FROM ecosystem_announcements ORDER BY created_at DESC')->fetchAll() ?: []);
 }
 function ecosystem_announcement_delete(int $id): void { ecosystem_shared_ensure_schema(); db()->prepare('DELETE FROM ecosystem_announcements WHERE id = ?')->execute([$id]); }
 

@@ -17,7 +17,7 @@ interface AccountProfile {
 }
 interface EcoAccount { user_id: number; role: string; org_name: string; email: string; approval_status: string }
 interface EcoDoc { id: number; doc_type: string; label: string; url: string; created_ts: number }
-interface EcoAnn { id: number; audience: string; title: string; body: string; created_ts: number }
+interface EcoAnn { id: number; audience: string; title: string; body: string; media_url?: string; created_ts: number }
 interface EcoAssign { id: number; title: string; detail: string; assign_date: string | null; status: string; created_ts: number }
 
 const card: React.CSSProperties = { background: 'rgba(255,255,255,0.04)', border: '1px solid var(--line)', borderRadius: 14, padding: 16 }
@@ -597,21 +597,38 @@ function Announcer({ anns, setAnns }: { anns: EcoAnn[]; setAnns: (a: EcoAnn[]) =
   const [audience, setAudience] = useState('all')
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
+  const [mediaUrl, setMediaUrl] = useState('')
+  const [mediaBusy, setMediaBusy] = useState(false)
   const [busy, setBusy] = useState(false)
+  const onMedia = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]; e.target.value = ''
+    if (!file) return
+    setMediaBusy(true)
+    try { const up = await api.upload<{ url: string }>('new-school/upload', file); setMediaUrl(up.url) }
+    catch (err) { window.fcToast?.(err instanceof Error ? err.message : 'Upload failed.') }
+    finally { setMediaBusy(false) }
+  }
   const post = async () => {
     if (!title.trim()) return
     setBusy(true)
-    try { const d = await api.post<{ announcements: EcoAnn[] }>('admin/ecosystem/announcement', { audience, title, body }); setAnns(d.announcements || []); setTitle(''); setBody('') } catch { /* ignore */ } finally { setBusy(false) }
+    try { const d = await api.post<{ announcements: EcoAnn[] }>('admin/ecosystem/announcement', { audience, title, body, media_url: mediaUrl }); setAnns(d.announcements || []); setTitle(''); setBody(''); setMediaUrl('') } catch { /* ignore */ } finally { setBusy(false) }
   }
   const del = async (id: number) => { if (!confirm('Delete announcement?')) return; await api.del(`admin/ecosystem/announcement/${id}`); setAnns(anns.filter((a) => a.id !== id)) }
   return (
     <div style={{ display: 'grid', gap: 12 }}>
       <div style={{ ...card, display: 'grid', gap: 10 }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12 }}>
-          <div><label style={lbl}>Audience</label><select style={inp} value={audience} onChange={(e) => setAudience(e.target.value)}>{['all', 'sponsor', 'partner', 'media', 'volunteer', 'business', 'community'].map((a) => <option key={a} value={a}>{a}</option>)}</select></div>
+          <div><label style={lbl}>Audience</label><select style={inp} value={audience} onChange={(e) => setAudience(e.target.value)}>{['all', 'sponsor', 'partner', 'media', 'volunteer', 'business', 'community', 'student', 'parent', 'school', 'teacher', 'judge', 'fellow', 'member'].map((a) => <option key={a} value={a}>{a === 'all' ? 'all (everyone / global)' : a}</option>)}</select></div>
           <div style={{ gridColumn: '1 / -1' }}><label style={lbl}>Title</label><input style={inp} value={title} onChange={(e) => setTitle(e.target.value)} /></div>
         </div>
         <div><label style={lbl}>Body</label><textarea style={{ ...inp, minHeight: 70, resize: 'vertical' }} value={body} onChange={(e) => setBody(e.target.value)} /></div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <label className={`btn btn--sm${mediaBusy ? ' is-disabled' : ''}`} style={{ cursor: mediaBusy ? 'default' : 'pointer' }}>
+            {mediaBusy ? 'Uploading…' : mediaUrl ? 'Change media' : '📎 Attach media (image / video / PDF)'}
+            <input type="file" accept="image/*,video/*,application/pdf" hidden disabled={mediaBusy} onChange={onMedia} />
+          </label>
+          {mediaUrl && <><span style={{ fontSize: 12, color: 'var(--muted)', overflowWrap: 'anywhere' }}>{mediaUrl.split('/').pop()}</span><button type="button" className="btn btn--sm" onClick={() => setMediaUrl('')}>Remove</button></>}
+        </div>
         <button className="btn btn--solid btn--sm" style={{ justifySelf: 'start' }} disabled={busy} onClick={post}>{busy ? 'Posting…' : 'Post Announcement'}</button>
       </div>
       {anns.map((a) => (

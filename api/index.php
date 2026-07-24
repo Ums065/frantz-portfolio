@@ -1407,6 +1407,13 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             json(['message' => 'Request updated.', 'requests' => business_requests_all()]);
         }
 
+        // Global announcements feed for ANY logged-in user (audience 'all' + any
+        // targeted to their role). Powers the Announcements section on every dashboard.
+        case $key === 'GET announcements': {
+            $u = require_login();
+            json(['announcements' => ecosystem_announcements_for_role((string) ($u['role'] ?? ''))]);
+        }
+
         /* ---------------- ADMIN: ecosystem documents / requests / announcements ---------------- */
         case $key === 'GET admin/ecosystem/accounts': {
             require_admin();
@@ -1453,7 +1460,7 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             require_admin();
             $b = body();
             if (trim((string) field($b, 'title')) === '') json(['error' => 'Title is required.'], 422);
-            ecosystem_announcement_add((string) field($b, 'audience'), (string) field($b, 'title'), (string) field($b, 'body'));
+            ecosystem_announcement_add((string) field($b, 'audience'), (string) field($b, 'title'), (string) field($b, 'body'), (string) field($b, 'media_url'));
             json(['message' => 'Announcement posted.', 'announcements' => ecosystem_announcements_all()], 201);
         }
         case $method === 'DELETE' && preg_match('#^admin/ecosystem/announcement/(\d+)$#', $route, $m) === 1: {
