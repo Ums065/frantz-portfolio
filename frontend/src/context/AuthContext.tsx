@@ -51,6 +51,11 @@ export interface RegistrationInput {
   volunteerType?: string
   areas?: string
   availability?: string
+  // Business-specific: EIN (for authorization) + owner availability (days + hours)
+  ein?: string
+  availableDays?: string
+  availableFrom?: string
+  availableTo?: string
   // Partner referral code entered at registration (attributes the signup to a partner)
   ref?: string
 }
@@ -240,6 +245,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           contact_phone: input.phoneNumber ?? '',
           website: input.website ?? '',
           about: input.about ?? '',
+          ein: input.ein ?? '',
+          available_days: input.availableDays ?? '',
+          available_from: input.availableFrom ?? '',
+          available_to: input.availableTo ?? '',
           ref: input.ref ?? '',
         })
         break

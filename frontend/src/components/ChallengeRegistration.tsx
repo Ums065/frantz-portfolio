@@ -18,6 +18,7 @@ const optionalEmail = (v: string) => (v.trim() ? vEmail(v) : '')
 export type RegistrationTag = 'community' | 'student' | 'parent' | 'school' | 'teacher' | 'business' | 'sponsor' | 'partner' | 'media' | 'volunteer'
 
 const ECO_TAGS: RegistrationTag[] = ['business', 'sponsor', 'partner', 'media', 'volunteer']
+const WEEK_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const
 
 const REGISTRATION_OPTIONS: Array<{ key: RegistrationTag; title: string; detail: string }> = [
   { key: 'community', title: 'Community', detail: 'Join as a general member and supporter.' },
@@ -95,6 +96,10 @@ export default function ChallengeRegistration({ tag, onTagChange, token, showCom
   const [communityErr, setCommunityErr] = useState<FieldErrors>({})
   const [ecoTermsOk, setEcoTermsOk] = useState(false)
   const [ecoErr, setEcoErr] = useState<FieldErrors>({})
+  // Business-only: which days the owner is available (chips → comma-joined string).
+  const [bizDays, setBizDays] = useState<string[]>([])
+  const toggleBizDay = (d: string) =>
+    setBizDays((prev) => (prev.includes(d) ? prev.filter((x) => x !== d) : [...WEEK_DAYS].filter((w) => prev.includes(w) || w === d)))
 
   const loadOverview = async () => {
     try {
@@ -504,10 +509,15 @@ export default function ChallengeRegistration({ tag, onTagChange, token, showCom
         volunteerType: value(fd, 'volunteerType'),
         areas: value(fd, 'areas'),
         availability: value(fd, 'availability'),
+        // business-only extras
+        ein: value(fd, 'ein'),
+        availableDays: bizDays.join(','),
+        availableFrom: value(fd, 'available_from'),
+        availableTo: value(fd, 'available_to'),
         ref: value(fd, 'ref') || referralCode,
       })
       window.fcToast?.(res.message || 'Account submitted for admin approval.')
-      form.reset(); setEcoErr({}); setEcoTermsOk(false)
+      form.reset(); setEcoErr({}); setEcoTermsOk(false); setBizDays([])
       await refresh()
       onSuccess?.()
     } catch (err) {
@@ -918,6 +928,32 @@ export default function ChallengeRegistration({ tag, onTagChange, token, showCom
             <label className="ns-field"><span>Phone <span className="ns-field-hint">(optional)</span></span><input name="phone_number" type="tel" /><FieldError msg={ecoErr.phone_number} /></label>
             <label className="ns-field"><span>Website <span className="ns-field-hint">(optional)</span></span><input name="website" placeholder="https://…" /><FieldError msg={ecoErr.website} /></label>
             <label className="ns-field"><span>Create a Password</span><PasswordField name="password" /><FieldError msg={ecoErr.password} /></label>
+            {tag === 'business' && (
+              <>
+                <label className="ns-field ns-field--full"><span>EIN <span className="ns-field-hint">(Employer Identification Number — for authorization)</span></span><input name="ein" placeholder="e.g. 12-3456789" /></label>
+                <div className="ns-field ns-field--full">
+                  <span>Availability <span className="ns-field-hint">(optional — when the owner is reachable)</span></span>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', margin: '8px 0 10px' }}>
+                    {WEEK_DAYS.map((d) => {
+                      const on = bizDays.includes(d)
+                      return (
+                        <button key={d} type="button" onClick={() => toggleBizDay(d)} style={{
+                          padding: '6px 12px', borderRadius: 999, cursor: 'pointer', fontSize: 12.5, fontWeight: 700,
+                          border: `1px solid ${on ? 'var(--gold)' : 'var(--line)'}`,
+                          background: on ? 'rgba(212,175,90,0.18)' : 'rgba(0,0,0,0.25)',
+                          color: on ? 'var(--gold-light)' : 'var(--muted)',
+                        }}>{d}</button>
+                      )
+                    })}
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(140px,100%), 1fr))', gap: 12 }}>
+                    <label className="ns-field"><span className="ns-field-hint">Available from</span><input type="time" name="available_from" /></label>
+                    <label className="ns-field"><span className="ns-field-hint">Available until</span><input type="time" name="available_to" /></label>
+                  </div>
+                </div>
+                <p className="ns-registration-note ns-field--full" style={{ margin: 0 }}>You can add your manager’s information from the Profile tab once your account is approved.</p>
+              </>
+            )}
             <label className="ns-field ns-field--full"><span>About <span className="ns-field-hint">(optional)</span></span><textarea name="about" rows={2} /></label>
             <label className="ns-field ns-field--full"><span>Referral Code <span className="ns-field-hint">(optional — if a partner invited you)</span></span><input name="ref" defaultValue={referralCode} placeholder="e.g. A1B2C3D4" style={{ textTransform: 'uppercase' }} /></label>
             <label className="ns-check ns-field--full">
