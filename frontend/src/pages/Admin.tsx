@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { api, type AnalyticsPayload, type AwardRow, type CommunityCommentRow, type CommunityThreadRow, type EventItem, type EventRsvpRow, type InventoryRow, type MediaRow, type PostDetail, type ProductVisibility, type TestimonialRow, type User } from '../lib/api'
@@ -7,16 +7,18 @@ import { useSeo } from '../hooks/useSeo'
 import { useLiveRefresh } from '../hooks/useLiveRefresh'
 import { statHint } from '../lib/statHints'
 import { resolveDashboardRoute } from '../lib/dashboardRoute'
-import SponsorsAdminPanel from '../components/admin/SponsorsAdminPanel'
-import GalleryAdminPanel from '../components/admin/GalleryAdminPanel'
 import NsRecordDetail from '../components/NsRecordDetail'
 import AdminNavIcon from '../components/admin/AdminNavIcon'
 import NsProfileModal, { type ProfileView } from '../components/admin/NsProfileModal'
-import JudgesAdminPanel from '../components/admin/JudgesAdminPanel'
-import PartnersAdminPanel from '../components/admin/PartnersAdminPanel'
-import ResearchAdminPanel from '../components/admin/ResearchAdminPanel'
-import BusinessRequestsAdminPanel from '../components/admin/BusinessRequestsAdminPanel'
 import EcosystemAdminPanel from '../components/admin/EcosystemAdminPanel'
+// Tab-specific leaf panels are code-split: their JS downloads only when the tab
+// is opened, keeping the initial admin bundle smaller.
+const SponsorsAdminPanel = lazy(() => import('../components/admin/SponsorsAdminPanel'))
+const GalleryAdminPanel = lazy(() => import('../components/admin/GalleryAdminPanel'))
+const JudgesAdminPanel = lazy(() => import('../components/admin/JudgesAdminPanel'))
+const PartnersAdminPanel = lazy(() => import('../components/admin/PartnersAdminPanel'))
+const ResearchAdminPanel = lazy(() => import('../components/admin/ResearchAdminPanel'))
+const BusinessRequestsAdminPanel = lazy(() => import('../components/admin/BusinessRequestsAdminPanel'))
 import SubmissionScoresModal from '../components/admin/SubmissionScoresModal'
 
 const EDU_PEOPLE_PAGE_SIZE = 10
@@ -861,6 +863,7 @@ export default function Admin() {
             </div>
           </header>
 
+          <Suspense fallback={<div style={{ padding: 40, color: 'var(--muted)', fontSize: 14 }}>Loading…</div>}>
           {tab === 'overview' && (
             <div className="admin-overview">
               <button
@@ -1787,6 +1790,7 @@ export default function Admin() {
         {tab === 'community' && <CommunityAdmin />}
         {tab === 'rsvps' && <RsvpsAdmin />}
         {tab === 'inventory' && <InventoryAdmin />}
+          </Suspense>
         </main>
       </div>
 
