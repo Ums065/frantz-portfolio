@@ -5,6 +5,10 @@ declare(strict_types=1);
 function new_school_upsert_user_account(string $fullName, string $email, string $password, string $role): array
 {
     if ($password !== '') assert_password_strength($password); // INFO-1: strong password on every registration
+    // Make sure the users.role ENUM includes every role (e.g. 'fellow') BEFORE we
+    // write it — otherwise MySQL silently stores an empty role and the account
+    // lands on the wrong dashboard.
+    roles_ensure_enum();
     $pdo = db();
     $stmt = $pdo->prepare('SELECT * FROM users WHERE email = ? LIMIT 1');
     $stmt->execute([$email]);
