@@ -1419,10 +1419,12 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             $r = business_offer_row((int) $m[1]);
             if (!$r || (int) $r['business_user_id'] !== (int) $u['id']) json(['error' => 'Offer not found.'], 404);
             $can = business_offer_is_confirmed($r);
+            if ($can) business_offer_messages_mark_read((int) $m[1], 'business');
             json(['can_chat' => $can, 'messages' => $can ? business_offer_messages_list((int) $m[1]) : []]);
         }
         case $method === 'POST' && preg_match('#^business/offer/(\d+)/messages$#', $route, $m) === 1: {
             $u = require_business();
+            rate_limit('offer_chat', 30, 300, (string) $u['id']);
             $r = business_offer_row((int) $m[1]);
             if (!$r || (int) $r['business_user_id'] !== (int) $u['id']) json(['error' => 'Offer not found.'], 404);
             if (!business_offer_is_confirmed($r)) json(['error' => 'Chat opens once the internship is confirmed.'], 422);

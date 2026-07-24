@@ -3891,6 +3891,7 @@ function business_offers_for_student(int $studentUserId): array
         'student_consent' => (string) $r['student_consent'], 'parent_consent' => (string) $r['parent_consent'],
         'decline_reason' => (string) ($r['decline_reason'] ?? ''), 'created_ts' => (int) $r['created_ts'],
         'resume_url' => (string) ($r['resume_url'] ?? ''),
+        'unread' => business_offer_is_confirmed($r + ['age' => $age]) ? business_offer_unread_count((int) $r['id'], 'student') : 0,
         'stage' => business_offer_stage($r + ['age' => $age]), 'timeline' => business_offer_timeline((int) $r['id']),
     ], $s->fetchAll());
 }
@@ -4057,6 +4058,7 @@ function business_offers_pipeline(int $businessUserId): array
             'decline_reason' => (string) ($r['decline_reason'] ?? ''), 'created_ts' => (int) $r['created_ts'],
             'resume_url' => $confirmed ? (string) ($r['resume_url'] ?? '') : '',
             'student_user_id' => (int) ($r['student_user_id'] ?? 0),
+            'unread' => $confirmed ? business_offer_unread_count((int) $r['id'], 'business') : 0,
             'stage' => business_offer_stage($r),
             'contact' => $contact,
             'timeline' => business_offer_timeline((int) $r['id']),
@@ -4099,6 +4101,24 @@ function business_offer_messages_list(int $reqId): array
         'body' => (string) $r['body'],
         'ts' => (int) $r['ts'],
     ], $s->fetchAll());
+}
+
+/** Mark all messages the given side did NOT send as read. */
+function business_offer_messages_mark_read(int $reqId, string $side): void
+{
+    if (!in_array($side, ['student', 'business'], true)) return;
+    $col = $side === 'student' ? 'read_by_student' : 'read_by_business';
+    db()->prepare("UPDATE business_offer_messages SET $col = 1 WHERE request_id = ? AND sender_role <> ?")->execute([$reqId, $side]);
+}
+
+/** Count messages the given side has not read yet (sent by someone else). */
+function business_offer_unread_count(int $reqId, string $side): int
+{
+    if (!in_array($side, ['student', 'business'], true)) return 0;
+    $col = $side === 'student' ? 'read_by_student' : 'read_by_business';
+    $s = db()->prepare("SELECT COUNT(*) FROM business_offer_messages WHERE request_id = ? AND sender_role <> ? AND $col = 0");
+    $s->execute([$reqId, $side]);
+    return (int) $s->fetchColumn();
 }
 
 /** Append a message to an offer thread and notify the other parties. */

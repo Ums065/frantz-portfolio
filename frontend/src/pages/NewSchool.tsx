@@ -740,6 +740,7 @@ interface JobOffer {
   job_title: string; location: string; duration: string; stipend: string; working_hours: string; skills: string
   student_name?: string; student_consent: string; parent_consent: string; decline_reason?: string; created_ts: number
   resume_url?: string
+  unread?: number
   stage: OfferStage; timeline: OfferEvent[]
 }
 
@@ -811,6 +812,9 @@ function JobOffers({ role, hidden }: { role: 'student' | 'parent'; hidden?: bool
                   <div style={{ color: 'var(--white)', fontWeight: 800, fontSize: 16, lineHeight: 1.2 }}>{o.job_title || 'Internship'}</div>
                   <div style={{ color: 'var(--gold-light)', fontSize: 13, marginTop: 2 }}>{o.business_name}{o.category ? ` · ${o.category}` : ''}</div>
                 </div>
+                {role === 'student' && (o.unread ?? 0) > 0 && (
+                  <span style={{ flex: '0 0 auto', background: '#e5484d', color: '#fff', fontSize: 11, fontWeight: 700, lineHeight: 1, padding: '4px 8px', borderRadius: 999 }}>{o.unread} new</span>
+                )}
               </div>
 
               <div style={{ padding: '4px 16px 16px' }}>

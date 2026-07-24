@@ -94,6 +94,7 @@ interface BizOffer {
   contact: { student_email: string; student_phone: string; parent_name: string; parent_email: string; parent_phone: string } | null
   resume_url?: string
   student_user_id?: number
+  unread?: number
 }
 interface BizProfile { business_name: string; category: string | null; borough: string | null; contact_name: string | null; contact_phone: string | null; website: string | null; about: string | null; ein?: string | null; manager_name?: string | null; manager_phone?: string | null; manager_email?: string | null; available_days?: string | null; available_from?: string | null; available_to?: string | null }
 interface BizDoc { id: number; doc_type: string; label: string; file_url: string; created_ts: number }
@@ -468,6 +469,9 @@ export default function Business() {
                           {[o.student_name, o.school_name].filter(Boolean).join(' · ')} · Sent {fmtDate(o.created_ts)}
                         </div>
                       </div>
+                      {(o.unread ?? 0) > 0 && (
+                        <span style={{ alignSelf: 'flex-start', background: '#e5484d', color: '#fff', fontSize: 11, fontWeight: 700, lineHeight: 1, padding: '4px 8px', borderRadius: 999 }}>{o.unread} new</span>
+                      )}
                     </div>
                     {(o.location || o.duration || o.stipend || o.working_hours) && (
                       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>

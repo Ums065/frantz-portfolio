@@ -634,10 +634,12 @@ function new_school_handle_route(string $method, string $route): bool
             $r = business_offer_row((int) $m[1]);
             if (!$r || (int) $r['student_id'] !== (int) $st['id']) json(['error' => 'Offer not found.'], 404);
             $can = business_offer_is_confirmed($r);
+            if ($can) business_offer_messages_mark_read((int) $m[1], 'student');
             json(['can_chat' => $can, 'messages' => $can ? business_offer_messages_list((int) $m[1]) : []]);
         }
         case $method === 'POST' && preg_match('#^new-school/student/offer/(\d+)/messages$#', $route, $m) === 1: {
             $user = require_login();
+            rate_limit('offer_chat', 30, 300, (string) $user['id']);
             $st = new_school_fetch_student_by_user_id((int) $user['id']);
             if (!$st) json(['error' => 'Student profile not found.'], 404);
             $r = business_offer_row((int) $m[1]);
