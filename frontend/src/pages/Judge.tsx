@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext'
 import { useSeo } from '../hooks/useSeo'
 import { HANDBOOK_SECTIONS, JUDGE_FAQ, JUDGE_SUPPORT } from '../lib/judgeHandbook'
 import ProfileSection from '../components/profile/ProfileSection'
-import AnnouncementsFeed from '../components/AnnouncementsFeed'
+import AnnouncementsFeed, { useAnnouncementBadge } from '../components/AnnouncementsFeed'
 
 const WRAP_S: React.CSSProperties = { minHeight: '100vh', color: 'var(--white)', padding: '0 24px 60px', fontFamily: 'var(--f-body)' }
 const thS: React.CSSProperties = { textAlign: 'left', padding: '14px 16px', color: 'var(--gold-light)', fontWeight: 600, borderBottom: '1px solid var(--line)', textTransform: 'uppercase', fontSize: 11, letterSpacing: '.06em' }
@@ -139,6 +139,7 @@ export default function Judge() {
 
   type JudgeTab = 'queue' | 'reviews' | 'handbook' | 'faq' | 'chat' | 'profile' | 'announcements'
   const [tab, setTab] = useState<JudgeTab>('queue')
+  const { items: annItems, unseen: annUnseen, markSeen: markAnnSeen } = useAnnouncementBadge()
   const [navOpen, setNavOpen] = useState(false)
   const [queue, setQueue] = useState<QueueRow[]>([])
   const [reviews, setReviews] = useState<ReviewRow[]>([])
@@ -394,10 +395,13 @@ export default function Judge() {
                     key={item.key}
                     type="button"
                     className={`admin-nav__item${tab === item.key ? ' is-active' : ''}`}
-                    onClick={() => setTab(item.key)}
+                    onClick={() => { setTab(item.key); if (item.key === 'announcements') markAnnSeen() }}
                   >
                     <span className="admin-nav__icon" aria-hidden="true">{item.key === 'queue' ? <QueueIcon /> : item.key === 'reviews' ? <ReviewsIcon /> : item.key === 'chat' ? <ChatIcon /> : <BookIcon />}</span>
                     <span className="admin-nav__label">{item.label}</span>
+                    {item.key === 'announcements' && annUnseen > 0 && (
+                      <span style={{ marginLeft: 'auto', background: '#e5484d', color: '#fff', fontSize: 11, fontWeight: 700, lineHeight: 1, padding: '3px 7px', borderRadius: 999 }}>{annUnseen}</span>
+                    )}
                   </button>
                 ))}
               </div>
@@ -536,7 +540,7 @@ export default function Judge() {
           )}
 
           {tab === 'announcements' && (
-            <div style={{ maxWidth: 760 }}><AnnouncementsFeed /></div>
+            <div style={{ maxWidth: 760 }}><AnnouncementsFeed items={annItems} /></div>
           )}
 
           {/* Messages — real chat layout */}

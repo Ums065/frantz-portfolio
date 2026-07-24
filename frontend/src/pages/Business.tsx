@@ -8,7 +8,7 @@ import OfferStepper, { type OfferStage, type OfferEvent } from '../components/Of
 import { unseenAnnCount, markAnnSeen, unseenReqCount, markReqSeen } from './portal/EcosystemPortal'
 import { useLiveRefresh } from '../hooks/useLiveRefresh'
 import { statHint } from '../lib/statHints'
-import ProfileSection from '../components/profile/ProfileSection'
+import ProfileSection, { AvatarPicker } from '../components/profile/ProfileSection'
 
 /* Business Portal — access, review & opportunity requests for a verified business.
    The business is NOT a judge: it cannot rate, score or rank students, and cannot
@@ -159,7 +159,7 @@ export default function Business() {
   // auth panel
   const [mode, setMode] = useState<'login' | 'register'>('register')
   const [busy, setBusy] = useState('')
-  const [f, setF] = useState({ full_name: '', email: '', password: '', business_name: '', category: '', borough: '', contact_phone: '', website: '', about: '', agree: false })
+  const [f, setF] = useState({ full_name: '', email: '', password: '', business_name: '', category: '', borough: '', contact_phone: '', website: '', about: '', avatar_url: '', agree: false })
   const [loginEmail, setLoginEmail] = useState('')
   const [loginPass, setLoginPass] = useState('')
 
@@ -227,6 +227,7 @@ export default function Business() {
         full_name: f.full_name.trim(), email: f.email.trim(), password: f.password,
         business_name: f.business_name.trim(), category: f.category.trim(), borough: f.borough.trim(),
         contact_phone: f.contact_phone.trim(), website: f.website.trim(), about: f.about.trim(),
+        avatar_url: f.avatar_url,
       })
       await refresh()
     } catch (e) { setErr(e instanceof Error ? e.message : 'Registration failed.') }
@@ -278,6 +279,7 @@ export default function Business() {
                 <div><label style={labelS}>Category</label><input style={inputS} value={f.category} onChange={(e) => setF({ ...f, category: e.target.value })} placeholder="Retail, Food, Healthcare…" /></div>
                 <div><label style={labelS}>Borough / County</label><input style={inputS} value={f.borough} onChange={(e) => setF({ ...f, borough: e.target.value })} placeholder="Bronx, Brooklyn…" /></div>
               </div>
+              <div><label style={labelS}>Profile photo (optional)</label><AvatarPicker value={f.avatar_url} onChange={(u) => setF({ ...f, avatar_url: u })} /></div>
               <div><label style={labelS}>Your name (contact) *</label><input style={inputS} required value={f.full_name} onChange={(e) => setF({ ...f, full_name: e.target.value })} /></div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(150px,100%), 1fr))', gap: 12 }}>
                 <div><label style={labelS}>Email *</label><input style={inputS} type="email" required value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} /></div>

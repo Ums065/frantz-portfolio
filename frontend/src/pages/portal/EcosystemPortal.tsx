@@ -7,7 +7,7 @@ import { useSeo } from '../../hooks/useSeo'
 import { useLiveRefresh } from '../../hooks/useLiveRefresh'
 import { statHint } from '../../lib/statHints'
 import { resolveDashboardRoute } from '../../lib/dashboardRoute'
-import ProfileSection from '../../components/profile/ProfileSection'
+import ProfileSection, { AvatarPicker } from '../../components/profile/ProfileSection'
 
 /* Shared shell for the ecosystem role portals (Sponsor / Partner / Media /
    Volunteer). Owns the login / register / pending / wrong-role states and the
@@ -537,6 +537,7 @@ export default function EcosystemPortal({ config }: { config: PortalConfig }) {
         contact_phone: (f.contact_phone || '').trim(),
         website: (f.website || '').trim(),
         about: (f.about || '').trim(),
+        avatar_url: (f.avatar_url || '').trim(),
         ref,
         ...Object.fromEntries(extraFields.map((x) => [x.key, (f[x.key] || '').trim()])),
       })
@@ -601,6 +602,7 @@ export default function EcosystemPortal({ config }: { config: PortalConfig }) {
                   ))}
                 </div>
               )}
+              <div><label style={S.label}>Profile photo (optional)</label><AvatarPicker value={f.avatar_url || ''} onChange={(u) => set('avatar_url', u)} /></div>
               <div><label style={S.label}>Your name (contact) *</label><input style={S.input} required value={f.full_name || ''} onChange={(e) => set('full_name', e.target.value)} /></div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(150px,100%), 1fr))', gap: 12 }}>
                 <div><label style={S.label}>Email *</label><input style={S.input} type="email" required value={f.email || ''} onChange={(e) => set('email', e.target.value)} /></div>

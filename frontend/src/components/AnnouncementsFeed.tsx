@@ -26,6 +26,31 @@ function AnnouncementMedia({ url }: { url: string }) {
   return <img src={url} alt="Announcement attachment" loading="lazy" style={{ ...box, width: '100%', display: 'block', objectFit: 'cover' }} />
 }
 
+const ANN_SEEN_KEY = 'fc_ann_seen_global'
+
+/* Global announcement badge: fetches announcements once, counts how many are
+   newer than the highest id the user has viewed (persisted in localStorage). */
+export function useAnnouncementBadge() {
+  const [anns, setAnns] = useState<Announcement[]>([])
+  const [seen, setSeen] = useState<number>(() => {
+    try { return Number(localStorage.getItem(ANN_SEEN_KEY) || 0) } catch { return 0 }
+  })
+  useEffect(() => {
+    let active = true
+    api.get<{ announcements: Announcement[] }>('announcements')
+      .then((d) => { if (active) setAnns(Array.isArray(d.announcements) ? d.announcements : []) })
+      .catch(() => { /* silent */ })
+    return () => { active = false }
+  }, [])
+  const maxId = anns.reduce((m, a) => Math.max(m, a.id || 0), 0)
+  const unseen = anns.filter((a) => (a.id || 0) > seen).length
+  const markSeen = () => {
+    try { localStorage.setItem(ANN_SEEN_KEY, String(maxId)) } catch { /* ignore */ }
+    setSeen(maxId)
+  }
+  return { items: anns, unseen, markSeen }
+}
+
 export default function AnnouncementsFeed({ items }: { items?: Announcement[] }) {
   const [anns, setAnns] = useState<Announcement[]>(items ?? [])
   const [loading, setLoading] = useState(!items)

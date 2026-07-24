@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { useSeo } from '../hooks/useSeo'
 import SheetImport from '../components/SheetImport'
 import ProfileSection from '../components/profile/ProfileSection'
-import AnnouncementsFeed from '../components/AnnouncementsFeed'
+import AnnouncementsFeed, { useAnnouncementBadge } from '../components/AnnouncementsFeed'
 import {
   RESEARCH_CATEGORIES, EMPTY_ENTRY_FORM,
   type ResearchCategory, type ResearchEntry, type CategoryConfig,
@@ -31,6 +31,7 @@ export default function Fellow() {
   const allowed = !!user && ['fellow', 'admin', 'super_admin'].includes(role)
 
   const [tab, setTab] = useState<TabKey>('overview')
+  const { items: annItems, unseen: annUnseen, markSeen: markAnnSeen } = useAnnouncementBadge()
   const [counts, setCounts] = useState<Record<string, number>>({})
   const [assignments, setAssignments] = useState<Assignment[]>([])
   const [entries, setEntries] = useState<ResearchEntry[]>([])
@@ -159,12 +160,12 @@ export default function Fellow() {
                 {c.tabLabel}{counts[c.key] ? ` (${counts[c.key]})` : ''}
               </button>
             ))}
-            <button type="button" role="tab" aria-selected={tab === 'announcements'} className={`admin-ov-tab${tab === 'announcements' ? ' is-active' : ''}`} onClick={() => setTab('announcements')}>Announcements</button>
+            <button type="button" role="tab" aria-selected={tab === 'announcements'} className={`admin-ov-tab${tab === 'announcements' ? ' is-active' : ''}`} onClick={() => { setTab('announcements'); markAnnSeen() }}>Announcements{annUnseen > 0 && <span style={{ marginLeft: 6, background: '#e5484d', color: '#fff', fontSize: 11, fontWeight: 700, lineHeight: 1, padding: '2px 6px', borderRadius: 999 }}>{annUnseen}</span>}</button>
             <button type="button" role="tab" aria-selected={tab === 'profile'} className={`admin-ov-tab${tab === 'profile' ? ' is-active' : ''}`} onClick={() => setTab('profile')}>Profile</button>
           </div>
 
           {tab === 'profile' && <ProfileSection />}
-          {tab === 'announcements' && <AnnouncementsFeed />}
+          {tab === 'announcements' && <AnnouncementsFeed items={annItems} />}
 
           {tab === 'overview' && (
             <div style={{ display: 'grid', gap: 16, minWidth: 0 }}>

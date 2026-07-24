@@ -3,6 +3,7 @@ import { useAuth, type RegistrationRole } from '../context/AuthContext'
 import { api } from '../lib/api'
 import { BRAND_LOGO } from '../lib/brandAssets'
 import TermsAgreement from './TermsAgreement'
+import { AvatarPicker } from './profile/ProfileSection'
 import { recordTermsAcceptance } from '../lib/recordTermsAcceptance'
 
 const CloseIcon = () => (
@@ -102,6 +103,7 @@ type RegisterFormState = {
   eduMode: boolean
   eduSchoolEmail: string
   schoolWebsite: string
+  avatarUrl: string
 }
 
 const createRegisterForm = (): RegisterFormState => ({
@@ -137,6 +139,7 @@ const createRegisterForm = (): RegisterFormState => ({
   eduMode: false,
   eduSchoolEmail: '',
   schoolWebsite: '',
+  avatarUrl: '',
 })
 
 type RegisterTextFieldKey = Exclude<keyof RegisterFormState, 'role' | 'consentChecked' | 'eduMode'>
@@ -528,6 +531,7 @@ export function AuthModal({
           roleDepartment: normalizeSpaces(form.roleDepartment),
           gradeLevelSupported: normalizeSpaces(form.gradeLevelSupported),
           consentChecked: termsAccepted || form.consentChecked,
+          avatarUrl: form.avatarUrl,
         })
       await handleAuthResult(result)
     } catch (err) {
@@ -624,6 +628,11 @@ export function AuthModal({
                     </select>
                   </div>
                   <p className="auth-note">{roleMeta.helper}</p>
+
+                  <div className="field field--full">
+                    <label>Profile photo (optional)</label>
+                    <AvatarPicker value={form.avatarUrl} onChange={(u) => updateField('avatarUrl', u)} />
+                  </div>
 
                   <div className="auth-grid">
                     {form.role === 'community' && (
