@@ -492,6 +492,7 @@ CREATE TABLE IF NOT EXISTS business_offer_messages (
   sender_role ENUM('student','business','admin') NOT NULL,
   sender_user_id INT DEFAULT NULL,
   body TEXT NOT NULL,
+  attachment_url VARCHAR(255) DEFAULT NULL,
   read_by_student TINYINT(1) NOT NULL DEFAULT 0,
   read_by_business TINYINT(1) NOT NULL DEFAULT 0,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

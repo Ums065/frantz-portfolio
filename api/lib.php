@@ -131,7 +131,7 @@ function ensure_session_version_column(): void
  * request after a deploy, db_auto_migrate() notices the stored version is behind
  * and runs every *_ensure_schema() once; afterwards it's a single cheap SELECT.
  */
-const APP_SCHEMA_VERSION = 20260702; // yyyymmdd + seq — raise on each schema change
+const APP_SCHEMA_VERSION = 20260703; // yyyymmdd + seq — raise on each schema change
 
 /**
  * One-shot, version-gated auto-migration. Runs on app bootstrap: if the DB's
@@ -3104,6 +3104,9 @@ function new_school_workflow_ensure_schema(): void
     };
     // Judge visibility gate: a submission reaches judges only once released.
     $addCol('new_school_submissions', 'judge_released', 'TINYINT(1) NOT NULL DEFAULT 0');
+    // Notifications: per-user targeting + judge/business as addressable roles (for the unified bell).
+    $addCol('new_school_notifications', 'recipient_user_id', 'INT DEFAULT NULL');
+    try { $pdo->exec("ALTER TABLE new_school_notifications MODIFY recipient_role ENUM('student','parent','school','teacher','admin','all','judge','business','fellow') NOT NULL DEFAULT 'student'"); } catch (Throwable $e) { if (app_debug()) error_log('notif role enum: ' . $e->getMessage()); }
     // Per-school marker that its top-3 have been released (idempotency + UI state).
     $addCol('new_school_schools', 'top3_released_at', 'TIMESTAMP NULL DEFAULT NULL');
     // Internal score rows — SEPARATE from new_school_judge_scores; never feeds the main ranking.
@@ -3212,6 +3215,9 @@ function new_school_release_top3(int $schoolId): array
     $n = 0;
     $u = $pdo->prepare('UPDATE new_school_submissions SET judge_released = 1 WHERE id = ?');
     foreach ($ids as $sid) { $u->execute([$sid]); $n++; }
+    if ($n > 0) {
+        try { new_school_add_notification(null, 'judge', 'submissions_released', 'New submissions to review', "$n new submission" . ($n === 1 ? '' : 's') . ' have been released for judging.'); } catch (Throwable $e) { /* non-fatal */ }
+    }
     return ['released' => true, 'already' => false, 'count' => $n, 'submission_ids' => $ids];
 }
 
@@ -3691,6 +3697,14 @@ function business_ensure_schema(): void
             INDEX idx_bom_req (request_id, created_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
     );
+    // Optional file/image attachment on a chat message.
+    $addColBom = static function (string $col, string $def) use ($pdo): void {
+        try {
+            $has = $pdo->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'business_offer_messages' AND COLUMN_NAME = " . $pdo->quote($col))->fetchColumn();
+            if ((int) $has === 0) $pdo->exec("ALTER TABLE business_offer_messages ADD COLUMN $col $def");
+        } catch (Throwable $e) { if (app_debug()) error_log("business_offer_messages column $col: " . $e->getMessage()); }
+    };
+    $addColBom('attachment_url', 'VARCHAR(255) DEFAULT NULL');
     // Full audit trail of every step in an offer's lifecycle (the timeline).
     $pdo->exec(
         "CREATE TABLE IF NOT EXISTS business_offer_events (
@@ -4210,8 +4224,10 @@ function business_student_respond(int $studentUserId, int $reqId, string $decisi
     if ($dec === 'accepted' && $adult) {
         // Adult student: acceptance confirms the internship outright — no parent gate.
         business_offer_log($reqId, 'confirmed', 'system', 'System', '');
-        if ($meta && function_exists('ecosystem_notify_user')) {
-            ecosystem_notify_user((int) $meta['business_user_id'], 'Internship offer: accepted 🎉', "🎉 Your internship offer has been accepted by the student. As the student is 18+, no parent/guardian consent is required. The program team will coordinate the next steps with you.");
+        if ($meta) {
+            $bizUid = (int) $meta['business_user_id'];
+            try { new_school_add_notification(null, 'business', 'offer_confirmed', 'Internship confirmed 🎉', 'A student accepted your internship offer. Open your pipeline for their contact details.', ['request_id' => $reqId], $bizUid); } catch (Throwable $e) { /* non-fatal */ }
+            if (function_exists('ecosystem_notify_user')) ecosystem_notify_user($bizUid, 'Internship offer: accepted 🎉', "🎉 Your internship offer has been accepted by the student. As the student is 18+, no parent/guardian consent is required. The program team will coordinate the next steps with you.");
         }
         // Keep the parent informed (informational only — not a consent request).
         new_school_add_notification((int) $st['id'], 'parent', 'job_offer_info', 'Internship confirmed', "Your child (18+) accepted an internship offer from $biz. As an adult student their acceptance is final — no consent is required from you. This message is for your information.", ['request_id' => $reqId]);
@@ -4258,11 +4274,15 @@ function business_parent_respond(int $parentUserId, int $reqId, string $decision
         ->execute([$dec, $dec, $dec, mb_substr($reason, 0, 2000) ?: null, $reqId]);
     business_offer_log($reqId, $dec === 'accepted' ? 'parent_approved' : 'parent_declined', 'parent', (string) ($p['parent_full_name'] ?? 'Parent/Guardian'), $reason);
     if ($dec === 'accepted') business_offer_log($reqId, 'confirmed', 'system', 'System', '');
+    $bizUid = (int) $r['business_user_id'];
+    if ($dec === 'accepted') {
+        try { new_school_add_notification(null, 'business', 'offer_confirmed', 'Internship confirmed 🎉', 'The student and parent/guardian have consented. Open your pipeline for their contact details.', ['request_id' => $reqId], $bizUid); } catch (Throwable $e) { /* non-fatal */ }
+    }
     if (function_exists('ecosystem_notify_user')) {
         $msg = $dec === 'accepted'
             ? "🎉 Your internship offer has been accepted — the student and their parent/guardian have both consented. The program team will coordinate the next steps with you."
             : "The parent/guardian declined consent for your internship offer." . ($reason !== '' ? "\n\nReason: " . $reason : '');
-        ecosystem_notify_user((int) $r['business_user_id'], 'Internship offer: ' . ($dec === 'accepted' ? 'accepted 🎉' : 'declined'), $msg);
+        ecosystem_notify_user($bizUid, 'Internship offer: ' . ($dec === 'accepted' ? 'accepted 🎉' : 'declined'), $msg);
     }
     return business_offers_for_parent($parentUserId);
 }
@@ -4349,7 +4369,7 @@ function business_offer_messages_list(int $reqId): array
 {
     business_ensure_schema();
     $s = db()->prepare(
-        "SELECT m.id, m.sender_role, m.body, UNIX_TIMESTAMP(m.created_at) AS ts, u.full_name AS sender_name
+        "SELECT m.id, m.sender_role, m.body, m.attachment_url, UNIX_TIMESTAMP(m.created_at) AS ts, u.full_name AS sender_name
          FROM business_offer_messages m
          LEFT JOIN users u ON u.id = m.sender_user_id
          WHERE m.request_id = ? ORDER BY m.created_at ASC, m.id ASC"
@@ -4358,6 +4378,7 @@ function business_offer_messages_list(int $reqId): array
     return array_map(static fn(array $r): array => [
         'id' => (int) $r['id'],
         'sender_role' => (string) $r['sender_role'],
+        'attachment_url' => (string) ($r['attachment_url'] ?? ''),
         'sender_name' => (string) ($r['sender_name'] ?? ucfirst((string) $r['sender_role'])),
         'body' => (string) $r['body'],
         'ts' => (int) $r['ts'],
@@ -4383,16 +4404,17 @@ function business_offer_unread_count(int $reqId, string $side): int
 }
 
 /** Append a message to an offer thread and notify the other parties. */
-function business_offer_message_add(int $reqId, string $senderRole, ?int $senderUserId, string $body): void
+function business_offer_message_add(int $reqId, string $senderRole, ?int $senderUserId, string $body, string $attachmentUrl = ''): void
 {
     business_ensure_schema();
     $body = trim($body);
-    if ($body === '') json(['error' => 'Message cannot be empty.'], 422);
+    $attach = preg_match('#^(/api/uploads/|https?://)#', $attachmentUrl) ? mb_substr($attachmentUrl, 0, 255) : '';
+    if ($body === '' && $attach === '') json(['error' => 'Message cannot be empty.'], 422);
     db()->prepare(
-        'INSERT INTO business_offer_messages (request_id, sender_role, sender_user_id, body, read_by_student, read_by_business)
-         VALUES (?,?,?,?,?,?)'
+        'INSERT INTO business_offer_messages (request_id, sender_role, sender_user_id, body, attachment_url, read_by_student, read_by_business)
+         VALUES (?,?,?,?,?,?,?)'
     )->execute([
-        $reqId, $senderRole, $senderUserId, mb_substr($body, 0, 4000),
+        $reqId, $senderRole, $senderUserId, mb_substr($body, 0, 4000), $attach ?: null,
         $senderRole === 'student' ? 1 : 0,
         $senderRole === 'business' ? 1 : 0,
     ]);
@@ -4404,9 +4426,10 @@ function business_offer_message_add(int $reqId, string $senderRole, ?int $sender
     if ($senderRole !== 'student' && $nsStudentId > 0) {
         new_school_add_notification($nsStudentId, 'student', 'chat', 'New message on your internship', 'You have a new message about your internship offer. Open it to reply.', ['request_id' => $reqId]);
     }
-    // Notify the business (unless they sent it).
-    if ($senderRole !== 'business' && $biz > 0 && function_exists('ecosystem_notify_user')) {
-        ecosystem_notify_user($biz, 'New message on an internship', 'You have a new message about a confirmed internship. Open your pipeline to reply.');
+    // Notify the business (unless they sent it) — bell (per-user) + email.
+    if ($senderRole !== 'business' && $biz > 0) {
+        try { new_school_add_notification(null, 'business', 'chat', 'New message on an internship', 'You have a new message about a confirmed internship. Open your pipeline to reply.', ['request_id' => $reqId], $biz); } catch (Throwable $e) { /* non-fatal */ }
+        if (function_exists('ecosystem_notify_user')) ecosystem_notify_user($biz, 'New message on an internship', 'You have a new message about a confirmed internship. Open your pipeline to reply.');
     }
 }
 
@@ -6259,19 +6282,33 @@ function notifications_scope_for_user(array $user): array
         if ($sc) foreach (new_school_fetch_students_for_school($sc) as $r) { $ids[] = (int) $r['id']; }
         return ['ids' => $ids, 'roles' => ['school']];
     }
-    return ['ids' => [], 'roles' => []]; // judge/fellow/business/ecosystem/member: no NS rows (announcements only)
+    // judge/business/fellow: role-broadcast + per-user targeted rows (recipient_user_id).
+    if (in_array($role, ['judge', 'business', 'fellow'], true)) return ['ids' => [], 'roles' => [$role]];
+    return ['ids' => [], 'roles' => []]; // others: only per-user (recipient_user_id) + 'all'
+}
+
+/** Build the WHERE clause + params matching every row this user should see. */
+function notifications_where_for_user(array $user): array
+{
+    $uid = (int) ($user['id'] ?? 0);
+    $scope = notifications_scope_for_user($user);
+    if (!empty($scope['admin'])) return ['1=1', []];
+    $ids = array_values(array_filter(array_map('intval', $scope['ids'] ?? []), static fn(int $i): bool => $i > 0));
+    $roles = array_values(array_filter($scope['roles'] ?? [], static fn($r): bool => $r !== ''));
+    $clauses = ["recipient_role = 'all'", 'recipient_user_id = ?'];
+    $params = [$uid];
+    if ($ids) { $clauses[] = 'student_id IN (' . new_school_placeholder_list(count($ids)) . ')'; $params = array_merge($params, $ids); }
+    if ($roles) { $clauses[] = 'recipient_role IN (' . new_school_placeholder_list(count($roles)) . ')'; $params = array_merge($params, $roles); }
+    return ['(' . implode(' OR ', $clauses) . ')', $params];
 }
 
 /** Unified notifications feed for the signed-in user: {items, unread}. */
 function notifications_feed_for_user(array $user, int $limit = 20): array
 {
     new_school_workflow_ensure_schema();
-    $scope = notifications_scope_for_user($user);
-    if (!empty($scope['admin'])) {
-        $rows = db()->query('SELECT * FROM new_school_notifications ORDER BY created_at DESC LIMIT ' . max(1, $limit))->fetchAll();
-    } else {
-        $rows = new_school_fetch_notifications_for_scope($scope['ids'] ?? [], $scope['roles'] ?? [], $limit);
-    }
+    [$where, $params] = notifications_where_for_user($user);
+    $stmt = db()->prepare('SELECT id, notification_type, title, message, is_read, created_at FROM new_school_notifications WHERE ' . $where . ' ORDER BY created_at DESC LIMIT ' . max(1, $limit));
+    $stmt->execute($params);
     $items = array_map(static fn(array $r): array => [
         'id'         => (int) $r['id'],
         'type'       => (string) ($r['notification_type'] ?? ''),
@@ -6279,36 +6316,29 @@ function notifications_feed_for_user(array $user, int $limit = 20): array
         'message'    => (string) ($r['message'] ?? ''),
         'is_read'    => (int) ($r['is_read'] ?? 0) === 1,
         'created_ts' => isset($r['created_at']) ? strtotime((string) $r['created_at']) : 0,
-    ], $rows);
+    ], $stmt->fetchAll());
     return ['items' => $items, 'unread' => count(array_filter($items, static fn(array $i): bool => !$i['is_read']))];
 }
 
-/** Mark all of the user's own notifications read (never touches shared 'all' rows for non-admins). */
+/** Mark all of the user's own notifications read. */
 function notifications_mark_all_read(array $user): void
 {
     new_school_workflow_ensure_schema();
-    $scope = notifications_scope_for_user($user);
-    $pdo = db();
-    if (!empty($scope['admin'])) { $pdo->exec('UPDATE new_school_notifications SET is_read = 1, read_at = COALESCE(read_at, NOW()) WHERE is_read = 0'); return; }
-    $ids = array_values(array_filter(array_map('intval', $scope['ids'] ?? []), static fn(int $i): bool => $i > 0));
-    $roles = array_values(array_filter($scope['roles'] ?? [], static fn($r): bool => $r !== ''));
-    $clauses = []; $params = [];
-    if ($ids) { $clauses[] = 'student_id IN (' . new_school_placeholder_list(count($ids)) . ')'; $params = array_merge($params, $ids); }
-    if ($roles) { $clauses[] = 'recipient_role IN (' . new_school_placeholder_list(count($roles)) . ')'; $params = array_merge($params, $roles); }
-    if (!$clauses) return;
-    $pdo->prepare('UPDATE new_school_notifications SET is_read = 1, read_at = COALESCE(read_at, NOW()) WHERE is_read = 0 AND (' . implode(' OR ', $clauses) . ')')->execute($params);
+    [$where, $params] = notifications_where_for_user($user);
+    db()->prepare('UPDATE new_school_notifications SET is_read = 1, read_at = COALESCE(read_at, NOW()) WHERE is_read = 0 AND ' . $where)->execute($params);
 }
 
-function new_school_add_notification(?int $studentId, string $recipientRole, string $type, string $title, string $message, array $payload = []): void
+function new_school_add_notification(?int $studentId, string $recipientRole, string $type, string $title, string $message, array $payload = [], ?int $recipientUserId = null): void
 {
     $stmt = db()->prepare(
         'INSERT INTO new_school_notifications (
-            student_id, recipient_role, notification_type, title, message, payload_json
-         ) VALUES (?, ?, ?, ?, ?, ?)'
+            student_id, recipient_role, recipient_user_id, notification_type, title, message, payload_json
+         ) VALUES (?, ?, ?, ?, ?, ?, ?)'
     );
     $stmt->execute([
         $studentId,
         $recipientRole,
+        $recipientUserId,
         $type,
         $title,
         $message,

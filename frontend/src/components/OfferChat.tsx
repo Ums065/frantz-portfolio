@@ -13,8 +13,11 @@ export interface OfferMessage {
   sender_role: 'student' | 'business' | 'admin'
   sender_name: string
   body: string
+  attachment_url?: string
   ts: number
 }
+
+const isImage = (u: string) => /\.(png|jpe?g|webp|gif)$/i.test(u)
 
 const ROLE_TINT: Record<string, string> = {
   student: 'rgba(120,180,255,0.16)',
@@ -35,6 +38,9 @@ export default function OfferChat({ base, role }: { base: string; role: 'student
   const [draft, setDraft] = useState('')
   const [busy, setBusy] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [attachUrl, setAttachUrl] = useState('')
+  const [attachName, setAttachName] = useState('')
+  const [uploading, setUploading] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
 
   const load = async () => {
@@ -57,14 +63,22 @@ export default function OfferChat({ base, role }: { base: string; role: 'student
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
   }, [messages.length])
 
+  const pickFile = async (file?: File) => {
+    if (!file) return
+    setUploading(true)
+    try {
+      const { url } = await api.upload<{ url: string }>('new-school/upload', file)
+      setAttachUrl(url); setAttachName(file.name)
+    } catch (e) { window.fcToast?.(e instanceof Error ? e.message : 'Could not attach the file.') } finally { setUploading(false) }
+  }
   const send = async () => {
     const body = draft.trim()
-    if (!body || busy) return
+    if ((!body && !attachUrl) || busy) return
     setBusy(true)
     try {
-      const d = await api.post<{ messages: OfferMessage[] }>(`${base}/messages`, { body })
+      const d = await api.post<{ messages: OfferMessage[] }>(`${base}/messages`, { body, attachment_url: attachUrl })
       setMessages(Array.isArray(d.messages) ? d.messages : [])
-      setDraft('')
+      setDraft(''); setAttachUrl(''); setAttachName('')
     } catch (e) { window.fcToast?.(e instanceof Error ? e.message : 'Could not send.') } finally { setBusy(false) }
   }
 
@@ -89,14 +103,27 @@ export default function OfferChat({ base, role }: { base: string; role: 'student
                   <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 3 }}>
                     {mine ? 'You' : m.sender_name}{m.sender_role === 'admin' ? ' (Admin)' : m.sender_role === 'business' ? ' (Business)' : ''} · {fmt(m.ts)}
                   </div>
-                  <div style={{ fontSize: 13.5, color: 'var(--ivory)', lineHeight: 1.5, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{m.body}</div>
+                  {m.body && <div style={{ fontSize: 13.5, color: 'var(--ivory)', lineHeight: 1.5, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{m.body}</div>}
+                  {m.attachment_url && (isImage(m.attachment_url)
+                    ? <a href={m.attachment_url} target="_blank" rel="noopener noreferrer"><img src={m.attachment_url} alt="attachment" style={{ maxWidth: '100%', maxHeight: 180, borderRadius: 8, marginTop: m.body ? 6 : 0, display: 'block' }} /></a>
+                    : <a href={m.attachment_url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--gold-light)', fontSize: 12.5, marginTop: m.body ? 6 : 0, display: 'inline-block' }}>📎 Attachment</a>)}
                 </div>
               </div>
             )
           })
         )}
       </div>
-      <div style={{ display: 'flex', gap: 8, padding: 12, borderTop: '1px solid var(--line)' }}>
+      {attachName && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderTop: '1px solid var(--line)', fontSize: 12.5, color: 'var(--gold-light)' }}>
+          📎 {attachName}
+          <button type="button" onClick={() => { setAttachUrl(''); setAttachName('') }} style={{ background: 'none', border: 0, color: 'var(--muted)', cursor: 'pointer', marginLeft: 'auto' }}>✕</button>
+        </div>
+      )}
+      <div style={{ display: 'flex', gap: 8, padding: 12, borderTop: '1px solid var(--line)', alignItems: 'center' }}>
+        <label className="btn btn--sm" title="Attach a file" style={{ cursor: uploading ? 'default' : 'pointer', padding: '8px 11px' }}>
+          {uploading ? '…' : '📎'}
+          <input type="file" accept="image/*,.pdf,.doc,.docx" hidden disabled={uploading} onChange={(e) => pickFile(e.target.files?.[0])} />
+        </label>
         <input
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
@@ -104,7 +131,7 @@ export default function OfferChat({ base, role }: { base: string; role: 'student
           placeholder="Write a message…"
           style={{ flex: 1, minWidth: 0, background: 'rgba(0,0,0,0.25)', border: '1px solid var(--line)', borderRadius: 9, padding: '10px 12px', color: 'var(--ivory)', fontSize: 14 }}
         />
-        <button className="btn btn--sm btn--solid" disabled={busy || !draft.trim()} onClick={() => void send()}>{busy ? '…' : 'Send'}</button>
+        <button className="btn btn--sm btn--solid" disabled={busy || uploading || (!draft.trim() && !attachUrl)} onClick={() => void send()}>{busy ? '…' : 'Send'}</button>
       </div>
     </div>
   )

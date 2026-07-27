@@ -16,6 +16,7 @@ import OfferChat from '../components/OfferChat'
 import ProfileSection from '../components/profile/ProfileSection'
 import InternalScoring, { InternalRankTable, type InternalBlock, type InternalRankRow } from '../components/InternalScoring'
 import NotificationBell from '../components/NotificationBell'
+import WinnerCertificate from '../components/WinnerCertificate'
 import ScholarshipWizard, { type ScholarshipAnswer } from '../components/ScholarshipWizard'
 import NsRecordDetail from '../components/NsRecordDetail'
 import ChallengeRegistration from '../components/ChallengeRegistration'
@@ -1067,6 +1068,7 @@ export default function NewSchool() {
   const [dashboard, setDashboard] = useState<any>(null)
   const [adminSummary, setAdminSummary] = useState<any>(null)
   const [dashboardLoading, setDashboardLoading] = useState(false)
+  const [showCert, setShowCert] = useState(false)
   const [dashboardTab, setDashboardTab] = useState<DashboardTabKey>('overview')
   const [guideOpen, setGuideOpen] = useState(false)
   const [chatMessages, setChatMessages] = useState<any[]>([])
@@ -3101,6 +3103,26 @@ export default function NewSchool() {
 
               {studentDashboard && (
             <div className="ns-dash-grid">
+              {studentDashboard.winner && dashboardTab === 'overview' && (
+                <article className="glass ns-dash-card ns-dash-card--wide reveal in" style={{ background: 'linear-gradient(150deg, rgba(212,175,90,0.16), rgba(212,175,90,0.04))', border: '1px solid rgba(212,175,90,0.4)' }}>
+                  <div style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 34 }}>🏆</span>
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div className="gold-text" style={{ fontFamily: 'var(--f-serif)', fontSize: 20 }}>Congratulations — you’re a winner!</div>
+                      <p style={{ color: '#d8d3c6', fontSize: 13, margin: '4px 0 0' }}>You placed in the Community Business Impact Challenge. Download your certificate below.</p>
+                    </div>
+                    <button className="btn btn--sm btn--solid" onClick={() => setShowCert(true)}>🎓 Download certificate</button>
+                  </div>
+                </article>
+              )}
+              {showCert && studentDashboard.winner && (
+                <WinnerCertificate
+                  name={studentDashboard.student?.full_name || user?.full_name || 'Student'}
+                  place={String(studentDashboard.winner.place || '')}
+                  amount={studentDashboard.winner.scholarship_amount}
+                  onClose={() => setShowCert(false)}
+                />
+              )}
               <JobOffers role="student" hidden={dashboardTab !== 'overview'} />
               {String(studentDashboard.parent?.link_status || '').toLowerCase() === 'pending_student' && (
                 <article className="glass ns-dash-card ns-dash-card--wide reveal in">

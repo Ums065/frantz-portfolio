@@ -1735,5 +1735,17 @@ CREATE TABLE IF NOT EXISTS new_school_internal_scores (
   KEY idx_internal_submission (submission_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- 2026-07 (b): notifications per-user targeting + judge/business roles; chat attachments; app_meta.
+CALL add_column_if_missing('new_school_notifications', 'recipient_user_id', 'INT DEFAULT NULL', 'recipient_role');
+ALTER TABLE new_school_notifications
+  MODIFY recipient_role ENUM('student','parent','school','teacher','admin','all','judge','business','fellow') NOT NULL DEFAULT 'student';
+CALL add_column_if_missing('business_offer_messages', 'attachment_url', 'varchar(255) DEFAULT NULL', 'body');
+
+CREATE TABLE IF NOT EXISTS app_meta (
+  meta_key VARCHAR(64) NOT NULL PRIMARY KEY,
+  meta_value VARCHAR(255) DEFAULT NULL,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 DROP PROCEDURE IF EXISTS add_column_if_missing;
 SET FOREIGN_KEY_CHECKS = 1;

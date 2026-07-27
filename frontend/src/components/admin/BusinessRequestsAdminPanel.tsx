@@ -63,6 +63,15 @@ export default function BusinessRequestsAdminPanel() {
     void load()
     window.fcToast?.(failed ? `${failed} of ${toApprove.length} could not be approved.` : `Approved ${toApprove.length}.`)
   }
+  const bulkDecline = async (ids: number[]) => {
+    const note = window.prompt('Reason to send to the business for these declines (required):', '')
+    if (note == null || note.trim() === '') { window.fcToast?.('A reason is required to decline.'); return }
+    const toDecline = ids.filter((id) => rows.find((r) => r.id === id)?.status !== 'declined')
+    let failed = 0
+    for (const id of toDecline) { try { await api.put(`admin/business-request/${id}`, { status: 'declined', admin_note: note.trim() }) } catch { failed++ } }
+    void load()
+    window.fcToast?.(failed ? `${failed} of ${toDecline.length} could not be declined.` : `Declined ${toDecline.length}.`)
+  }
 
   return (
     <div style={{ display: 'grid', gap: 14, minWidth: 0 }}>
@@ -95,7 +104,10 @@ export default function BusinessRequestsAdminPanel() {
           { label: 'statuses', options: ['pending', 'approved', 'info_needed', 'declined'], valueOf: (r) => r.status },
         ]}
         rowId={(r) => r.id}
-        bulkActions={[{ label: 'Approve selected', onClick: bulkApprove }]}
+        bulkActions={[
+          { label: 'Approve selected', onClick: bulkApprove },
+          { label: 'Decline selected', danger: true, onClick: bulkDecline },
+        ]}
         renderRow={(r, checkbox, index) => (
           <tr key={r.id} style={{ cursor: 'pointer' }} onClick={() => setOpen(r)}>
             {checkbox}

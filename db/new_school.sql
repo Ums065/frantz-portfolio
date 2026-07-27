@@ -278,7 +278,8 @@ CREATE TABLE IF NOT EXISTS new_school_winners (
 CREATE TABLE IF NOT EXISTS new_school_notifications (
   id                  INT AUTO_INCREMENT PRIMARY KEY,
   student_id          INT DEFAULT NULL,
-  recipient_role      ENUM('student','parent','school','teacher','admin','all') NOT NULL DEFAULT 'student',
+  recipient_role      ENUM('student','parent','school','teacher','admin','all','judge','business','fellow') NOT NULL DEFAULT 'student',
+  recipient_user_id   INT DEFAULT NULL, -- per-user targeting (judge/business/etc.) for the unified bell
   notification_type   VARCHAR(80) NOT NULL,
   title               VARCHAR(180) NOT NULL,
   message             TEXT NOT NULL,

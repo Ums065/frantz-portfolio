@@ -1462,7 +1462,7 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             $r = business_offer_row((int) $m[1]);
             if (!$r || (int) $r['business_user_id'] !== (int) $u['id']) json(['error' => 'Offer not found.'], 404);
             if (!business_offer_is_confirmed($r)) json(['error' => 'Chat opens once the internship is confirmed.'], 422);
-            business_offer_message_add((int) $m[1], 'business', (int) $u['id'], (string) field(body(), 'body'));
+            business_offer_message_add((int) $m[1], 'business', (int) $u['id'], (string) field(body(), 'body'), (string) field(body(), 'attachment_url'));
             json(['messages' => business_offer_messages_list((int) $m[1])]);
         }
 
@@ -1489,7 +1489,7 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             $admin = require_admin();
             $r = business_offer_row((int) $m[1]);
             if (!$r) json(['error' => 'Offer not found.'], 404);
-            business_offer_message_add((int) $m[1], 'admin', (int) $admin['id'], (string) field(body(), 'body'));
+            business_offer_message_add((int) $m[1], 'admin', (int) $admin['id'], (string) field(body(), 'body'), (string) field(body(), 'attachment_url'));
             json(['messages' => business_offer_messages_list((int) $m[1])]);
         }
 

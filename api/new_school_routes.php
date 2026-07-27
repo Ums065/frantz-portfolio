@@ -648,7 +648,7 @@ function new_school_handle_route(string $method, string $route): bool
             $r = business_offer_row((int) $m[1]);
             if (!$r || (int) $r['student_id'] !== (int) $st['id']) json(['error' => 'Offer not found.'], 404);
             if (!business_offer_is_confirmed($r)) json(['error' => 'Chat opens once the internship is confirmed.'], 422);
-            business_offer_message_add((int) $m[1], 'student', (int) $user['id'], (string) field(body(), 'body'));
+            business_offer_message_add((int) $m[1], 'student', (int) $user['id'], (string) field(body(), 'body'), (string) field(body(), 'attachment_url'));
             json(['messages' => business_offer_messages_list((int) $m[1])]);
         }
         case $key === 'GET new-school/parent/offers': {
