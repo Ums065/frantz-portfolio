@@ -215,8 +215,8 @@ function rate_limit(string $action, int $max, int $windowSeconds, ?string $id = 
 }
 
 /* ---- Account lockout: too many WRONG passwords locks the account temporarily ---- */
-const LOGIN_MAX_FAILS = 10;      // wrong-password attempts allowed…
-const LOGIN_LOCK_SECONDS = 1800; // …within / lock duration = 30 minutes.
+const LOGIN_MAX_FAILS = 10;     // wrong-password attempts allowed…
+const LOGIN_LOCK_SECONDS = 300; // …within / lock duration = 5 minutes.
 
 /** The rate_limits bucket that tracks failed logins for one account. */
 function login_fail_bucket(string $email): string
