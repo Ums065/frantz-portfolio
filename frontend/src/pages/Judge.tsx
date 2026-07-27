@@ -28,6 +28,15 @@ const BookIcon = () => (
 const ChatIcon = () => (
   <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth={1.7}><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" /></svg>
 )
+const FaqIcon = () => (
+  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth={1.7}><circle cx="12" cy="12" r="9" /><path d="M9.1 9.2a2.9 2.9 0 015.6 1c0 1.9-2.8 2.5-2.8 2.5" /><path d="M12 17h.01" /></svg>
+)
+const ProfileIcon = () => (
+  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth={1.7}><circle cx="12" cy="8" r="4" /><path d="M4 21c0-3.9 3.6-7 8-7s8 3.1 8 7" /></svg>
+)
+const MegaphoneIcon = () => (
+  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth={1.7}><path d="M3 11v2a1 1 0 001 1h2l4 4V6L6 10H4a1 1 0 00-1 1z" /><path d="M14 8a4 4 0 010 8" /><path d="M17 5a8 8 0 010 14" /></svg>
+)
 /** Professional line icons for the Evidence & Uploads items (video / document / image). */
 const EvidenceIcon = ({ kind }: { kind: 'video' | 'doc' | 'image' }) => {
   const p = { viewBox: '0 0 24 24', width: 18, height: 18, fill: 'none', stroke: 'currentColor', strokeWidth: 1.7, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const }
@@ -397,7 +406,7 @@ export default function Judge() {
                     className={`admin-nav__item${tab === item.key ? ' is-active' : ''}`}
                     onClick={() => { setTab(item.key); if (item.key === 'announcements') markAnnSeen() }}
                   >
-                    <span className="admin-nav__icon" aria-hidden="true">{item.key === 'queue' ? <QueueIcon /> : item.key === 'reviews' ? <ReviewsIcon /> : item.key === 'chat' ? <ChatIcon /> : <BookIcon />}</span>
+                    <span className="admin-nav__icon" aria-hidden="true">{item.key === 'queue' ? <QueueIcon /> : item.key === 'reviews' ? <ReviewsIcon /> : item.key === 'chat' ? <ChatIcon /> : item.key === 'faq' ? <FaqIcon /> : item.key === 'profile' ? <ProfileIcon /> : item.key === 'announcements' ? <MegaphoneIcon /> : <BookIcon />}</span>
                     <span className="admin-nav__label">{item.label}</span>
                     {item.key === 'announcements' && annUnseen > 0 && (
                       <span style={{ marginLeft: 'auto', background: '#e5484d', color: '#fff', fontSize: 11, fontWeight: 700, lineHeight: 1, padding: '3px 7px', borderRadius: 999 }}>{annUnseen}</span>

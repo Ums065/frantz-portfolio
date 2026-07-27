@@ -1,4 +1,5 @@
-import { useState, type ChangeEvent, type FormEvent } from 'react'
+import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react'
+import { createPortal } from 'react-dom'
 import { api } from '../../lib/api'
 import { useAuth } from '../../context/AuthContext'
 import { PasswordField } from '../../lib/registrationForm'
@@ -15,17 +16,42 @@ const cardS: React.CSSProperties = { background: 'rgba(255,255,255,0.04)', borde
 const headS: React.CSSProperties = { fontSize: 12, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--gold)', margin: '0 0 14px' }
 const errS: React.CSSProperties = { color: '#ff9a9a', fontSize: 12.5, margin: '8px 0 0' }
 
-/** Round avatar: the photo if present, else the name's first letter. Reusable in headers. */
-export function Avatar({ name, photo, size = 64 }: { name?: string | null; photo?: string | null; size?: number }) {
+/** Round avatar: the photo if present, else the name's first letter. Reusable in headers.
+ *  When `onClick` is set (and a photo exists) it becomes a button that opens the lightbox. */
+export function Avatar({ name, photo, size = 64, onClick, ring }: { name?: string | null; photo?: string | null; size?: number; onClick?: () => void; ring?: boolean }) {
+  const clickable = !!(onClick && photo)
   const base: React.CSSProperties = {
     width: size, height: size, borderRadius: '50%', flex: '0 0 auto', overflow: 'hidden',
     display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
     background: 'linear-gradient(150deg,rgba(201,168,76,0.28),rgba(201,168,76,0.06))',
-    border: '1px solid var(--line)', color: 'var(--gold-light)', fontFamily: 'var(--f-serif)',
+    border: ring ? '2px solid rgba(201,168,76,0.55)' : '1px solid var(--line)',
+    color: 'var(--gold-light)', fontFamily: 'var(--f-serif)',
     fontWeight: 800, fontSize: Math.round(size * 0.42),
+    cursor: clickable ? 'zoom-in' : 'default',
+    boxShadow: ring ? '0 6px 22px -8px rgba(0,0,0,0.6)' : 'none',
+    padding: 0,
   }
-  if (photo) return <span style={base}><img src={photo} alt={name ? `${name} profile photo` : 'Profile photo'} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /></span>
-  return <span style={base} aria-hidden="true">{String(name || '?').trim().charAt(0).toUpperCase()}</span>
+  const inner = photo
+    ? <img src={photo} alt={name ? `${name} profile photo` : 'Profile photo'} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+    : <span aria-hidden="true">{String(name || '?').trim().charAt(0).toUpperCase()}</span>
+  if (clickable) return <button type="button" onClick={onClick} title="View photo" style={base}>{inner}</button>
+  return <span style={base}>{inner}</span>
+}
+
+/** Full-screen image viewer. Click the backdrop or press Esc to close. */
+export function Lightbox({ src, alt, onClose }: { src: string; alt?: string; onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+  return createPortal(
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', display: 'grid', placeItems: 'center', padding: 24, zIndex: 10000, cursor: 'zoom-out' }}>
+      <img src={src} alt={alt || 'Profile photo'} onClick={(e) => e.stopPropagation()} style={{ maxWidth: 'min(92vw,620px)', maxHeight: '88vh', borderRadius: 16, boxShadow: '0 30px 80px -20px rgba(0,0,0,0.8)', objectFit: 'contain', cursor: 'default' }} />
+      <button type="button" onClick={onClose} aria-label="Close" style={{ position: 'fixed', top: 18, right: 20, width: 42, height: 42, borderRadius: '50%', border: '1px solid rgba(255,255,255,0.3)', background: 'rgba(0,0,0,0.5)', color: '#fff', fontSize: 22, cursor: 'pointer', lineHeight: 1 }}>×</button>
+    </div>,
+    document.body,
+  )
 }
 
 /** Pre-account photo picker for registration forms. Uploads immediately and
@@ -46,9 +72,10 @@ export function AvatarPicker({ value, onChange, name }: { value: string; onChang
     } catch (e) { setErr(e instanceof Error ? e.message : 'Could not upload the photo.') }
     finally { setBusy(false) }
   }
+  const [zoom, setZoom] = useState(false)
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', minWidth: 0 }}>
-      <Avatar name={name} photo={value} size={56} />
+    <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', minWidth: 0 }}>
+      <Avatar name={name} photo={value} size={88} ring={!!value} onClick={() => setZoom(true)} />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <label className={`btn btn--sm${busy ? ' is-disabled' : ''}`} style={{ cursor: busy ? 'default' : 'pointer' }}>
@@ -57,8 +84,10 @@ export function AvatarPicker({ value, onChange, name }: { value: string; onChang
           </label>
           {value && <button type="button" className="btn btn--sm" disabled={busy} onClick={() => onChange('')}>Remove</button>}
         </div>
+        {value ? <p style={{ fontSize: 11.5, color: 'var(--muted)', margin: 0 }}>Tap the photo to preview it larger.</p> : null}
         {err && <p style={{ ...errS, margin: 0 }}>{err}</p>}
       </div>
+      {zoom && value && <Lightbox src={value} alt="Profile photo preview" onClose={() => setZoom(false)} />}
     </div>
   )
 }
@@ -68,7 +97,13 @@ export function ProfilePhotoCard() {
   const { user, refresh } = useAuth()
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
-  const photo = user?.avatar_url || ''
+  const [zoom, setZoom] = useState(false)
+  // Optimistic preview: show the just-uploaded image immediately, even before
+  // refresh() round-trips, so the preview never looks empty after an upload.
+  const [preview, setPreview] = useState<string | null>(null)
+  const photo = preview ?? (user?.avatar_url || '')
+  // Once the auth user reflects the saved photo, drop the optimistic override.
+  useEffect(() => { if (preview && user?.avatar_url === preview) setPreview(null) }, [user?.avatar_url, preview])
 
   const onPick = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -79,16 +114,18 @@ export function ProfilePhotoCard() {
     setErr(''); setBusy(true)
     try {
       const up = await api.upload<{ url: string }>('new-school/upload', file)
+      setPreview(up.url) // instant preview
       await api.post('new-school/profile/photo', { avatar_url: up.url })
       await refresh()
       window.fcToast?.('Profile photo updated.')
-    } catch (e) { setErr(e instanceof Error ? e.message : 'Could not upload the photo.') }
+    } catch (e) { setPreview(null); setErr(e instanceof Error ? e.message : 'Could not upload the photo.') }
     finally { setBusy(false) }
   }
   const removePhoto = async () => {
     setBusy(true); setErr('')
     try {
       await api.post('new-school/profile/photo', { avatar_url: '' })
+      setPreview(null)
       await refresh()
       window.fcToast?.('Profile photo removed.')
     } catch (e) { setErr(e instanceof Error ? e.message : 'Could not remove the photo.') }
@@ -98,20 +135,25 @@ export function ProfilePhotoCard() {
   return (
     <article className="glass" style={cardS}>
       <h3 style={headS}>Profile Photo</h3>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', minWidth: 0 }}>
-        <Avatar name={user?.full_name} photo={photo} size={72} />
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <label className={`btn btn--sm${busy ? ' is-disabled' : ''}`} style={{ cursor: busy ? 'default' : 'pointer' }}>
-              {busy ? 'Uploading…' : photo ? 'Change photo' : 'Upload photo'}
-              <input type="file" accept="image/png,image/jpeg,image/webp" hidden disabled={busy} onChange={onPick} />
-            </label>
-            {photo && <button type="button" className="btn btn--sm" disabled={busy} onClick={() => void removePhoto()}>Remove</button>}
-          </div>
-          <p style={{ fontSize: 11.5, color: 'var(--muted)', margin: 0 }}>Image only (JPG, PNG, WebP) · max 5 MB</p>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, textAlign: 'center', minWidth: 0 }}>
+        <Avatar name={user?.full_name} photo={photo} size={140} ring onClick={() => setZoom(true)} />
+        <div style={{ minWidth: 0 }}>
+          <div style={{ color: 'var(--ivory)', fontWeight: 700, fontSize: 15 }}>{user?.full_name || 'Your profile'}</div>
+          <p style={{ fontSize: 11.5, color: 'var(--muted)', margin: '2px 0 0' }}>
+            {photo ? 'Tap your photo to view it full size.' : 'Add a photo so people recognise you.'}
+          </p>
         </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
+          <label className={`btn btn--sm btn--solid${busy ? ' is-disabled' : ''}`} style={{ cursor: busy ? 'default' : 'pointer' }}>
+            {busy ? 'Uploading…' : photo ? 'Change photo' : 'Upload photo'}
+            <input type="file" accept="image/png,image/jpeg,image/webp" hidden disabled={busy} onChange={onPick} />
+          </label>
+          {photo && <button type="button" className="btn btn--sm" disabled={busy} onClick={() => void removePhoto()}>Remove</button>}
+        </div>
+        <p style={{ fontSize: 11, color: 'var(--muted)', margin: 0 }}>Image only (JPG, PNG, WebP) · max 5 MB</p>
       </div>
-      {err && <p style={errS}>{err}</p>}
+      {err && <p style={{ ...errS, textAlign: 'center' }}>{err}</p>}
+      {zoom && photo && <Lightbox src={photo} alt={`${user?.full_name || 'Your'} profile photo`} onClose={() => setZoom(false)} />}
     </article>
   )
 }
@@ -157,10 +199,10 @@ export function ChangePasswordCard() {
   )
 }
 
-/** Drop-in profile section: photo + password, responsive. */
+/** Drop-in profile section: photo + password, responsive (two columns on wide screens). */
 export default function ProfileSection() {
   return (
-    <div style={{ display: 'grid', gap: 16, minWidth: 0 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(300px,100%),1fr))', gap: 16, alignItems: 'start', minWidth: 0 }}>
       <ProfilePhotoCard />
       <ChangePasswordCard />
     </div>

@@ -13,6 +13,7 @@ import TermsAgreement from '../components/TermsAgreement'
 import DashboardGuide from '../components/DashboardGuide'
 import OfferStepper, { Confetti, type OfferStage, type OfferEvent } from '../components/OfferStepper'
 import OfferChat from '../components/OfferChat'
+import ProfileSection from '../components/profile/ProfileSection'
 import ScholarshipWizard, { type ScholarshipAnswer } from '../components/ScholarshipWizard'
 import NsRecordDetail from '../components/NsRecordDetail'
 import ChallengeRegistration from '../components/ChallengeRegistration'
@@ -3188,7 +3189,7 @@ export default function NewSchool() {
                 )
               })()}
 
-              {dashboardTab === 'profile' && (<><ProfilePhotoCard /><ChangePasswordCard /></>)}
+              {dashboardTab === 'profile' && <ProfileSection />}
 
               <article className="glass ns-dash-card reveal in" hidden={dashboardTab !== 'profile'}>
                 <div className="ns-dash-card__head">
@@ -3571,7 +3572,7 @@ export default function NewSchool() {
                   <button className="btn btn--sm" type="button" onClick={() => openDashboardTab('notifications')}>Open Alerts</button>
                 </div>
               </article>
-              {dashboardTab === 'profile' && (<><ProfilePhotoCard /><ChangePasswordCard /></>)}
+              {dashboardTab === 'profile' && <ProfileSection />}
               <article className="glass ns-dash-card reveal in" hidden={dashboardTab !== 'profile'}>
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">Profile</span>
@@ -3660,7 +3661,7 @@ export default function NewSchool() {
                 </div>
               </article>
 
-              {dashboardTab === 'profile' && (<><ProfilePhotoCard /><ChangePasswordCard /></>)}
+              {dashboardTab === 'profile' && <ProfileSection />}
               <article className="glass ns-dash-card reveal in" hidden={dashboardTab !== 'profile'}>
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">{schoolDashboard ? 'School Profile' : 'Teacher Profile'}</span>
@@ -4616,7 +4617,7 @@ export default function NewSchool() {
                 </div>
               </article>
 
-              {dashboardTab === 'profile' && (<><ProfilePhotoCard /><ChangePasswordCard /></>)}
+              {dashboardTab === 'profile' && <ProfileSection />}
               <article className="glass ns-dash-card reveal in" hidden={dashboardTab !== 'profile'}>
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">Profile</span>
