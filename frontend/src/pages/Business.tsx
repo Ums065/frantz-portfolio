@@ -165,6 +165,10 @@ export default function Business() {
   const [mode, setMode] = useState<'login' | 'register'>('register')
   const [busy, setBusy] = useState('')
   const [f, setF] = useState({ full_name: '', email: '', password: '', business_name: '', category: '', borough: '', contact_phone: '', website: '', about: '', avatar_url: '', ein: '', available_days: '', available_from: '', available_to: '', agree: false })
+  const [fieldErr, setFieldErr] = useState<Record<string, string>>({})
+  const clrErr = (name: string) => setFieldErr((p) => { if (!p[name]) return p; const n = { ...p }; delete n[name]; return n })
+  const errBorder = (name: string): React.CSSProperties => fieldErr[name] ? { borderColor: '#e08a8a', boxShadow: '0 0 0 3px rgba(224,138,138,0.18)' } : {}
+  const FErr = ({ name }: { name: string }) => fieldErr[name] ? <span style={{ color: '#e59a9a', fontSize: 12, marginTop: 4, display: 'block' }}>⚠ {fieldErr[name]}</span> : null
   const [loginEmail, setLoginEmail] = useState('')
   const [loginPass, setLoginPass] = useState('')
 
@@ -225,8 +229,24 @@ export default function Business() {
     finally { setBusy('') }
   }
 
+  const validateReg = (): Record<string, string> => {
+    const er: Record<string, string> = {}
+    if (!f.business_name.trim()) er.business_name = 'Business name is required.'
+    if (f.full_name.trim().length < 3) er.full_name = 'Your name is required (at least 3 characters).'
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(f.email.trim())) er.email = 'Enter a valid email address.'
+    if ((f.password || '').length < 6) er.password = 'Password must be at least 6 characters.'
+    return er
+  }
   const doRegister = async (e: FormEvent) => {
-    e.preventDefault(); setBusy('register'); setErr('')
+    e.preventDefault()
+    const er = validateReg()
+    if (Object.keys(er).length) {
+      setFieldErr(er); setErr('Please fix the highlighted field' + (Object.keys(er).length > 1 ? 's' : '') + ' below.')
+      const el = document.querySelector<HTMLElement>(`[data-fld="${Object.keys(er)[0]}"]`)
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center' }); window.setTimeout(() => el?.focus?.(), 250)
+      return
+    }
+    setFieldErr({}); setBusy('register'); setErr('')
     try {
       await api.post('business/register', {
         full_name: f.full_name.trim(), email: f.email.trim(), password: f.password,
@@ -236,7 +256,12 @@ export default function Business() {
         ein: f.ein.trim(), available_days: f.available_days, available_from: f.available_from, available_to: f.available_to,
       })
       await refresh()
-    } catch (e) { setErr(e instanceof Error ? e.message : 'Registration failed.') }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Registration failed.'
+      // Point duplicate/invalid-email errors at the email field.
+      if (/email/i.test(msg)) setFieldErr({ email: msg })
+      setErr(msg)
+    }
     finally { setBusy('') }
   }
 
@@ -280,20 +305,20 @@ export default function Business() {
             </form>
           ) : (
             <form onSubmit={doRegister} style={{ padding: '18px 30px 30px', display: 'grid', gap: 14 }}>
-              <div><label style={labelS}>Business name *</label><input style={inputS} required value={f.business_name} onChange={(e) => setF({ ...f, business_name: e.target.value })} placeholder="e.g. Barclays Center" /></div>
+              <div><label style={labelS}>Business name *</label><input data-fld="business_name" style={{ ...inputS, ...errBorder('business_name') }} required value={f.business_name} onChange={(e) => { setF({ ...f, business_name: e.target.value }); clrErr('business_name') }} placeholder="e.g. Barclays Center" /><FErr name="business_name" /></div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(150px,100%), 1fr))', gap: 12 }}>
                 <div><label style={labelS}>Category</label><input style={inputS} value={f.category} onChange={(e) => setF({ ...f, category: e.target.value })} placeholder="Retail, Food, Healthcare…" /></div>
                 <div><label style={labelS}>Borough / County</label><input style={inputS} value={f.borough} onChange={(e) => setF({ ...f, borough: e.target.value })} placeholder="Bronx, Brooklyn…" /></div>
               </div>
               <div><label style={labelS}>Profile photo (optional)</label><AvatarPicker value={f.avatar_url} onChange={(u) => setF({ ...f, avatar_url: u })} /></div>
-              <div><label style={labelS}>Your name (contact) *</label><input style={inputS} required value={f.full_name} onChange={(e) => setF({ ...f, full_name: e.target.value })} /></div>
+              <div><label style={labelS}>Your name (contact) *</label><input data-fld="full_name" style={{ ...inputS, ...errBorder('full_name') }} required value={f.full_name} onChange={(e) => { setF({ ...f, full_name: e.target.value }); clrErr('full_name') }} /><FErr name="full_name" /></div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(150px,100%), 1fr))', gap: 12 }}>
-                <div><label style={labelS}>Email *</label><input style={inputS} type="email" required value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} /></div>
+                <div><label style={labelS}>Email *</label><input data-fld="email" style={{ ...inputS, ...errBorder('email') }} type="email" required value={f.email} onChange={(e) => { setF({ ...f, email: e.target.value }); clrErr('email') }} /><FErr name="email" /></div>
                 <div><label style={labelS}>Phone</label><input style={inputS} value={f.contact_phone} onChange={(e) => setF({ ...f, contact_phone: e.target.value })} /></div>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(150px,100%), 1fr))', gap: 12 }}>
                 <div><label style={labelS}>Website</label><input style={inputS} value={f.website} onChange={(e) => setF({ ...f, website: e.target.value })} placeholder="https://…" /></div>
-                <div><label style={labelS}>Password *</label><input style={inputS} type="password" required value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} placeholder="6+ characters" /></div>
+                <div><label style={labelS}>Password *</label><input data-fld="password" style={{ ...inputS, ...errBorder('password') }} type="password" required value={f.password} onChange={(e) => { setF({ ...f, password: e.target.value }); clrErr('password') }} placeholder="6+ characters" /><FErr name="password" /></div>
               </div>
               <div><label style={labelS}>EIN (Employer Identification Number)</label><input style={inputS} value={f.ein} onChange={(e) => setF({ ...f, ein: e.target.value })} placeholder="e.g. 12-3456789 — for business authorization" /></div>
               <AvailabilityFields days={f.available_days} from={f.available_from} to={f.available_to} onDays={(v) => setF({ ...f, available_days: v })} onFrom={(v) => setF({ ...f, available_from: v })} onTo={(v) => setF({ ...f, available_to: v })} />

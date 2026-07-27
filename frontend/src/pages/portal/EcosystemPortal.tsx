@@ -521,7 +521,10 @@ export default function EcosystemPortal({ config }: { config: PortalConfig }) {
   // Keep counters/badges live without a manual page refresh.
   useLiveRefresh(reload, { enabled: !!user && (isRole || isAdmin) && approved })
 
-  const set = (k: string, v: string) => setF((p) => ({ ...p, [k]: v }))
+  const [fieldErr, setFieldErr] = useState<Record<string, string>>({})
+  const set = (k: string, v: string) => { setF((p) => ({ ...p, [k]: v })); setFieldErr((p) => { if (!p[k]) return p; const n = { ...p }; delete n[k]; return n }) }
+  const errBorder = (name: string): React.CSSProperties => fieldErr[name] ? { borderColor: '#e08a8a', boxShadow: '0 0 0 3px rgba(224,138,138,0.18)' } : {}
+  const FErr = ({ name }: { name: string }) => fieldErr[name] ? <span style={{ color: '#e59a9a', fontSize: 12, marginTop: 4, display: 'block' }}>⚠ {fieldErr[name]}</span> : null
 
   const doLogin = async (e: FormEvent) => {
     e.preventDefault(); setBusy('login'); setErr('')
@@ -531,7 +534,20 @@ export default function EcosystemPortal({ config }: { config: PortalConfig }) {
   }
 
   const doRegister = async (e: FormEvent) => {
-    e.preventDefault(); setBusy('register'); setErr('')
+    e.preventDefault()
+    const er: Record<string, string> = {}
+    if (orgLabel && !(f.org_name || '').trim()) er.org_name = `${orgLabel} is required.`
+    if ((f.full_name || '').trim().length < 3) er.full_name = 'Your name is required (at least 3 characters).'
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test((f.email || '').trim())) er.email = 'Enter a valid email address.'
+    const pw = f.password || ''
+    if (pw.length < 8 || !/[A-Za-z]/.test(pw) || !/\d/.test(pw)) er.password = 'Password must be at least 8 characters and include a letter and a number.'
+    if (Object.keys(er).length) {
+      setFieldErr(er); setErr('Please fix the highlighted field' + (Object.keys(er).length > 1 ? 's' : '') + ' below.')
+      const el = document.querySelector<HTMLElement>(`[data-fld="${Object.keys(er)[0]}"]`)
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center' }); window.setTimeout(() => el?.focus?.(), 250)
+      return
+    }
+    setFieldErr({}); setBusy('register'); setErr('')
     try {
       await api.post(`ecosystem/${role}/register`, {
         full_name: (f.full_name || '').trim(),
@@ -546,7 +562,11 @@ export default function EcosystemPortal({ config }: { config: PortalConfig }) {
         ...Object.fromEntries(extraFields.map((x) => [x.key, (f[x.key] || '').trim()])),
       })
       await refresh()
-    } catch (e) { setErr(e instanceof Error ? e.message : 'Registration failed.') }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Registration failed.'
+      if (/email/i.test(msg)) setFieldErr({ email: msg })
+      setErr(msg)
+    }
     finally { setBusy('') }
   }
 
@@ -586,7 +606,7 @@ export default function EcosystemPortal({ config }: { config: PortalConfig }) {
             </form>
           ) : (
             <form onSubmit={doRegister} style={{ padding: '18px clamp(16px,5vw,30px) 30px', display: 'grid', gap: 14 }}>
-              {orgLabel && <div><label style={S.label}>{orgLabel} *</label><input style={S.input} required value={f.org_name || ''} onChange={(e) => set('org_name', e.target.value)} /></div>}
+              {orgLabel && <div><label style={S.label}>{orgLabel} *</label><input data-fld="org_name" style={{ ...S.input, ...errBorder('org_name') }} required value={f.org_name || ''} onChange={(e) => set('org_name', e.target.value)} /><FErr name="org_name" /></div>}
               {extraFields.length > 0 && (
                 <div style={{ display: 'grid', gridTemplateColumns: extraFields.length > 1 ? 'repeat(auto-fit, minmax(min(150px,100%), 1fr))' : '1fr', gap: 12 }}>
                   {extraFields.map((x) => (
@@ -607,14 +627,14 @@ export default function EcosystemPortal({ config }: { config: PortalConfig }) {
                 </div>
               )}
               <div><label style={S.label}>Profile photo (optional)</label><AvatarPicker value={f.avatar_url || ''} onChange={(u) => set('avatar_url', u)} /></div>
-              <div><label style={S.label}>Your name (contact) *</label><input style={S.input} required value={f.full_name || ''} onChange={(e) => set('full_name', e.target.value)} /></div>
+              <div><label style={S.label}>Your name (contact) *</label><input data-fld="full_name" style={{ ...S.input, ...errBorder('full_name') }} required value={f.full_name || ''} onChange={(e) => set('full_name', e.target.value)} /><FErr name="full_name" /></div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(150px,100%), 1fr))', gap: 12 }}>
-                <div><label style={S.label}>Email *</label><input style={S.input} type="email" required value={f.email || ''} onChange={(e) => set('email', e.target.value)} /></div>
+                <div><label style={S.label}>Email *</label><input data-fld="email" style={{ ...S.input, ...errBorder('email') }} type="email" required value={f.email || ''} onChange={(e) => set('email', e.target.value)} /><FErr name="email" /></div>
                 <div><label style={S.label}>Phone</label><input style={S.input} value={f.contact_phone || ''} onChange={(e) => set('contact_phone', e.target.value)} /></div>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(150px,100%), 1fr))', gap: 12 }}>
                 <div><label style={S.label}>Website</label><input style={S.input} value={f.website || ''} onChange={(e) => set('website', e.target.value)} placeholder="https://…" /></div>
-                <div><label style={S.label}>Password *</label><input style={S.input} type="password" required value={f.password || ''} onChange={(e) => set('password', e.target.value)} placeholder="6+ characters" /></div>
+                <div><label style={S.label}>Password *</label><input data-fld="password" style={{ ...S.input, ...errBorder('password') }} type="password" required value={f.password || ''} onChange={(e) => set('password', e.target.value)} placeholder="8+ chars, a letter & a number" /><FErr name="password" /></div>
               </div>
               <div><label style={S.label}>About</label><textarea style={{ ...S.input, minHeight: 64, resize: 'vertical' }} value={f.about || ''} onChange={(e) => set('about', e.target.value)} /></div>
               <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', color: 'var(--ivory)', fontSize: 13 }}>
