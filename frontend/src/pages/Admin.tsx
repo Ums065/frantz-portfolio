@@ -851,7 +851,7 @@ export default function Admin() {
                     className="admin-nav__group-label admin-nav__group-toggle"
                     aria-expanded={open}
                     onClick={(e) => { e.stopPropagation(); toggleGroup(group.group) }}
-                    style={{ display: 'flex', alignItems: 'center', width: '100%', background: 'none', border: 0, cursor: 'pointer', font: 'inherit', color: 'inherit' }}
+                    style={{ display: 'flex', alignItems: 'center', width: '100%', background: 'none', border: 0, borderBottom: '1px solid rgba(201,168,76,0.14)', cursor: 'pointer' }}
                   >
                     <span className="admin-nav__chevron" aria-hidden="true" style={{ display: 'inline-block', transition: 'transform .2s', transform: open ? 'rotate(90deg)' : 'none', marginRight: 6 }}>›</span>
                     <span style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>{group.group}</span>
