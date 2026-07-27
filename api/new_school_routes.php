@@ -714,6 +714,7 @@ function new_school_handle_route(string $method, string $route): bool
                     'winners' => new_school_fetch_winners_by_student_ids($studentIds),
                     'notifications' => new_school_fetch_notifications_for_scope($studentIds, ['school'], 12),
                     'leaderboards' => new_school_public_leaderboards(),
+                    'internal' => new_school_internal_dashboard_block((int) $school['id'], (int) $user['id']),
                     'rankings' => [
                         'students' => $students,
                         'teachers' => $teachers,
@@ -745,6 +746,7 @@ function new_school_handle_route(string $method, string $route): bool
                     'winners' => new_school_fetch_winners_by_student_ids($studentIds),
                     'notifications' => new_school_fetch_notifications_for_scope($studentIds, ['teacher'], 12),
                     'leaderboards' => new_school_public_leaderboards(),
+                    'internal' => new_school_internal_dashboard_block((int) $teacher['school_id'], (int) $user['id']),
                     'rankings' => [
                         'students' => $students,
                         'teachers' => array_slice($schoolTeachers, 0, 10),
@@ -3054,6 +3056,7 @@ function new_school_handle_route(string $method, string $route): bool
 
         case $key === 'GET admin/new-school/summary': {
             require_admin();
+            ns_auto_release_due(); // deadline safety net (lazy, idempotent)
             $students = db()->query(
                 'SELECT s.*, u.full_name AS user_full_name, u.email AS user_email, u.avatar_url AS avatar_url,
                         (SELECT COUNT(*) FROM new_school_business_interviews bi WHERE bi.student_id = s.id) AS interview_count,
@@ -4111,6 +4114,88 @@ function new_school_handle_route(string $method, string $route): bool
             json(['message' => 'Submission deleted.']);
         }
 
+        /* ============ School-internal scoring (teacher + principal → release top-3) ============ */
+
+        // Full submission content + rubric + the caller's own internal score (scoped read).
+        case $method === 'GET' && preg_match('#^new-school/manage/submission/(\d+)/internal$#', $route, $m) === 1: {
+            $user = ns_manage_require_user();
+            $scope = ns_manage_scope($user);
+            if (!in_array($scope['kind'], ['school', 'teacher', 'admin'], true)) json(['error' => 'Not allowed.'], 403);
+            $subId = (int) $m[1];
+            $q = db()->prepare('SELECT * FROM new_school_submissions WHERE id = ? LIMIT 1');
+            $q->execute([$subId]);
+            $submission = $q->fetch();
+            if (!$submission) json(['error' => 'Submission not found.'], 404);
+            $student = new_school_fetch_student_by_id((int) $submission['student_id']);
+            if ($student) ns_manage_assert_student($student, $scope);
+            $mine = db()->prepare('SELECT * FROM new_school_internal_scores WHERE submission_id = ? AND reviewer_user_id = ? LIMIT 1');
+            $mine->execute([$subId, (int) $user['id']]);
+            $cats = [];
+            foreach (ns_judge_categories() as $ck => $def) { $cats[] = ['key' => $ck, 'label' => $def[0], 'max' => $def[1]]; }
+            json([
+                'submission' => [
+                    'id'                 => (int) $submission['id'],
+                    'student_name'       => (string) ($student['full_name'] ?? 'Student'),
+                    'problem_identified' => (string) ($submission['problem_identified'] ?? ''),
+                    'why_it_matters'     => (string) ($submission['why_it_matters'] ?? ''),
+                    'proposed_solution'  => (string) ($submission['proposed_solution'] ?? ''),
+                    'how_it_helps'       => (string) ($submission['how_it_helps'] ?? ''),
+                    'expected_impact'    => (string) ($submission['expected_impact'] ?? ''),
+                    'video_url'          => (string) ($submission['video_url'] ?? ''),
+                    'written_url'        => (string) ($submission['written_url'] ?? ''),
+                ],
+                'categories' => $cats,
+                'max_total'  => NS_JUDGE_MAX_TOTAL,
+                'my_score'   => $mine->fetch() ?: null,
+            ]);
+        }
+
+        // Save (upsert) the caller's internal rubric score for a submission.
+        case $method === 'POST' && preg_match('#^new-school/manage/submission/(\d+)/internal-score$#', $route, $m) === 1: {
+            $user = ns_manage_require_user();
+            $scope = ns_manage_scope($user);
+            if (!in_array($scope['kind'], ['school', 'teacher'], true)) json(['error' => 'Only a teacher or principal can score internally.'], 403);
+            if (ns_winners_published()) json(['error' => 'Results are published — scoring is locked.'], 423);
+            $subId = (int) $m[1];
+            $q = db()->prepare('SELECT * FROM new_school_submissions WHERE id = ? LIMIT 1');
+            $q->execute([$subId]);
+            $submission = $q->fetch();
+            if (!$submission) json(['error' => 'Submission not found.'], 404);
+            if ((string) $submission['status'] === 'draft') json(['error' => 'This project has not been submitted yet.'], 409);
+            $student = new_school_fetch_student_by_id((int) $submission['student_id']);
+            if ($student) ns_manage_assert_student($student, $scope);
+            $b = body();
+            $vals = []; $total = 0;
+            foreach (ns_judge_categories() as $ck => $def) {
+                $v = max(0, min((int) $def[1], (int) field($b, $ck)));
+                $vals[$ck] = $v; $total += $v;
+            }
+            $role = $scope['kind'] === 'school' ? 'principal' : 'teacher';
+            $notes = mb_substr(trim((string) field($b, 'notes')), 0, 2000);
+            db()->prepare(
+                'INSERT INTO new_school_internal_scores (submission_id, reviewer_user_id, reviewer_role, problem, solution, creativity, supporting_evidence, community_impact, presentation, total, notes, status)
+                 VALUES (?,?,?,?,?,?,?,?,?,?,?,"submitted")
+                 ON DUPLICATE KEY UPDATE reviewer_role=VALUES(reviewer_role), problem=VALUES(problem), solution=VALUES(solution), creativity=VALUES(creativity),
+                     supporting_evidence=VALUES(supporting_evidence), community_impact=VALUES(community_impact), presentation=VALUES(presentation),
+                     total=VALUES(total), notes=VALUES(notes), status="submitted", updated_at=NOW()'
+            )->execute([$subId, (int) $user['id'], $role, $vals['problem'], $vals['solution'], $vals['creativity'], $vals['supporting_evidence'], $vals['community_impact'], $vals['presentation'], $total, $notes ?: null]);
+            $schoolId = (int) ($scope['school_id'] ?? ($student['school_id'] ?? 0));
+            json(['message' => 'Score saved.', 'total' => $total, 'internal' => new_school_internal_dashboard_block($schoolId, (int) $user['id'])]);
+        }
+
+        // Release this school's top-3 (by internal rank) to the judges.
+        case $key === 'POST new-school/manage/release-top3': {
+            $user = ns_manage_require_user();
+            $scope = ns_manage_scope($user);
+            if (!in_array($scope['kind'], ['school', 'teacher'], true)) json(['error' => 'Only a teacher or principal can submit the top 3.'], 403);
+            if (ns_winners_published()) json(['error' => 'Results are published — the top 3 are locked.'], 423);
+            $schoolId = (int) ($scope['school_id'] ?? 0);
+            if ($schoolId <= 0) json(['error' => 'No school is linked to this account.'], 403);
+            $res = new_school_release_top3($schoolId);
+            $msg = $res['already'] ? 'Your top 3 were already sent to the judges.' : ($res['count'] . ' submission' . ($res['count'] === 1 ? '' : 's') . ' sent to the judges.');
+            json(['message' => $msg, 'result' => $res, 'internal' => new_school_internal_dashboard_block($schoolId, (int) $user['id'])]);
+        }
+
         /* ============ Supporting materials (215-model, 5 pts each) ============ */
 
         case $key === 'GET new-school/materials/types': {
@@ -4212,6 +4297,7 @@ function new_school_handle_route(string $method, string $route): bool
             $judge = require_judge();
             new_school_judge_ensure_schema();
             new_school_workflow_ensure_schema();
+            ns_auto_release_due(); // deadline safety net: auto-release forgotten schools' top-3
             $anon = ns_anonymous_judging();
 
             $stmt = db()->prepare(
@@ -4223,7 +4309,7 @@ function new_school_handle_route(string $method, string $route): bool
                  LEFT JOIN new_school_teachers t ON t.id = s.teacher_id
                  LEFT JOIN new_school_judge_scores js ON js.submission_id = sub.id AND js.judge_user_id = ?
                  LEFT JOIN new_school_judge_assignments a ON a.submission_id = sub.id AND a.judge_user_id = ?
-                 WHERE sub.status <> 'draft' AND (a.status IS NULL OR a.status <> 'recused')
+                 WHERE sub.status <> 'draft' AND sub.judge_released = 1 AND (a.status IS NULL OR a.status <> 'recused')
                  ORDER BY (js.status IS NULL) DESC, sub.submission_date DESC, sub.id DESC"
             );
             $stmt->execute([(int) $judge['id'], (int) $judge['id']]);
@@ -4262,7 +4348,7 @@ function new_school_handle_route(string $method, string $route): bool
             new_school_judge_ensure_schema();
             $submissionId = (int) $m[1];
             $stmt = db()->prepare(
-                'SELECT sub.id, sub.status, sub.submission_date,
+                'SELECT sub.id, sub.status, sub.judge_released, sub.submission_date,
                         sub.problem_identified, sub.why_it_matters, sub.proposed_solution, sub.how_it_helps, sub.expected_impact,
                         sub.video_url, sub.written_url, sub.ai_note, sub.ai_url, sub.community_note, sub.community_url, sub.source_business_id,
                         s.id AS student_id, s.full_name AS student_name, s.school_name, s.grade_level, s.participant_id,
@@ -4274,7 +4360,7 @@ function new_school_handle_route(string $method, string $route): bool
             );
             $stmt->execute([$submissionId]);
             $submission = $stmt->fetch();
-            if (!$submission || (string) $submission['status'] === 'draft') {
+            if (!$submission || (string) $submission['status'] === 'draft' || (int) ($submission['judge_released'] ?? 0) !== 1) {
                 json(['error' => 'Submission not available for judging.'], 404);
             }
             if (!new_school_judge_can_review((int) $judge['id'], $submissionId)) {
@@ -4330,14 +4416,17 @@ function new_school_handle_route(string $method, string $route): bool
                 json(['error' => 'Results have been published — scoring is now locked and cannot be changed.'], 423);
             }
 
-            $check = db()->prepare('SELECT status FROM new_school_submissions WHERE id = ? LIMIT 1');
+            $check = db()->prepare('SELECT status, judge_released FROM new_school_submissions WHERE id = ? LIMIT 1');
             $check->execute([$submissionId]);
-            $subStatus = $check->fetchColumn();
-            if ($subStatus === false) {
+            $subRow = $check->fetch();
+            if (!$subRow) {
                 json(['error' => 'Submission not found.'], 404);
             }
-            if ((string) $subStatus === 'draft') {
+            if ((string) $subRow['status'] === 'draft') {
                 json(['error' => 'This project has not been submitted yet.'], 409);
+            }
+            if ((int) ($subRow['judge_released'] ?? 0) !== 1) {
+                json(['error' => 'This submission has not been released to judges yet.'], 409);
             }
             if (!new_school_judge_can_review((int) $judge['id'], $submissionId)) {
                 json(['error' => 'This submission is not assigned to you or you have recused yourself.'], 403);

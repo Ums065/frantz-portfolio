@@ -3037,6 +3037,39 @@ function new_school_workflow_ensure_schema(): void
     $pdo->exec("CREATE TABLE IF NOT EXISTS new_school_judge_assignments (id INT AUTO_INCREMENT PRIMARY KEY, judge_user_id INT NOT NULL, submission_id INT NOT NULL, status ENUM('assigned','recused') NOT NULL DEFAULT 'assigned', recuse_reason VARCHAR(255) DEFAULT NULL, assigned_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, UNIQUE KEY uniq_judge_assignment (judge_user_id, submission_id), KEY idx_assignment_judge (judge_user_id, status), KEY idx_assignment_submission (submission_id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
     $pdo->exec("CREATE TABLE IF NOT EXISTS new_school_judge_score_audit (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, submission_id INT NOT NULL, judge_user_id INT NOT NULL, action VARCHAR(20) NOT NULL DEFAULT 'update', old_total INT DEFAULT NULL, new_total INT DEFAULT NULL, detail TEXT DEFAULT NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, KEY idx_audit_submission (submission_id, created_at), KEY idx_audit_judge (judge_user_id, created_at)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
     $pdo->exec("CREATE TABLE IF NOT EXISTS new_school_reports (id INT AUTO_INCREMENT PRIMARY KEY, submission_id INT DEFAULT NULL, reporter_user_id INT DEFAULT NULL, reason VARCHAR(80) NOT NULL, notes TEXT DEFAULT NULL, status ENUM('open','reviewed','dismissed') NOT NULL DEFAULT 'open', created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, KEY idx_reports_status (status, created_at), KEY idx_reports_submission (submission_id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+    // ---- School-internal scoring pre-round (teacher/principal score → release top-3 to judges) ----
+    // Teacher & principal score submissions internally; only released submissions reach judges.
+    $addCol = static function (string $table, string $col, string $def) use ($pdo): void {
+        try {
+            $has = $pdo->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '$table' AND COLUMN_NAME = " . $pdo->quote($col))->fetchColumn();
+            if ((int) $has === 0) $pdo->exec("ALTER TABLE $table ADD COLUMN $col $def");
+        } catch (Throwable $e) { if (app_debug()) error_log("workflow addcol $table.$col: " . $e->getMessage()); }
+    };
+    // Judge visibility gate: a submission reaches judges only once released.
+    $addCol('new_school_submissions', 'judge_released', 'TINYINT(1) NOT NULL DEFAULT 0');
+    // Per-school marker that its top-3 have been released (idempotency + UI state).
+    $addCol('new_school_schools', 'top3_released_at', 'TIMESTAMP NULL DEFAULT NULL');
+    // Internal score rows — SEPARATE from new_school_judge_scores; never feeds the main ranking.
+    $pdo->exec("CREATE TABLE IF NOT EXISTS new_school_internal_scores (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        submission_id INT NOT NULL,
+        reviewer_user_id INT NOT NULL,
+        reviewer_role ENUM('teacher','principal') NOT NULL,
+        problem SMALLINT NOT NULL DEFAULT 0,
+        solution SMALLINT NOT NULL DEFAULT 0,
+        creativity SMALLINT NOT NULL DEFAULT 0,
+        supporting_evidence SMALLINT NOT NULL DEFAULT 0,
+        community_impact SMALLINT NOT NULL DEFAULT 0,
+        presentation SMALLINT NOT NULL DEFAULT 0,
+        total INT NOT NULL DEFAULT 0,
+        notes TEXT DEFAULT NULL,
+        status ENUM('draft','submitted') NOT NULL DEFAULT 'submitted',
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY uniq_internal_reviewer (submission_id, reviewer_user_id),
+        KEY idx_internal_submission (submission_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
     $ready = true;
 }
 
@@ -3065,6 +3098,114 @@ function ns_anonymous_judging(): bool
 function ns_results_published(): bool
 {
     return filter_var(ns_setting_get('results_published', 'false'), FILTER_VALIDATE_BOOLEAN);
+}
+
+/* ================= School-internal scoring pre-round ================= */
+
+/**
+ * School-internal ranking: every non-draft submission in the school, ranked by
+ * the AVERAGE of its submitted internal (teacher + principal) scores. Scored
+ * submissions rank above unscored; ties break by earliest submission. This is
+ * fully separate from the main ranking (new_school_rank_students / final_score).
+ */
+function new_school_internal_rank(int $schoolId): array
+{
+    new_school_workflow_ensure_schema();
+    $st = db()->prepare(
+        "SELECT sub.id AS submission_id, s.id AS student_id, s.full_name,
+                COUNT(isc.id) AS reviewers, COALESCE(AVG(isc.total),0) AS avg_total, sub.judge_released
+         FROM new_school_students s
+         JOIN new_school_submissions sub ON sub.student_id = s.id AND sub.status <> 'draft'
+         LEFT JOIN new_school_internal_scores isc ON isc.submission_id = sub.id AND isc.status = 'submitted'
+         WHERE s.school_id = ?
+         GROUP BY sub.id, s.id, s.full_name, sub.judge_released, sub.submission_date
+         ORDER BY (COUNT(isc.id) > 0) DESC, AVG(isc.total) DESC, sub.submission_date ASC, sub.id ASC"
+    );
+    $st->execute([$schoolId]);
+    $out = []; $rank = 0;
+    foreach ($st->fetchAll() as $r) {
+        $rank++;
+        $out[] = [
+            'rank'           => $rank,
+            'submission_id'  => (int) $r['submission_id'],
+            'student_id'     => (int) $r['student_id'],
+            'student_name'   => (string) ($r['full_name'] ?? 'Student'),
+            'reviewers'      => (int) $r['reviewers'],
+            'avg_total'      => round((float) $r['avg_total'], 1),
+            'max_total'      => NS_JUDGE_MAX_TOTAL,
+            'judge_released' => (int) $r['judge_released'] === 1,
+            'is_top3'        => $rank <= 3,
+        ];
+    }
+    return $out;
+}
+
+/**
+ * Release a school's top-3 (by internal rank) to the judges. Atomic per-school
+ * claim on top3_released_at prevents double-release across concurrent manual +
+ * auto-release runs. Returns ['released'=>bool,'already'=>bool,'count'=>int].
+ */
+function new_school_release_top3(int $schoolId): array
+{
+    new_school_workflow_ensure_schema();
+    $pdo = db();
+    $claim = $pdo->prepare('UPDATE new_school_schools SET top3_released_at = NOW() WHERE id = ? AND top3_released_at IS NULL');
+    $claim->execute([$schoolId]);
+    if ($claim->rowCount() !== 1) return ['released' => false, 'already' => true, 'count' => 0];
+    $ids = array_slice(array_map(static fn(array $r): int => $r['submission_id'], new_school_internal_rank($schoolId)), 0, 3);
+    $n = 0;
+    $u = $pdo->prepare('UPDATE new_school_submissions SET judge_released = 1 WHERE id = ?');
+    foreach ($ids as $sid) { $u->execute([$sid]); $n++; }
+    return ['released' => true, 'already' => false, 'count' => $n, 'submission_ids' => $ids];
+}
+
+/** The `internal` dashboard block for a teacher/principal: rank + release state + the viewer's own scores. */
+function new_school_internal_dashboard_block(int $schoolId, int $viewerUserId): array
+{
+    new_school_workflow_ensure_schema();
+    $released = null;
+    try {
+        $st = db()->prepare('SELECT top3_released_at FROM new_school_schools WHERE id = ? LIMIT 1');
+        $st->execute([$schoolId]);
+        $released = $st->fetchColumn() ?: null;
+    } catch (Throwable $e) { /* ignore */ }
+    // The viewer's own internal scores, keyed by submission_id.
+    $mine = [];
+    try {
+        $ms = db()->prepare('SELECT submission_id, total FROM new_school_internal_scores WHERE reviewer_user_id = ?');
+        $ms->execute([$viewerUserId]);
+        foreach ($ms->fetchAll() as $r) { $mine[(int) $r['submission_id']] = (int) $r['total']; }
+    } catch (Throwable $e) { /* ignore */ }
+    return [
+        'rank'             => new_school_internal_rank($schoolId),
+        'top3_released_at' => $released,
+        'my_scores'        => $mine,
+        'max_total'        => NS_JUDGE_MAX_TOTAL,
+    ];
+}
+
+/**
+ * Deadline safety net: once the submission deadline has passed, auto-release the
+ * top-3 for any school that never pressed the button. Lazy (no cron) — call from
+ * hot read paths (judge queue, admin summary). Idempotent via the atomic claim.
+ */
+function ns_auto_release_due(): void
+{
+    try {
+        new_school_workflow_ensure_schema();
+        if (date('Y-m-d') <= ns_submission_deadline()) return; // only after the deadline (judging phase)
+        $pdo = db();
+        $schools = $pdo->query(
+            "SELECT DISTINCT s.school_id
+             FROM new_school_students s
+             JOIN new_school_submissions sub ON sub.student_id = s.id AND sub.status <> 'draft'
+             JOIN new_school_schools sc ON sc.id = s.school_id
+             WHERE sc.top3_released_at IS NULL AND s.school_id IS NOT NULL"
+        )->fetchAll(PDO::FETCH_COLUMN);
+        foreach ($schools as $sid) { new_school_release_top3((int) $sid); }
+    } catch (Throwable $e) {
+        if (app_debug()) error_log('ns_auto_release_due: ' . $e->getMessage());
+    }
 }
 
 /* ---------------- Submission window (admin-editable deadline) ----------------

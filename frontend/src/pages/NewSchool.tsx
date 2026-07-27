@@ -14,6 +14,7 @@ import DashboardGuide from '../components/DashboardGuide'
 import OfferStepper, { Confetti, type OfferStage, type OfferEvent } from '../components/OfferStepper'
 import OfferChat from '../components/OfferChat'
 import ProfileSection from '../components/profile/ProfileSection'
+import InternalScoring, { type InternalBlock } from '../components/InternalScoring'
 import ScholarshipWizard, { type ScholarshipAnswer } from '../components/ScholarshipWizard'
 import NsRecordDetail from '../components/NsRecordDetail'
 import ChallengeRegistration from '../components/ChallengeRegistration'
@@ -512,7 +513,7 @@ function SchoolRankBoard({ schools, mySchoolId, hidden }: { schools: any[]; mySc
 }
 
 type RegistrationTag = 'community' | 'student' | 'parent' | 'school' | 'teacher' | 'business' | 'sponsor' | 'partner' | 'media' | 'volunteer'
-type DashboardTabKey = 'overview' | 'profile' | 'activity' | 'rankings' | 'records' | 'approvals' | 'reviews' | 'notifications' | 'data' | 'chat' | 'faq' | 'resources'
+type DashboardTabKey = 'overview' | 'profile' | 'activity' | 'rankings' | 'records' | 'approvals' | 'reviews' | 'scoring' | 'notifications' | 'data' | 'chat' | 'faq' | 'resources'
 type SchoolRecordsTabKey = 'students' | 'teachers' | 'interviews' | 'approvals' | 'projects'
 type DashboardTabConfig = { key: DashboardTabKey; label: string; hint: string; badge?: string }
 
@@ -977,6 +978,7 @@ const dashboardTabsByRole: Record<string, DashboardTabConfig[]> = {
     { key: 'overview', label: 'Overview', hint: 'Your school at a glance' },
     { key: 'profile', label: 'My Profile', hint: 'Your school details' },
     { key: 'approvals', label: 'Approvals', hint: 'Approve teachers and students' },
+    { key: 'scoring', label: 'Scoring & Top 3', hint: 'Score work, send top 3 to judges' },
     { key: 'rankings', label: 'Rankings', hint: 'See who is leading' },
     { key: 'records', label: 'Records', hint: 'Students and their work' },
     { key: 'chat', label: 'Chat', hint: 'Talk to the team' },
@@ -988,6 +990,7 @@ const dashboardTabsByRole: Record<string, DashboardTabConfig[]> = {
     { key: 'overview', label: 'Overview', hint: 'Your class at a glance' },
     { key: 'profile', label: 'My Profile', hint: 'Your details' },
     { key: 'approvals', label: 'Approvals', hint: 'Approve your students' },
+    { key: 'scoring', label: 'Scoring & Top 3', hint: 'Score work, send top 3 to judges' },
     { key: 'rankings', label: 'Rankings', hint: 'See who is leading' },
     { key: 'records', label: 'Records', hint: 'Students and their work' },
     { key: 'chat', label: 'Chat', hint: 'Talk to the team' },
@@ -3935,6 +3938,9 @@ export default function NewSchool() {
                   Actions are signed as <strong>{user?.full_name || 'Reviewer'}</strong>. {teacherDashboard ? 'You approve students directly; parents appear here once the student confirms them.' : 'Approving a student here is the same gate as a teacher’s approval — either one unlocks the student.'}
                 </p>
               </article>
+              {dashboardTab === 'scoring' && (isSchoolLayout || isTeacherLayout) && (
+                <InternalScoring role={isSchoolLayout ? 'principal' : 'teacher'} internal={((schoolDashboard || teacherDashboard) as { internal?: InternalBlock } | null)?.internal} />
+              )}
               <article className="glass ns-dash-card ns-dash-card--wide reveal in" hidden={dashboardTab !== 'records'}>
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">Records</span>
