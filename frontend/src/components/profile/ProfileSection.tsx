@@ -196,9 +196,25 @@ export function ChangePasswordCard() {
       </div>
       <div style={{ height: 1, background: 'var(--line)', margin: '14px 0 18px' }} />
       <style>{`
-        .fc-pw-big .ns-pw input { padding: 15px 46px 15px 16px !important; font-size: 15.5px !important; border-radius: 12px !important; height: auto !important; }
-        .fc-pw-big .ns-pw__toggle { width: 44px !important; }
-        .fc-pw-big label > span:first-child { margin-bottom: 2px; }
+        .fc-pw-big .ns-pw { width: 100%; }
+        .fc-pw-big .ns-pw input {
+          width: 100%;
+          box-sizing: border-box;
+          padding: 15px 46px 15px 16px;
+          font-size: 15.5px;
+          color: var(--ivory, #f4efe4);
+          background: rgba(0,0,0,0.28);
+          border: 1px solid var(--line);
+          border-radius: 12px;
+          outline: none;
+          transition: border-color .2s, box-shadow .2s;
+        }
+        .fc-pw-big .ns-pw input:focus {
+          border-color: rgba(201,168,76,0.6);
+          box-shadow: 0 0 0 3px rgba(201,168,76,0.15);
+        }
+        .fc-pw-big .ns-pw input::placeholder { color: var(--muted); }
+        .fc-pw-big .ns-pw__toggle { width: 40px; height: 40px; top: 50%; right: 6px; }
       `}</style>
       <form onSubmit={submit} noValidate className="fc-pw-big" style={{ display: 'grid', gap: 18, minWidth: 0 }}>
         <label style={fieldS}><span style={labelS}>Current Password</span><PasswordField name="current_password" autoComplete="current-password" /></label>
