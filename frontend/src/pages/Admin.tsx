@@ -168,6 +168,14 @@ export default function Admin() {
   })
   // Mobile: sidebar starts collapsed (content-first); toggled by the mobile bar.
   const [navOpen, setNavOpen] = useState(false)
+  // Collapsible sidebar groups (accordion) — tames the long nav. Only the active
+  // tab's group is open by default; the user's expand/collapse choices persist.
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => {
+    try { const s = JSON.parse(localStorage.getItem('fc_admin_nav_open') || 'null'); if (s && typeof s === 'object') return s } catch { /* ignore */ }
+    return {}
+  })
+  useEffect(() => { try { localStorage.setItem('fc_admin_nav_open', JSON.stringify(openGroups)) } catch { /* ignore */ } }, [openGroups])
+  const toggleGroup = (name: string) => setOpenGroups((p) => ({ ...p, [name]: !p[name] }))
   // Keep the URL in sync with the active tab (replaceState → no history spam).
   useEffect(() => {
     const url = new URL(window.location.href)
@@ -175,6 +183,11 @@ export default function Admin() {
       url.searchParams.set('tab', tab)
       window.history.replaceState(window.history.state, '', url)
     }
+  }, [tab])
+  // Always keep the group that owns the active tab expanded.
+  useEffect(() => {
+    const g = NAV_GROUPS.find((gr) => gr.items.some((i) => i.key === tab))?.group
+    if (g) setOpenGroups((prev) => (prev[g] ? prev : { ...prev, [g]: true }))
   }, [tab])
   const [ovGroup, setOvGroup] = useState('People')
   const [viewBusyId, setViewBusyId] = useState<number | null>(null)
@@ -828,25 +841,41 @@ export default function Admin() {
             <strong className="gold-text">Command Center</strong>
           </div>
           <nav className="admin-nav" onClick={() => setNavOpen(false)}>
-            {NAV_GROUPS.map((group) => (
-              <div key={group.group} className="admin-nav__group">
-                <span className="admin-nav__group-label">{group.group}</span>
-                <div className="admin-nav__items">
-                  {group.items.map((item) => (
-                    <button
-                      key={item.key}
-                      type="button"
-                      className={`admin-nav__item${tab === item.key ? ' is-active' : ''}`}
-                      onClick={() => setTab(item.key)}
-                    >
-                      <span className="admin-nav__icon" aria-hidden="true"><AdminNavIcon name={item.key} /></span>
-                      <span className="admin-nav__label">{item.label}</span>
-                      {notifications[item.key] ? <span className="admin-nav__badge admin-nav__badge--notify" title={`${notifications[item.key]} need attention`}>{notifications[item.key]}</span> : null}
-                    </button>
-                  ))}
+            {NAV_GROUPS.map((group) => {
+              const open = !!openGroups[group.group]
+              const groupCount = group.items.reduce((n, it) => n + (Number(notifications[it.key]) || 0), 0)
+              return (
+                <div key={group.group} className={`admin-nav__group${open ? ' is-open' : ' is-collapsed'}`}>
+                  <button
+                    type="button"
+                    className="admin-nav__group-label admin-nav__group-toggle"
+                    aria-expanded={open}
+                    onClick={(e) => { e.stopPropagation(); toggleGroup(group.group) }}
+                    style={{ display: 'flex', alignItems: 'center', width: '100%', background: 'none', border: 0, cursor: 'pointer', font: 'inherit', color: 'inherit' }}
+                  >
+                    <span className="admin-nav__chevron" aria-hidden="true" style={{ display: 'inline-block', transition: 'transform .2s', transform: open ? 'rotate(90deg)' : 'none', marginRight: 6 }}>›</span>
+                    <span style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>{group.group}</span>
+                    {!open && groupCount > 0 && <span className="admin-nav__badge admin-nav__badge--notify" title={`${groupCount} need attention`}>{groupCount}</span>}
+                  </button>
+                  {open && (
+                    <div className="admin-nav__items">
+                      {group.items.map((item) => (
+                        <button
+                          key={item.key}
+                          type="button"
+                          className={`admin-nav__item${tab === item.key ? ' is-active' : ''}`}
+                          onClick={() => setTab(item.key)}
+                        >
+                          <span className="admin-nav__icon" aria-hidden="true"><AdminNavIcon name={item.key} /></span>
+                          <span className="admin-nav__label">{item.label}</span>
+                          {notifications[item.key] ? <span className="admin-nav__badge admin-nav__badge--notify" title={`${notifications[item.key]} need attention`}>{notifications[item.key]}</span> : null}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </nav>
           <div className="admin-sidebar__foot">
             <a className="btn btn--sm" href="/">View Site</a>
