@@ -93,7 +93,10 @@ async function request<T>(path: string, options: RequestInit = {}, retry = true)
       status: res.status,
       body: summarizeBody(data),
     })
-    throw new Error(extractErrorMessage(data, `Request failed (${res.status})`))
+    const err = new Error(extractErrorMessage(data, `Request failed (${res.status})`)) as Error & { status?: number; data?: unknown }
+    err.status = res.status
+    err.data = data
+    throw err
   }
   return data as T
 }

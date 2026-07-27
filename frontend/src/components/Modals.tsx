@@ -306,6 +306,18 @@ export function AuthModal({
   const [form, setForm] = useState<RegisterFormState>(createRegisterForm())
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  // Account lockout countdown: epoch-ms until the account can try to log in again.
+  const [lockUntil, setLockUntil] = useState(0)
+  const [, setTick] = useState(0)
+  const lockRemaining = lockUntil ? Math.max(0, Math.ceil((lockUntil - Date.now()) / 1000)) : 0
+  useEffect(() => {
+    if (!lockUntil) return
+    const id = window.setInterval(() => {
+      setTick((t) => t + 1)
+      if (Date.now() >= lockUntil) { setLockUntil(0); window.clearInterval(id) }
+    }, 1000)
+    return () => window.clearInterval(id)
+  }, [lockUntil])
   const [done, setDone] = useState<{ title: string; message: string } | null>(null)
   const [termsAccepted, setTermsAccepted] = useState(false)
   const [termsSig, setTermsSig] = useState('')
@@ -535,7 +547,16 @@ export function AuthModal({
         })
       await handleAuthResult(result)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong.')
+      const data = (err && typeof err === 'object' && 'data' in err) ? (err as { data?: Record<string, unknown> }).data : null
+      const msg = err instanceof Error ? err.message : 'Something went wrong.'
+      if (data && data.locked && Number(data.retry_after) > 0) {
+        setLockUntil(Date.now() + Number(data.retry_after) * 1000)
+        setError('')
+      } else if (data && typeof data.warn === 'string') {
+        setError(`${msg} ${data.warn}`)
+      } else {
+        setError(msg)
+      }
     } finally {
       setBusy(false)
     }
@@ -800,8 +821,17 @@ export function AuthModal({
                 </>
               )}
               {error && <p className="msub" style={{ color: '#e08a8a' }}>{error}</p>}
-              <button type="submit" className="btn btn--solid" disabled={busy || (mode === 'register' && !termsAccepted)}>
-                {busy ? (mode === 'login' ? 'Signing in...' : 'Submitting...') : submitLabel}
+              {mode === 'login' && lockRemaining > 0 && (
+                <div style={{ background: 'rgba(224,138,138,0.12)', border: '1px solid rgba(224,138,138,0.4)', borderRadius: 10, padding: '12px 14px', margin: '4px 0 2px', textAlign: 'center' }}>
+                  <div style={{ color: '#e59a9a', fontWeight: 700, fontSize: 13 }}>🔒 Account temporarily locked</div>
+                  <div style={{ color: '#e8c9c9', fontSize: 12.5, marginTop: 4 }}>Too many wrong passwords. Try again in</div>
+                  <div style={{ color: '#fff', fontFamily: 'var(--f-serif)', fontSize: 26, fontWeight: 800, marginTop: 4, letterSpacing: '.04em' }}>
+                    {String(Math.floor(lockRemaining / 60)).padStart(2, '0')}:{String(lockRemaining % 60).padStart(2, '0')}
+                  </div>
+                </div>
+              )}
+              <button type="submit" className="btn btn--solid" disabled={busy || (mode === 'register' && !termsAccepted) || (mode === 'login' && lockRemaining > 0)}>
+                {mode === 'login' && lockRemaining > 0 ? 'Locked — please wait' : busy ? (mode === 'login' ? 'Signing in...' : 'Submitting...') : submitLabel}
               </button>
             </form>
             {mode === 'login' ? (

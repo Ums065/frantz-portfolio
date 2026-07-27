@@ -148,7 +148,30 @@ try {
 
             if (!$u || !password_verify($pass, $u['password_hash'])) {
                 login_fail_record($email); // count this wrong attempt toward the lockout
-                json(['error' => 'Invalid email or password.'], 401);
+                $st = login_fail_status($email);
+                $remaining = max(0, LOGIN_MAX_FAILS - $st['count']);
+                $lockMins = max(1, (int) ceil(LOGIN_LOCK_SECONDS / 60));
+                if ($remaining <= 0) {
+                    // This attempt hit the limit — the account is now locked.
+                    json([
+                        'error'       => "Too many incorrect password attempts. This account is locked for $lockMins minute" . ($lockMins === 1 ? '' : 's') . ". Please try again later or reset your password.",
+                        'locked'      => true,
+                        'retry_after' => $st['retry_after'] ?: LOGIN_LOCK_SECONDS,
+                        'max'         => LOGIN_MAX_FAILS,
+                    ], 429);
+                }
+                $resp = [
+                    'error'              => 'Invalid email or password.',
+                    'attempts_used'      => $st['count'],
+                    'attempts_remaining' => $remaining,
+                    'max'                => LOGIN_MAX_FAILS,
+                    'lock_minutes'       => $lockMins,
+                ];
+                // Start warning the user once they are halfway to the lockout.
+                if ($st['count'] >= 5) {
+                    $resp['warn'] = "$remaining attempt" . ($remaining === 1 ? '' : 's') . " remaining before this account is locked for $lockMins minutes.";
+                }
+                json($resp, 401);
             }
             if ((string) ($u['approval_status'] ?? 'pending') === 'rejected') {
                 json(['error' => 'This account has been rejected. Please contact the administrator.'], 403);

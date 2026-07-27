@@ -224,12 +224,8 @@ function login_fail_bucket(string $email): string
     return mb_substr('login_fail:' . strtolower(trim($email)), 0, 140);
 }
 
-/**
- * If the account has too many recent failed logins, block sign-in with 429 and a
- * clear "locked for N minutes" message. Only WRONG-password attempts are counted
- * (recorded by login_fail_record); a successful login clears them. Fails OPEN.
- */
-function login_lock_check(string $email): void
+/** Failed-login status for an account: recent fail count + seconds until unlock. */
+function login_fail_status(string $email): array
 {
     rate_limit_ensure_schema();
     try {
@@ -239,13 +235,31 @@ function login_lock_check(string $email): void
         );
         $c->execute([login_fail_bucket($email)]);
         $row = $c->fetch() ?: [];
-        if ((int) ($row['c'] ?? 0) >= LOGIN_MAX_FAILS) {
-            $remaining = LOGIN_LOCK_SECONDS - (int) ($row['age'] ?? 0);
-            $mins = max(1, (int) ceil($remaining / 60));
-            json(['error' => "Too many incorrect password attempts. This account is locked for security — please try again in about $mins minute" . ($mins === 1 ? '' : 's') . ", or reset your password."], 429);
-        }
+        $count = (int) ($row['c'] ?? 0);
+        $retry = max(0, LOGIN_LOCK_SECONDS - (int) ($row['age'] ?? 0));
+        return ['count' => $count, 'retry_after' => $retry];
     } catch (Throwable $e) {
-        if (app_debug()) error_log('login_lock_check: ' . $e->getMessage());
+        if (app_debug()) error_log('login_fail_status: ' . $e->getMessage());
+        return ['count' => 0, 'retry_after' => 0];
+    }
+}
+
+/**
+ * If the account is already locked (>= LOGIN_MAX_FAILS recent wrong passwords),
+ * block sign-in with 429, a clear message, and a `retry_after` (seconds) so the
+ * UI can show a live countdown. Only WRONG attempts count; success clears them.
+ */
+function login_lock_check(string $email): void
+{
+    $st = login_fail_status($email);
+    if ($st['count'] >= LOGIN_MAX_FAILS) {
+        $mins = max(1, (int) ceil($st['retry_after'] / 60));
+        json([
+            'error'       => "Too many incorrect password attempts. This account is locked — please try again in about $mins minute" . ($mins === 1 ? '' : 's') . ", or reset your password.",
+            'locked'      => true,
+            'retry_after' => $st['retry_after'],
+            'max'         => LOGIN_MAX_FAILS,
+        ], 429);
     }
 }
 
