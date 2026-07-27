@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { api } from '../lib/api'
 import { useAuth } from '../context/AuthContext'
 import { useAnnouncementBadge } from './AnnouncementsFeed'
@@ -25,7 +26,14 @@ export default function NotificationBell() {
   const [items, setItems] = useState<FeedItem[]>([])
   const [unread, setUnread] = useState(0)
   const [busy, setBusy] = useState(false)
+  const [pos, setPos] = useState<{ top: number; right: number }>({ top: 56, right: 16 })
   const wrapRef = useRef<HTMLDivElement>(null)
+  const btnRef = useRef<HTMLButtonElement>(null)
+  const dropRef = useRef<HTMLDivElement>(null)
+  const placeDropdown = () => {
+    const r = btnRef.current?.getBoundingClientRect()
+    if (r) setPos({ top: Math.round(r.bottom + 8), right: Math.round(window.innerWidth - r.right) })
+  }
   const ann = useAnnouncementBadge()
 
   const load = async () => {
@@ -45,12 +53,24 @@ export default function NotificationBell() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id])
 
-  // Close on outside click.
+  // Close on outside click (dropdown is portaled to body, so check it too) +
+  // keep the dropdown pinned under the bell on scroll / resize.
   useEffect(() => {
     if (!open) return
-    const onDoc = (e: MouseEvent) => { if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false) }
+    const onDoc = (e: MouseEvent) => {
+      const t = e.target as Node
+      if (wrapRef.current?.contains(t) || dropRef.current?.contains(t)) return
+      setOpen(false)
+    }
+    const onMove = () => placeDropdown()
     document.addEventListener('mousedown', onDoc)
-    return () => document.removeEventListener('mousedown', onDoc)
+    window.addEventListener('resize', onMove)
+    window.addEventListener('scroll', onMove, true)
+    return () => {
+      document.removeEventListener('mousedown', onDoc)
+      window.removeEventListener('resize', onMove)
+      window.removeEventListener('scroll', onMove, true)
+    }
   }, [open])
 
   if (!user) return null
@@ -58,6 +78,7 @@ export default function NotificationBell() {
 
   const toggle = () => {
     const next = !open
+    if (next) placeDropdown()
     setOpen(next)
     if (next) { void load(); ann.markSeen() } // opening clears the announcement portion
   }
@@ -77,6 +98,7 @@ export default function NotificationBell() {
   return (
     <div ref={wrapRef} style={{ position: 'relative', display: 'inline-flex' }}>
       <button
+        ref={btnRef}
         type="button"
         onClick={toggle}
         aria-label={`Notifications${badge ? ` (${badge} new)` : ''}`}
@@ -89,8 +111,8 @@ export default function NotificationBell() {
         )}
       </button>
 
-      {open && (
-        <div style={{ position: 'absolute', top: 48, right: 0, width: 'min(340px, 86vw)', maxHeight: 460, overflowY: 'auto', background: '#14130f', border: '1px solid var(--line)', borderRadius: 14, boxShadow: '0 24px 60px -20px rgba(0,0,0,0.8)', zIndex: 1000 }}>
+      {open && createPortal(
+        <div ref={dropRef} style={{ position: 'fixed', top: pos.top, right: pos.right, width: 'min(340px, 92vw)', maxHeight: 460, overflowY: 'auto', background: '#14130f', border: '1px solid var(--line)', borderRadius: 14, boxShadow: '0 24px 60px -20px rgba(0,0,0,0.8)', zIndex: 100000 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '12px 14px', borderBottom: '1px solid var(--line)', position: 'sticky', top: 0, background: '#14130f' }}>
             <strong style={{ color: 'var(--gold-light)', fontSize: 13.5 }}>Notifications</strong>
             {unread > 0 && <button type="button" className="linklike" disabled={busy} onClick={() => void markAll()} style={{ background: 'none', border: 0, color: 'var(--gold-light)', fontSize: 12, cursor: 'pointer' }}>Mark all read</button>}
@@ -123,7 +145,8 @@ export default function NotificationBell() {
               </>
             )}
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   )
