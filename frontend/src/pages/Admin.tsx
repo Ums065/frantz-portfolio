@@ -32,21 +32,12 @@ type TabKey =
 
 interface NavItem { key: TabKey; label: string }
 const NAV_GROUPS: Array<{ group: string; items: NavItem[] }> = [
-  // Grouped by area of work so related tools sit together and the sidebar scans
-  // top-to-bottom in rough order of daily use.
+  // Ordered by daily-use workflow: overview first, then the core challenge and
+  // outreach work, then accounts/inbox, then content/engagement, store last.
   { group: 'Overview', items: [
     { key: 'overview', label: 'Overview' },
     { key: 'analytics', label: 'Analytics' },
     { key: 'traffic', label: 'Traffic' },
-  ] },
-  { group: 'Accounts', items: [
-    { key: 'members', label: 'User Accounts' },
-    { key: 'approvals', label: 'Account Approvals' },
-  ] },
-  { group: 'Inbox', items: [
-    { key: 'contacts', label: 'Contact Messages' },
-    { key: 'requests', label: 'Service Requests' },
-    { key: 'subscribers', label: 'Newsletter' },
   ] },
   { group: 'New School Challenge', items: [
     { key: 'ns-schools', label: 'School Dashboard' },
@@ -65,9 +56,14 @@ const NAV_GROUPS: Array<{ group: string; items: NavItem[] }> = [
     { key: 'partners', label: 'Partners' },
     { key: 'research', label: 'Research (Fellow)' },
   ] },
-  { group: 'Store', items: [
-    { key: 'orders', label: 'Store Orders' },
-    { key: 'inventory', label: 'Products & Inventory' },
+  { group: 'Accounts', items: [
+    { key: 'members', label: 'User Accounts' },
+    { key: 'approvals', label: 'Account Approvals' },
+  ] },
+  { group: 'Inbox', items: [
+    { key: 'contacts', label: 'Contact Messages' },
+    { key: 'requests', label: 'Service Requests' },
+    { key: 'subscribers', label: 'Newsletter' },
   ] },
   { group: 'Content & Media', items: [
     { key: 'awards', label: 'Awards' },
@@ -80,6 +76,10 @@ const NAV_GROUPS: Array<{ group: string; items: NavItem[] }> = [
   { group: 'Engagement', items: [
     { key: 'rsvps', label: 'Event RSVPs' },
     { key: 'community', label: 'Community' },
+  ] },
+  { group: 'Store', items: [
+    { key: 'orders', label: 'Store Orders' },
+    { key: 'inventory', label: 'Products & Inventory' },
   ] },
 ]
 
