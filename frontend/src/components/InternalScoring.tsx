@@ -79,10 +79,12 @@ export default function InternalScoring({ role, internal }: { role: 'teacher' | 
   const [scores, setScores] = useState<Record<string, number>>({})
   const [notes, setNotes] = useState('')
   const [saving, setSaving] = useState(false)
+  const [confirmOpen, setConfirmOpen] = useState(false)
 
   const rows = data?.rank ?? []
   const released = !!data?.top3_released_at
   const scoredCount = rows.filter((r) => r.reviewers > 0).length
+  const willSend = rows.slice(0, 3) // top 3 (or fewer) that will go to the judges
 
   const openScore = async (submissionId: number) => {
     setBusy(true)
@@ -111,36 +113,56 @@ export default function InternalScoring({ role, internal }: { role: 'teacher' | 
     finally { setSaving(false) }
   }
 
-  const releaseTop3 = async () => {
+  const doRelease = async () => {
     if (released) return
-    if (!window.confirm('Send this school’s top 3 submissions to the judges? This cannot be undone.')) return
     setBusy(true)
     try {
       const d = await api.post<{ message: string; internal: InternalBlock }>('new-school/manage/release-top3', {})
       if (d.internal) setData(d.internal)
-      window.fcToast?.(d.message || 'Top 3 sent to judges.')
-    } catch (e) { window.fcToast?.(e instanceof Error ? e.message : 'Could not send the top 3.') }
+      setConfirmOpen(false)
+      window.fcToast?.(d.message || 'Top submissions sent to judges.')
+    } catch (e) { window.fcToast?.(e instanceof Error ? e.message : 'Could not send to the judges.') }
     finally { setBusy(false) }
   }
 
   return (
-    <section className="glass" style={{ padding: 'clamp(16px,3vw,22px)', borderRadius: 16, minWidth: 0 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'center', marginBottom: 6 }}>
+    <section className="glass" style={{ padding: 'clamp(16px,3.5vw,24px)', borderRadius: 16, minWidth: 0 }}>
+      {/* Header */}
+      <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', marginBottom: 14 }}>
+        <span style={{ width: 44, height: 44, flex: '0 0 auto', borderRadius: 12, display: 'grid', placeItems: 'center', background: 'linear-gradient(150deg,rgba(201,168,76,0.28),rgba(201,168,76,0.06))', border: '1px solid var(--line)', fontSize: 20 }}>🏅</span>
         <div style={{ minWidth: 0 }}>
-          <h3 className="gold-text" style={{ fontFamily: 'var(--f-serif)', fontSize: 20, margin: 0 }}>Internal Scoring &amp; Top 3</h3>
-          <p style={{ color: 'var(--muted)', fontSize: 12.5, margin: '4px 0 0' }}>
-            Score submissions with the judge rubric. The top 3 by average score go to the judges. This does <strong>not</strong> affect the main rankings.
+          <h3 className="gold-text" style={{ fontFamily: 'var(--f-serif)', fontSize: 'clamp(18px,3.5vw,21px)', margin: 0 }}>Internal Scoring &amp; Top 3</h3>
+          <p style={{ color: 'var(--muted)', fontSize: 12.5, lineHeight: 1.5, margin: '4px 0 0' }}>
+            Score submissions with the judge rubric. Only the <strong>top 3</strong> by average score go to the judges — this does <strong>not</strong> affect the main rankings.
           </p>
         </div>
-        <button className="btn btn--sm btn--solid" disabled={busy || released || scoredCount === 0} onClick={() => void releaseTop3()}>
-          {released ? 'Top 3 sent ✓' : 'Submit Top 3 to Judges'}
-        </button>
       </div>
-      {released && (
-        <p style={{ color: '#8fd6a3', fontSize: 12.5, margin: '0 0 10px' }}>✓ Your top 3 were sent to the judges on {new Date(data!.top3_released_at as string).toLocaleDateString()}.</p>
-      )}
-      {!released && scoredCount === 0 && (
-        <p style={{ color: 'var(--muted)', fontSize: 12.5, margin: '0 0 10px' }}>Score at least one submission to enable sending the top 3.</p>
+
+      {/* Summary chips */}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+        {[['Submissions', rows.length], ['Scored', scoredCount], ['Go to judges', Math.min(3, rows.length)]].map(([label, val]) => (
+          <div key={String(label)} style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid var(--line)', borderRadius: 10, padding: '8px 14px', minWidth: 0 }}>
+            <div className="gold-text" style={{ fontFamily: 'var(--f-serif)', fontSize: 18, lineHeight: 1 }}>{val}</div>
+            <div style={{ color: 'var(--muted)', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '.05em', marginTop: 3 }}>{label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Release action / state */}
+      {released ? (
+        <div style={{ background: 'rgba(120,200,140,0.1)', border: '1px solid rgba(120,200,140,0.35)', borderRadius: 12, padding: '12px 14px', marginBottom: 14 }}>
+          <div style={{ color: '#8fd6a3', fontWeight: 700, fontSize: 13 }}>✓ Sent to the judges</div>
+          <div style={{ color: '#c9e6d2', fontSize: 12.5, marginTop: 3 }}>Your top submissions were sent on {new Date(data!.top3_released_at as string).toLocaleDateString()}. This can only be done once.</div>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 14 }}>
+          <button className="btn btn--solid" style={{ minWidth: 200 }} disabled={busy || scoredCount === 0} onClick={() => setConfirmOpen(true)}>
+            Submit Top {Math.min(3, rows.length) || 3} to Judges
+          </button>
+          {scoredCount === 0
+            ? <span style={{ color: 'var(--muted)', fontSize: 12.5 }}>Score at least one submission first.</span>
+            : <span style={{ color: 'var(--muted)', fontSize: 12.5 }}>You can only submit once — please score everyone first.</span>}
+        </div>
       )}
 
       <div style={{ overflowX: 'auto', minWidth: 0 }}>
@@ -174,6 +196,31 @@ export default function InternalScoring({ role, internal }: { role: 'teacher' | 
           </tbody>
         </table>
       </div>
+
+      {confirmOpen && createPortal(
+        <div onClick={() => !busy && setConfirmOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'grid', placeItems: 'center', padding: 18, zIndex: 9999 }}>
+          <div onClick={(e) => e.stopPropagation()} className="glass" style={{ maxWidth: 460, width: '100%', padding: 24, borderRadius: 16 }}>
+            <h3 className="gold-text" style={{ fontFamily: 'var(--f-serif)', fontSize: 20, margin: '0 0 6px' }}>Send to the judges?</h3>
+            <p style={{ color: 'var(--muted)', fontSize: 13, lineHeight: 1.6, margin: '0 0 12px' }}>
+              These {willSend.length === 1 ? 'submission' : `${willSend.length} submissions`} will be sent to the judges. This can be done <strong style={{ color: '#e59a9a' }}>only once</strong> and cannot be undone.
+            </p>
+            <ol style={{ margin: '0 0 16px', padding: '0 0 0 4px', listStyle: 'none', display: 'grid', gap: 8 }}>
+              {willSend.map((r, i) => (
+                <li key={r.submission_id} style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'rgba(212,175,90,0.08)', border: '1px solid rgba(212,175,90,0.25)', borderRadius: 10, padding: '9px 12px' }}>
+                  <span className="gold-text" style={{ fontFamily: 'var(--f-serif)', fontSize: 16, minWidth: 20 }}>{i + 1}</span>
+                  <span style={{ color: 'var(--ivory)', fontSize: 13.5, fontWeight: 600, flex: 1, minWidth: 0 }}>{r.student_name}</span>
+                  <span style={{ color: 'var(--muted)', fontSize: 12.5 }}>{r.reviewers ? `${r.avg_total}/${r.max_total}` : 'unscored'}</span>
+                </li>
+              ))}
+            </ol>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+              <button className="btn btn--sm" disabled={busy} onClick={() => setConfirmOpen(false)}>Cancel</button>
+              <button className="btn btn--sm btn--solid" disabled={busy} onClick={() => void doRelease()}>{busy ? 'Sending…' : 'Yes, send to judges'}</button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
 
       {detail && createPortal(
         <div onClick={() => !saving && setDetail(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'grid', placeItems: 'center', padding: 18, zIndex: 9999 }}>
