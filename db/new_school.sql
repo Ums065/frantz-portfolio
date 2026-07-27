@@ -80,6 +80,7 @@ CREATE TABLE IF NOT EXISTS new_school_schools (
   administrator_phone     VARCHAR(40) NOT NULL,
   school_website          VARCHAR(255) DEFAULT NULL,
   status                  ENUM('registered','approved','rejected') NOT NULL DEFAULT 'registered',
+  top3_released_at        TIMESTAMP NULL DEFAULT NULL, -- when the school sent its top-3 to the judges
   origin                  ENUM('principal','trendcatch_edu') NOT NULL DEFAULT 'principal',
   claim_status            ENUM('claimed','unclaimed') NOT NULL DEFAULT 'claimed',
   claimed_at              TIMESTAMP NULL DEFAULT NULL,
@@ -242,6 +243,7 @@ CREATE TABLE IF NOT EXISTS new_school_submissions (
   written_url            VARCHAR(255) DEFAULT NULL,
   submission_date        TIMESTAMP NULL DEFAULT NULL,
   status                 ENUM('draft','submitted','approved','rejected','winner') NOT NULL DEFAULT 'draft',
+  judge_released         TINYINT(1) NOT NULL DEFAULT 0, -- 1 only once the school (or the deadline sweep) sends it to the judges
   reviewer_notes         TEXT DEFAULT NULL,
   reviewed_by_user_id    INT DEFAULT NULL,
   reviewed_at            TIMESTAMP NULL DEFAULT NULL,
@@ -291,3 +293,26 @@ CREATE TABLE IF NOT EXISTS new_school_notifications (
   CONSTRAINT fk_new_school_notifications_student
     FOREIGN KEY (student_id) REFERENCES new_school_students(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
+
+-- School-internal scoring pre-round: teacher + principal score submissions with
+-- the judge rubric; only the school's top-3 (by average) are released to judges.
+-- SEPARATE from new_school_judge_scores — never feeds the main ranking.
+CREATE TABLE IF NOT EXISTS new_school_internal_scores (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  submission_id INT NOT NULL,
+  reviewer_user_id INT NOT NULL,
+  reviewer_role ENUM('teacher','principal') NOT NULL,
+  problem SMALLINT NOT NULL DEFAULT 0,
+  solution SMALLINT NOT NULL DEFAULT 0,
+  creativity SMALLINT NOT NULL DEFAULT 0,
+  supporting_evidence SMALLINT NOT NULL DEFAULT 0,
+  community_impact SMALLINT NOT NULL DEFAULT 0,
+  presentation SMALLINT NOT NULL DEFAULT 0,
+  total INT NOT NULL DEFAULT 0,
+  notes TEXT DEFAULT NULL,
+  status ENUM('draft','submitted') NOT NULL DEFAULT 'submitted',
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_internal_reviewer (submission_id, reviewer_user_id),
+  KEY idx_internal_submission (submission_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

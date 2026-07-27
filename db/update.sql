@@ -1677,5 +1677,60 @@ ALTER TABLE new_school_students
   MODIFY overall_status ENUM('student_registered','parent_consent_pending','parent_consent_approved','school_approval_pending','school_approval_approved','teacher_approval_pending','interviews_pending','eligible_to_submit','submission_submitted','submission_complete','rejected') NOT NULL DEFAULT 'student_registered';
 ALTER TABLE new_school_points MODIFY source_type ENUM('interview','project','referral') NOT NULL;
 
+-- ============================================================================
+-- 2026-07 : Business profile extras, internship résumé + chat, and the
+--           school-internal scoring pre-round ("Submit Top 3 to Judges").
+-- ============================================================================
+
+-- Business profile: EIN + manager contact + owner availability.
+CALL add_column_if_missing('business_accounts', 'ein', 'varchar(30) DEFAULT NULL', 'about');
+CALL add_column_if_missing('business_accounts', 'manager_name', 'varchar(120) DEFAULT NULL', 'ein');
+CALL add_column_if_missing('business_accounts', 'manager_phone', 'varchar(40) DEFAULT NULL', 'manager_name');
+CALL add_column_if_missing('business_accounts', 'manager_email', 'varchar(120) DEFAULT NULL', 'manager_phone');
+CALL add_column_if_missing('business_accounts', 'available_days', 'varchar(120) DEFAULT NULL', 'manager_email');
+CALL add_column_if_missing('business_accounts', 'available_from', 'varchar(20) DEFAULT NULL', 'available_days');
+CALL add_column_if_missing('business_accounts', 'available_to', 'varchar(20) DEFAULT NULL', 'available_from');
+
+-- Internship: résumé the student attaches on accept (shared to the business once confirmed).
+CALL add_column_if_missing('business_requests', 'resume_url', 'varchar(255) DEFAULT NULL', 'declined_by');
+
+-- Internship: one-to-one chat between student, business (and admin) once confirmed.
+CREATE TABLE IF NOT EXISTS business_offer_messages (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  request_id INT NOT NULL,
+  sender_role ENUM('student','business','admin') NOT NULL,
+  sender_user_id INT DEFAULT NULL,
+  body TEXT NOT NULL,
+  read_by_student TINYINT(1) NOT NULL DEFAULT 0,
+  read_by_business TINYINT(1) NOT NULL DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_bom_req (request_id, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- School-internal scoring pre-round: only released submissions reach the judges.
+CALL add_column_if_missing('new_school_submissions', 'judge_released', 'tinyint(1) NOT NULL DEFAULT ''0''', 'status');
+CALL add_column_if_missing('new_school_schools', 'top3_released_at', 'timestamp NULL DEFAULT NULL', 'status');
+
+-- Internal (teacher + principal) rubric scores — SEPARATE from new_school_judge_scores; never feeds the main ranking.
+CREATE TABLE IF NOT EXISTS new_school_internal_scores (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  submission_id INT NOT NULL,
+  reviewer_user_id INT NOT NULL,
+  reviewer_role ENUM('teacher','principal') NOT NULL,
+  problem SMALLINT NOT NULL DEFAULT 0,
+  solution SMALLINT NOT NULL DEFAULT 0,
+  creativity SMALLINT NOT NULL DEFAULT 0,
+  supporting_evidence SMALLINT NOT NULL DEFAULT 0,
+  community_impact SMALLINT NOT NULL DEFAULT 0,
+  presentation SMALLINT NOT NULL DEFAULT 0,
+  total INT NOT NULL DEFAULT 0,
+  notes TEXT DEFAULT NULL,
+  status ENUM('draft','submitted') NOT NULL DEFAULT 'submitted',
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_internal_reviewer (submission_id, reviewer_user_id),
+  KEY idx_internal_submission (submission_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 DROP PROCEDURE IF EXISTS add_column_if_missing;
 SET FOREIGN_KEY_CHECKS = 1;

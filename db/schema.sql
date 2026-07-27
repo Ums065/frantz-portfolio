@@ -424,6 +424,14 @@ CREATE TABLE IF NOT EXISTS business_accounts (
   contact_phone VARCHAR(40) DEFAULT NULL,
   website VARCHAR(255) DEFAULT NULL,
   about TEXT DEFAULT NULL,
+  -- EIN (for authorization), manager contact, and owner availability.
+  ein VARCHAR(30) DEFAULT NULL,
+  manager_name VARCHAR(120) DEFAULT NULL,
+  manager_phone VARCHAR(40) DEFAULT NULL,
+  manager_email VARCHAR(120) DEFAULT NULL,
+  available_days VARCHAR(120) DEFAULT NULL,
+  available_from VARCHAR(20) DEFAULT NULL,
+  available_to VARCHAR(20) DEFAULT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_business_name (business_name)
@@ -452,6 +460,8 @@ CREATE TABLE IF NOT EXISTS business_requests (
   skills VARCHAR(400) DEFAULT NULL,
   decline_reason TEXT DEFAULT NULL,
   declined_by VARCHAR(12) DEFAULT NULL,
+  -- Résumé the student attaches on accept (shared to the business once confirmed).
+  resume_url VARCHAR(255) DEFAULT NULL,
   reviewed_by_user_id INT DEFAULT NULL,
   reviewed_at TIMESTAMP NULL DEFAULT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -472,6 +482,20 @@ CREATE TABLE IF NOT EXISTS business_offer_events (
   note TEXT DEFAULT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_boe_req (request_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- One-to-one chat on a confirmed internship offer: student <-> business, with
+-- admin oversight. Gated open only once the offer is confirmed.
+CREATE TABLE IF NOT EXISTS business_offer_messages (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  request_id INT NOT NULL,
+  sender_role ENUM('student','business','admin') NOT NULL,
+  sender_user_id INT DEFAULT NULL,
+  body TEXT NOT NULL,
+  read_by_student TINYINT(1) NOT NULL DEFAULT 0,
+  read_by_business TINYINT(1) NOT NULL DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_bom_req (request_id, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ---------- Our Partners content page (dynamic, admin-editable) ----------
