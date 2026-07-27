@@ -146,7 +146,11 @@ try {
             $stmt->execute([$email]);
             $u = $stmt->fetch();
 
-            if (!$u || !password_verify($pass, $u['password_hash'])) {
+            if (!$u) {
+                // No such account — tell the user the email isn't registered.
+                json(['error' => 'No account found with this email address. Please check it or create an account.', 'field' => 'email'], 401);
+            }
+            if (!password_verify($pass, $u['password_hash'])) {
                 login_fail_record($email); // count this wrong attempt toward the lockout
                 $st = login_fail_status($email);
                 $remaining = max(0, LOGIN_MAX_FAILS - $st['count']);
@@ -161,7 +165,8 @@ try {
                     ], 429);
                 }
                 $resp = [
-                    'error'              => 'Invalid email or password.',
+                    'error'              => 'Incorrect password. Please try again.',
+                    'field'              => 'password',
                     'attempts_used'      => $st['count'],
                     'attempts_remaining' => $remaining,
                     'max'                => LOGIN_MAX_FAILS,
