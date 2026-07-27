@@ -12,9 +12,12 @@
 -- intentionally excluded — it only defines the data STRUCTURE.
 -- ============================================================
 
-CREATE DATABASE IF NOT EXISTS frantz_portfolio
-  CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-USE frantz_portfolio;
+-- IMPORTANT: this script runs against the CURRENTLY SELECTED database. In
+-- phpMyAdmin, first click your live database in the left sidebar, THEN go to
+-- Import and run this file. Do NOT add a `USE <db>` here — on shared hosting the
+-- live database is rarely named "frantz_portfolio", and a wrong USE would create
+-- everything in an empty phantom database while leaving your real one untouched
+-- (the classic "656 queries executed but nothing changed" symptom).
 
 -- FK checks off so tables can be created in any order regardless of
 -- their foreign-key references (restored at the end).
