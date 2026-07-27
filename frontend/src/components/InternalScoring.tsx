@@ -43,8 +43,8 @@ export function InternalRankTable({ rows, myStudentId, title = 'Your School — 
     <section className="glass ns-dash-card ns-dash-card--wide reveal in" style={{ minWidth: 0 }}>
       <div className="ns-dash-card__head"><span className="eyebrow">🏫 {title}</span></div>
       <p style={{ color: 'var(--muted)', fontSize: 12.5, margin: '0 0 12px' }}>Ranked by your teachers’ &amp; principal’s scores. The top 3 are sent to the judges. (This is separate from the main challenge ranking.)</p>
-      <div style={{ overflowX: 'auto', minWidth: 0 }}>
-        <table className="admin-table admin-table--stack" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5 }}>
+      <div className="admin-table-wrap">
+        <table className="admin-table--stack" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5 }}>
           <thead>
             <tr style={{ textAlign: 'left', color: 'var(--muted)' }}>
               <th style={{ padding: '8px 10px' }}>#</th>
@@ -165,37 +165,42 @@ export default function InternalScoring({ role, internal }: { role: 'teacher' | 
         </div>
       )}
 
-      <div style={{ overflowX: 'auto', minWidth: 0 }}>
-        <table className="admin-table admin-table--stack" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5 }}>
-          <thead>
-            <tr style={{ textAlign: 'left', color: 'var(--muted)' }}>
-              <th style={{ padding: '8px 10px' }}>#</th>
-              <th style={{ padding: '8px 10px' }}>Student</th>
-              <th style={{ padding: '8px 10px' }}>Avg score</th>
-              <th style={{ padding: '8px 10px' }}>Reviewers</th>
-              <th style={{ padding: '8px 10px' }}>To judges</th>
-              <th style={{ padding: '8px 10px' }}></th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.length === 0 && (
-              <tr><td colSpan={6} style={{ padding: 14, color: 'var(--muted)' }}>No submitted projects yet.</td></tr>
-            )}
-            {rows.map((r) => (
-              <tr key={r.submission_id} style={{ borderTop: '1px solid var(--line)', background: r.is_top3 ? 'rgba(212,175,90,0.08)' : 'transparent' }}>
-                <td data-label="#" style={{ padding: '8px 10px', fontWeight: 800, color: r.is_top3 ? 'var(--gold-light)' : 'var(--ivory)' }}>{r.rank}{r.is_top3 ? ' ★' : ''}</td>
-                <td data-label="Student" style={{ padding: '8px 10px' }}>{r.student_name}</td>
-                <td data-label="Avg score" style={{ padding: '8px 10px' }}>{r.reviewers ? `${r.avg_total} / ${r.max_total}` : '—'}</td>
-                <td data-label="Reviewers" style={{ padding: '8px 10px' }}>{r.reviewers}</td>
-                <td data-label="To judges" style={{ padding: '8px 10px' }}>{r.judge_released ? <span style={{ color: '#8fd6a3' }}>Sent ✓</span> : '—'}</td>
-                <td data-label="" style={{ padding: '8px 10px' }}>
-                  <button className="btn btn--sm" disabled={busy} onClick={() => void openScore(r.submission_id)}>Score</button>
-                </td>
+      {rows.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '28px 16px', border: '1px dashed var(--line)', borderRadius: 12, color: 'var(--muted)' }}>
+          <div style={{ fontSize: 26, marginBottom: 6 }}>📭</div>
+          <div style={{ fontSize: 13.5 }}>No submitted projects yet.</div>
+          <div style={{ fontSize: 12, marginTop: 4 }}>Once your students submit their work, it will appear here to score.</div>
+        </div>
+      ) : (
+        <div className="admin-table-wrap">
+          <table className="admin-table--stack" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5 }}>
+            <thead>
+              <tr style={{ textAlign: 'left', color: 'var(--muted)' }}>
+                <th style={{ padding: '8px 10px' }}>#</th>
+                <th style={{ padding: '8px 10px' }}>Student</th>
+                <th style={{ padding: '8px 10px' }}>Avg score</th>
+                <th style={{ padding: '8px 10px' }}>Reviewers</th>
+                <th style={{ padding: '8px 10px' }}>To judges</th>
+                <th style={{ padding: '8px 10px' }}></th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.submission_id} style={{ borderTop: '1px solid var(--line)', background: r.is_top3 ? 'rgba(212,175,90,0.08)' : 'transparent' }}>
+                  <td data-label="#" style={{ padding: '8px 10px', fontWeight: 800, color: r.is_top3 ? 'var(--gold-light)' : 'var(--ivory)' }}>{r.rank}{r.is_top3 ? ' ★' : ''}</td>
+                  <td data-label="Student" style={{ padding: '8px 10px' }}>{r.student_name}</td>
+                  <td data-label="Avg score" style={{ padding: '8px 10px' }}>{r.reviewers ? `${r.avg_total} / ${r.max_total}` : '—'}</td>
+                  <td data-label="Reviewers" style={{ padding: '8px 10px' }}>{r.reviewers}</td>
+                  <td data-label="To judges" style={{ padding: '8px 10px' }}>{r.judge_released ? <span style={{ color: '#8fd6a3' }}>Sent ✓</span> : '—'}</td>
+                  <td data-label="" style={{ padding: '8px 10px' }}>
+                    <button className="btn btn--sm" disabled={busy} onClick={() => void openScore(r.submission_id)}>Score</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {confirmOpen && createPortal(
         <div onClick={() => !busy && setConfirmOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'grid', placeItems: 'center', padding: 18, zIndex: 9999 }}>
