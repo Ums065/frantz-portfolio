@@ -304,6 +304,9 @@ function new_school_build_student_context(array $student): array
         'approvals' => new_school_fetch_student_approvals($studentId),
         'submission' => $submission,
         'winner' => $winner,
+        // School-internal ranking (avg of teacher+principal scores) so the student
+        // can see where they stand within their school. Read-only leaderboard.
+        'internal_rank' => $school ? new_school_internal_rank((int) $school['id']) : [],
         'scholarship' => [
             'completed' => $scholarship !== null && !empty($scholarship['completed']),
             'answers' => $scholarship['answers'] ?? [],

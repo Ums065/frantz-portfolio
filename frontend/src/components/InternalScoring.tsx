@@ -34,6 +34,44 @@ interface ScoreDetail {
 
 const box: React.CSSProperties = { background: 'rgba(0,0,0,0.25)', border: '1px solid var(--line)', borderRadius: 10, padding: '10px 12px', color: 'var(--ivory)', fontSize: 14, width: '100%', boxSizing: 'border-box' }
 
+/* Read-only school-internal ranking table for students/parents — highlights the
+   viewing student and marks the top 3 that go to the judges. */
+export function InternalRankTable({ rows, myStudentId, title = 'Your School — Internal Ranking' }: { rows?: InternalRankRow[]; myStudentId?: number; title?: string }) {
+  const list = rows ?? []
+  if (list.length === 0) return null
+  return (
+    <section className="glass ns-dash-card ns-dash-card--wide reveal in" style={{ minWidth: 0 }}>
+      <div className="ns-dash-card__head"><span className="eyebrow">🏫 {title}</span></div>
+      <p style={{ color: 'var(--muted)', fontSize: 12.5, margin: '0 0 12px' }}>Ranked by your teachers’ &amp; principal’s scores. The top 3 are sent to the judges. (This is separate from the main challenge ranking.)</p>
+      <div style={{ overflowX: 'auto', minWidth: 0 }}>
+        <table className="admin-table admin-table--stack" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5 }}>
+          <thead>
+            <tr style={{ textAlign: 'left', color: 'var(--muted)' }}>
+              <th style={{ padding: '8px 10px' }}>#</th>
+              <th style={{ padding: '8px 10px' }}>Student</th>
+              <th style={{ padding: '8px 10px' }}>Score</th>
+              <th style={{ padding: '8px 10px' }}>To judges</th>
+            </tr>
+          </thead>
+          <tbody>
+            {list.map((r) => {
+              const me = myStudentId != null && r.student_id === myStudentId
+              return (
+                <tr key={r.submission_id} style={{ borderTop: '1px solid var(--line)', background: me ? 'rgba(120,180,255,0.12)' : r.is_top3 ? 'rgba(212,175,90,0.08)' : 'transparent' }}>
+                  <td data-label="#" style={{ padding: '8px 10px', fontWeight: 800, color: r.is_top3 ? 'var(--gold-light)' : 'var(--ivory)' }}>{r.rank}{r.is_top3 ? ' ★' : ''}</td>
+                  <td data-label="Student" style={{ padding: '8px 10px' }}>{r.student_name}{me ? <strong style={{ color: '#9ec5ff' }}> · You</strong> : ''}</td>
+                  <td data-label="Score" style={{ padding: '8px 10px' }}>{r.reviewers ? `${r.avg_total} / ${r.max_total}` : 'Not scored yet'}</td>
+                  <td data-label="To judges" style={{ padding: '8px 10px' }}>{r.judge_released ? <span style={{ color: '#8fd6a3' }}>Sent ✓</span> : '—'}</td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  )
+}
+
 export default function InternalScoring({ role, internal }: { role: 'teacher' | 'principal'; internal?: InternalBlock }) {
   const [data, setData] = useState<InternalBlock | null>(internal ?? null)
   const [busy, setBusy] = useState(false)

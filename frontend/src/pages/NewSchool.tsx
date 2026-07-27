@@ -14,7 +14,7 @@ import DashboardGuide from '../components/DashboardGuide'
 import OfferStepper, { Confetti, type OfferStage, type OfferEvent } from '../components/OfferStepper'
 import OfferChat from '../components/OfferChat'
 import ProfileSection from '../components/profile/ProfileSection'
-import InternalScoring, { type InternalBlock } from '../components/InternalScoring'
+import InternalScoring, { InternalRankTable, type InternalBlock, type InternalRankRow } from '../components/InternalScoring'
 import ScholarshipWizard, { type ScholarshipAnswer } from '../components/ScholarshipWizard'
 import NsRecordDetail from '../components/NsRecordDetail'
 import ChallengeRegistration from '../components/ChallengeRegistration'
@@ -3239,6 +3239,12 @@ export default function NewSchool() {
                 <p className="ns-muted">This tab is your student profile overview. It shows your school link, teacher link, and scholarship progress.</p>
               </article>
 
+              {dashboardTab === 'rankings' && (
+                <InternalRankTable
+                  rows={(studentDashboard as { internal_rank?: InternalRankRow[] }).internal_rank}
+                  myStudentId={(studentDashboard.student as { id?: number } | undefined)?.id}
+                />
+              )}
               <article className="glass ns-dash-card ns-dash-card--wide reveal in ns-leaderboard-card" hidden={dashboardTab !== 'rankings'}>
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">Competition Leaderboard</span>
