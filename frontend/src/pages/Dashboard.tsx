@@ -16,6 +16,7 @@ import { useAuth } from '../context/AuthContext'
 import { useSeo } from '../hooks/useSeo'
 import { ProfilePhotoCard } from '../components/profile/ProfileSection'
 import AnnouncementsFeed from '../components/AnnouncementsFeed'
+import NotificationBell from '../components/NotificationBell'
 
 interface DashboardData {
   user: User
@@ -218,6 +219,7 @@ export default function Dashboard() {
               <strong>{displayName || user.email}</strong>
               <p>{user.email}</p>
             </div>
+            <div style={{ marginLeft: 'auto' }}><NotificationBell /></div>
           </div>
           <div className="dashboard-hero__panel-grid">
             <div>

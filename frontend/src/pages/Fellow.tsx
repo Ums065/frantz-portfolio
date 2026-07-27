@@ -6,6 +6,7 @@ import { useSeo } from '../hooks/useSeo'
 import SheetImport from '../components/SheetImport'
 import ProfileSection from '../components/profile/ProfileSection'
 import AnnouncementsFeed, { useAnnouncementBadge } from '../components/AnnouncementsFeed'
+import NotificationBell from '../components/NotificationBell'
 import {
   RESEARCH_CATEGORIES, EMPTY_ENTRY_FORM,
   type ResearchCategory, type ResearchEntry, type CategoryConfig,
@@ -149,7 +150,10 @@ export default function Fellow() {
               <h1 className="gold-text" style={{ fontFamily: 'var(--f-serif)', fontSize: 'clamp(20px,4vw,26px)', margin: '2px 0 0' }}>Research Workspace</h1>
               <p style={{ color: 'var(--muted)', fontSize: 13, margin: 0, overflowWrap: 'anywhere' }}>Signed in as {user?.full_name}</p>
             </div>
-            <button className="btn btn--sm" onClick={() => void logout()}>Log out</button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <NotificationBell />
+              <button className="btn btn--sm" onClick={() => void logout()}>Log out</button>
+            </div>
           </header>
 
           {/* Tabs */}

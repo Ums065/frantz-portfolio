@@ -10,6 +10,7 @@ import { useLiveRefresh } from '../hooks/useLiveRefresh'
 import { statHint } from '../lib/statHints'
 import ProfileSection, { AvatarPicker } from '../components/profile/ProfileSection'
 import OfferChat from '../components/OfferChat'
+import NotificationBell from '../components/NotificationBell'
 
 /* Business Portal — access, review & opportunity requests for a verified business.
    The business is NOT a judge: it cannot rate, score or rank students, and cannot
@@ -394,11 +395,14 @@ export default function Business() {
         </aside>
 
         <main className="admin-main">
-          <header style={{ margin: '6px 0 20px' }}>
-            <span style={eyebrow}>Business Portal</span>
-            <h1 className="gold-text" style={{ fontFamily: 'var(--f-serif)', fontSize: 28, margin: '4px 0 0' }}>
-              {NAV.find((n) => n.key === tab)?.label.replace(/\s*\(.*\)/, '')}
-            </h1>
+          <header style={{ margin: '6px 0 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+            <div>
+              <span style={eyebrow}>Business Portal</span>
+              <h1 className="gold-text" style={{ fontFamily: 'var(--f-serif)', fontSize: 28, margin: '4px 0 0' }}>
+                {NAV.find((n) => n.key === tab)?.label.replace(/\s*\(.*\)/, '')}
+              </h1>
+            </div>
+            <NotificationBell />
           </header>
 
           {err && <p style={{ color: '#ff9a9a', fontSize: 13, marginBottom: 14 }}>{err}</p>}

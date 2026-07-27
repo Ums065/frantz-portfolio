@@ -1500,6 +1500,17 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             json(['announcements' => ecosystem_announcements_for_role((string) ($u['role'] ?? ''))]);
         }
 
+        // Unified notifications bell: per-user feed + unread count (role-scoped).
+        case $key === 'GET notifications/feed': {
+            $u = require_login();
+            json(notifications_feed_for_user($u));
+        }
+        case $key === 'POST notifications/read-all': {
+            $u = require_login();
+            notifications_mark_all_read($u);
+            json(notifications_feed_for_user($u));
+        }
+
         /* ---------------- ADMIN: ecosystem documents / requests / announcements ---------------- */
         case $key === 'GET admin/ecosystem/accounts': {
             require_admin();

@@ -15,6 +15,7 @@ import OfferStepper, { Confetti, type OfferStage, type OfferEvent } from '../com
 import OfferChat from '../components/OfferChat'
 import ProfileSection from '../components/profile/ProfileSection'
 import InternalScoring, { InternalRankTable, type InternalBlock, type InternalRankRow } from '../components/InternalScoring'
+import NotificationBell from '../components/NotificationBell'
 import ScholarshipWizard, { type ScholarshipAnswer } from '../components/ScholarshipWizard'
 import NsRecordDetail from '../components/NsRecordDetail'
 import ChallengeRegistration from '../components/ChallengeRegistration'
@@ -2970,6 +2971,7 @@ export default function NewSchool() {
                     <button className="btn btn--sm ns-guide-btn" type="button" onClick={() => setGuideOpen(true)} title="Open the guide and rule book">📘 Guide &amp; Rules</button>
                     <span className="ns-principal-topbar__live"><i aria-hidden="true" />Live</span>
                     <span className="ns-principal-topbar__role">{dashboardRoleLabel}</span>
+                    <NotificationBell />
                     <span className="ns-principal-topbar__avatar" aria-hidden="true">{avatarInner(user?.full_name, user?.avatar_url)}</span>
                   </div>
                 </header>

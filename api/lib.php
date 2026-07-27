@@ -6241,6 +6241,64 @@ function new_school_fetch_notifications_for_scope(array $studentIds, array $role
     return $rows;
 }
 
+/** Resolve which notification rows a user may see: ['admin'=>true] OR ['ids'=>[], 'roles'=>[]]. */
+function notifications_scope_for_user(array $user): array
+{
+    $role = (string) ($user['role'] ?? '');
+    $uid = (int) ($user['id'] ?? 0);
+    if (in_array($role, ['admin', 'super_admin', 'editor'], true)) return ['admin' => true];
+    if ($role === 'student') { $s = new_school_fetch_student_by_user_id($uid); return ['ids' => $s ? [(int) $s['id']] : [], 'roles' => ['student']]; }
+    if ($role === 'parent') { $p = new_school_fetch_parent_by_user_id($uid); return ['ids' => $p ? [(int) $p['student_id']] : [], 'roles' => ['parent']]; }
+    if ($role === 'teacher') {
+        $t = new_school_fetch_teacher_by_user_id($uid); $ids = [];
+        if ($t) foreach (new_school_fetch_students_for_teacher($t) as $r) { $ids[] = (int) $r['id']; }
+        return ['ids' => $ids, 'roles' => ['teacher']];
+    }
+    if ($role === 'school') {
+        $sc = new_school_fetch_school_by_user_id($uid); $ids = [];
+        if ($sc) foreach (new_school_fetch_students_for_school($sc) as $r) { $ids[] = (int) $r['id']; }
+        return ['ids' => $ids, 'roles' => ['school']];
+    }
+    return ['ids' => [], 'roles' => []]; // judge/fellow/business/ecosystem/member: no NS rows (announcements only)
+}
+
+/** Unified notifications feed for the signed-in user: {items, unread}. */
+function notifications_feed_for_user(array $user, int $limit = 20): array
+{
+    new_school_workflow_ensure_schema();
+    $scope = notifications_scope_for_user($user);
+    if (!empty($scope['admin'])) {
+        $rows = db()->query('SELECT * FROM new_school_notifications ORDER BY created_at DESC LIMIT ' . max(1, $limit))->fetchAll();
+    } else {
+        $rows = new_school_fetch_notifications_for_scope($scope['ids'] ?? [], $scope['roles'] ?? [], $limit);
+    }
+    $items = array_map(static fn(array $r): array => [
+        'id'         => (int) $r['id'],
+        'type'       => (string) ($r['notification_type'] ?? ''),
+        'title'      => (string) ($r['title'] ?? ''),
+        'message'    => (string) ($r['message'] ?? ''),
+        'is_read'    => (int) ($r['is_read'] ?? 0) === 1,
+        'created_ts' => isset($r['created_at']) ? strtotime((string) $r['created_at']) : 0,
+    ], $rows);
+    return ['items' => $items, 'unread' => count(array_filter($items, static fn(array $i): bool => !$i['is_read']))];
+}
+
+/** Mark all of the user's own notifications read (never touches shared 'all' rows for non-admins). */
+function notifications_mark_all_read(array $user): void
+{
+    new_school_workflow_ensure_schema();
+    $scope = notifications_scope_for_user($user);
+    $pdo = db();
+    if (!empty($scope['admin'])) { $pdo->exec('UPDATE new_school_notifications SET is_read = 1, read_at = COALESCE(read_at, NOW()) WHERE is_read = 0'); return; }
+    $ids = array_values(array_filter(array_map('intval', $scope['ids'] ?? []), static fn(int $i): bool => $i > 0));
+    $roles = array_values(array_filter($scope['roles'] ?? [], static fn($r): bool => $r !== ''));
+    $clauses = []; $params = [];
+    if ($ids) { $clauses[] = 'student_id IN (' . new_school_placeholder_list(count($ids)) . ')'; $params = array_merge($params, $ids); }
+    if ($roles) { $clauses[] = 'recipient_role IN (' . new_school_placeholder_list(count($roles)) . ')'; $params = array_merge($params, $roles); }
+    if (!$clauses) return;
+    $pdo->prepare('UPDATE new_school_notifications SET is_read = 1, read_at = COALESCE(read_at, NOW()) WHERE is_read = 0 AND (' . implode(' OR ', $clauses) . ')')->execute($params);
+}
+
 function new_school_add_notification(?int $studentId, string $recipientRole, string $type, string $title, string $message, array $payload = []): void
 {
     $stmt = db()->prepare(

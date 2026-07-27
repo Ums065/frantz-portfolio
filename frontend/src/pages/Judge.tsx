@@ -7,6 +7,7 @@ import { useSeo } from '../hooks/useSeo'
 import { HANDBOOK_SECTIONS, JUDGE_FAQ, JUDGE_SUPPORT } from '../lib/judgeHandbook'
 import ProfileSection from '../components/profile/ProfileSection'
 import AnnouncementsFeed, { useAnnouncementBadge } from '../components/AnnouncementsFeed'
+import NotificationBell from '../components/NotificationBell'
 
 const WRAP_S: React.CSSProperties = { minHeight: '100vh', color: 'var(--white)', padding: '0 24px 60px', fontFamily: 'var(--f-body)' }
 const thS: React.CSSProperties = { textAlign: 'left', padding: '14px 16px', color: 'var(--gold-light)', fontWeight: 600, borderBottom: '1px solid var(--line)', textTransform: 'uppercase', fontSize: 11, letterSpacing: '.06em' }
@@ -423,12 +424,13 @@ export default function Judge() {
         </aside>
 
         <main className="admin-main">
-          <header className="admin-main__header glass">
+          <header className="admin-main__header glass" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
             <div>
               <span className="admin-kicker">Judge Dashboard</span>
               <h1 className="gold-text" style={{ fontFamily: 'var(--f-serif)', fontSize: 26, marginTop: 4 }}>{activeLabel}</h1>
               <p style={{ color: 'var(--muted)', fontSize: 13 }}>Signed in as {user?.full_name} · judge</p>
             </div>
+            <NotificationBell />
           </header>
 
           {listBusy && <p className="admin-muted" style={{ color: 'var(--muted)' }}>Loading…</p>}

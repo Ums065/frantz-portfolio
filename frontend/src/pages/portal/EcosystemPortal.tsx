@@ -8,6 +8,7 @@ import { useLiveRefresh } from '../../hooks/useLiveRefresh'
 import { statHint } from '../../lib/statHints'
 import { resolveDashboardRoute } from '../../lib/dashboardRoute'
 import ProfileSection, { AvatarPicker } from '../../components/profile/ProfileSection'
+import NotificationBell from '../../components/NotificationBell'
 
 /* Shared shell for the ecosystem role portals (Sponsor / Partner / Media /
    Volunteer). Owns the login / register / pending / wrong-role states and the
@@ -468,9 +469,12 @@ function TabbedDashboard({ config, data, reload, logout, orgName }: { config: Po
         <button className="btn btn--sm" style={{ margin: 16 }} onClick={() => logout()}>Sign Out</button>
       </aside>
       <main className="admin-main">
-        <header style={{ margin: '6px 0 18px' }}>
-          <span style={S.eyebrow}>{config.title}</span>
-          <h1 className="gold-text" style={{ fontFamily: 'var(--f-serif)', fontSize: 'clamp(22px,4vw,28px)', margin: '4px 0 0' }}>{active.label}</h1>
+        <header style={{ margin: '6px 0 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+          <div>
+            <span style={S.eyebrow}>{config.title}</span>
+            <h1 className="gold-text" style={{ fontFamily: 'var(--f-serif)', fontSize: 'clamp(22px,4vw,28px)', margin: '4px 0 0' }}>{active.label}</h1>
+          </div>
+          <NotificationBell />
         </header>
         {tiles.length > 0 && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(130px,100%),1fr))', gap: 14, marginBottom: 20, minWidth: 0 }}>
