@@ -181,19 +181,31 @@ export function ChangePasswordCard() {
     } catch (e) { setErr(e instanceof Error ? e.message : 'Could not change your password.') }
     finally { setBusy(false) }
   }
-  const fieldS: React.CSSProperties = { display: 'grid', gap: 5, minWidth: 0 }
-  const labelS: React.CSSProperties = { fontSize: 11, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--gold-light)' }
+  const fieldS: React.CSSProperties = { display: 'grid', gap: 7, minWidth: 0 }
+  const labelS: React.CSSProperties = { fontSize: 11.5, fontWeight: 700, letterSpacing: '.05em', textTransform: 'uppercase', color: 'var(--gold-light)' }
   return (
-    <article className="glass" style={cardS}>
-      <h3 style={headS}>Change Password</h3>
-      <form onSubmit={submit} noValidate>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(200px,100%),1fr))', gap: 12, minWidth: 0 }}>
-          <label style={{ ...fieldS, gridColumn: '1 / -1' }}><span style={labelS}>Current Password</span><PasswordField name="current_password" autoComplete="current-password" /></label>
+    <article className="glass" style={{ ...cardS, padding: 'clamp(20px,3.5vw,28px)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 6 }}>
+        <span style={{ width: 42, height: 42, flex: '0 0 auto', borderRadius: 12, display: 'grid', placeItems: 'center', background: 'linear-gradient(150deg,rgba(201,168,76,0.28),rgba(201,168,76,0.06))', border: '1px solid var(--line)', color: 'var(--gold-light)' }}>
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth={1.7}><rect x="4" y="10" width="16" height="11" rx="2" /><path d="M8 10V7a4 4 0 018 0v3" /><circle cx="12" cy="15.5" r="1.4" fill="currentColor" stroke="none" /></svg>
+        </span>
+        <div style={{ minWidth: 0 }}>
+          <h3 style={{ ...headS, margin: 0 }}>Change Password</h3>
+          <p style={{ fontSize: 12, color: 'var(--muted)', margin: '3px 0 0' }}>Keep your account secure with a strong password.</p>
+        </div>
+      </div>
+      <div style={{ height: 1, background: 'var(--line)', margin: '14px 0 18px' }} />
+      <form onSubmit={submit} noValidate style={{ display: 'grid', gap: 16, minWidth: 0 }}>
+        <label style={fieldS}><span style={labelS}>Current Password</span><PasswordField name="current_password" autoComplete="current-password" /></label>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(220px,100%),1fr))', gap: 16, minWidth: 0 }}>
           <label style={fieldS}><span style={labelS}>New Password</span><PasswordField name="new_password" /></label>
           <label style={fieldS}><span style={labelS}>Confirm New Password</span><PasswordField name="confirm_new_password" /></label>
         </div>
-        {err && <p style={errS}>{err}</p>}
-        <button className="btn btn--sm btn--solid" type="submit" disabled={busy} style={{ marginTop: 14 }}>{busy ? 'Saving…' : 'Update Password'}</button>
+        <p style={{ fontSize: 11.5, color: 'var(--muted)', margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ color: 'var(--gold-light)' }}>ⓘ</span> At least 8 characters, including a letter and a number.
+        </p>
+        {err && <p style={{ ...errS, margin: 0 }}>{err}</p>}
+        <button className="btn btn--solid" type="submit" disabled={busy} style={{ justifySelf: 'start', minWidth: 180 }}>{busy ? 'Saving…' : 'Update Password'}</button>
       </form>
     </article>
   )
