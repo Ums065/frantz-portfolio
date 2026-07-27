@@ -40,25 +40,28 @@ const NAV_GROUPS: Array<{ group: string; items: NavItem[] }> = [
     { key: 'traffic', label: 'Traffic' },
   ] },
   { group: 'New School Challenge', items: [
+    // In challenge lifecycle order: schools set up → students work → judged → results.
     { key: 'ns-schools', label: 'School Dashboard' },
-    { key: 'ns-submissions', label: 'Student Submissions' },
-    { key: 'ns-ranking', label: 'Ranking' },
-    { key: 'ns-judges', label: 'Judges & Scoring' },
+    { key: 'ns-trendcatch', label: 'TrendCatch EDU' },
     { key: 'ns-interviews', label: 'Business Interviews' },
+    { key: 'ns-submissions', label: 'Student Submissions' },
+    { key: 'ns-judges', label: 'Judges & Scoring' },
+    { key: 'ns-ranking', label: 'Ranking' },
     { key: 'ns-timeline', label: 'Challenge Timeline' },
     { key: 'ns-chat', label: 'Messages' },
-    { key: 'ns-trendcatch', label: 'TrendCatch EDU' },
   ] },
   { group: 'Partnerships & Outreach', items: [
+    // Requests to act on first, then standing partner directories.
     { key: 'business-requests', label: 'Business Requests' },
     { key: 'ecosystem', label: 'Ecosystem' },
+    { key: 'research', label: 'Research (Fellow)' },
     { key: 'sponsors', label: 'Founding Sponsors' },
     { key: 'partners', label: 'Partners' },
-    { key: 'research', label: 'Research (Fellow)' },
   ] },
   { group: 'Accounts', items: [
-    { key: 'members', label: 'User Accounts' },
+    // Approvals need attention first, then the full directory.
     { key: 'approvals', label: 'Account Approvals' },
+    { key: 'members', label: 'User Accounts' },
   ] },
   { group: 'Inbox', items: [
     { key: 'contacts', label: 'Contact Messages' },
