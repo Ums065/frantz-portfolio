@@ -136,7 +136,9 @@ try {
             rate_limit('auth_login', 12, 900); // H2: throttle password brute-force per IP
             $b     = body();
             $email = require_email(field($b, 'email'));
-            rate_limit('auth_login_acct', 15, 900, strtolower($email)); // H2: also throttle per-account (defeats IP rotation)
+            // Account lockout: block sign-in if this account has 10+ recent wrong
+            // passwords (locked ~30 min). Runs before we check the password.
+            login_lock_check($email);
             $pass  = field($b, 'password');
 
             $pdo = db();
@@ -145,6 +147,7 @@ try {
             $u = $stmt->fetch();
 
             if (!$u || !password_verify($pass, $u['password_hash'])) {
+                login_fail_record($email); // count this wrong attempt toward the lockout
                 json(['error' => 'Invalid email or password.'], 401);
             }
             if ((string) ($u['approval_status'] ?? 'pending') === 'rejected') {
@@ -176,6 +179,7 @@ try {
                 }
 
                 $pdo->commit();
+                login_fail_clear($email); // successful sign-in resets the lockout counter
                 $activeUser = login_user($activeUser);
                 json(['user' => $activeUser, 'message' => 'Welcome back.', 'csrfToken' => csrf_token()]);
             } catch (Throwable $e) {

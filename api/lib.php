@@ -214,6 +214,56 @@ function rate_limit(string $action, int $max, int $windowSeconds, ?string $id = 
     }
 }
 
+/* ---- Account lockout: too many WRONG passwords locks the account temporarily ---- */
+const LOGIN_MAX_FAILS = 10;      // wrong-password attempts allowed…
+const LOGIN_LOCK_SECONDS = 1800; // …within / lock duration = 30 minutes.
+
+/** The rate_limits bucket that tracks failed logins for one account. */
+function login_fail_bucket(string $email): string
+{
+    return mb_substr('login_fail:' . strtolower(trim($email)), 0, 140);
+}
+
+/**
+ * If the account has too many recent failed logins, block sign-in with 429 and a
+ * clear "locked for N minutes" message. Only WRONG-password attempts are counted
+ * (recorded by login_fail_record); a successful login clears them. Fails OPEN.
+ */
+function login_lock_check(string $email): void
+{
+    rate_limit_ensure_schema();
+    try {
+        $c = db()->prepare(
+            'SELECT COUNT(*) AS c, TIMESTAMPDIFF(SECOND, MIN(created_at), NOW()) AS age
+             FROM rate_limits WHERE bucket = ? AND created_at >= (NOW() - INTERVAL ' . LOGIN_LOCK_SECONDS . ' SECOND)'
+        );
+        $c->execute([login_fail_bucket($email)]);
+        $row = $c->fetch() ?: [];
+        if ((int) ($row['c'] ?? 0) >= LOGIN_MAX_FAILS) {
+            $remaining = LOGIN_LOCK_SECONDS - (int) ($row['age'] ?? 0);
+            $mins = max(1, (int) ceil($remaining / 60));
+            json(['error' => "Too many incorrect password attempts. This account is locked for security — please try again in about $mins minute" . ($mins === 1 ? '' : 's') . ", or reset your password."], 429);
+        }
+    } catch (Throwable $e) {
+        if (app_debug()) error_log('login_lock_check: ' . $e->getMessage());
+    }
+}
+
+/** Record one failed login attempt for an account. */
+function login_fail_record(string $email): void
+{
+    rate_limit_ensure_schema();
+    try { db()->prepare('INSERT INTO rate_limits (bucket) VALUES (?)')->execute([login_fail_bucket($email)]); }
+    catch (Throwable $e) { if (app_debug()) error_log('login_fail_record: ' . $e->getMessage()); }
+}
+
+/** Clear an account's failed-login history (called after a successful sign-in). */
+function login_fail_clear(string $email): void
+{
+    try { db()->prepare('DELETE FROM rate_limits WHERE bucket = ?')->execute([login_fail_bucket($email)]); }
+    catch (Throwable $e) { if (app_debug()) error_log('login_fail_clear: ' . $e->getMessage()); }
+}
+
 /**
  * Central password-policy check (audit INFO-1). Requires at least 8 characters
  * with a letter AND a number. Sends HTTP 422 and exits on failure. Call this at
