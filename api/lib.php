@@ -126,6 +126,62 @@ function ensure_session_version_column(): void
     }
 }
 
+/**
+ * Bump this whenever the schema changes (new table / column / enum). On the first
+ * request after a deploy, db_auto_migrate() notices the stored version is behind
+ * and runs every *_ensure_schema() once; afterwards it's a single cheap SELECT.
+ */
+const APP_SCHEMA_VERSION = 20260702; // yyyymmdd + seq — raise on each schema change
+
+/**
+ * One-shot, version-gated auto-migration. Runs on app bootstrap: if the DB's
+ * recorded schema version is behind the code's APP_SCHEMA_VERSION, it runs all
+ * idempotent ensure-schema routines (CREATE TABLE IF NOT EXISTS / add-column
+ * guards) then records the new version. Safe to run concurrently (every step is
+ * idempotent) and fails OPEN so a migration hiccup never takes the site down.
+ */
+function db_auto_migrate(): void
+{
+    static $done = false;
+    if ($done) return;
+    $done = true;
+    try {
+        $pdo = db();
+        $pdo->exec("CREATE TABLE IF NOT EXISTS app_meta (meta_key VARCHAR(64) NOT NULL PRIMARY KEY, meta_value VARCHAR(255) DEFAULT NULL, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        $cur = (int) ($pdo->query("SELECT meta_value FROM app_meta WHERE meta_key = 'schema_version' LIMIT 1")->fetchColumn() ?: 0);
+        if ($cur >= APP_SCHEMA_VERSION) return; // up to date — cheap path, nothing to do
+
+        // Serialize concurrent deploys so two first-requests don't both migrate.
+        $locked = false;
+        try { $locked = (bool) $pdo->query("SELECT GET_LOCK('fc_migrate', 5)")->fetchColumn(); } catch (Throwable $e) { /* no lock support → proceed, steps are idempotent */ }
+        try {
+            // Re-check under the lock in case another request just finished.
+            $cur = (int) ($pdo->query("SELECT meta_value FROM app_meta WHERE meta_key = 'schema_version' LIMIT 1")->fetchColumn() ?: 0);
+            if ($cur < APP_SCHEMA_VERSION) {
+                foreach ([
+                    'ensure_session_version_column', 'roles_ensure_enum', 'rate_limit_ensure_schema',
+                    'site_visits_ensure_schema', 'gallery_ensure_schema', 'sponsor_ensure_schema',
+                    'terms_acceptances_ensure_schema', 'new_school_chat_ensure_schema', 'new_school_scholarship_ensure_schema',
+                    'new_school_points_ensure_schema', 'new_school_judge_ensure_schema', 'new_school_workflow_ensure_schema',
+                    'new_school_parents_ensure_link_columns', 'partners_ensure_schema', 'business_ensure_schema',
+                    'ecosystem_ensure_schema', 'ecosystem_shared_ensure_schema', 'referral_ensure_schema',
+                    'mail_queue_ensure_schema', 'password_reset_ensure_schema', 'research_ensure_schema',
+                ] as $fn) {
+                    if (function_exists($fn)) {
+                        try { $fn(); } catch (Throwable $e) { if (app_debug()) error_log("db_auto_migrate $fn: " . $e->getMessage()); }
+                    }
+                }
+                $pdo->prepare("INSERT INTO app_meta (meta_key, meta_value) VALUES ('schema_version', ?) ON DUPLICATE KEY UPDATE meta_value = VALUES(meta_value), updated_at = NOW()")
+                    ->execute([(string) APP_SCHEMA_VERSION]);
+            }
+        } finally {
+            if ($locked) { try { $pdo->query("SELECT RELEASE_LOCK('fc_migrate')"); } catch (Throwable $e) { /* ignore */ } }
+        }
+    } catch (Throwable $e) {
+        if (app_debug()) error_log('db_auto_migrate: ' . $e->getMessage());
+    }
+}
+
 function current_user(): ?array
 {
     if (empty($_SESSION['uid'])) {

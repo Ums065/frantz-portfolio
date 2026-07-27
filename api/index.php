@@ -19,6 +19,11 @@ require __DIR__ . '/config.php';
 require __DIR__ . '/lib.php';
 require __DIR__ . '/new_school_routes.php';
 
+// Auto-migration: on the first request after a deploy (when APP_SCHEMA_VERSION
+// has been bumped) this runs all idempotent schema routines once, then it's a
+// single cheap version check. Fails open so it never blocks a request.
+db_auto_migrate();
+
 require_csrf();
 
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
