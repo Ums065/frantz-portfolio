@@ -1074,6 +1074,8 @@ export default function NewSchool() {
   const [chatMessages, setChatMessages] = useState<any[]>([])
   const [chatInput, setChatInput] = useState('')
   const [chatBusy, setChatBusy] = useState(false)
+  const [chatAttach, setChatAttach] = useState('')
+  const [chatAttachName, setChatAttachName] = useState('')
   const [parentLink, setParentLink] = useState<any>(null)
   const [busy, setBusy] = useState('')
   const [registrationTag, setRegistrationTag] = useState<RegistrationTag>('student')
@@ -1209,17 +1211,23 @@ export default function NewSchool() {
   const sendChat = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const text = chatInput.trim()
-    if (!text || chatBusy) return
+    if ((!text && !chatAttach) || chatBusy) return
     setChatBusy(true)
     try {
-      const d = await api.post<any>('new-school/chat', { body: text })
+      const d = await api.post<any>('new-school/chat', { body: text, attachment_url: chatAttach })
       setChatMessages(Array.isArray(d?.messages) ? d.messages : [])
-      setChatInput('')
+      setChatInput(''); setChatAttach(''); setChatAttachName('')
     } catch (err) {
       handleError(err, 'Could not send your message.')
     } finally {
       setChatBusy(false)
     }
+  }
+  const pickChatFile = async (file?: File) => {
+    if (!file) return
+    setChatBusy(true)
+    try { const { url } = await api.upload<{ url: string }>('new-school/upload', file); setChatAttach(url); setChatAttachName(file.name) }
+    catch (err) { handleError(err, 'Could not attach the file.') } finally { setChatBusy(false) }
   }
   const clearChatForMe = async () => {
     if (!confirm('Clear this chat from your view? The admin team keeps the full history.')) return
@@ -3069,14 +3077,19 @@ export default function NewSchool() {
                       {chatMessages.map((m: any) => (
                         <div key={m.id} className={`ns-chat__msg ns-chat__msg--${m.sender === 'admin' ? 'admin' : 'me'}`}>
                           <span className="ns-chat__who">{m.sender === 'admin' ? 'Admin' : 'You'}</span>
-                          <p>{m.body}</p>
+                          {m.body && <p>{m.body}</p>}
+                          {m.attachment_url && (/\.(png|jpe?g|webp|gif)$/i.test(m.attachment_url)
+                            ? <a href={m.attachment_url} target="_blank" rel="noopener noreferrer"><img src={m.attachment_url} alt="attachment" style={{ maxWidth: '100%', maxHeight: 160, borderRadius: 8, display: 'block', marginTop: 4 }} /></a>
+                            : <a href={m.attachment_url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--gold-light)', fontSize: 12.5 }}>📎 Attachment</a>)}
                           <span className="ns-chat__time">{m.created_at}</span>
                         </div>
                       ))}
                     </div>
+                    {chatAttachName && <div style={{ fontSize: 12, color: 'var(--gold-light)', padding: '4px 2px' }}>📎 {chatAttachName} <button type="button" onClick={() => { setChatAttach(''); setChatAttachName('') }} style={{ background: 'none', border: 0, color: 'var(--muted)', cursor: 'pointer' }}>✕</button></div>}
                     <form className="ns-chat__form" onSubmit={sendChat}>
+                      <label className="btn btn--sm" title="Attach a file" style={{ cursor: 'pointer', padding: '8px 11px' }}>📎<input type="file" accept="image/*,.pdf,.doc,.docx" hidden disabled={chatBusy} onChange={(e) => pickChatFile(e.target.files?.[0])} /></label>
                       <input type="text" value={chatInput} onChange={(e) => setChatInput(e.target.value)} placeholder="Type a message to the admin…" maxLength={2000} />
-                      <button className="btn btn--solid" type="submit" disabled={chatBusy || !chatInput.trim()}>{chatBusy ? 'Sending…' : 'Send'}</button>
+                      <button className="btn btn--solid" type="submit" disabled={chatBusy || (!chatInput.trim() && !chatAttach)}>{chatBusy ? 'Sending…' : 'Send'}</button>
                     </form>
                     <p className="ns-muted ns-chat__note">“Clear chat” only clears your own view — the admin team keeps the full history.</p>
                   </article>

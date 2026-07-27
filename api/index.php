@@ -1731,6 +1731,7 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             if ($uid <= 0) json(['error' => 'Choose a Fellow.'], 422);
             if (trim((string) field($b, 'title')) === '') json(['error' => 'Title is required.'], 422);
             ecosystem_assignment_add($uid, 'fellow', (string) field($b, 'title'), (string) field($b, 'detail'), (string) field($b, 'assign_date'));
+            try { new_school_add_notification(null, 'fellow', 'assignment', 'New research assignment', 'You have a new research assignment: ' . trim((string) field($b, 'title')) . '.', [], $uid); } catch (Throwable $e) { /* non-fatal */ }
             json(['message' => 'Assignment created.', 'assignments' => ecosystem_assignments_for_user($uid)], 201);
         }
         case $method === 'PUT' && preg_match('#^admin/research/assignment/(\d+)$#', $route, $m) === 1: {

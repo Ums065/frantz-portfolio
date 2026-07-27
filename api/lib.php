@@ -131,7 +131,7 @@ function ensure_session_version_column(): void
  * request after a deploy, db_auto_migrate() notices the stored version is behind
  * and runs every *_ensure_schema() once; afterwards it's a single cheap SELECT.
  */
-const APP_SCHEMA_VERSION = 20260703; // yyyymmdd + seq — raise on each schema change
+const APP_SCHEMA_VERSION = 20260704; // yyyymmdd + seq — raise on each schema change
 
 /**
  * One-shot, version-gated auto-migration. Runs on app bootstrap: if the DB's
@@ -2484,6 +2484,10 @@ function new_school_chat_ensure_schema(): void
             INDEX idx_ns_chat_thread (thread_user_id, created_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
     );
+    try {
+        $has = db()->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'new_school_chat_messages' AND COLUMN_NAME = 'attachment_url'")->fetchColumn();
+        if ((int) $has === 0) db()->exec("ALTER TABLE new_school_chat_messages ADD COLUMN attachment_url VARCHAR(255) DEFAULT NULL");
+    } catch (Throwable $e) { if (app_debug()) error_log('ns_chat attachment_url: ' . $e->getMessage()); }
     db()->exec(
         "CREATE TABLE IF NOT EXISTS new_school_chat_clears (
             thread_user_id INT NOT NULL,
@@ -2502,10 +2506,10 @@ function new_school_chat_fetch(int $threadUserId, string $side): array
     $stmt->execute([$threadUserId, $side]);
     $clearedAt = $stmt->fetchColumn();
     if ($clearedAt !== false) {
-        $q = db()->prepare('SELECT id, sender, body, created_at FROM new_school_chat_messages WHERE thread_user_id = ? AND created_at > ? ORDER BY created_at ASC, id ASC');
+        $q = db()->prepare('SELECT id, sender, body, attachment_url, created_at FROM new_school_chat_messages WHERE thread_user_id = ? AND created_at > ? ORDER BY created_at ASC, id ASC');
         $q->execute([$threadUserId, (string) $clearedAt]);
     } else {
-        $q = db()->prepare('SELECT id, sender, body, created_at FROM new_school_chat_messages WHERE thread_user_id = ? ORDER BY created_at ASC, id ASC');
+        $q = db()->prepare('SELECT id, sender, body, attachment_url, created_at FROM new_school_chat_messages WHERE thread_user_id = ? ORDER BY created_at ASC, id ASC');
         $q->execute([$threadUserId]);
     }
     return $q->fetchAll();
@@ -3214,7 +3218,15 @@ function new_school_release_top3(int $schoolId): array
     $ids = array_slice(array_map(static fn(array $r): int => $r['submission_id'], new_school_internal_rank($schoolId)), 0, 3);
     $n = 0;
     $u = $pdo->prepare('UPDATE new_school_submissions SET judge_released = 1 WHERE id = ?');
-    foreach ($ids as $sid) { $u->execute([$sid]); $n++; }
+    $sidLookup = $pdo->prepare('SELECT student_id FROM new_school_submissions WHERE id = ? LIMIT 1');
+    foreach ($ids as $sid) {
+        $u->execute([$sid]); $n++;
+        try {
+            $sidLookup->execute([$sid]);
+            $stId = (int) $sidLookup->fetchColumn();
+            if ($stId > 0) new_school_add_notification($stId, 'student', 'advanced', 'Your project advanced! 🎉', 'Congratulations — your project was selected as a school top-3 and sent to the judges.', ['submission_id' => $sid]);
+        } catch (Throwable $e) { /* non-fatal */ }
+    }
     if ($n > 0) {
         try { new_school_add_notification(null, 'judge', 'submissions_released', 'New submissions to review', "$n new submission" . ($n === 1 ? '' : 's') . ' have been released for judging.'); } catch (Throwable $e) { /* non-fatal */ }
     }

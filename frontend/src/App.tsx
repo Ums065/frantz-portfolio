@@ -17,6 +17,7 @@ const FoundingSponsor = lazy(() => import('./pages/FoundingSponsor'))
 const FoundingSponsors = lazy(() => import('./pages/FoundingSponsors'))
 const Media = lazy(() => import('./pages/Media'))
 const NewSchool = lazy(() => import('./pages/NewSchool'))
+const Winners = lazy(() => import('./pages/Winners'))
 const Profile = lazy(() => import('./pages/Profile'))
 const Projects = lazy(() => import('./pages/Projects'))
 const Resources = lazy(() => import('./pages/Resources'))
@@ -121,6 +122,7 @@ export default function App() {
           <Route path="/become-a-founding-sponsor" element={<RoutedPage pageKey="become-a-founding-sponsor"><FoundingSponsor /></RoutedPage>} />
           <Route path="/founding-sponsors" element={<RoutedPage pageKey="founding-sponsors"><FoundingSponsors /></RoutedPage>} />
           <Route path="/new-school" element={<RoutedPage pageKey="new-school"><NewSchool /></RoutedPage>} />
+          <Route path="/winners" element={<RoutedPage pageKey="winners"><Winners /></RoutedPage>} />
           <Route path="/new-school/become-a-founding-sponsor" element={<RoutedPage pageKey="new-school-become-a-founding-sponsor"><FoundingSponsor /></RoutedPage>} />
           <Route path="/new-school/founding-sponsors" element={<RoutedPage pageKey="new-school-founding-sponsors"><FoundingSponsors /></RoutedPage>} />
           <Route path="/new-school/dashboard" element={<RoutedPage pageKey="new-school-dashboard"><NewSchool /></RoutedPage>} />

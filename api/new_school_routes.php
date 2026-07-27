@@ -1522,13 +1522,15 @@ function new_school_handle_route(string $method, string $route): bool
         case $key === 'POST new-school/chat': {
             $user = require_login();
             $text = trim((string) field($body, 'body'));
-            if ($text === '') {
+            $attach = trim((string) field($body, 'attachment_url'));
+            $attach = preg_match('#^(/api/uploads/|https?://)#', $attach) ? mb_substr($attach, 0, 255) : '';
+            if ($text === '' && $attach === '') {
                 json(['error' => 'Message cannot be empty.'], 422);
             }
             $text = mb_substr($text, 0, 2000);
             new_school_chat_ensure_schema();
-            db()->prepare('INSERT INTO new_school_chat_messages (thread_user_id, sender, sender_user_id, body) VALUES (?, "user", ?, ?)')
-                ->execute([(int) $user['id'], (int) $user['id'], $text]);
+            db()->prepare('INSERT INTO new_school_chat_messages (thread_user_id, sender, sender_user_id, body, attachment_url) VALUES (?, "user", ?, ?, ?)')
+                ->execute([(int) $user['id'], (int) $user['id'], $text, $attach ?: null]);
             new_school_add_notification(null, 'admin', 'chat', 'New message', (($user['full_name'] ?? 'A user') . ' sent a message in chat.'), ['user_id' => (string) $user['id']]);
             json(['messages' => new_school_chat_fetch((int) $user['id'], 'user')], 201);
         }
@@ -1592,12 +1594,14 @@ function new_school_handle_route(string $method, string $route): bool
             new_school_chat_ensure_schema();
             $threadUserId = (int) ($body['user_id'] ?? 0);
             $text = trim((string) field($body, 'body'));
-            if ($threadUserId <= 0 || $text === '') {
-                json(['error' => 'A user_id and message body are required.'], 422);
+            $attach = trim((string) field($body, 'attachment_url'));
+            $attach = preg_match('#^(/api/uploads/|https?://)#', $attach) ? mb_substr($attach, 0, 255) : '';
+            if ($threadUserId <= 0 || ($text === '' && $attach === '')) {
+                json(['error' => 'A user_id and a message or attachment are required.'], 422);
             }
             $text = mb_substr($text, 0, 2000);
-            db()->prepare('INSERT INTO new_school_chat_messages (thread_user_id, sender, sender_user_id, body) VALUES (?, "admin", ?, ?)')
-                ->execute([$threadUserId, (int) $admin['id'], $text]);
+            db()->prepare('INSERT INTO new_school_chat_messages (thread_user_id, sender, sender_user_id, body, attachment_url) VALUES (?, "admin", ?, ?, ?)')
+                ->execute([$threadUserId, (int) $admin['id'], $text, $attach ?: null]);
             new_school_add_notification(null, 'all', 'chat', 'Admin replied', 'You have a new message from the admin team.', ['user_id' => (string) $threadUserId]);
             json(['messages' => new_school_chat_fetch($threadUserId, 'admin')], 201);
         }
@@ -2817,6 +2821,13 @@ function new_school_handle_route(string $method, string $route): bool
             }
 
             $file = $_FILES['file'];
+            // Hardening: only accept a genuine PHP upload, and reject empty files.
+            if (!is_uploaded_file((string) ($file['tmp_name'] ?? ''))) {
+                json(['error' => 'Invalid upload.'], 422);
+            }
+            if ((int) ($file['size'] ?? 0) <= 0) {
+                json(['error' => 'The file is empty.'], 422);
+            }
             $mime = function_exists('mime_content_type') ? mime_content_type($file['tmp_name']) : ($file['type'] ?? '');
             $videoMimes = [
                 'video/mp4' => 'mp4',
@@ -2846,6 +2857,11 @@ function new_school_handle_route(string $method, string $route): bool
 
             if ($extension === null) {
                 json(['error' => 'Unsupported file type.'], 422);
+            }
+            // For image types, confirm the bytes are actually a valid image (not a
+            // renamed script that happens to sniff as image/*).
+            if (str_starts_with((string) $mime, 'image/') && @getimagesize($file['tmp_name']) === false) {
+                json(['error' => 'That image file appears to be invalid.'], 422);
             }
             if ((int) ($file['size'] ?? 0) > $maxSize) {
                 json(['error' => $maxSize >= 50 * 1024 * 1024 ? 'Video must be 70MB or smaller.' : 'File must be 5MB or smaller.'], 422);
@@ -3246,6 +3262,42 @@ function new_school_handle_route(string $method, string $route): bool
                 )->fetchAll();
                 $csv = new_school_rows_to_csv($rows);
                 json(['filename' => 'new-school-winners.csv', 'rows' => $rows, 'csv' => $csv]);
+            }
+
+            if ($type === 'internal_scores') {
+                $rows = db()->query(
+                    "SELECT isc.id, isc.submission_id, s.full_name AS student_name, s.participant_id, sc.school_name,
+                            isc.reviewer_role, u.full_name AS reviewer_name,
+                            isc.problem, isc.solution, isc.creativity, isc.supporting_evidence, isc.community_impact, isc.presentation, isc.total,
+                            isc.notes, isc.created_at
+                     FROM new_school_internal_scores isc
+                     INNER JOIN new_school_submissions sub ON sub.id = isc.submission_id
+                     INNER JOIN new_school_students s ON s.id = sub.student_id
+                     LEFT JOIN new_school_schools sc ON sc.id = s.school_id
+                     LEFT JOIN users u ON u.id = isc.reviewer_user_id
+                     ORDER BY sc.school_name ASC, isc.total DESC"
+                )->fetchAll();
+                $csv = new_school_rows_to_csv($rows);
+                json(['filename' => 'new-school-internal-scores.csv', 'rows' => $rows, 'csv' => $csv]);
+            }
+
+            if ($type === 'internships') {
+                $rows = db()->query(
+                    "SELECT br.id, ba.business_name, br.job_title, s.full_name AS student_name, s.age, s.participant_id, sc.school_name,
+                            br.status, br.student_consent, br.parent_consent,
+                            (CASE WHEN br.parent_consent='accepted' OR (s.age>=18 AND br.student_consent='accepted') THEN 'confirmed'
+                                  WHEN br.status='declined' OR br.student_consent='declined' OR br.parent_consent='declined' THEN 'declined'
+                                  ELSE 'in_progress' END) AS stage,
+                            br.created_at
+                     FROM business_requests br
+                     LEFT JOIN business_accounts ba ON ba.user_id = br.business_user_id
+                     LEFT JOIN new_school_students s ON s.id = br.student_id
+                     LEFT JOIN new_school_schools sc ON sc.id = s.school_id
+                     WHERE br.request_type = 'internship'
+                     ORDER BY br.created_at DESC"
+                )->fetchAll();
+                $csv = new_school_rows_to_csv($rows);
+                json(['filename' => 'new-school-internships.csv', 'rows' => $rows, 'csv' => $csv]);
             }
 
             if ($type === 'businesses') {

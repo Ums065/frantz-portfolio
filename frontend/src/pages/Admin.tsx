@@ -660,7 +660,7 @@ export default function Admin() {
   }
   // New School CSV exports — same admin endpoint the /new-school/dashboard uses, surfaced
   // here in the Analytics + School Dashboard tabs so the admin never has to leave /admin.
-  const NS_EXPORT_TYPES = ['parents', 'schools', 'teachers', 'businesses', 'submissions', 'winners', 'approvals', 'notifications'] as const
+  const NS_EXPORT_TYPES = ['parents', 'schools', 'teachers', 'businesses', 'submissions', 'winners', 'approvals', 'notifications', 'internal_scores', 'internships'] as const
   const exportNsCsv = async (type: string) => {
     setNsExporting(type)
     try {
@@ -684,7 +684,7 @@ export default function Admin() {
       <span className="admin-export-bar__label">{title}</span>
       {NS_EXPORT_TYPES.map((type) => (
         <button key={type} type="button" className="btn btn--sm" onClick={() => exportNsCsv(type)} disabled={nsExporting === type}>
-          {nsExporting === type ? 'Exporting…' : `Export ${type.charAt(0).toUpperCase() + type.slice(1)}`}
+          {nsExporting === type ? 'Exporting…' : `Export ${type.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}`}
         </button>
       ))}
     </div>

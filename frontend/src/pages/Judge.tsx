@@ -153,9 +153,11 @@ export default function Judge() {
   const [navOpen, setNavOpen] = useState(false)
   const [queue, setQueue] = useState<QueueRow[]>([])
   const [reviews, setReviews] = useState<ReviewRow[]>([])
-  const [chat, setChat] = useState<Array<{ id: number; sender: string; body: string; created_at: string }>>([])
+  const [chat, setChat] = useState<Array<{ id: number; sender: string; body: string; attachment_url?: string; created_at: string }>>([])
   const [chatText, setChatText] = useState('')
   const [chatBusy, setChatBusy] = useState(false)
+  const [chatAttach, setChatAttach] = useState('')
+  const [chatAttachName, setChatAttachName] = useState('')
   const [hbSel, setHbSel] = useState(0)
   const [faqOpen, setFaqOpen] = useState<Set<string>>(new Set())
   const [listBusy, setListBusy] = useState(false)
@@ -243,13 +245,19 @@ export default function Judge() {
   const sendChat = async (e: React.FormEvent) => {
     e.preventDefault()
     const text = chatText.trim()
-    if (!text) return
+    if (!text && !chatAttach) return
     setChatBusy(true)
     try {
-      const d = await api.post<{ messages: typeof chat }>('new-school/chat', { body: text })
+      const d = await api.post<{ messages: typeof chat }>('new-school/chat', { body: text, attachment_url: chatAttach })
       setChat(Array.isArray(d.messages) ? d.messages : [])
-      setChatText('')
+      setChatText(''); setChatAttach(''); setChatAttachName('')
     } catch { /* ignore */ } finally { setChatBusy(false) }
+  }
+  const pickChatFile = async (file?: File) => {
+    if (!file) return
+    setChatBusy(true)
+    try { const { url } = await api.upload<{ url: string }>('new-school/upload', file); setChatAttach(url); setChatAttachName(file.name) }
+    catch (err) { window.fcToast?.(err instanceof Error ? err.message : 'Could not attach.') } finally { setChatBusy(false) }
   }
 
   useEffect(() => {
@@ -575,14 +583,19 @@ export default function Judge() {
                         color: mine ? '#14110a' : 'var(--ivory)',
                         border: mine ? 'none' : '1px solid var(--line)',
                       }}>
-                        <div style={{ fontSize: 14, whiteSpace: 'pre-wrap', lineHeight: 1.45 }}>{m.body}</div>
+                        {m.body && <div style={{ fontSize: 14, whiteSpace: 'pre-wrap', lineHeight: 1.45 }}>{m.body}</div>}
+                        {m.attachment_url && (/\.(png|jpe?g|webp|gif)$/i.test(m.attachment_url)
+                          ? <a href={m.attachment_url} target="_blank" rel="noopener noreferrer"><img src={m.attachment_url} alt="attachment" style={{ maxWidth: '100%', maxHeight: 160, borderRadius: 8, display: 'block', marginTop: 4 }} /></a>
+                          : <a href={m.attachment_url} target="_blank" rel="noopener noreferrer" style={{ color: mine ? '#14110a' : 'var(--gold-light)', fontSize: 12.5 }}>📎 Attachment</a>)}
                         <div style={{ fontSize: 10, opacity: 0.7, marginTop: 4, textAlign: 'right' }}>{m.created_at}</div>
                       </div>
                     </div>
                   )
                 })}
               </div>
+              {chatAttachName && <div style={{ fontSize: 12, color: 'var(--gold-light)', padding: '0 12px 6px' }}>📎 {chatAttachName} <button type="button" onClick={() => { setChatAttach(''); setChatAttachName('') }} style={{ background: 'none', border: 0, color: 'var(--muted)', cursor: 'pointer' }}>✕</button></div>}
               <form onSubmit={sendChat} style={{ display: 'flex', gap: 10, alignItems: 'center', padding: 12, borderTop: '1px solid var(--line)', background: 'rgba(0,0,0,0.15)' }}>
+                <label title="Attach" style={{ flex: '0 0 auto', width: 40, height: 40, borderRadius: '50%', border: '1px solid var(--line)', display: 'grid', placeItems: 'center', cursor: 'pointer', color: 'var(--gold-light)' }}>📎<input type="file" accept="image/*,.pdf,.doc,.docx" hidden disabled={chatBusy} onChange={(e) => pickChatFile(e.target.files?.[0])} /></label>
                 <input
                   value={chatText}
                   onChange={(e) => setChatText(e.target.value)}
@@ -597,7 +610,7 @@ export default function Judge() {
                 />
                 <button
                   type="submit"
-                  disabled={chatBusy || !chatText.trim()}
+                  disabled={chatBusy || (!chatText.trim() && !chatAttach)}
                   aria-label="Send message"
                   title="Send"
                   style={{

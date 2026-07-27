@@ -1740,6 +1740,7 @@ CALL add_column_if_missing('new_school_notifications', 'recipient_user_id', 'INT
 ALTER TABLE new_school_notifications
   MODIFY recipient_role ENUM('student','parent','school','teacher','admin','all','judge','business','fellow') NOT NULL DEFAULT 'student';
 CALL add_column_if_missing('business_offer_messages', 'attachment_url', 'varchar(255) DEFAULT NULL', 'body');
+CALL add_column_if_missing('new_school_chat_messages', 'attachment_url', 'varchar(255) DEFAULT NULL', 'body');
 
 CREATE TABLE IF NOT EXISTS app_meta (
   meta_key VARCHAR(64) NOT NULL PRIMARY KEY,
