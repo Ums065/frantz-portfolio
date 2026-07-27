@@ -195,7 +195,12 @@ export function ChangePasswordCard() {
         </div>
       </div>
       <div style={{ height: 1, background: 'var(--line)', margin: '14px 0 18px' }} />
-      <form onSubmit={submit} noValidate style={{ display: 'grid', gap: 16, minWidth: 0 }}>
+      <style>{`
+        .fc-pw-big .ns-pw input { padding: 15px 46px 15px 16px !important; font-size: 15.5px !important; border-radius: 12px !important; height: auto !important; }
+        .fc-pw-big .ns-pw__toggle { width: 44px !important; }
+        .fc-pw-big label > span:first-child { margin-bottom: 2px; }
+      `}</style>
+      <form onSubmit={submit} noValidate className="fc-pw-big" style={{ display: 'grid', gap: 18, minWidth: 0 }}>
         <label style={fieldS}><span style={labelS}>Current Password</span><PasswordField name="current_password" autoComplete="current-password" /></label>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(220px,100%),1fr))', gap: 16, minWidth: 0 }}>
           <label style={fieldS}><span style={labelS}>New Password</span><PasswordField name="new_password" /></label>
