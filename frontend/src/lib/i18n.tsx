@@ -81,23 +81,19 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
 
 export function useI18n(): I18nCtx { return useContext(Ctx) }
 
-/** Compact EN | ES language toggle for the header. */
+/** Compact EN | ES language toggle. */
 export function LanguageToggle({ style }: { style?: React.CSSProperties }) {
   const { lang, setLang } = useI18n()
   const seg = (l: Lang, label: string) => (
     <button
       type="button"
+      className={`fc-lang__seg${lang === l ? ' is-active' : ''}`}
       onClick={() => setLang(l)}
       aria-pressed={lang === l}
-      style={{
-        border: 0, background: lang === l ? 'var(--gold)' : 'transparent',
-        color: lang === l ? '#1c1a14' : 'var(--gold-light)', fontWeight: 700, fontSize: 11.5,
-        padding: '4px 8px', borderRadius: 999, cursor: 'pointer', letterSpacing: '.03em',
-      }}
     >{label}</button>
   )
   return (
-    <div title="Language / Idioma" style={{ display: 'inline-flex', alignItems: 'center', gap: 2, border: '1px solid var(--line)', borderRadius: 999, padding: 2, ...style }}>
+    <div className="fc-lang__seg-wrap" title="Language / Idioma" style={style}>
       {seg('en', 'EN')}
       {seg('es', 'ES')}
     </div>
@@ -205,12 +201,34 @@ export function AutoTranslate() {
   return null
 }
 
+const LANG_CSS = `
+.fc-lang { position: fixed; right: 18px; bottom: 18px; z-index: 90; }
+.fc-lang__pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 8px 6px 12px;
+  background: linear-gradient(150deg, rgba(38,33,18,0.96), rgba(20,19,15,0.96));
+  border: 1px solid rgba(201,168,76,0.45); border-radius: 999px;
+  box-shadow: 0 10px 30px -10px rgba(0,0,0,0.75), inset 0 1px 0 rgba(255,255,255,0.05);
+  backdrop-filter: blur(8px); transition: transform .25s var(--ease,ease), box-shadow .25s; }
+.fc-lang__pill:hover { transform: translateY(-2px); box-shadow: 0 16px 40px -12px rgba(0,0,0,0.85); }
+.fc-lang__globe { display: grid; place-items: center; width: 22px; height: 22px; color: var(--gold-light); }
+.fc-lang__globe svg { width: 18px; height: 18px; }
+.fc-lang__seg-wrap { display: inline-flex; align-items: center; gap: 3px; background: rgba(0,0,0,0.35);
+  border: 1px solid rgba(201,168,76,0.25); border-radius: 999px; padding: 3px; }
+.fc-lang__seg { border: 0; background: transparent; color: var(--gold-light); font-weight: 800; font-size: 11.5px;
+  letter-spacing: .06em; padding: 5px 11px; border-radius: 999px; cursor: pointer; transition: all .2s; line-height: 1; }
+.fc-lang__seg:hover:not(.is-active) { color: #fff; background: rgba(201,168,76,0.15); }
+.fc-lang__seg.is-active { background: linear-gradient(180deg, #f6e2a8, #c9a84c); color: #1c1a14; box-shadow: 0 2px 8px -2px rgba(201,168,76,0.6); }
+@media (max-width: 640px) { .fc-lang { right: 12px; bottom: 12px; } .fc-lang__pill { padding: 5px 6px 5px 10px; } }
+`
+
 /** Site-wide floating language widget, pinned bottom-right on every page. */
 export function FloatingLanguageToggle() {
   return (
-    <div data-no-translate style={{ position: 'fixed', right: 16, bottom: 16, zIndex: 90 }}>
-      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(20,19,15,0.92)', border: '1px solid var(--line)', borderRadius: 999, padding: '5px 8px 5px 10px', boxShadow: '0 8px 26px -10px rgba(0,0,0,0.7)', backdropFilter: 'blur(6px)' }}>
-        <span aria-hidden="true" style={{ fontSize: 14 }}>🌐</span>
+    <div className="fc-lang" data-no-translate>
+      <style>{LANG_CSS}</style>
+      <div className="fc-lang__pill" title="Language / Idioma">
+        <span className="fc-lang__globe" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7}><circle cx="12" cy="12" r="9" /><path d="M3 12h18" /><path d="M12 3c2.5 2.6 3.9 5.7 3.9 9s-1.4 6.4-3.9 9c-2.5-2.6-3.9-5.7-3.9-9S9.5 5.6 12 3z" /></svg>
+        </span>
         <LanguageToggle />
       </div>
     </div>
