@@ -43,30 +43,28 @@ export function InternalRankTable({ rows, myStudentId, title = 'Your School — 
     <section className="glass ns-dash-card ns-dash-card--wide reveal in" style={{ minWidth: 0 }}>
       <div className="ns-dash-card__head"><span className="eyebrow">🏫 {title}</span></div>
       <p style={{ color: 'var(--muted)', fontSize: 12.5, margin: '0 0 12px' }}>Ranked by your teachers’ &amp; principal’s scores. The top 3 are sent to the judges. (This is separate from the main challenge ranking.)</p>
-      <div className="admin-table-wrap">
-        <table className="admin-table--stack" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5 }}>
-          <thead>
-            <tr style={{ textAlign: 'left', color: 'var(--muted)' }}>
-              <th style={{ padding: '8px 10px' }}>#</th>
-              <th style={{ padding: '8px 10px' }}>Student</th>
-              <th style={{ padding: '8px 10px' }}>Score</th>
-              <th style={{ padding: '8px 10px' }}>To judges</th>
-            </tr>
-          </thead>
-          <tbody>
-            {list.map((r) => {
-              const me = myStudentId != null && r.student_id === myStudentId
-              return (
-                <tr key={r.submission_id} style={{ borderTop: '1px solid var(--line)', background: me ? 'rgba(120,180,255,0.12)' : r.is_top3 ? 'rgba(212,175,90,0.08)' : 'transparent' }}>
-                  <td data-label="#" style={{ padding: '8px 10px', fontWeight: 800, color: r.is_top3 ? 'var(--gold-light)' : 'var(--ivory)' }}>{r.rank}{r.is_top3 ? ' ★' : ''}</td>
-                  <td data-label="Student" style={{ padding: '8px 10px' }}>{r.student_name}{me ? <strong style={{ color: '#9ec5ff' }}> · You</strong> : ''}</td>
-                  <td data-label="Score" style={{ padding: '8px 10px' }}>{r.reviewers ? `${r.avg_total} / ${r.max_total}` : 'Not scored yet'}</td>
-                  <td data-label="To judges" style={{ padding: '8px 10px' }}>{r.judge_released ? <span style={{ color: '#8fd6a3' }}>Sent ✓</span> : '—'}</td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
+      <div style={{ display: 'grid', gap: 8, minWidth: 0 }}>
+        {list.map((r) => {
+          const me = myStudentId != null && r.student_id === myStudentId
+          return (
+            <div key={r.submission_id} style={{
+              display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+              border: '1px solid var(--line)', borderRadius: 10, padding: '10px 12px', minWidth: 0,
+              background: me ? 'rgba(120,180,255,0.12)' : r.is_top3 ? 'rgba(212,175,90,0.08)' : 'rgba(255,255,255,0.02)',
+            }}>
+              <span style={{ flex: '0 0 auto', width: 28, height: 28, borderRadius: 8, display: 'grid', placeItems: 'center', fontWeight: 800, fontSize: 12.5, background: r.is_top3 ? 'linear-gradient(180deg,#f6e2a8,#c9a84c)' : 'rgba(255,255,255,0.06)', color: r.is_top3 ? '#1c1a14' : 'var(--ivory)' }}>{r.rank}</span>
+              <div style={{ flex: '1 1 150px', minWidth: 0 }}>
+                <div style={{ color: 'var(--ivory)', fontWeight: 700, fontSize: 13.5, overflowWrap: 'anywhere' }}>
+                  {r.student_name}{me ? <strong style={{ color: '#9ec5ff' }}> · You</strong> : ''}{r.is_top3 && <span style={{ color: 'var(--gold-light)', marginLeft: 6, fontSize: 11.5 }}>★</span>}
+                </div>
+                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 3, color: 'var(--muted)', fontSize: 12 }}>
+                  <span>{r.reviewers ? `${r.avg_total}/${r.max_total}` : 'Not scored yet'}</span>
+                  {r.judge_released && <span style={{ color: '#8fd6a3' }}>Sent to judges ✓</span>}
+                </div>
+              </div>
+            </div>
+          )
+        })}
       </div>
     </section>
   )
@@ -172,33 +170,30 @@ export default function InternalScoring({ role, internal }: { role: 'teacher' | 
           <div style={{ fontSize: 12, marginTop: 4 }}>Once your students submit their work, it will appear here to score.</div>
         </div>
       ) : (
-        <div className="admin-table-wrap">
-          <table className="admin-table--stack" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5 }}>
-            <thead>
-              <tr style={{ textAlign: 'left', color: 'var(--muted)' }}>
-                <th style={{ padding: '8px 10px' }}>#</th>
-                <th style={{ padding: '8px 10px' }}>Student</th>
-                <th style={{ padding: '8px 10px' }}>Avg score</th>
-                <th style={{ padding: '8px 10px' }}>Reviewers</th>
-                <th style={{ padding: '8px 10px' }}>To judges</th>
-                <th style={{ padding: '8px 10px' }}></th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr key={r.submission_id} style={{ borderTop: '1px solid var(--line)', background: r.is_top3 ? 'rgba(212,175,90,0.08)' : 'transparent' }}>
-                  <td data-label="#" style={{ padding: '8px 10px', fontWeight: 800, color: r.is_top3 ? 'var(--gold-light)' : 'var(--ivory)' }}>{r.rank}{r.is_top3 ? ' ★' : ''}</td>
-                  <td data-label="Student" style={{ padding: '8px 10px' }}>{r.student_name}</td>
-                  <td data-label="Avg score" style={{ padding: '8px 10px' }}>{r.reviewers ? `${r.avg_total} / ${r.max_total}` : '—'}</td>
-                  <td data-label="Reviewers" style={{ padding: '8px 10px' }}>{r.reviewers}</td>
-                  <td data-label="To judges" style={{ padding: '8px 10px' }}>{r.judge_released ? <span style={{ color: '#8fd6a3' }}>Sent ✓</span> : '—'}</td>
-                  <td data-label="" style={{ padding: '8px 10px' }}>
-                    <button className="btn btn--sm" disabled={busy} onClick={() => void openScore(r.submission_id)}>Score</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div style={{ display: 'grid', gap: 10, minWidth: 0 }}>
+          {rows.map((r) => (
+            <div key={r.submission_id} style={{
+              display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+              border: '1px solid var(--line)', borderRadius: 12, padding: '12px 14px', minWidth: 0,
+              background: r.is_top3 ? 'rgba(212,175,90,0.09)' : 'rgba(255,255,255,0.02)',
+            }}>
+              {/* rank badge */}
+              <span style={{ flex: '0 0 auto', width: 30, height: 30, borderRadius: 8, display: 'grid', placeItems: 'center', fontWeight: 800, fontSize: 13, background: r.is_top3 ? 'linear-gradient(180deg,#f6e2a8,#c9a84c)' : 'rgba(255,255,255,0.06)', color: r.is_top3 ? '#1c1a14' : 'var(--ivory)' }}>{r.rank}</span>
+              {/* student + inline meta */}
+              <div style={{ flex: '1 1 150px', minWidth: 0 }}>
+                <div style={{ color: 'var(--ivory)', fontWeight: 700, fontSize: 14, overflowWrap: 'anywhere' }}>
+                  {r.student_name}{r.is_top3 && <span style={{ color: 'var(--gold-light)', marginLeft: 6, fontSize: 12 }}>★ Top 3</span>}
+                </div>
+                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 4, color: 'var(--muted)', fontSize: 12 }}>
+                  <span>Score: <strong style={{ color: r.reviewers ? 'var(--gold-light)' : 'var(--muted)' }}>{r.reviewers ? `${r.avg_total}/${r.max_total}` : 'not scored'}</strong></span>
+                  <span>{r.reviewers} reviewer{r.reviewers === 1 ? '' : 's'}</span>
+                  {r.judge_released && <span style={{ color: '#8fd6a3' }}>Sent to judges ✓</span>}
+                </div>
+              </div>
+              {/* action */}
+              <button className="btn btn--sm" style={{ flex: '0 0 auto' }} disabled={busy} onClick={() => void openScore(r.submission_id)}>Score</button>
+            </div>
+          ))}
         </div>
       )}
 
