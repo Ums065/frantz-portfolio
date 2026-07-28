@@ -119,15 +119,21 @@ const config: PortalConfig = {
       ),
     },
     {
+      key: 'announcements',
+      label: 'Announcements',
+      badge: (data) => unseenAnnCount('partner', data?.announcements),
+      onActivate: (data) => { markAnnSeen('partner', data?.announcements) },
+      render: (data) => (
+        <Section title="Announcements"><EcoAnnouncements items={data?.announcements} /></Section>
+      ),
+    },
+    {
       key: 'updates',
-      label: 'Updates',
-      badge: (data) => unseenAnnCount('partner', data?.announcements) + unseenReqCount('partner', data?.requests),
-      onActivate: (data) => { markAnnSeen('partner', data?.announcements); markReqSeen('partner', data?.requests) },
+      label: 'My Requests',
+      badge: (data) => unseenReqCount('partner', data?.requests),
+      onActivate: (data) => { markReqSeen('partner', data?.requests) },
       render: (data, reload) => (
-        <>
-          <Section title="Announcements"><EcoAnnouncements items={data?.announcements} /></Section>
-          <Section title="Notifications — Your Requests"><EcoRequests items={data?.requests} role="partner" reload={reload} /></Section>
-        </>
+        <Section title="Notifications — Your Requests"><EcoRequests items={data?.requests} role="partner" reload={reload} /></Section>
       ),
     },
   ],

@@ -186,14 +186,22 @@ const config: PortalConfig = {
       ),
     },
     {
+      key: 'announcements',
+      label: 'Announcements',
+      badge: (data) => unseenAnnCount('volunteer', data?.announcements),
+      onActivate: (data) => { markAnnSeen('volunteer', data?.announcements) },
+      render: (data) => (
+        <Section title="Announcements"><EcoAnnouncements items={data?.announcements} /></Section>
+      ),
+    },
+    {
       key: 'updates',
-      label: 'Updates',
-      badge: (data) => unseenAnnCount('volunteer', data?.announcements) + unseenReqCount('volunteer', data?.requests),
-      onActivate: (data) => { markAnnSeen('volunteer', data?.announcements); markReqSeen('volunteer', data?.requests) },
+      label: 'My Requests',
+      badge: (data) => unseenReqCount('volunteer', data?.requests),
+      onActivate: (data) => { markReqSeen('volunteer', data?.requests) },
       render: (data, reload) => (
         <>
           <Section title="Certificates & Handbook"><EcoDocuments docs={data?.documents} /></Section>
-          <Section title="Announcements"><EcoAnnouncements items={data?.announcements} /></Section>
           <Section title="My Requests"><EcoRequests items={data?.requests} role="volunteer" reload={reload} /></Section>
         </>
       ),
