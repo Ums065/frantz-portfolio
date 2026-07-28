@@ -157,6 +157,19 @@ function ns_manage_assert_student(array $student, array $scope): void
     json(['error' => 'This record is outside your access.'], 403);
 }
 
+/**
+ * School-internal scoring access: ANY teacher or principal belonging to the
+ * student's school may view/score the submission (not just the student's own
+ * teacher). Admins always allowed.
+ */
+function ns_assert_same_school(array $student, array $scope): void
+{
+    if (($scope['kind'] ?? '') === 'admin') return;
+    $callerSchool = (int) ($scope['school_id'] ?? 0);
+    if ($callerSchool > 0 && (int) ($student['school_id'] ?? 0) === $callerSchool) return;
+    json(['error' => 'This student is outside your school.'], 403);
+}
+
 // Whether the scope may create/delete a whole record of the given entity.
 function ns_manage_can_write_entity(array $scope, string $entity, string $op): bool
 {
@@ -4182,7 +4195,7 @@ function new_school_handle_route(string $method, string $route): bool
             $submission = $q->fetch();
             if (!$submission) json(['error' => 'Submission not found.'], 404);
             $student = new_school_fetch_student_by_id((int) $submission['student_id']);
-            if ($student) ns_manage_assert_student($student, $scope);
+            if ($student) ns_assert_same_school($student, $scope);
             $mine = db()->prepare('SELECT * FROM new_school_internal_scores WHERE submission_id = ? AND reviewer_user_id = ? LIMIT 1');
             $mine->execute([$subId, (int) $user['id']]);
             $cats = [];
@@ -4218,7 +4231,7 @@ function new_school_handle_route(string $method, string $route): bool
             if (!$submission) json(['error' => 'Submission not found.'], 404);
             if ((string) $submission['status'] === 'draft') json(['error' => 'This project has not been submitted yet.'], 409);
             $student = new_school_fetch_student_by_id((int) $submission['student_id']);
-            if ($student) ns_manage_assert_student($student, $scope);
+            if ($student) ns_assert_same_school($student, $scope);
             $b = body();
             $vals = []; $total = 0;
             foreach (ns_judge_categories() as $ck => $def) {
