@@ -124,7 +124,7 @@ export default function InternalScoring({ role, internal }: { role: 'teacher' | 
   }
 
   return (
-    <section className="glass" style={{ padding: 'clamp(16px,3.5vw,24px)', borderRadius: 16, minWidth: 0 }}>
+    <section className="glass ns-dash-card--wide" style={{ padding: 'clamp(16px,3.5vw,24px)', borderRadius: 16, minWidth: 0, width: '100%' }}>
       {/* Header */}
       <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', marginBottom: 14 }}>
         <span style={{ width: 44, height: 44, flex: '0 0 auto', borderRadius: 12, display: 'grid', placeItems: 'center', background: 'linear-gradient(150deg,rgba(201,168,76,0.28),rgba(201,168,76,0.06))', border: '1px solid var(--line)', fontSize: 20 }}>🏅</span>
@@ -170,7 +170,7 @@ export default function InternalScoring({ role, internal }: { role: 'teacher' | 
           <div style={{ fontSize: 12, marginTop: 4 }}>Once your students submit their work, it will appear here to score.</div>
         </div>
       ) : (
-        <div style={{ display: 'grid', gap: 10, minWidth: 0 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(340px,100%), 1fr))', gap: 10, minWidth: 0 }}>
           {rows.map((r) => (
             <div key={r.submission_id} style={{
               display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
