@@ -243,15 +243,27 @@ export default function InternalScoring({ role, internal }: { role: 'teacher' | 
               )}
             </div>
 
-            <div style={{ display: 'grid', gap: 12 }}>
-              {detail.categories.map((c) => (
-                <div key={c.key} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 10, alignItems: 'center' }}>
-                  <label style={{ fontSize: 13, color: 'var(--ivory)' }}>{c.label} <span style={{ color: 'var(--muted)' }}>/ {c.max}</span></label>
-                  <input type="number" min={0} max={c.max} value={scores[c.key] ?? 0}
-                    onChange={(e) => setScores((s) => ({ ...s, [c.key]: Math.max(0, Math.min(c.max, Number(e.target.value) || 0)) }))}
-                    style={{ ...box, width: 90, textAlign: 'center' }} />
-                </div>
-              ))}
+            <p style={{ color: 'var(--muted)', fontSize: 12, margin: '0 0 12px' }}>Drag each slider — the gold number is your points for that category out of its maximum.</p>
+            <div style={{ display: 'grid', gap: 18 }}>
+              {detail.categories.map((c) => {
+                const v = Number(scores[c.key] ?? 0)
+                return (
+                  <div key={c.key}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12 }}>
+                      <div style={{ fontWeight: 700, color: 'var(--ivory)', fontSize: 14 }}>{c.label}</div>
+                      <div style={{ flex: '0 0 auto', textAlign: 'right' }}>
+                        <span className="gold-text" style={{ fontSize: 22, fontWeight: 800 }}>{v}</span>
+                        <span style={{ color: 'var(--muted)', fontSize: 13 }}> / {c.max}</span>
+                      </div>
+                    </div>
+                    <input
+                      type="range" min={0} max={c.max} step={1} value={v}
+                      onChange={(e) => setScores((s) => ({ ...s, [c.key]: Math.max(0, Math.min(c.max, Number(e.target.value) || 0)) }))}
+                      style={{ width: '100%', marginTop: 8, accentColor: '#C9A84C' }}
+                    />
+                  </div>
+                )
+              })}
               <div><textarea placeholder="Notes (optional)" value={notes} onChange={(e) => setNotes(e.target.value)} style={{ ...box, minHeight: 64, resize: 'vertical' }} /></div>
             </div>
 
