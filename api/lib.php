@@ -6327,32 +6327,41 @@ function translate_texts(array $texts, string $target): array
     }
     if (!$need) return $out;
 
-    // 2) translate the misses via LibreTranslate
-    $url = (string) env('LIBRETRANSLATE_URL', 'https://libretranslate.com/translate');
-    $apiKey = (string) env('LIBRETRANSLATE_API_KEY', '');
-    $idx = array_keys($need);
-    $vals = array_values($need);
+    // 2) translate the misses. Prefer LibreTranslate if configured; otherwise fall
+    //    back to MyMemory (free, keyless, zero-setup).
+    $ins = $pdo->prepare('INSERT IGNORE INTO translation_cache (src_hash, target, translated) VALUES (?,?,?)');
+    $save = function (int $origIndex, string $t) use (&$out, $ins, $hash, $target) {
+        $out[$origIndex] = $t;
+        try { $ins->execute([$hash[$origIndex], $target, $t]); } catch (Throwable $e) { /* ignore */ }
+    };
+    $url = (string) env('LIBRETRANSLATE_URL', '');
     try {
-        $payload = ['q' => $vals, 'source' => 'en', 'target' => $target, 'format' => 'text'];
-        if ($apiKey !== '') $payload['api_key'] = $apiKey;
-        $ch = curl_init($url);
-        curl_setopt_array($ch, [
-            CURLOPT_POST => true, CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 20,
-            CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
-            CURLOPT_POSTFIELDS => json_encode($payload, JSON_UNESCAPED_UNICODE),
-        ]);
-        $resp = curl_exec($ch);
-        $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-        if ($resp !== false && $code < 400) {
-            $data = json_decode((string) $resp, true);
-            $tr = $data['translatedText'] ?? null;
-            if (is_array($tr)) {
-                $ins = $pdo->prepare('INSERT IGNORE INTO translation_cache (src_hash, target, translated) VALUES (?,?,?)');
-                foreach ($idx as $k => $origIndex) {
-                    $t = (string) ($tr[$k] ?? $vals[$k]);
-                    $out[$origIndex] = $t;
-                    try { $ins->execute([$hash[$origIndex], $target, $t]); } catch (Throwable $e) { /* ignore */ }
+        if ($url !== '') {
+            // LibreTranslate — one batched request (q is an array).
+            $idx = array_keys($need); $vals = array_values($need);
+            $payload = ['q' => $vals, 'source' => 'en', 'target' => $target, 'format' => 'text'];
+            $apiKey = (string) env('LIBRETRANSLATE_API_KEY', '');
+            if ($apiKey !== '') $payload['api_key'] = $apiKey;
+            $ch = curl_init($url);
+            curl_setopt_array($ch, [CURLOPT_POST => true, CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 20, CURLOPT_HTTPHEADER => ['Content-Type: application/json'], CURLOPT_POSTFIELDS => json_encode($payload, JSON_UNESCAPED_UNICODE)]);
+            $resp = curl_exec($ch); $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE); curl_close($ch);
+            if ($resp !== false && $code < 400) {
+                $tr = json_decode((string) $resp, true)['translatedText'] ?? null;
+                if (is_array($tr)) { foreach ($idx as $k => $origIndex) { $save($origIndex, (string) ($tr[$k] ?? $vals[$k])); } }
+            }
+        } else {
+            // MyMemory — free & keyless. One GET per string (results are cached, so
+            // it only happens once per unique phrase). Optional MYMEMORY_EMAIL raises the daily quota.
+            $email = (string) env('MYMEMORY_EMAIL', '');
+            foreach ($need as $origIndex => $tx) {
+                $q = mb_substr((string) $tx, 0, 500);
+                $u = 'https://api.mymemory.translated.net/get?q=' . rawurlencode($q) . '&langpair=' . rawurlencode('en|' . $target) . ($email !== '' ? '&de=' . rawurlencode($email) : '');
+                $ch = curl_init($u);
+                curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 15, CURLOPT_HTTPHEADER => ['Accept: application/json']]);
+                $resp = curl_exec($ch); $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE); curl_close($ch);
+                if ($resp !== false && $code < 400) {
+                    $t = json_decode((string) $resp, true)['responseData']['translatedText'] ?? '';
+                    if (is_string($t) && $t !== '') $save($origIndex, $t);
                 }
             }
         }
