@@ -1069,7 +1069,11 @@ export default function NewSchool() {
   const [adminSummary, setAdminSummary] = useState<any>(null)
   const [dashboardLoading, setDashboardLoading] = useState(false)
   const [showCert, setShowCert] = useState(false)
-  const [dashboardTab, setDashboardTab] = useState<DashboardTabKey>('overview')
+  const [dashboardTab, setDashboardTab] = useState<DashboardTabKey>(() => {
+    // Restore the open tab from the URL (?tab=…) so a refresh stays put.
+    try { const q = new URLSearchParams(window.location.search).get('tab'); if (q) return q as DashboardTabKey } catch { /* ignore */ }
+    return 'overview'
+  })
   const [guideOpen, setGuideOpen] = useState(false)
   const [chatMessages, setChatMessages] = useState<any[]>([])
   const [chatInput, setChatInput] = useState('')
@@ -2034,6 +2038,19 @@ export default function NewSchool() {
       return nextTab
     })
   }, [dashboardRole, isDashboardRoute])
+
+  // Keep the URL (?tab=) in sync with the active dashboard tab so a refresh
+  // restores the same tab instead of dropping back to Overview.
+  useEffect(() => {
+    if (!isDashboardRoute) return
+    try {
+      const url = new URL(window.location.href)
+      if (url.searchParams.get('tab') !== dashboardTab) {
+        url.searchParams.set('tab', dashboardTab)
+        window.history.replaceState(window.history.state, '', url)
+      }
+    } catch { /* ignore */ }
+  }, [dashboardTab, isDashboardRoute])
 
   useEffect(() => {
     if (!approvalDetail) return
