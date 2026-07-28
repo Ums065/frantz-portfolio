@@ -6276,6 +6276,90 @@ function new_school_fetch_notifications_for_scope(array $studentIds, array $role
     return $rows;
 }
 
+/* ==================== Auto-translation proxy (LibreTranslate + cache) ==================== */
+
+function translation_cache_ensure(): void
+{
+    static $ready = false;
+    if ($ready) return;
+    try {
+        db()->exec("CREATE TABLE IF NOT EXISTS translation_cache (
+            src_hash CHAR(40) NOT NULL,
+            target VARCHAR(8) NOT NULL,
+            translated MEDIUMTEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (src_hash, target)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    } catch (Throwable $e) { if (app_debug()) error_log('translation_cache_ensure: ' . $e->getMessage()); }
+    $ready = true;
+}
+
+/**
+ * Translate an array of English strings to $target via LibreTranslate, cached in
+ * translation_cache. Fails OPEN — any string that can't be translated is returned
+ * unchanged (so the UI just stays English rather than breaking). Configure the
+ * endpoint with LIBRETRANSLATE_URL (+ optional LIBRETRANSLATE_API_KEY) in .env.
+ */
+function translate_texts(array $texts, string $target): array
+{
+    $target = preg_replace('/[^a-z]/', '', strtolower($target));
+    if ($target === '' || $target === 'en') return $texts; // source language
+    translation_cache_ensure();
+    $pdo = db();
+    $out = $texts;
+    $hash = [];
+    foreach ($texts as $i => $tx) { $hash[$i] = sha1($target . '|' . (string) $tx); }
+
+    // 1) serve from cache
+    $uniq = array_values(array_unique($hash));
+    $cache = [];
+    if ($uniq) {
+        try {
+            $in = implode(',', array_fill(0, count($uniq), '?'));
+            $st = $pdo->prepare("SELECT src_hash, translated FROM translation_cache WHERE target = ? AND src_hash IN ($in)");
+            $st->execute(array_merge([$target], $uniq));
+            foreach ($st->fetchAll() as $r) { $cache[$r['src_hash']] = $r['translated']; }
+        } catch (Throwable $e) { if (app_debug()) error_log('translate cache read: ' . $e->getMessage()); }
+    }
+    $need = [];
+    foreach ($texts as $i => $tx) {
+        if (isset($cache[$hash[$i]])) { $out[$i] = $cache[$hash[$i]]; } else { $need[$i] = (string) $tx; }
+    }
+    if (!$need) return $out;
+
+    // 2) translate the misses via LibreTranslate
+    $url = (string) env('LIBRETRANSLATE_URL', 'https://libretranslate.com/translate');
+    $apiKey = (string) env('LIBRETRANSLATE_API_KEY', '');
+    $idx = array_keys($need);
+    $vals = array_values($need);
+    try {
+        $payload = ['q' => $vals, 'source' => 'en', 'target' => $target, 'format' => 'text'];
+        if ($apiKey !== '') $payload['api_key'] = $apiKey;
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_POST => true, CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 20,
+            CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
+            CURLOPT_POSTFIELDS => json_encode($payload, JSON_UNESCAPED_UNICODE),
+        ]);
+        $resp = curl_exec($ch);
+        $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        if ($resp !== false && $code < 400) {
+            $data = json_decode((string) $resp, true);
+            $tr = $data['translatedText'] ?? null;
+            if (is_array($tr)) {
+                $ins = $pdo->prepare('INSERT IGNORE INTO translation_cache (src_hash, target, translated) VALUES (?,?,?)');
+                foreach ($idx as $k => $origIndex) {
+                    $t = (string) ($tr[$k] ?? $vals[$k]);
+                    $out[$origIndex] = $t;
+                    try { $ins->execute([$hash[$origIndex], $target, $t]); } catch (Throwable $e) { /* ignore */ }
+                }
+            }
+        }
+    } catch (Throwable $e) { if (app_debug()) error_log('translate_texts: ' . $e->getMessage()); }
+    return $out;
+}
+
 /** Resolve which notification rows a user may see: ['admin'=>true] OR ['ids'=>[], 'roles'=>[]]. */
 function notifications_scope_for_user(array $user): array
 {

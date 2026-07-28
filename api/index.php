@@ -1500,6 +1500,16 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             json(['announcements' => ecosystem_announcements_for_role((string) ($u['role'] ?? ''))]);
         }
 
+        // Auto-translation proxy (whole-site language toggle). Public; rate-limited.
+        case $key === 'POST translate': {
+            rate_limit('translate', 240, 3600);
+            $b = body();
+            $q = $b['q'] ?? [];
+            if (!is_array($q)) $q = [];
+            $q = array_slice(array_map(static fn($x): string => mb_substr((string) $x, 0, 1000), $q), 0, 300);
+            json(['translations' => translate_texts($q, (string) field($b, 'target'))]);
+        }
+
         // Unified notifications bell: per-user feed + unread count (role-scoped).
         case $key === 'GET notifications/feed': {
             $u = require_login();

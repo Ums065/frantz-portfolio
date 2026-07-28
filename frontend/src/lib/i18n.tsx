@@ -1,4 +1,5 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { api } from './api'
 
 /* Lightweight i18n — no external dependency. A language toggle stores the choice
    in localStorage and t('key') looks it up in the dictionaries below (falling
@@ -103,10 +104,111 @@ export function LanguageToggle({ style }: { style?: React.CSSProperties }) {
   )
 }
 
+/* ---- Whole-page auto-translation (machine, via /api/translate) ----
+   When the language is Spanish, walk the page's visible text (+ common
+   attributes) and translate it through the backend LibreTranslate proxy,
+   caching results in memory. A MutationObserver re-translates dynamic content.
+   Switching back to English reloads the page to restore the original source. */
+const memCache: Record<string, Map<string, string>> = {}
+const SKIP_TAGS = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'CODE', 'PRE', 'TEXTAREA'])
+const looksTranslatable = (v: string) => /[A-Za-z]{2,}/.test(v)
+
+export function AutoTranslate() {
+  const { lang } = useI18n()
+  const prev = useRef<Lang>(lang)
+
+  useEffect(() => {
+    const was = prev.current
+    prev.current = lang
+    // Returning to English: reload once to restore original text cleanly.
+    if (lang === 'en') {
+      if (was === 'es' && sessionStorage.getItem('fc_translated') === '1') {
+        sessionStorage.removeItem('fc_translated')
+        window.location.reload()
+      }
+      return
+    }
+    // Spanish (or any non-en): translate the live DOM.
+    sessionStorage.setItem('fc_translated', '1')
+    const target = lang
+    const cache = (memCache[target] ||= new Map())
+    const applied = new WeakMap<Text, string>() // node -> the translation we set
+    let cancelled = false
+    let observer: MutationObserver | null = null
+    let timer: number | null = null
+
+    const collect = (): Text[] => {
+      const nodes: Text[] = []
+      const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
+        acceptNode(n) {
+          const p = (n as Text).parentElement
+          if (!p || SKIP_TAGS.has(p.tagName) || p.closest('[data-no-translate]')) return NodeFilter.FILTER_REJECT
+          const v = n.nodeValue || ''
+          if (!looksTranslatable(v)) return NodeFilter.FILTER_REJECT
+          if (applied.get(n as Text) === v) return NodeFilter.FILTER_REJECT // already translated, unchanged
+          return NodeFilter.FILTER_ACCEPT
+        },
+      })
+      while (w.nextNode()) nodes.push(w.currentNode as Text)
+      return nodes
+    }
+    const applyText = (nodes: Text[]) => {
+      observer?.disconnect()
+      for (const n of nodes) {
+        const raw = n.nodeValue || ''
+        const key = raw.trim()
+        const tr = key && cache.get(key)
+        if (tr && tr !== key) {
+          const next = raw.replace(key, tr)
+          n.nodeValue = next
+          applied.set(n, next)
+        }
+      }
+      const attrs = ['placeholder', 'title', 'aria-label']
+      for (const a of attrs) {
+        document.querySelectorAll<HTMLElement>(`[${a}]`).forEach((el) => {
+          if (el.closest('[data-no-translate]')) return
+          const raw = el.getAttribute(a) || ''
+          const key = raw.trim()
+          const tr = key && cache.get(key)
+          if (tr && tr !== key) el.setAttribute(a, tr)
+        })
+      }
+      if (observer) observer.observe(document.body, { childList: true, subtree: true, characterData: true })
+    }
+    const run = async () => {
+      const nodes = collect()
+      const keys = new Set<string>()
+      for (const n of nodes) { const k = (n.nodeValue || '').trim(); if (k && !cache.has(k)) keys.add(k) }
+      document.querySelectorAll<HTMLElement>('[placeholder],[title],[aria-label]').forEach((el) => {
+        for (const a of ['placeholder', 'title', 'aria-label']) { const v = el.getAttribute(a); const k = v && v.trim(); if (k && looksTranslatable(k) && !cache.has(k)) keys.add(k) }
+      })
+      applyText(nodes) // apply anything already cached
+      const todo = [...keys]
+      for (let i = 0; i < todo.length && !cancelled; i += 100) {
+        const chunk = todo.slice(i, i + 100)
+        try {
+          const d = await api.post<{ translations: string[] }>('translate', { q: chunk, target })
+          ;(d.translations || []).forEach((t, idx) => cache.set(chunk[idx], t))
+        } catch { /* fail open — leave English */ }
+      }
+      if (!cancelled) applyText(collect())
+    }
+    const schedule = () => { if (timer) window.clearTimeout(timer); timer = window.setTimeout(() => { if (!cancelled) void run() }, 450) }
+
+    observer = new MutationObserver(schedule)
+    void run()
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true })
+    return () => { cancelled = true; observer?.disconnect(); if (timer) window.clearTimeout(timer) }
+  }, [lang])
+
+  return null
+}
+
 /** Site-wide floating language widget, pinned bottom-right on every page. */
 export function FloatingLanguageToggle() {
   return (
-    <div style={{ position: 'fixed', right: 16, bottom: 16, zIndex: 90 }}>
+    <div data-no-translate style={{ position: 'fixed', right: 16, bottom: 16, zIndex: 90 }}>
       <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(20,19,15,0.92)', border: '1px solid var(--line)', borderRadius: 999, padding: '5px 8px 5px 10px', boxShadow: '0 8px 26px -10px rgba(0,0,0,0.7)', backdropFilter: 'blur(6px)' }}>
         <span aria-hidden="true" style={{ fontSize: 14 }}>🌐</span>
         <LanguageToggle />

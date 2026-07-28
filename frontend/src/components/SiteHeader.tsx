@@ -88,7 +88,7 @@ export default function SiteHeader({ home = false }: { home?: boolean }) {
     <>
       <div className="scroll-progress" id="scrollProgress" />
 
-      <header className="nav">
+      <header className="nav" data-no-translate>
         <div className="nav__inner">
           <Link to="/" className="logo-mono" aria-label="Frantz Coutard home"><img src={logo} alt="FC monogram" /></Link>
           <nav className="nav__links">
