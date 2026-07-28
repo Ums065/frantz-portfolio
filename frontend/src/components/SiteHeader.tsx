@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import { SocialLinks } from './SocialIcons'
 import { BRAND_LOGO } from '../lib/brandAssets'
 import { resolveDashboardRoute } from '../lib/dashboardRoute'
-import { useI18n, LanguageToggle } from '../lib/i18n'
+import { useI18n } from '../lib/i18n'
 
 const logo = BRAND_LOGO
 
@@ -127,7 +127,6 @@ export default function SiteHeader({ home = false }: { home?: boolean }) {
             <span className="nav__indicator" aria-hidden="true" />
           </nav>
           <div className="nav__cta">
-            <LanguageToggle />
             <Link to="/demo" className="btn btn--sm" style={{ borderColor: 'var(--gold)', color: 'var(--gold-light)' }}>{t('cta.demo')}</Link>
             {user ? (
               <div className="profile-menu" ref={menuRef}>

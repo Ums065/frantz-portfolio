@@ -102,3 +102,15 @@ export function LanguageToggle({ style }: { style?: React.CSSProperties }) {
     </div>
   )
 }
+
+/** Site-wide floating language widget, pinned bottom-right on every page. */
+export function FloatingLanguageToggle() {
+  return (
+    <div style={{ position: 'fixed', right: 16, bottom: 16, zIndex: 90 }}>
+      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(20,19,15,0.92)', border: '1px solid var(--line)', borderRadius: 999, padding: '5px 8px 5px 10px', boxShadow: '0 8px 26px -10px rgba(0,0,0,0.7)', backdropFilter: 'blur(6px)' }}>
+        <span aria-hidden="true" style={{ fontSize: 14 }}>🌐</span>
+        <LanguageToggle />
+      </div>
+    </div>
+  )
+}
