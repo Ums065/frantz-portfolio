@@ -6334,11 +6334,13 @@ function translate_texts(array $texts, string $target): array
         $out[$origIndex] = $t;
         try { $ins->execute([$hash[$origIndex], $target, $t]); } catch (Throwable $e) { /* ignore */ }
     };
+    $pending = $need; // index => english text, whittled down as providers succeed
     $url = (string) env('LIBRETRANSLATE_URL', '');
-    try {
-        if ($url !== '') {
-            // LibreTranslate — one batched request (q is an array).
-            $idx = array_keys($need); $vals = array_values($need);
+
+    // Provider 1: LibreTranslate (batched, unlimited) if configured + reachable.
+    if ($url !== '' && $pending) {
+        try {
+            $idx = array_keys($pending); $vals = array_values($pending);
             $payload = ['q' => $vals, 'source' => 'en', 'target' => $target, 'format' => 'text'];
             $apiKey = (string) env('LIBRETRANSLATE_API_KEY', '');
             if ($apiKey !== '') $payload['api_key'] = $apiKey;
@@ -6347,13 +6349,22 @@ function translate_texts(array $texts, string $target): array
             $resp = curl_exec($ch); $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE); curl_close($ch);
             if ($resp !== false && $code < 400) {
                 $tr = json_decode((string) $resp, true)['translatedText'] ?? null;
-                if (is_array($tr)) { foreach ($idx as $k => $origIndex) { $save($origIndex, (string) ($tr[$k] ?? $vals[$k])); } }
+                if (is_array($tr)) {
+                    foreach ($idx as $k => $origIndex) {
+                        $t = (string) ($tr[$k] ?? '');
+                        if ($t !== '') { $save($origIndex, $t); unset($pending[$origIndex]); }
+                    }
+                }
             }
-        } else {
-            // MyMemory — free & keyless. One GET per string (results are cached, so
-            // it only happens once per unique phrase). Optional MYMEMORY_EMAIL raises the daily quota.
-            $email = (string) env('MYMEMORY_EMAIL', '');
-            foreach ($need as $origIndex => $tx) {
+        } catch (Throwable $e) { if (app_debug()) error_log('translate LibreTranslate: ' . $e->getMessage()); }
+    }
+
+    // Provider 2 (fallback / default): MyMemory — free & keyless, one cached GET
+    // per phrase. Runs for anything LibreTranslate didn't cover (or if it's off).
+    if ($pending) {
+        $email = (string) env('MYMEMORY_EMAIL', '');
+        foreach ($pending as $origIndex => $tx) {
+            try {
                 $q = mb_substr((string) $tx, 0, 500);
                 $u = 'https://api.mymemory.translated.net/get?q=' . rawurlencode($q) . '&langpair=' . rawurlencode('en|' . $target) . ($email !== '' ? '&de=' . rawurlencode($email) : '');
                 $ch = curl_init($u);
@@ -6363,9 +6374,9 @@ function translate_texts(array $texts, string $target): array
                     $t = json_decode((string) $resp, true)['responseData']['translatedText'] ?? '';
                     if (is_string($t) && $t !== '') $save($origIndex, $t);
                 }
-            }
+            } catch (Throwable $e) { if (app_debug()) error_log('translate MyMemory: ' . $e->getMessage()); }
         }
-    } catch (Throwable $e) { if (app_debug()) error_log('translate_texts: ' . $e->getMessage()); }
+    }
     return $out;
 }
 
