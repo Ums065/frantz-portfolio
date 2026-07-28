@@ -613,3 +613,12 @@ INSERT INTO community_comments (thread_id, author_name, body) VALUES
   (1, 'Frantz Coutard', 'If you want a project or event added here, use the contact form or join the member dashboard.'),
   (1, 'Community Partner', 'Looking forward to the next launch and the local opportunities it creates.'),
   (2, 'Frantz Coutard', 'The roadmap will continue to expand with private resources, notices, and member-first benefits.');
+
+-- Auto-translation cache (whole-site EN→ES via LibreTranslate/MyMemory proxy).
+CREATE TABLE IF NOT EXISTS translation_cache (
+  src_hash CHAR(40) NOT NULL,
+  target VARCHAR(8) NOT NULL,
+  translated MEDIUMTEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (src_hash, target)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

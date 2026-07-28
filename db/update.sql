@@ -1748,5 +1748,14 @@ CREATE TABLE IF NOT EXISTS app_meta (
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Auto-translation cache (whole-site EN→ES via LibreTranslate/MyMemory proxy).
+CREATE TABLE IF NOT EXISTS translation_cache (
+  src_hash CHAR(40) NOT NULL,
+  target VARCHAR(8) NOT NULL,
+  translated MEDIUMTEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (src_hash, target)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 DROP PROCEDURE IF EXISTS add_column_if_missing;
 SET FOREIGN_KEY_CHECKS = 1;
