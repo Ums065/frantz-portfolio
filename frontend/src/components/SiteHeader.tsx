@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import { SocialLinks } from './SocialIcons'
 import { BRAND_LOGO } from '../lib/brandAssets'
 import { resolveDashboardRoute } from '../lib/dashboardRoute'
+import { useI18n, LanguageToggle } from '../lib/i18n'
 
 const logo = BRAND_LOGO
 
@@ -17,6 +18,7 @@ type NavItem =
    `home` keeps the section links as in-page hash anchors. */
 export default function SiteHeader({ home = false }: { home?: boolean }) {
   const { user, logout } = useAuth()
+  const { t } = useI18n()
   const [menuOpen, setMenuOpen] = useState(false)
   const [desktopSponsorOpen, setDesktopSponsorOpen] = useState(false)
   const [mobileSponsorOpen, setMobileSponsorOpen] = useState(false)
@@ -29,19 +31,19 @@ export default function SiteHeader({ home = false }: { home?: boolean }) {
 
   const navLinks: NavItem[] = [
     home
-      ? { label: 'Home', href: '#home', kind: 'anchor' }
-      : { label: 'Home', href: '/', kind: 'route', end: true },
-    { label: 'About', href: '/about', kind: 'route' },
-    { label: 'Projects', href: '/projects', kind: 'route' },
-    { label: 'Awards', href: '/awards', kind: 'route' },
-    { label: 'Events', href: '/events', kind: 'route' },
-    { label: 'Media', href: '/media', kind: 'route' },
-    { label: 'Challenge', href: '/new-school', kind: 'route' },
-    { label: 'Partners', href: '/partner', kind: 'route' },
-    ...(user ? [{ label: 'Dashboard', href: dashboardHref, kind: 'route' as const }] : []),
-    { label: 'Merch', href: '/store', kind: 'route' },
-    { label: 'News', href: '/blog', kind: 'route' },
-    { label: 'Contact', href: '/contact', kind: 'route' },
+      ? { label: t('nav.home'), href: '#home', kind: 'anchor' }
+      : { label: t('nav.home'), href: '/', kind: 'route', end: true },
+    { label: t('nav.about'), href: '/about', kind: 'route' },
+    { label: t('nav.projects'), href: '/projects', kind: 'route' },
+    { label: t('nav.awards'), href: '/awards', kind: 'route' },
+    { label: t('nav.events'), href: '/events', kind: 'route' },
+    { label: t('nav.media'), href: '/media', kind: 'route' },
+    { label: t('nav.challenge'), href: '/new-school', kind: 'route' },
+    { label: t('nav.partners'), href: '/partner', kind: 'route' },
+    ...(user ? [{ label: t('nav.dashboard'), href: dashboardHref, kind: 'route' as const }] : []),
+    { label: t('nav.merch'), href: '/store', kind: 'route' },
+    { label: t('nav.news'), href: '/blog', kind: 'route' },
+    { label: t('nav.contact'), href: '/contact', kind: 'route' },
   ]
 
   useEffect(() => {
@@ -125,7 +127,8 @@ export default function SiteHeader({ home = false }: { home?: boolean }) {
             <span className="nav__indicator" aria-hidden="true" />
           </nav>
           <div className="nav__cta">
-            <Link to="/demo" className="btn btn--sm" style={{ borderColor: 'var(--gold)', color: 'var(--gold-light)' }}>Demo</Link>
+            <LanguageToggle />
+            <Link to="/demo" className="btn btn--sm" style={{ borderColor: 'var(--gold)', color: 'var(--gold-light)' }}>{t('cta.demo')}</Link>
             {user ? (
               <div className="profile-menu" ref={menuRef}>
                 <button
@@ -144,10 +147,10 @@ export default function SiteHeader({ home = false }: { home?: boolean }) {
                     <strong>{fullName}</strong>
                     <span>{user.email}</span>
                   </div>
-                  <Link to={dashboardHref} onClick={closeMenu}>Dashboard</Link>
-                  <Link to="/profile" onClick={closeMenu}>Profile</Link>
-                  <Link to="/become-a-founding-sponsor" onClick={closeMenu}>Founding Sponsor</Link>
-                  <Link to="/founding-sponsors" onClick={closeMenu}>Founding Sponsors</Link>
+                  <Link to={dashboardHref} onClick={closeMenu}>{t('nav.dashboard')}</Link>
+                  <Link to="/profile" onClick={closeMenu}>{t('cta.profile')}</Link>
+                  <Link to="/become-a-founding-sponsor" onClick={closeMenu}>{t('cta.foundingSponsor')}</Link>
+                  <Link to="/founding-sponsors" onClick={closeMenu}>{t('cta.foundingSponsors')}</Link>
                   <button
                     type="button"
                     onClick={async () => {
@@ -155,14 +158,14 @@ export default function SiteHeader({ home = false }: { home?: boolean }) {
                       await logout()
                     }}
                   >
-                    Logout
+                    {t('cta.logout')}
                   </button>
                 </div>
               </div>
             ) : (
               <>
-                <button className="btn btn--sm" data-auth="login">Login</button>
-                <button className="btn btn--sm btn--solid" data-auth="register">Register</button>
+                <button className="btn btn--sm" data-auth="login">{t('cta.login')}</button>
+                <button className="btn btn--sm btn--solid" data-auth="register">{t('cta.register')}</button>
               </>
             )}
           </div>
