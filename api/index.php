@@ -1805,6 +1805,11 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             $url = media_store_uploaded_file('file', false);
             json(ecosystem_set_logo($u, $url));
         }
+        // Ecosystem account removes its logo/branding image.
+        case $method === 'DELETE' && preg_match('#^ecosystem/(sponsor|partner|media|volunteer)/logo$#', $route, $m) === 1: {
+            $u = require_ecosystem($m[1]);
+            json(ecosystem_set_logo($u, ''));
+        }
 
         // Ecosystem account raises a request (meeting/renewal/interview/opportunity/event…) for admin review.
         case $method === 'POST' && preg_match('#^ecosystem/(sponsor|partner|media|volunteer)/request$#', $route, $m) === 1: {
