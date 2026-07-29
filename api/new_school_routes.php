@@ -325,6 +325,8 @@ function new_school_build_student_context(array $student): array
             'answers' => $scholarship['answers'] ?? [],
             'word_limit' => NS_SCHOLARSHIP_WORD_LIMIT,
         ],
+        // Global, age-filtered sponsor jobs this student is eligible to apply to.
+        'sponsor_jobs' => sponsor_jobs_for_student($student),
         'notifications' => new_school_fetch_notifications_for_scope([$studentId], ['student', 'parent'], 12),
         'status_tracker' => new_school_status_tracker($student, $interviewCount),
         'submission_locked' => new_school_submission_is_locked($student, $interviewCount) || !ns_submissions_open(),
@@ -664,6 +666,53 @@ function new_school_handle_route(string $method, string $route): bool
             business_offer_message_add((int) $m[1], 'student', (int) $user['id'], (string) field(body(), 'body'), (string) field(body(), 'attachment_url'));
             json(['messages' => business_offer_messages_list((int) $m[1])]);
         }
+        /* ---------------- SPONSOR JOBS (global board for students) ---------------- */
+        // Age-filtered global board: approved jobs with min_age <= this student's age.
+        case $key === 'GET new-school/student/sponsor-jobs': {
+            $user = require_login();
+            $st = new_school_fetch_student_by_user_id((int) $user['id']);
+            if (!$st) json(['error' => 'Student profile not found.'], 404);
+            json(['jobs' => sponsor_jobs_for_student($st)]);
+        }
+        // Student applies (or edits a still-submitted application) to a sponsor job.
+        case $method === 'POST' && preg_match('#^new-school/student/sponsor-job/(\d+)/apply$#', $route, $m) === 1: {
+            $user = require_login();
+            rate_limit('sponsor_job_apply', 30, 3600, (string) $user['id']);
+            $st = new_school_fetch_student_by_user_id((int) $user['id']);
+            if (!$st) json(['error' => 'Student profile not found.'], 404);
+            $b = body();
+            $answers = $b['answers'] ?? [];
+            if (!is_array($answers)) $answers = [];
+            try {
+                $jobs = sponsor_job_apply($st, (int) $m[1], $answers, trim((string) field($b, 'resume_url')));
+            } catch (RuntimeException $e) {
+                json(['error' => $e->getMessage()], 422);
+            }
+            json(['message' => 'Application submitted.', 'jobs' => $jobs]);
+        }
+        // Student ⇄ sponsor chat on an accepted application.
+        case $method === 'GET' && preg_match('#^new-school/student/application/(\d+)/messages$#', $route, $m) === 1: {
+            $user = require_login();
+            $st = new_school_fetch_student_by_user_id((int) $user['id']);
+            if (!$st) json(['error' => 'Student profile not found.'], 404);
+            $r = sponsor_application_row((int) $m[1]);
+            if (!$r || (int) $r['student_id'] !== (int) $st['id']) json(['error' => 'Application not found.'], 404);
+            $can = sponsor_application_is_accepted($r);
+            if ($can) sponsor_application_messages_mark_read((int) $m[1], 'student');
+            json(['can_chat' => $can, 'messages' => $can ? sponsor_application_messages_list((int) $m[1]) : []]);
+        }
+        case $method === 'POST' && preg_match('#^new-school/student/application/(\d+)/messages$#', $route, $m) === 1: {
+            $user = require_login();
+            rate_limit('sponsor_chat', 30, 300, (string) $user['id']);
+            $st = new_school_fetch_student_by_user_id((int) $user['id']);
+            if (!$st) json(['error' => 'Student profile not found.'], 404);
+            $r = sponsor_application_row((int) $m[1]);
+            if (!$r || (int) $r['student_id'] !== (int) $st['id']) json(['error' => 'Application not found.'], 404);
+            if (!sponsor_application_is_accepted($r)) json(['error' => 'Chat opens once the sponsor accepts your application.'], 422);
+            sponsor_application_message_add((int) $m[1], 'student', (int) $user['id'], (string) field(body(), 'body'), (string) field(body(), 'attachment_url'));
+            json(['messages' => sponsor_application_messages_list((int) $m[1])]);
+        }
+
         case $key === 'GET new-school/parent/offers': {
             $user = require_login();
             json(['offers' => business_offers_for_parent((int) $user['id'])]);

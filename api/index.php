@@ -1837,6 +1837,82 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             json(['messages' => ecosystem_send_message((int) $u['id'], 'user', (string) field(body(), 'body'))], 201);
         }
 
+        /* ---------------- SPONSOR JOB POSTS (global, age-filtered) ---------------- */
+        // Sponsor: list own jobs / post a new job (goes to admin for approval).
+        case $key === 'GET ecosystem/sponsor/jobs': {
+            $u = require_ecosystem('sponsor');
+            json(['jobs' => sponsor_jobs_for_sponsor((int) $u['id'])]);
+        }
+        case $key === 'POST ecosystem/sponsor/jobs': {
+            $u = require_ecosystem('sponsor');
+            rate_limit('sponsor_job_post', 20, 3600, (string) $u['id']);
+            json(['message' => 'Job submitted for approval.', 'jobs' => sponsor_job_create((int) $u['id'], body())], 201);
+        }
+        // Sponsor closes / reopens one of their jobs.
+        case $method === 'POST' && preg_match('#^ecosystem/sponsor/job/(\d+)/status$#', $route, $m) === 1: {
+            $u = require_ecosystem('sponsor');
+            json(['jobs' => sponsor_job_set_status((int) $m[1], (string) field(body(), 'status'), (int) $u['id'])]);
+        }
+        // Sponsor: applications for one of their jobs.
+        case $method === 'GET' && preg_match('#^ecosystem/sponsor/job/(\d+)/applications$#', $route, $m) === 1: {
+            $u = require_ecosystem('sponsor');
+            $job = sponsor_job_row((int) $m[1]);
+            if (!$job || (int) $job['sponsor_user_id'] !== (int) $u['id']) json(['error' => 'Job not found.'], 404);
+            json(['applications' => sponsor_job_applications_for_job((int) $m[1])]);
+        }
+        // Sponsor accepts / declines an application on their job.
+        case $method === 'POST' && preg_match('#^ecosystem/sponsor/application/(\d+)/respond$#', $route, $m) === 1: {
+            $u = require_ecosystem('sponsor');
+            $b = body();
+            json(['applications' => sponsor_application_respond((int) $m[1], (string) field($b, 'decision'), (string) field($b, 'reason'), (int) $u['id'])]);
+        }
+        // Sponsor ⇄ student chat on an accepted application.
+        case $method === 'GET' && preg_match('#^ecosystem/sponsor/application/(\d+)/messages$#', $route, $m) === 1: {
+            $u = require_ecosystem('sponsor');
+            $r = sponsor_application_row((int) $m[1]);
+            if (!$r || (int) $r['sponsor_user_id'] !== (int) $u['id']) json(['error' => 'Application not found.'], 404);
+            $can = sponsor_application_is_accepted($r);
+            if ($can) sponsor_application_messages_mark_read((int) $m[1], 'sponsor');
+            json(['can_chat' => $can, 'messages' => $can ? sponsor_application_messages_list((int) $m[1]) : []]);
+        }
+        case $method === 'POST' && preg_match('#^ecosystem/sponsor/application/(\d+)/messages$#', $route, $m) === 1: {
+            $u = require_ecosystem('sponsor');
+            rate_limit('sponsor_chat', 30, 300, (string) $u['id']);
+            $r = sponsor_application_row((int) $m[1]);
+            if (!$r || (int) $r['sponsor_user_id'] !== (int) $u['id']) json(['error' => 'Application not found.'], 404);
+            if (!sponsor_application_is_accepted($r)) json(['error' => 'Chat opens once you accept the application.'], 422);
+            sponsor_application_message_add((int) $m[1], 'sponsor', (int) $u['id'], (string) field(body(), 'body'), (string) field(body(), 'attachment_url'));
+            json(['messages' => sponsor_application_messages_list((int) $m[1])]);
+        }
+
+        // Admin: sponsor job approvals + oversight of an accepted application's chat.
+        case $key === 'GET admin/sponsor-jobs': {
+            require_admin();
+            json(['jobs' => sponsor_jobs_all()]);
+        }
+        case $method === 'PUT' && preg_match('#^admin/sponsor-job/(\d+)$#', $route, $m) === 1: {
+            $admin = require_admin();
+            $b = body();
+            json(['message' => 'Job updated.', 'jobs' => sponsor_job_review((int) $m[1], (string) field($b, 'status'), (string) field($b, 'admin_note'), (int) $admin['id'])]);
+        }
+        case $method === 'GET' && preg_match('#^admin/sponsor-job/(\d+)/applications$#', $route, $m) === 1: {
+            require_admin();
+            json(['applications' => sponsor_job_applications_for_job((int) $m[1])]);
+        }
+        case $method === 'GET' && preg_match('#^admin/sponsor-application/(\d+)/messages$#', $route, $m) === 1: {
+            require_admin();
+            $r = sponsor_application_row((int) $m[1]);
+            if (!$r) json(['error' => 'Application not found.'], 404);
+            json(['can_chat' => sponsor_application_is_accepted($r), 'messages' => sponsor_application_messages_list((int) $m[1])]);
+        }
+        case $method === 'POST' && preg_match('#^admin/sponsor-application/(\d+)/messages$#', $route, $m) === 1: {
+            $admin = require_admin();
+            $r = sponsor_application_row((int) $m[1]);
+            if (!$r) json(['error' => 'Application not found.'], 404);
+            sponsor_application_message_add((int) $m[1], 'admin', (int) $admin['id'], (string) field(body(), 'body'), (string) field(body(), 'attachment_url'));
+            json(['messages' => sponsor_application_messages_list((int) $m[1])]);
+        }
+
         /* ---------------- OUR PARTNERS (dynamic content directory) ---------------- */
         case $key === 'GET partners': {
             partners_ensure_schema();

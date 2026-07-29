@@ -2,6 +2,7 @@ import EcosystemPortal, {
   Section, DownloadList, EcoDocuments, EcoRequests, EcoAnnouncements, EcoAssignments,
   LogoUploader, RequestButton, EcoMessages, unseenAnnCount, markAnnSeen, unseenReqCount, markReqSeen, type EcoAssign, type PortalConfig,
 } from './portal/EcosystemPortal'
+import { PostJobPanel, ApplicationsPanel, type SponsorJob } from '../components/SponsorJobsManager'
 
 /* Sponsor Portal — an investment portal: package + recognition, branding, live
    impact, documents (invoices/agreements), award ceremony, renewal + meeting
@@ -29,6 +30,26 @@ const config: PortalConfig = {
     ]
   },
   tabs: [
+    {
+      key: 'jobs',
+      label: 'Post a Job',
+      render: (data, reload) => (
+        <Section title="Post a Job — reaches students globally">
+          <p style={{ color: 'var(--muted)', fontSize: 12.5, margin: '0 0 14px' }}>
+            Your job is reviewed by the program team, then shown to every eligible student (age {'≥'} your minimum). Add up to 12 questions applicants must answer.
+          </p>
+          <PostJobPanel jobs={(data?.job_posts as SponsorJob[]) || []} reload={reload} />
+        </Section>
+      ),
+    },
+    {
+      key: 'applications',
+      label: 'Applications',
+      badge: (data) => ((data?.job_posts as SponsorJob[]) || []).reduce((n, j) => n + (j.app_new || 0), 0),
+      render: (data) => (
+        <Section title="Applications"><ApplicationsPanel jobs={(data?.job_posts as SponsorJob[]) || []} /></Section>
+      ),
+    },
     {
       key: 'sponsorship',
       label: 'Sponsorship',

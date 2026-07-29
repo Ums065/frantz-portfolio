@@ -1757,5 +1757,56 @@ CREATE TABLE IF NOT EXISTS translation_cache (
   PRIMARY KEY (src_hash, target)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- 2026-07 (c): Sponsor job posts (global, age-filtered) + applications + 1:1 chat.
+CREATE TABLE IF NOT EXISTS sponsor_jobs (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  sponsor_user_id INT NOT NULL,
+  title VARCHAR(160) NOT NULL,
+  description TEXT DEFAULT NULL,
+  location VARCHAR(160) DEFAULT NULL,
+  stipend VARCHAR(120) DEFAULT NULL,
+  skills VARCHAR(255) DEFAULT NULL,
+  min_age TINYINT UNSIGNED NOT NULL DEFAULT 12,
+  questions LONGTEXT DEFAULT NULL,
+  attachment_url VARCHAR(255) DEFAULT NULL,
+  status ENUM('pending','approved','declined','closed') NOT NULL DEFAULT 'pending',
+  admin_note TEXT DEFAULT NULL,
+  reviewed_by_user_id INT DEFAULT NULL,
+  reviewed_at TIMESTAMP NULL DEFAULT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  KEY idx_sjob_sponsor (sponsor_user_id),
+  KEY idx_sjob_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS sponsor_job_applications (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  job_id INT NOT NULL,
+  student_id INT NOT NULL,
+  student_user_id INT DEFAULT NULL,
+  answers LONGTEXT DEFAULT NULL,
+  resume_url VARCHAR(255) DEFAULT NULL,
+  status ENUM('submitted','accepted','declined') NOT NULL DEFAULT 'submitted',
+  decline_reason TEXT DEFAULT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_job_student (job_id, student_id),
+  KEY idx_sja_job (job_id),
+  KEY idx_sja_student (student_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS sponsor_application_messages (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  application_id INT NOT NULL,
+  sender_role ENUM('student','sponsor','admin') NOT NULL,
+  sender_user_id INT DEFAULT NULL,
+  body TEXT NOT NULL,
+  attachment_url VARCHAR(255) DEFAULT NULL,
+  read_by_student TINYINT(1) NOT NULL DEFAULT 0,
+  read_by_sponsor TINYINT(1) NOT NULL DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_sam_app (application_id, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 DROP PROCEDURE IF EXISTS add_column_if_missing;
 SET FOREIGN_KEY_CHECKS = 1;

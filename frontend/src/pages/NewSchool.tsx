@@ -515,7 +515,7 @@ function SchoolRankBoard({ schools, mySchoolId, hidden }: { schools: any[]; mySc
 }
 
 type RegistrationTag = 'community' | 'student' | 'parent' | 'school' | 'teacher' | 'business' | 'sponsor' | 'partner' | 'media' | 'volunteer'
-type DashboardTabKey = 'overview' | 'profile' | 'activity' | 'rankings' | 'records' | 'approvals' | 'reviews' | 'scoring' | 'notifications' | 'data' | 'chat' | 'faq' | 'resources'
+type DashboardTabKey = 'overview' | 'profile' | 'activity' | 'rankings' | 'records' | 'approvals' | 'reviews' | 'scoring' | 'jobs' | 'notifications' | 'data' | 'chat' | 'faq' | 'resources'
 type SchoolRecordsTabKey = 'students' | 'teachers' | 'interviews' | 'approvals' | 'projects'
 type DashboardTabConfig = { key: DashboardTabKey; label: string; hint: string; badge?: string }
 
@@ -957,11 +957,214 @@ function NsOfferChip({ icon, text }: { icon: string; text: string }) {
   )
 }
 
+const SPONSOR_JOB_WORD_LIMIT = 200
+
+interface StudentSponsorJob {
+  id: number
+  title: string
+  description: string
+  location: string
+  stipend: string
+  skills: string
+  min_age: number
+  attachment_url: string
+  sponsor_name: string
+  questions: { key: string; question: string }[]
+  created_ts: number
+  application: null | {
+    id: number
+    status: 'submitted' | 'accepted' | 'declined'
+    answers: { key: string; question: string; answer: string }[]
+    decline_reason: string
+    unread: number
+  }
+}
+
+const JOB_STATUS_LABEL: Record<string, string> = { submitted: 'Applied ✓', accepted: 'Accepted 🎉', declined: 'Not selected' }
+
+/* Global sponsor-jobs board for students: age-filtered cards + an apply wizard
+   (one question at a time, 200-word cap each). Once a sponsor accepts, a 1:1 chat
+   opens (reusing OfferChat). Data comes from the dashboard payload; applying
+   returns a fresh list we hold locally. */
+function StudentSponsorJobs({ jobs, hidden }: { jobs: StudentSponsorJob[]; hidden?: boolean }) {
+  const [list, setList] = useState<StudentSponsorJob[]>(jobs)
+  const [applyJob, setApplyJob] = useState<StudentSponsorJob | null>(null)
+  useEffect(() => { setList(jobs) }, [jobs])
+
+  return (
+    <article className="glass ns-dash-card ns-dash-card--wide reveal in" hidden={hidden}>
+      <div className="ns-dash-card__head">
+        <span className="eyebrow">💼 Sponsor Jobs</span>
+      </div>
+      {list.length === 0 ? (
+        <p style={{ color: 'var(--muted)', fontSize: 13.5 }}>No jobs open to you right now. New opportunities from sponsors will appear here — check back soon.</p>
+      ) : (
+        <div style={{ display: 'grid', gap: 16 }}>
+          {list.map((j) => {
+            const app = j.application
+            return (
+              <div key={j.id} style={{ border: '1px solid var(--line)', borderRadius: 14, background: 'rgba(0,0,0,0.16)', overflow: 'hidden' }}>
+                <div style={{ display: 'flex', gap: 12, alignItems: 'center', padding: '14px 16px', background: 'linear-gradient(180deg, rgba(212,175,90,0.08), transparent)' }}>
+                  <div style={{ width: 46, height: 46, flex: '0 0 46px', borderRadius: 12, display: 'grid', placeItems: 'center', background: 'linear-gradient(135deg, var(--gold), var(--gold-light))', color: '#1c1a14', fontWeight: 900, fontSize: 17, fontFamily: 'var(--f-serif)' }}>
+                    {initials(j.sponsor_name)}
+                  </div>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ color: 'var(--white)', fontWeight: 800, fontSize: 16, lineHeight: 1.2 }}>{j.title}</div>
+                    <div style={{ color: 'var(--gold-light)', fontSize: 13, marginTop: 2 }}>{j.sponsor_name}</div>
+                  </div>
+                  {app && (app.unread ?? 0) > 0 && (
+                    <span style={{ flex: '0 0 auto', background: '#e5484d', color: '#fff', fontSize: 11, fontWeight: 700, lineHeight: 1, padding: '4px 8px', borderRadius: 999 }}>{app.unread} new</span>
+                  )}
+                </div>
+                <div style={{ padding: '4px 16px 16px' }}>
+                  {(j.location || j.stipend) && (
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', margin: '12px 0 0' }}>
+                      {j.location && <NsOfferChip icon="📍" text={j.location} />}
+                      {j.stipend && <NsOfferChip icon="💰" text={j.stipend} />}
+                      <NsOfferChip icon="🎂" text={`Ages ${j.min_age}+`} />
+                    </div>
+                  )}
+                  {j.skills && (
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', margin: '10px 0 0' }}>
+                      {j.skills.split(',').map((s) => s.trim()).filter(Boolean).map((s, i) => (
+                        <span key={i} style={{ fontSize: 11.5, color: 'var(--gold-light)', background: 'rgba(212,175,90,0.12)', border: '1px solid rgba(212,175,90,0.3)', borderRadius: 6, padding: '2px 8px' }}>{s}</span>
+                      ))}
+                    </div>
+                  )}
+                  {j.description && <p style={{ color: '#d8d3c6', fontSize: 13.5, lineHeight: 1.55, margin: '12px 0 0', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{j.description}</p>}
+                  {j.attachment_url && (
+                    <p style={{ fontSize: 12.5, margin: '10px 0 0' }}>📎 <a href={j.attachment_url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--gold-light)' }}>View attachment</a></p>
+                  )}
+
+                  <div style={{ marginTop: 14, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                    {!app && (
+                      <button className="btn btn--sm btn--solid" onClick={() => setApplyJob(j)}>Apply</button>
+                    )}
+                    {app && (
+                      <span style={{ fontSize: 12.5, fontWeight: 700, borderRadius: 999, padding: '4px 12px', color: 'var(--white)', background: app.status === 'accepted' ? 'rgba(120,200,140,0.2)' : app.status === 'declined' ? 'rgba(220,130,130,0.2)' : 'rgba(120,180,255,0.18)', border: '1px solid var(--line)' }}>{JOB_STATUS_LABEL[app.status] || app.status}</span>
+                    )}
+                    {app && app.status === 'submitted' && <button className="btn btn--sm" onClick={() => setApplyJob(j)}>Edit application</button>}
+                  </div>
+
+                  {app && app.status === 'declined' && app.decline_reason && (
+                    <p style={{ color: '#e0a0a0', fontSize: 12.5, margin: '10px 0 0' }}>Reason: {app.decline_reason}</p>
+                  )}
+                  {app && app.status === 'accepted' && (
+                    <OfferChat base={`new-school/student/application/${app.id}`} role="student" />
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {applyJob && (
+        <SponsorJobApplyModal
+          job={applyJob}
+          onClose={() => setApplyJob(null)}
+          onDone={(fresh) => { setList(fresh); setApplyJob(null) }}
+        />
+      )}
+    </article>
+  )
+}
+
+/* Apply wizard — one question per step, 200-word cap, live counter. Pre-fills
+   existing answers when editing a still-submitted application. */
+function SponsorJobApplyModal({ job, onClose, onDone }: { job: StudentSponsorJob; onClose: () => void; onDone: (jobs: StudentSponsorJob[]) => void }) {
+  const questions = job.questions || []
+  const [step, setStep] = useState(0)
+  const [answers, setAnswers] = useState<Record<string, string>>(() => {
+    const seed: Record<string, string> = {}
+    for (const qa of job.application?.answers || []) seed[qa.key] = qa.answer
+    return seed
+  })
+  const [resumeUrl, setResumeUrl] = useState('')
+  const [resumeName, setResumeName] = useState('')
+  const [uploading, setUploading] = useState(false)
+  const [busy, setBusy] = useState(false)
+
+  const total = questions.length
+  const q = questions[step]
+  const answer = q ? (answers[q.key] || '') : ''
+  const words = countWords(answer)
+  const overLimit = words > SPONSOR_JOB_WORD_LIMIT
+  const canNext = answer.trim() !== '' && !overLimit
+
+  const pickResume = async (file?: File) => {
+    if (!file) return
+    setUploading(true)
+    try {
+      const { url } = await api.upload<{ url: string }>('new-school/upload', file)
+      setResumeUrl(url); setResumeName(file.name)
+    } catch (e) { window.fcToast?.(e instanceof Error ? e.message : 'Could not upload the résumé.') } finally { setUploading(false) }
+  }
+
+  const submit = async () => {
+    setBusy(true)
+    try {
+      const payload = questions.map((qq) => ({ key: qq.key, answer: (answers[qq.key] || '').trim() }))
+      const d = await api.post<{ jobs: StudentSponsorJob[]; message?: string }>(`new-school/student/sponsor-job/${job.id}/apply`, { answers: payload, resume_url: resumeUrl })
+      window.fcToast?.(d.message || 'Application submitted.')
+      onDone(Array.isArray(d.jobs) ? d.jobs : [])
+    } catch (e) { window.fcToast?.(e instanceof Error ? e.message : 'Could not submit your application.'); setBusy(false) }
+  }
+
+  const isLast = step >= total - 1
+
+  return createPortal(
+    <div onClick={() => !busy && onClose()} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.66)', display: 'grid', placeItems: 'center', padding: 20, zIndex: 9998 }}>
+      <div onClick={(e) => e.stopPropagation()} className="glass" style={{ maxWidth: 560, width: '100%', maxHeight: '88vh', overflowY: 'auto', padding: 26, borderRadius: 16 }}>
+        <span className="eyebrow">{job.sponsor_name}</span>
+        <h3 style={{ fontFamily: 'var(--f-serif)', color: 'var(--gold-light)', fontSize: 22, margin: '4px 0 6px' }}>Apply — {job.title}</h3>
+
+        {total === 0 ? (
+          <>
+            <p style={{ color: 'var(--muted)', fontSize: 13, lineHeight: 1.6, margin: '0 0 12px' }}>This job has no questions — you can attach a résumé (optional) and apply directly.</p>
+          </>
+        ) : (
+          <>
+            <p style={{ color: 'var(--muted)', fontSize: 12.5, margin: '0 0 10px' }}>Question {step + 1} of {total}</p>
+            <div style={{ color: 'var(--white)', fontSize: 15, fontWeight: 700, marginBottom: 8 }}>{q?.question}</div>
+            <textarea autoFocus value={answer} onChange={(e) => setAnswers((a) => ({ ...a, [q!.key]: e.target.value }))} placeholder="Write your answer…" style={{ width: '100%', minHeight: 130, resize: 'vertical', background: 'rgba(0,0,0,0.25)', border: `1px solid ${overLimit ? '#e08a8a' : 'var(--line)'}`, borderRadius: 10, color: 'var(--white)', padding: '10px 12px', fontSize: 13.5, fontFamily: 'inherit', boxSizing: 'border-box' }} />
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginTop: 6, color: overLimit ? '#e59a9a' : 'var(--muted)' }}>
+              <span>{overLimit ? `Over the ${SPONSOR_JOB_WORD_LIMIT}-word limit` : `Up to ${SPONSOR_JOB_WORD_LIMIT} words`}</span>
+              <span>{words}/{SPONSOR_JOB_WORD_LIMIT}</span>
+            </div>
+          </>
+        )}
+
+        {isLast && (
+          <div style={{ marginTop: 14 }}>
+            <label className="btn btn--sm" style={{ display: 'inline-flex', cursor: uploading ? 'default' : 'pointer' }}>
+              {uploading ? 'Uploading…' : resumeName ? `📄 ${resumeName}` : 'Attach résumé (optional)'}
+              <input type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp" hidden disabled={uploading} onChange={(e) => pickResume(e.target.files?.[0])} />
+            </label>
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: 10, marginTop: 18, justifyContent: 'space-between', flexWrap: 'wrap' }}>
+          <button className="btn btn--sm" disabled={busy || step === 0} onClick={() => setStep((s) => Math.max(0, s - 1))}>Back</button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn--sm" disabled={busy} onClick={onClose}>Cancel</button>
+            {total > 0 && !isLast
+              ? <button className="btn btn--sm btn--solid" disabled={!canNext} onClick={() => setStep((s) => s + 1)}>Next</button>
+              : <button className="btn btn--sm btn--solid" disabled={busy || uploading || (total > 0 && !canNext)} onClick={() => void submit()}>{busy ? 'Submitting…' : 'Submit application'}</button>}
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  )
+}
+
 const dashboardTabsByRole: Record<string, DashboardTabConfig[]> = {
   student: [
     { key: 'overview', label: 'Overview', hint: 'Your progress at a glance' },
     { key: 'profile', label: 'My Profile', hint: 'Your details and approvals' },
     { key: 'activity', label: 'My Work', hint: 'Do your tasks and submit' },
+    { key: 'jobs', label: 'Sponsor Jobs', hint: 'Browse and apply' },
     { key: 'rankings', label: 'Rankings', hint: 'See who is leading' },
     { key: 'chat', label: 'Chat', hint: 'Talk to the team' },
     { key: 'resources', label: 'Handbooks', hint: 'Download guides' },
@@ -3154,6 +3357,7 @@ export default function NewSchool() {
                 />
               )}
               <JobOffers role="student" hidden={dashboardTab !== 'overview'} />
+              <StudentSponsorJobs jobs={(studentDashboard.sponsor_jobs as StudentSponsorJob[]) || []} hidden={dashboardTab !== 'jobs'} />
               {String(studentDashboard.parent?.link_status || '').toLowerCase() === 'pending_student' && (
                 <article className="glass ns-dash-card ns-dash-card--wide reveal in">
                   <div className="ns-dash-card__head">

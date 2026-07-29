@@ -217,6 +217,15 @@ const ICONS: Record<string, ReactNode> = {
       <rect width="20" height="14" x="2" y="6" rx="2" />
     </>
   ),
+  // Sponsor job posts — briefcase with a plus (post a job).
+  'sponsor-jobs': (
+    <>
+      <rect width="20" height="14" x="2" y="7" rx="2" />
+      <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2" />
+      <line x1="12" x2="12" y1="11" y2="17" />
+      <line x1="9" x2="15" y1="14" y2="14" />
+    </>
+  ),
   // Ecosystem (sponsor/partner/media/volunteer network) — connected nodes.
   ecosystem: (
     <>

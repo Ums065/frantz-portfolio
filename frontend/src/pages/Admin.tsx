@@ -19,13 +19,14 @@ const JudgesAdminPanel = lazy(() => import('../components/admin/JudgesAdminPanel
 const PartnersAdminPanel = lazy(() => import('../components/admin/PartnersAdminPanel'))
 const ResearchAdminPanel = lazy(() => import('../components/admin/ResearchAdminPanel'))
 const BusinessRequestsAdminPanel = lazy(() => import('../components/admin/BusinessRequestsAdminPanel'))
+const SponsorJobsAdminPanel = lazy(() => import('../components/admin/SponsorJobsAdminPanel'))
 import SubmissionScoresModal from '../components/admin/SubmissionScoresModal'
 
 const EDU_PEOPLE_PAGE_SIZE = 10
 
 type TabKey =
   | 'overview' | 'analytics' | 'traffic' | 'requests' | 'orders' | 'subscribers' | 'contacts'
-  | 'members' | 'approvals' | 'business-requests' | 'ecosystem' | 'sponsors' | 'partners' | 'awards' | 'events' | 'blog'
+  | 'members' | 'approvals' | 'business-requests' | 'sponsor-jobs' | 'ecosystem' | 'sponsors' | 'partners' | 'awards' | 'events' | 'blog'
   | 'testimonials' | 'media' | 'gallery' | 'community' | 'rsvps' | 'inventory'
   | 'ns-schools' | 'ns-ranking' | 'ns-submissions' | 'ns-interviews' | 'ns-chat' | 'ns-trendcatch' | 'ns-judges' | 'ns-timeline'
   | 'research'
@@ -53,6 +54,7 @@ const NAV_GROUPS: Array<{ group: string; items: NavItem[] }> = [
   { group: 'Partnerships & Outreach', items: [
     // Requests to act on first, then standing partner directories.
     { key: 'business-requests', label: 'Business Requests' },
+    { key: 'sponsor-jobs', label: 'Sponsor Jobs' },
     { key: 'ecosystem', label: 'Ecosystem' },
     { key: 'research', label: 'Research (Fellow)' },
     { key: 'sponsors', label: 'Founding Sponsors' },
@@ -1812,6 +1814,7 @@ export default function Admin() {
         {tab === 'partners' && <PartnersAdminPanel />}
         {tab === 'research' && <ResearchAdminPanel />}
         {tab === 'business-requests' && <BusinessRequestsAdminPanel />}
+        {tab === 'sponsor-jobs' && <SponsorJobsAdminPanel />}
         {tab === 'ecosystem' && <EcosystemAdminPanel />}
         {tab === 'awards' && <AwardsAdmin />}
         {tab === 'events' && <EventsAdmin />}

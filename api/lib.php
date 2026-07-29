@@ -131,7 +131,7 @@ function ensure_session_version_column(): void
  * request after a deploy, db_auto_migrate() notices the stored version is behind
  * and runs every *_ensure_schema() once; afterwards it's a single cheap SELECT.
  */
-const APP_SCHEMA_VERSION = 20260704; // yyyymmdd + seq — raise on each schema change
+const APP_SCHEMA_VERSION = 20260729; // yyyymmdd + seq — raise on each schema change
 
 /**
  * One-shot, version-gated auto-migration. Runs on app bootstrap: if the DB's
@@ -166,6 +166,7 @@ function db_auto_migrate(): void
                     'new_school_parents_ensure_link_columns', 'partners_ensure_schema', 'business_ensure_schema',
                     'ecosystem_ensure_schema', 'ecosystem_shared_ensure_schema', 'referral_ensure_schema',
                     'mail_queue_ensure_schema', 'password_reset_ensure_schema', 'research_ensure_schema',
+                    'sponsor_jobs_ensure_schema',
                 ] as $fn) {
                     if (function_exists($fn)) {
                         try { $fn(); } catch (Throwable $e) { if (app_debug()) error_log("db_auto_migrate $fn: " . $e->getMessage()); }
@@ -4445,6 +4446,472 @@ function business_offer_message_add(int $reqId, string $senderRole, ?int $sender
     }
 }
 
+/* ==================== Sponsor job posts (global, age-filtered) + applications + chat ==================== */
+
+// A sponsor may attach up to this many custom questions to a job; each answer is
+// capped at this many words. Mirrors the scholarship-answer validation model.
+const NS_JOB_MAX_QUESTIONS = 12;
+const NS_JOB_ANSWER_WORD_LIMIT = 200;
+
+/** Self-healing schema for sponsor jobs, applications and their 1:1 chat threads. */
+function sponsor_jobs_ensure_schema(): void
+{
+    static $ready = false;
+    if ($ready) return;
+    $pdo = db();
+    // A job a sponsor posts. Goes to admin as 'pending'; once 'approved' it is
+    // visible to every New School student whose age >= min_age. 'closed' hides it.
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS sponsor_jobs (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            sponsor_user_id INT NOT NULL,
+            title VARCHAR(160) NOT NULL,
+            description TEXT DEFAULT NULL,
+            location VARCHAR(160) DEFAULT NULL,
+            stipend VARCHAR(120) DEFAULT NULL,
+            skills VARCHAR(255) DEFAULT NULL,
+            min_age TINYINT UNSIGNED NOT NULL DEFAULT 12,
+            questions LONGTEXT DEFAULT NULL,
+            attachment_url VARCHAR(255) DEFAULT NULL,
+            status ENUM('pending','approved','declined','closed') NOT NULL DEFAULT 'pending',
+            admin_note TEXT DEFAULT NULL,
+            reviewed_by_user_id INT DEFAULT NULL,
+            reviewed_at TIMESTAMP NULL DEFAULT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_sjob_sponsor (sponsor_user_id),
+            INDEX idx_sjob_status (status)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+    );
+    // One application per student per job (UNIQUE); answers stored as a JSON array
+    // of {key,question,answer}. Résumé released to the sponsor only once accepted.
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS sponsor_job_applications (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            job_id INT NOT NULL,
+            student_id INT NOT NULL,
+            student_user_id INT DEFAULT NULL,
+            answers LONGTEXT DEFAULT NULL,
+            resume_url VARCHAR(255) DEFAULT NULL,
+            status ENUM('submitted','accepted','declined') NOT NULL DEFAULT 'submitted',
+            decline_reason TEXT DEFAULT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uniq_job_student (job_id, student_id),
+            INDEX idx_sja_job (job_id),
+            INDEX idx_sja_student (student_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+    );
+    // Direct sponsor ⇄ student chat (admin oversight) once an application is accepted.
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS sponsor_application_messages (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            application_id INT NOT NULL,
+            sender_role ENUM('student','sponsor','admin') NOT NULL,
+            sender_user_id INT DEFAULT NULL,
+            body TEXT NOT NULL,
+            attachment_url VARCHAR(255) DEFAULT NULL,
+            read_by_student TINYINT(1) NOT NULL DEFAULT 0,
+            read_by_sponsor TINYINT(1) NOT NULL DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_sam_app (application_id, created_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+    );
+    $ready = true;
+}
+
+/** Decode a job's questions JSON into a clean list of {key,question}. */
+function sponsor_job_questions_decode(?string $json): array
+{
+    if (!$json) return [];
+    $decoded = json_decode($json, true);
+    if (!is_array($decoded)) return [];
+    $out = [];
+    foreach ($decoded as $q) {
+        if (!is_array($q)) continue;
+        $key = trim((string) ($q['key'] ?? ''));
+        $question = trim((string) ($q['question'] ?? ''));
+        if ($question === '') continue;
+        if ($key === '') $key = 'q' . (count($out) + 1);
+        $out[] = ['key' => $key, 'question' => $question];
+    }
+    return $out;
+}
+
+/** Sponsor posts a new job (goes to admin as pending). Notifies admins. */
+function sponsor_job_create(int $sponsorUserId, array $body): array
+{
+    sponsor_jobs_ensure_schema();
+    $s = static fn(string $k, int $max): string => mb_substr(trim((string) field($body, $k)), 0, $max);
+    $title = $s('title', 160);
+    $description = mb_substr(trim((string) field($body, 'description')), 0, 4000);
+    if ($title === '') json(['error' => 'A job title is required.'], 422);
+    if ($description === '') json(['error' => 'Please describe the job.'], 422);
+    // min_age / questions are non-string fields — read them straight off $body
+    // (field() would cast them to a string).
+    $minAge = (int) ($body['min_age'] ?? 12);
+    if ($minAge < 12) $minAge = 12;
+    if ($minAge > 99) $minAge = 99;
+    // Questions: up to NS_JOB_MAX_QUESTIONS non-empty entries.
+    $rawQ = $body['questions'] ?? null;
+    $questions = [];
+    if (is_array($rawQ)) {
+        foreach ($rawQ as $q) {
+            $question = is_array($q) ? trim((string) ($q['question'] ?? '')) : trim((string) $q);
+            if ($question === '') continue;
+            $questions[] = ['key' => 'q' . (count($questions) + 1), 'question' => mb_substr($question, 0, 500)];
+            if (count($questions) >= NS_JOB_MAX_QUESTIONS) break;
+        }
+    }
+    $attach = (string) field($body, 'attachment_url');
+    $attach = preg_match('#^(/api/uploads/|https?://)#', $attach) ? mb_substr($attach, 0, 255) : null;
+    db()->prepare(
+        'INSERT INTO sponsor_jobs (sponsor_user_id, title, description, location, stipend, skills, min_age, questions, attachment_url, status)
+         VALUES (?,?,?,?,?,?,?,?,?,\'pending\')'
+    )->execute([
+        $sponsorUserId, $title, $description, $s('location', 160) ?: null, $s('stipend', 120) ?: null,
+        $s('skills', 255) ?: null, $minAge,
+        $questions !== [] ? json_encode($questions, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : null,
+        $attach,
+    ]);
+    if (function_exists('notify')) notify('New sponsor job awaiting approval', "A sponsor posted a job \"$title\" (min age $minAge). Review it in the admin Job Approvals tab.");
+    return sponsor_jobs_for_sponsor($sponsorUserId);
+}
+
+/** Shape one job row for output, optionally with its questions + application count. */
+function sponsor_job_public_shape(array $r, bool $withQuestions = true): array
+{
+    return [
+        'id' => (int) $r['id'],
+        'title' => (string) $r['title'],
+        'description' => (string) ($r['description'] ?? ''),
+        'location' => (string) ($r['location'] ?? ''),
+        'stipend' => (string) ($r['stipend'] ?? ''),
+        'skills' => (string) ($r['skills'] ?? ''),
+        'min_age' => (int) ($r['min_age'] ?? 12),
+        'attachment_url' => (string) ($r['attachment_url'] ?? ''),
+        'status' => (string) $r['status'],
+        'admin_note' => (string) ($r['admin_note'] ?? ''),
+        'questions' => $withQuestions ? sponsor_job_questions_decode($r['questions'] ?? null) : [],
+        'created_ts' => (int) ($r['created_ts'] ?? 0),
+    ];
+}
+
+/** A sponsor's own jobs (newest first) with live application counts. */
+function sponsor_jobs_for_sponsor(int $sponsorUserId): array
+{
+    sponsor_jobs_ensure_schema();
+    $s = db()->prepare(
+        "SELECT j.*, UNIX_TIMESTAMP(j.created_at) AS created_ts,
+                (SELECT COUNT(*) FROM sponsor_job_applications a WHERE a.job_id = j.id) AS app_count,
+                (SELECT COUNT(*) FROM sponsor_job_applications a WHERE a.job_id = j.id AND a.status = 'submitted') AS app_new
+         FROM sponsor_jobs j WHERE j.sponsor_user_id = ? ORDER BY j.created_at DESC"
+    );
+    $s->execute([$sponsorUserId]);
+    return array_map(static function (array $r): array {
+        $job = sponsor_job_public_shape($r);
+        $job['app_count'] = (int) ($r['app_count'] ?? 0);
+        $job['app_new'] = (int) ($r['app_new'] ?? 0);
+        return $job;
+    }, $s->fetchAll());
+}
+
+/** Shape one application row for the sponsor/admin manage view. Résumé only when accepted. */
+function sponsor_application_shape(array $r): array
+{
+    $accepted = (string) ($r['status'] ?? '') === 'accepted';
+    $answers = json_decode((string) ($r['answers'] ?? ''), true);
+    return [
+        'id' => (int) $r['id'],
+        'job_id' => (int) $r['job_id'],
+        'job_title' => (string) ($r['job_title'] ?? ''),
+        'student_name' => (string) ($r['student_name'] ?? 'Student'),
+        'school_name' => (string) ($r['school_name'] ?? ''),
+        'answers' => is_array($answers) ? $answers : [],
+        'resume_url' => $accepted ? (string) ($r['resume_url'] ?? '') : '',
+        'status' => (string) $r['status'],
+        'decline_reason' => (string) ($r['decline_reason'] ?? ''),
+        'student_user_id' => (int) ($r['student_user_id'] ?? 0),
+        'unread' => $accepted ? sponsor_application_unread_count((int) $r['id'], 'sponsor') : 0,
+        'created_ts' => (int) ($r['created_ts'] ?? 0),
+    ];
+}
+
+/** All applications for one job (sponsor manage view). Caller must verify job ownership. */
+function sponsor_job_applications_for_job(int $jobId): array
+{
+    sponsor_jobs_ensure_schema();
+    $s = db()->prepare(
+        "SELECT a.*, UNIX_TIMESTAMP(a.created_at) AS created_ts, j.title AS job_title,
+                st.full_name AS student_name, sch.school_name
+         FROM sponsor_job_applications a
+         JOIN sponsor_jobs j ON j.id = a.job_id
+         LEFT JOIN new_school_students st ON st.id = a.student_id
+         LEFT JOIN new_school_schools sch ON sch.id = st.school_id
+         WHERE a.job_id = ? ORDER BY (a.status = 'submitted') DESC, a.created_at DESC"
+    );
+    $s->execute([$jobId]);
+    return array_map('sponsor_application_shape', $s->fetchAll());
+}
+
+/** Fetch a job row (or null). */
+function sponsor_job_row(int $jobId): ?array
+{
+    sponsor_jobs_ensure_schema();
+    $s = db()->prepare('SELECT * FROM sponsor_jobs WHERE id = ? LIMIT 1');
+    $s->execute([$jobId]);
+    return $s->fetch() ?: null;
+}
+
+/** Global, age-filtered board for a student. Each job carries the student's own application (if any). */
+function sponsor_jobs_for_student(array $student): array
+{
+    sponsor_jobs_ensure_schema();
+    $studentId = (int) ($student['id'] ?? 0);
+    $age = (int) ($student['age'] ?? 0);
+    if ($studentId <= 0) return [];
+    // A student below a job's min_age (or with no age set → age 0) never sees it.
+    $s = db()->prepare(
+        "SELECT j.*, UNIX_TIMESTAMP(j.created_at) AS created_ts,
+                a.id AS app_id, a.status AS app_status, a.answers AS app_answers, a.decline_reason AS app_decline
+         FROM sponsor_jobs j
+         LEFT JOIN sponsor_job_applications a ON a.job_id = j.id AND a.student_id = ?
+         WHERE j.status = 'approved' AND j.min_age <= ?
+         ORDER BY j.created_at DESC"
+    );
+    $s->execute([$studentId, $age]);
+    return array_map(static function (array $r): array {
+        $job = sponsor_job_public_shape($r);
+        $sp = db()->prepare('SELECT org_name FROM ecosystem_accounts WHERE user_id = ? LIMIT 1');
+        $sp->execute([(int) $r['sponsor_user_id']]);
+        $job['sponsor_name'] = (string) ($sp->fetchColumn() ?: 'A sponsor');
+        if (!empty($r['app_id'])) {
+            $ans = json_decode((string) ($r['app_answers'] ?? ''), true);
+            $job['application'] = [
+                'id' => (int) $r['app_id'],
+                'status' => (string) ($r['app_status'] ?? ''),
+                'answers' => is_array($ans) ? $ans : [],
+                'decline_reason' => (string) ($r['app_decline'] ?? ''),
+                'unread' => (string) ($r['app_status'] ?? '') === 'accepted' ? sponsor_application_unread_count((int) $r['app_id'], 'student') : 0,
+            ];
+        } else {
+            $job['application'] = null;
+        }
+        return $job;
+    }, $s->fetchAll());
+}
+
+/** Student applies (or edits a still-submitted application) with per-question answers. */
+function sponsor_job_apply(array $student, int $jobId, array $answers, string $resumeUrl): array
+{
+    sponsor_jobs_ensure_schema();
+    $studentId = (int) ($student['id'] ?? 0);
+    $age = (int) ($student['age'] ?? 0);
+    $job = sponsor_job_row($jobId);
+    if (!$job || (string) $job['status'] !== 'approved') json(['error' => 'This job is no longer open.'], 404);
+    if ($age < (int) $job['min_age']) json(['error' => 'You are not eligible for this job.'], 403);
+    // Block editing once the sponsor has acted on it.
+    $existing = db()->prepare('SELECT id, status FROM sponsor_job_applications WHERE job_id = ? AND student_id = ? LIMIT 1');
+    $existing->execute([$jobId, $studentId]);
+    $ex = $existing->fetch();
+    if ($ex && (string) $ex['status'] !== 'submitted') json(['error' => 'Your application has already been reviewed and cannot be changed.'], 409);
+    // Validate answers against the job's questions.
+    $questions = sponsor_job_questions_decode($job['questions'] ?? null);
+    $byKey = [];
+    foreach ($answers as $item) {
+        if (!is_array($item)) continue;
+        $byKey[trim((string) ($item['key'] ?? ''))] = trim((string) ($item['answer'] ?? ''));
+    }
+    $clean = [];
+    foreach ($questions as $q) {
+        $answer = (string) ($byKey[$q['key']] ?? '');
+        if ($answer === '') throw new RuntimeException('Please answer every question before you apply.');
+        if (new_school_word_count($answer) > NS_JOB_ANSWER_WORD_LIMIT) {
+            throw new RuntimeException('Each answer must be ' . NS_JOB_ANSWER_WORD_LIMIT . ' words or fewer.');
+        }
+        $clean[] = ['key' => $q['key'], 'question' => $q['question'], 'answer' => $answer];
+    }
+    $resume = preg_match('#^(/api/uploads/|https?://)#', $resumeUrl) ? mb_substr($resumeUrl, 0, 255) : null;
+    $json = json_encode($clean, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    db()->prepare(
+        'INSERT INTO sponsor_job_applications (job_id, student_id, student_user_id, answers, resume_url, status)
+         VALUES (?,?,?,?,?,\'submitted\')
+         ON DUPLICATE KEY UPDATE answers = VALUES(answers), resume_url = VALUES(resume_url), status = \'submitted\', decline_reason = NULL, updated_at = NOW()'
+    )->execute([$jobId, $studentId, (int) ($student['user_id'] ?? 0), $json, $resume]);
+    // Notify the sponsor (email) that a new application arrived.
+    if (function_exists('ecosystem_notify_user')) {
+        ecosystem_notify_user((int) $job['sponsor_user_id'], 'New job application', 'A student applied to your job "' . (string) $job['title'] . '". Open the Applications tab in your sponsor dashboard to review it.');
+    }
+    return sponsor_jobs_for_student($student);
+}
+
+/** Sponsor closes / reopens one of their own jobs. */
+function sponsor_job_set_status(int $jobId, string $status, int $sponsorUserId): array
+{
+    sponsor_jobs_ensure_schema();
+    if (!in_array($status, ['approved', 'closed'], true)) json(['error' => 'Invalid action.'], 422);
+    $job = sponsor_job_row($jobId);
+    if (!$job || (int) $job['sponsor_user_id'] !== $sponsorUserId) json(['error' => 'Job not found.'], 404);
+    // Only an approved job may be closed, and only a closed job reopened.
+    $cur = (string) $job['status'];
+    if ($status === 'closed' && $cur !== 'approved') json(['error' => 'Only a live job can be closed.'], 409);
+    if ($status === 'approved' && $cur !== 'closed') json(['error' => 'Only a closed job can be reopened.'], 409);
+    db()->prepare('UPDATE sponsor_jobs SET status = ? WHERE id = ?')->execute([$status, $jobId]);
+    return sponsor_jobs_for_sponsor($sponsorUserId);
+}
+
+/** Sponsor accepts/declines an application on their own job. On accept → chat + résumé open. */
+function sponsor_application_respond(int $appId, string $decision, string $reason, int $sponsorUserId): array
+{
+    sponsor_jobs_ensure_schema();
+    $row = sponsor_application_row($appId);
+    if (!$row || (int) $row['sponsor_user_id'] !== $sponsorUserId) json(['error' => 'Application not found.'], 404);
+    if ((string) $row['status'] !== 'submitted') json(['error' => 'You have already responded to this application.'], 409);
+    $dec = $decision === 'accept' ? 'accepted' : 'declined';
+    if ($dec === 'declined' && trim($reason) === '') json(['error' => 'Please give a short reason when declining.'], 422);
+    db()->prepare('UPDATE sponsor_job_applications SET status = ?, decline_reason = CASE WHEN ?="declined" THEN ? ELSE decline_reason END WHERE id = ?')
+        ->execute([$dec, $dec, mb_substr($reason, 0, 2000) ?: null, $appId]);
+    $nsStudentId = (int) ($row['ns_student_id'] ?? $row['student_id'] ?? 0);
+    $jobTitle = (string) ($row['job_title'] ?? 'a job');
+    if ($nsStudentId > 0) {
+        $title = $dec === 'accepted' ? 'Your job application was accepted 🎉' : 'Update on your job application';
+        $msg = $dec === 'accepted'
+            ? "The sponsor accepted your application for \"$jobTitle\". Open the Sponsor Jobs tab to chat with them."
+            : "The sponsor could not move forward with your application for \"$jobTitle\"." . ($reason !== '' ? " Reason: $reason" : '');
+        // Best-effort: a notification hiccup must never fail the accept/decline itself.
+        try { new_school_add_notification($nsStudentId, 'student', 'job_offer', $title, $msg, ['application_id' => $appId]); }
+        catch (Throwable $e) { if (app_debug()) error_log('sponsor_application_respond notify: ' . $e->getMessage()); }
+    }
+    return sponsor_job_applications_for_job((int) $row['job_id']);
+}
+
+/* ---- Sponsor application chat (student ⇄ sponsor, admin oversight) ---- */
+
+/** Fetch an application joined to its job + student (for gating). */
+function sponsor_application_row(int $appId): ?array
+{
+    sponsor_jobs_ensure_schema();
+    $s = db()->prepare(
+        "SELECT a.*, j.sponsor_user_id, j.title AS job_title,
+                st.user_id AS student_user_id, st.id AS ns_student_id
+         FROM sponsor_job_applications a
+         JOIN sponsor_jobs j ON j.id = a.job_id
+         LEFT JOIN new_school_students st ON st.id = a.student_id
+         WHERE a.id = ? LIMIT 1"
+    );
+    $s->execute([$appId]);
+    return $s->fetch() ?: null;
+}
+
+/** Chat opens only once the application is accepted. */
+function sponsor_application_is_accepted(array $app): bool
+{
+    return (string) ($app['status'] ?? '') === 'accepted';
+}
+
+function sponsor_application_messages_list(int $appId): array
+{
+    sponsor_jobs_ensure_schema();
+    $s = db()->prepare(
+        "SELECT m.id, m.sender_role, m.body, m.attachment_url, UNIX_TIMESTAMP(m.created_at) AS ts, u.full_name AS sender_name
+         FROM sponsor_application_messages m LEFT JOIN users u ON u.id = m.sender_user_id
+         WHERE m.application_id = ? ORDER BY m.created_at ASC, m.id ASC"
+    );
+    $s->execute([$appId]);
+    return array_map(static fn(array $r): array => [
+        'id' => (int) $r['id'],
+        'sender_role' => (string) $r['sender_role'],
+        'attachment_url' => (string) ($r['attachment_url'] ?? ''),
+        'sender_name' => (string) ($r['sender_name'] ?? ucfirst((string) $r['sender_role'])),
+        'body' => (string) $r['body'],
+        'ts' => (int) $r['ts'],
+    ], $s->fetchAll());
+}
+
+function sponsor_application_messages_mark_read(int $appId, string $side): void
+{
+    if (!in_array($side, ['student', 'sponsor'], true)) return;
+    $col = $side === 'student' ? 'read_by_student' : 'read_by_sponsor';
+    db()->prepare("UPDATE sponsor_application_messages SET $col = 1 WHERE application_id = ? AND sender_role <> ?")->execute([$appId, $side]);
+}
+
+function sponsor_application_unread_count(int $appId, string $side): int
+{
+    if (!in_array($side, ['student', 'sponsor'], true)) return 0;
+    $col = $side === 'student' ? 'read_by_student' : 'read_by_sponsor';
+    $s = db()->prepare("SELECT COUNT(*) FROM sponsor_application_messages WHERE application_id = ? AND sender_role <> ? AND $col = 0");
+    $s->execute([$appId, $side]);
+    return (int) $s->fetchColumn();
+}
+
+/** Append a chat message on an accepted application and notify the other party. */
+function sponsor_application_message_add(int $appId, string $senderRole, ?int $senderUserId, string $body, string $attachmentUrl = ''): void
+{
+    sponsor_jobs_ensure_schema();
+    $body = trim($body);
+    $attach = preg_match('#^(/api/uploads/|https?://)#', $attachmentUrl) ? mb_substr($attachmentUrl, 0, 255) : '';
+    if ($body === '' && $attach === '') json(['error' => 'Message cannot be empty.'], 422);
+    db()->prepare(
+        'INSERT INTO sponsor_application_messages (application_id, sender_role, sender_user_id, body, attachment_url, read_by_student, read_by_sponsor)
+         VALUES (?,?,?,?,?,?,?)'
+    )->execute([
+        $appId, $senderRole, $senderUserId, mb_substr($body, 0, 4000), $attach ?: null,
+        $senderRole === 'student' ? 1 : 0,
+        $senderRole === 'sponsor' ? 1 : 0,
+    ]);
+    $r = sponsor_application_row($appId);
+    if (!$r) return;
+    $sponsorUid = (int) ($r['sponsor_user_id'] ?? 0);
+    $nsStudentId = (int) ($r['ns_student_id'] ?? $r['student_id'] ?? 0);
+    if ($senderRole !== 'student' && $nsStudentId > 0) {
+        try { new_school_add_notification($nsStudentId, 'student', 'chat', 'New message about a job', 'You have a new message about your job application. Open it to reply.', ['application_id' => $appId]); }
+        catch (Throwable $e) { if (app_debug()) error_log('sponsor chat notify student: ' . $e->getMessage()); }
+    }
+    if ($senderRole !== 'sponsor' && $sponsorUid > 0 && function_exists('ecosystem_notify_user')) {
+        try { ecosystem_notify_user($sponsorUid, 'New message on a job application', 'You have a new message about a job application. Open the Applications tab to reply.'); }
+        catch (Throwable $e) { if (app_debug()) error_log('sponsor chat notify sponsor: ' . $e->getMessage()); }
+    }
+}
+
+/* ---- Admin: sponsor job approvals ---- */
+
+/** All sponsor jobs (pending first) for the admin approvals queue. */
+function sponsor_jobs_all(): array
+{
+    sponsor_jobs_ensure_schema();
+    $rows = db()->query(
+        "SELECT j.*, UNIX_TIMESTAMP(j.created_at) AS created_ts, ea.org_name AS sponsor_name,
+                (SELECT COUNT(*) FROM sponsor_job_applications a WHERE a.job_id = j.id) AS app_count
+         FROM sponsor_jobs j LEFT JOIN ecosystem_accounts ea ON ea.user_id = j.sponsor_user_id
+         ORDER BY (j.status = 'pending') DESC, j.created_at DESC"
+    )->fetchAll();
+    return array_map(static function (array $r): array {
+        $job = sponsor_job_public_shape($r);
+        $job['sponsor_name'] = (string) ($r['sponsor_name'] ?? ('Sponsor #' . $r['sponsor_user_id']));
+        $job['app_count'] = (int) ($r['app_count'] ?? 0);
+        return $job;
+    }, $rows);
+}
+
+/** Admin approves / declines a sponsor job. Declining requires a note. Notifies the sponsor. */
+function sponsor_job_review(int $jobId, string $status, string $adminNote, int $adminId): array
+{
+    sponsor_jobs_ensure_schema();
+    if (!in_array($status, ['approved', 'declined'], true)) json(['error' => 'Invalid status.'], 422);
+    if ($status === 'declined' && trim($adminNote) === '') json(['error' => 'A reason is required when declining a job.'], 422);
+    $job = sponsor_job_row($jobId);
+    if (!$job) json(['error' => 'Job not found.'], 404);
+    db()->prepare('UPDATE sponsor_jobs SET status = ?, admin_note = ?, reviewed_by_user_id = ?, reviewed_at = NOW() WHERE id = ?')
+        ->execute([$status, mb_substr($adminNote, 0, 2000) ?: null, $adminId, $jobId]);
+    if (function_exists('ecosystem_notify_user')) {
+        $body = $status === 'approved'
+            ? 'Your job "' . (string) $job['title'] . '" is approved and is now visible to eligible students.'
+            : 'Your job "' . (string) $job['title'] . '" was not approved.' . ($adminNote !== '' ? "\n\nNote: $adminNote" : '');
+        ecosystem_notify_user((int) $job['sponsor_user_id'], 'Update on your posted job', $body);
+    }
+    return sponsor_jobs_all();
+}
+
 /* ==================== Ecosystem accounts (sponsor / partner / media / volunteer) ==================== */
 
 /** Live challenge impact counters shared by sponsor + media dashboards. */
@@ -4614,6 +5081,9 @@ function ecosystem_dashboard_payload(string $role, array $user): array
             ['label' => 'Founding Sponsor Kit (PDF)', 'url' => '/docs/founding_sponsor_kit.pdf'],
             ['label' => 'Sponsor Media Kit (PDF)', 'url' => '/docs/founding_sponsor_media_kit.pdf'],
         ];
+        // The sponsor's own posted jobs (with live application counts) drive the
+        // "Post a Job" / "Applications" tabs and their badges.
+        $out['job_posts'] = sponsor_jobs_for_sponsor((int) $user['id']);
     }
     if ($role === 'media') {
         $out['presskit'] = [

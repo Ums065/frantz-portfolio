@@ -8,9 +8,11 @@ import { api } from '../lib/api'
      POST {base}/messages  { body } → { messages }
    Auto-polls every ~9s while mounted (no websockets). */
 
+export type ChatRole = 'student' | 'business' | 'sponsor' | 'admin'
+
 export interface OfferMessage {
   id: number
-  sender_role: 'student' | 'business' | 'admin'
+  sender_role: ChatRole
   sender_name: string
   body: string
   attachment_url?: string
@@ -22,8 +24,11 @@ const isImage = (u: string) => /\.(png|jpe?g|webp|gif)$/i.test(u)
 const ROLE_TINT: Record<string, string> = {
   student: 'rgba(120,180,255,0.16)',
   business: 'rgba(212,175,90,0.16)',
+  sponsor: 'rgba(212,175,90,0.16)',
   admin: 'rgba(180,140,220,0.16)',
 }
+
+const ROLE_TAG: Record<string, string> = { admin: ' (Admin)', business: ' (Business)', sponsor: ' (Sponsor)' }
 
 function fmt(ts: number): string {
   if (!ts) return ''
@@ -32,7 +37,7 @@ function fmt(ts: number): string {
     d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
 }
 
-export default function OfferChat({ base, role }: { base: string; role: 'student' | 'business' | 'admin' }) {
+export default function OfferChat({ base, role }: { base: string; role: ChatRole }) {
   const [messages, setMessages] = useState<OfferMessage[]>([])
   const [canChat, setCanChat] = useState(true)
   const [draft, setDraft] = useState('')
@@ -101,7 +106,7 @@ export default function OfferChat({ base, role }: { base: string; role: 'student
               <div key={m.id} style={{ display: 'flex', justifyContent: mine ? 'flex-end' : 'flex-start' }}>
                 <div style={{ maxWidth: '80%', minWidth: 0, background: ROLE_TINT[m.sender_role] || 'rgba(255,255,255,0.06)', border: '1px solid var(--line)', borderRadius: 12, padding: '8px 12px' }}>
                   <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 3 }}>
-                    {mine ? 'You' : m.sender_name}{m.sender_role === 'admin' ? ' (Admin)' : m.sender_role === 'business' ? ' (Business)' : ''} · {fmt(m.ts)}
+                    {mine ? 'You' : m.sender_name}{ROLE_TAG[m.sender_role] || ''} · {fmt(m.ts)}
                   </div>
                   {m.body && <div style={{ fontSize: 13.5, color: 'var(--ivory)', lineHeight: 1.5, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{m.body}</div>}
                   {m.attachment_url && (isImage(m.attachment_url)
