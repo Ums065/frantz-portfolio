@@ -900,6 +900,164 @@ function gallery_public_payload(): array
     return ['items' => $items];
 }
 
+/** Allowed image MIME types for gallery uploads → file extension. */
+function gallery_allowed_image_mimes(): array
+{
+    return ['image/jpeg' => 'jpg', 'image/pjpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp'];
+}
+
+/** Allowed video MIME types for gallery uploads → file extension. */
+function gallery_allowed_video_mimes(): array
+{
+    return ['video/mp4' => 'mp4', 'video/webm' => 'webm', 'video/quicktime' => 'mov', 'video/x-matroska' => 'mkv'];
+}
+
+/**
+ * Normalize the PHP $_FILES entry for a multi-file field (name="files[]") into a
+ * flat list of per-file arrays {name,type,tmp_name,error,size}. Also tolerates a
+ * single-file shape. Skips slots with no file selected.
+ */
+function gallery_normalize_uploads($files): array
+{
+    if (!is_array($files) || !isset($files['name'])) return [];
+    $out = [];
+    if (is_array($files['name'])) {
+        $count = count($files['name']);
+        for ($i = 0; $i < $count; $i++) {
+            $err = (int) ($files['error'][$i] ?? UPLOAD_ERR_NO_FILE);
+            if ($err === UPLOAD_ERR_NO_FILE) continue; // empty slot
+            $out[] = [
+                'name'     => (string) ($files['name'][$i] ?? ''),
+                'type'     => (string) ($files['type'][$i] ?? ''),
+                'tmp_name' => (string) ($files['tmp_name'][$i] ?? ''),
+                'error'    => $err,
+                'size'     => (int) ($files['size'][$i] ?? 0),
+            ];
+        }
+    } else {
+        $err = (int) ($files['error'] ?? UPLOAD_ERR_NO_FILE);
+        if ($err !== UPLOAD_ERR_NO_FILE) {
+            $out[] = [
+                'name'     => (string) ($files['name'] ?? ''),
+                'type'     => (string) ($files['type'] ?? ''),
+                'tmp_name' => (string) ($files['tmp_name'] ?? ''),
+                'error'    => $err,
+                'size'     => (int) ($files['size'] ?? 0),
+            ];
+        }
+    }
+    return $out;
+}
+
+/** Human-readable message for a PHP upload error code. */
+function gallery_upload_error_message(int $code): string
+{
+    switch ($code) {
+        case UPLOAD_ERR_INI_SIZE:
+        case UPLOAD_ERR_FORM_SIZE:
+            return 'One of the files is too large.';
+        case UPLOAD_ERR_PARTIAL:
+            return 'A file was only partially uploaded. Please try again.';
+        case UPLOAD_ERR_NO_FILE:
+            return 'No file was uploaded.';
+        case UPLOAD_ERR_NO_TMP_DIR:
+        case UPLOAD_ERR_CANT_WRITE:
+            return 'The server could not save the upload. Please try again.';
+        case UPLOAD_ERR_EXTENSION:
+            return 'The upload was blocked by the server.';
+        default:
+            return 'The file could not be uploaded. Please try again.';
+    }
+}
+
+/** Turn an original filename into a friendly display title (no extension). */
+function gallery_title_from_filename(string $name): string
+{
+    $base = pathinfo($name, PATHINFO_FILENAME);
+    $base = preg_replace('/[_\-]+/', ' ', $base);
+    $base = trim(preg_replace('/\s+/', ' ', (string) $base));
+    if ($base === '') return 'Untitled';
+    // Title-case gently, keep it within the column limit.
+    return mb_substr(function_exists('mb_convert_case') ? mb_convert_case($base, MB_CASE_TITLE, 'UTF-8') : ucwords($base), 0, 180);
+}
+
+/**
+ * Recompute a gallery submission's overall_status from its files' statuses and
+ * persist it. Returns the new overall status.
+ *   all approved  → approved
+ *   all rejected  → rejected
+ *   any approved (mixed) → partially_approved
+ *   otherwise     → pending_review
+ */
+function gallery_recompute_submission_status(int $submissionId): string
+{
+    gallery_ensure_schema();
+    $stmt = db()->prepare(
+        "SELECT
+            COUNT(*) AS total,
+            SUM(approval_status = 'approved') AS approved,
+            SUM(approval_status = 'rejected') AS rejected
+         FROM gallery_submission_files WHERE submission_id = ?"
+    );
+    $stmt->execute([$submissionId]);
+    $r = $stmt->fetch() ?: ['total' => 0, 'approved' => 0, 'rejected' => 0];
+    $total = (int) $r['total'];
+    $approved = (int) $r['approved'];
+    $rejected = (int) $r['rejected'];
+
+    if ($total === 0) {
+        $overall = 'pending_review';
+    } elseif ($approved === $total) {
+        $overall = 'approved';
+    } elseif ($rejected === $total) {
+        $overall = 'rejected';
+    } elseif ($approved > 0) {
+        $overall = 'partially_approved';
+    } else {
+        $overall = 'pending_review';
+    }
+    db()->prepare('UPDATE gallery_submissions SET overall_status = ?, updated_at = NOW() WHERE id = ?')
+        ->execute([$overall, $submissionId]);
+    return $overall;
+}
+
+/** A single user's own gallery submissions (newest first) with their files — for the "my uploads" view. */
+function gallery_user_submissions(int $userId): array
+{
+    gallery_ensure_schema();
+    $subs = db()->prepare('SELECT * FROM gallery_submissions WHERE user_id = ? ORDER BY created_at DESC, id DESC');
+    $subs->execute([$userId]);
+    $rows = $subs->fetchAll() ?: [];
+    if ($rows === []) return [];
+    $ids = array_map(static fn(array $s): int => (int) $s['id'], $rows);
+    $in = implode(',', array_fill(0, count($ids), '?'));
+    $fstmt = db()->prepare(
+        "SELECT id, submission_id, original_name, display_title, file_url, mime_type, media_kind, size_bytes,
+                approval_status, reviewed_at, approved_at, rejected_at, created_at
+         FROM gallery_submission_files WHERE submission_id IN ($in) ORDER BY created_at ASC, id ASC"
+    );
+    $fstmt->execute($ids);
+    $bySub = [];
+    foreach ($fstmt->fetchAll() ?: [] as $f) {
+        $bySub[(int) $f['submission_id']][] = [
+            'id'              => (int) $f['id'],
+            'submission_id'   => (int) $f['submission_id'],
+            'original_name'   => (string) $f['original_name'],
+            'display_title'   => (string) $f['display_title'],
+            'file_url'        => (string) $f['file_url'],
+            'mime_type'       => (string) $f['mime_type'],
+            'media_kind'      => (string) $f['media_kind'],
+            'size_bytes'      => (int) $f['size_bytes'],
+            'approval_status' => (string) $f['approval_status'],
+            'reviewed_at'     => $f['reviewed_at'] ?? null,
+            'approved_at'     => $f['approved_at'] ?? null,
+            'rejected_at'     => $f['rejected_at'] ?? null,
+            'created_at'      => $f['created_at'] ?? null,
+        ];
+    }
+    return array_map(static fn(array $s): array => gallery_admin_submission_row($s, $bySub[(int) $s['id']] ?? []), $rows);
+}
+
 /** Record one page view. Best-effort: callers swallow errors so tracking never breaks a page. */
 function site_visits_record(string $path, string $visitorToken, ?string $referrer, ?string $userAgent, ?int $userId = null): void
 {

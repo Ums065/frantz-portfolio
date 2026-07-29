@@ -434,9 +434,14 @@ export interface PortalConfig {
 
 /** Business-style authenticated frame: collapsible sidebar of tabs + stat tiles. */
 function TabbedDashboard({ config, data, reload, logout, orgName }: { config: PortalConfig; data: any; reload: () => void; logout: () => void; orgName: string }) {
-  // Append a shared "Profile" tab (personal photo + password) to every ecosystem
-  // role — one place, so Sponsor/Partner/Media/Volunteer all get it.
-  const tabs: PortalTab[] = [...config.tabs!, { key: 'profile', label: 'Profile', render: () => <ProfileSection /> }]
+  // Append a shared "Profile" tab (personal photo + password) — but only if the
+  // role hasn't already defined its own 'profile' tab. Roles that need extra
+  // profile content (Media, Volunteer) define their own and embed <ProfileSection/>
+  // inside it, so there is never a duplicate "Profile" in the sidebar.
+  const ownProfile = config.tabs!.some((t) => t.key === 'profile')
+  const tabs: PortalTab[] = ownProfile
+    ? config.tabs!
+    : [...config.tabs!, { key: 'profile', label: 'Profile', render: () => <ProfileSection /> }]
   const validKeys = tabs.map((t) => t.key)
   // Remember the active tab in the URL hash so a page refresh keeps you where
   // you were (instead of snapping back to the first tab) — and the tab is

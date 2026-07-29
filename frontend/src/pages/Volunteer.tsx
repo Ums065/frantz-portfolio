@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { api } from '../lib/api'
+import ProfileSection from '../components/profile/ProfileSection'
 import EcosystemPortal, {
   Section, EcoDocuments, EcoRequests, EcoAnnouncements, EcoAssignments, EcoStatusPill,
   EcoEventCalendar, EcoMessages, RequestButton, unseenAnnCount, markAnnSeen, unseenReqCount, markReqSeen, type EcoReq, type EcoAssign, type PortalConfig,
@@ -164,14 +165,17 @@ const config: PortalConfig = {
         const p = data?.profile
         const d = p?.details || {}
         return (
-          <Section title="Volunteer Profile" right={<RequestButton role="volunteer" reqType="availability" label="Update Availability" reload={reload} />}>
-            <dl className="eco-dl" style={{ color: '#d8d3c6', fontSize: 13.5 }}>
-              <dt style={{ color: 'var(--muted)' }}>Role</dt><dd style={{ margin: 0 }}>{d.volunteer_type || '—'}</dd>
-              <dt style={{ color: 'var(--muted)' }}>Expertise</dt><dd style={{ margin: 0 }}>{d.areas || '—'}</dd>
-              <dt style={{ color: 'var(--muted)' }}>Availability</dt><dd style={{ margin: 0 }}>{d.availability || '—'}</dd>
-              <dt style={{ color: 'var(--muted)' }}>Contact</dt><dd style={{ margin: 0 }}>{p?.contact_name || '—'}{p?.contact_phone ? ` · ${p.contact_phone}` : ''}</dd>
-            </dl>
-          </Section>
+          <>
+            <Section title="Volunteer Profile" right={<RequestButton role="volunteer" reqType="availability" label="Update Availability" reload={reload} />}>
+              <dl className="eco-dl" style={{ color: '#d8d3c6', fontSize: 13.5 }}>
+                <dt style={{ color: 'var(--muted)' }}>Role</dt><dd style={{ margin: 0 }}>{d.volunteer_type || '—'}</dd>
+                <dt style={{ color: 'var(--muted)' }}>Expertise</dt><dd style={{ margin: 0 }}>{d.areas || '—'}</dd>
+                <dt style={{ color: 'var(--muted)' }}>Availability</dt><dd style={{ margin: 0 }}>{d.availability || '—'}</dd>
+                <dt style={{ color: 'var(--muted)' }}>Contact</dt><dd style={{ margin: 0 }}>{p?.contact_name || '—'}{p?.contact_phone ? ` · ${p.contact_phone}` : ''}</dd>
+              </dl>
+            </Section>
+            <div style={{ marginTop: 16 }}><ProfileSection /></div>
+          </>
         )
       },
     },

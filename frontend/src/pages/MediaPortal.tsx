@@ -4,6 +4,8 @@ import EcosystemPortal, {
   Section, DownloadList, EcoDocuments, EcoRequests, EcoAnnouncements, EcoAssignments,
   EcoStatusPill, EcoMessages, LogoUploader, RequestButton, unseenAnnCount, markAnnSeen, unseenReqCount, markReqSeen, type EcoReq, type EcoAssign, type PortalConfig,
 } from './portal/EcosystemPortal'
+import MediaGalleryUploader from '../components/MediaGalleryUploader'
+import ProfileSection from '../components/profile/ProfileSection'
 
 /* Media Portal — a press room for journalists & outlets: official statistics,
    press/media kit, photo & video library, founder bio, event coverage +
@@ -73,6 +75,15 @@ const config: PortalConfig = {
     ]
   },
   tabs: [
+    {
+      key: 'library',
+      label: 'Media Library',
+      render: () => (
+        <Section title="Upload Photos & Video">
+          <MediaGalleryUploader />
+        </Section>
+      ),
+    },
     {
       key: 'presskit',
       label: 'Press & Media Kit',
@@ -149,6 +160,8 @@ const config: PortalConfig = {
                 Frantz Coutard — founder of the “Leave It Better Than You Found It” movement, connecting New York students with local businesses to solve real community problems. Full approved biography and headshots are available in the press kit.
               </p>
             </Section>
+            {/* Personal account: profile photo + password (merged in so there is one Profile tab). */}
+            <div style={{ marginTop: 4 }}><ProfileSection /></div>
           </>
         )
       },

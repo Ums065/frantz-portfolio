@@ -612,6 +612,12 @@ try {
             json(gallery_public_payload());
         }
 
+        // A logged-in user's own gallery submissions + approval status (media dashboard etc.).
+        case $key === 'GET gallery/my-submissions': {
+            $u = require_login();
+            json(['submissions' => gallery_user_submissions((int) $u['id'])]);
+        }
+
         case $key === 'GET testimonials': {
             $rows = db()->query(
                 'SELECT id, quote, author_name, author_title, company, image, is_featured, sort_order, created_at
