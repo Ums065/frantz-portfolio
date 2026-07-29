@@ -8,8 +8,13 @@ Options -Indexes -ExecCGI
     Require all denied
 </FilesMatch>
 
-# Belt-and-suspenders: strip script handlers and turn the PHP engine off here.
+# Belt-and-suspenders: strip script handlers so uploaded files are never
+# executed. (PHP execution is already denied outright by the FilesMatch above.)
+# NOTE: do NOT use `php_admin_flag`/`php_admin_value` here — those are only valid
+# in httpd.conf/vhost context and make Apache return 500 for EVERY file in this
+# directory (which broke all uploaded-image serving). `php_flag` is .htaccess-safe
+# and guarded by IfModule so it is simply ignored when mod_php isn't the SAPI.
 RemoveHandler .php .phtml .phar .php3 .php4 .php5 .php7 .cgi .pl .py
 <IfModule mod_php.c>
-    php_admin_flag engine off
+    php_flag engine off
 </IfModule>
