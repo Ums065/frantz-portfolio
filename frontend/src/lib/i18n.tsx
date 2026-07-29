@@ -158,17 +158,19 @@ const translator = (() => {
     running = true
     try {
       const todo = collectMisses()
-      let got = false
-      for (let i = 0; i < todo.length; i += 100) {
-        if (target === 'en') break
-        const chunk = todo.slice(i, i + 100)
+      if (!todo.length) return
+      const chunks: string[][] = []
+      for (let i = 0; i < todo.length; i += 80) chunks.push(todo.slice(i, i + 80))
+      // Fire all chunks in parallel; apply each as soon as it lands (progressive).
+      await Promise.all(chunks.map(async (chunk) => {
+        if ((target as string) === 'en') return
         try {
           const d = await api.post<{ translations: string[] }>('translate', { q: chunk, target })
-          ;(d.translations || []).forEach((tx, ix) => { if (tx && tx !== chunk[ix]) { cache.set(chunk[ix], tx); got = true } else cache.set(chunk[ix], chunk[ix]) })
+          ;(d.translations || []).forEach((tx, ix) => cache.set(chunk[ix], tx && tx !== chunk[ix] ? tx : chunk[ix]))
+          if ((target as string) !== 'en') applyCached() // progressive reveal
         } catch { /* fail open — stays English */ }
-      }
-      if (got) { persist(); if (target !== 'en') applyCached() }
-      else persist()
+      }))
+      persist()
     } finally { running = false }
   }
 

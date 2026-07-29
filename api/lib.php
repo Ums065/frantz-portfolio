@@ -6361,20 +6361,36 @@ function translate_texts(array $texts, string $target): array
 
     // Provider 2 (fallback / default): MyMemory — free & keyless, one cached GET
     // per phrase. Runs for anything LibreTranslate didn't cover (or if it's off).
+    // Requests are run in PARALLEL (curl_multi, ~10 at a time) so a first-time
+    // page translates in a fraction of the sequential time.
     if ($pending) {
         $email = (string) env('MYMEMORY_EMAIL', '');
-        foreach ($pending as $origIndex => $tx) {
+        $entries = array_map(static fn($k, $v) => [$k, (string) $v], array_keys($pending), array_values($pending));
+        $CONCURRENCY = 12;
+        foreach (array_chunk($entries, $CONCURRENCY) as $group) {
             try {
-                $q = mb_substr((string) $tx, 0, 500);
-                $u = 'https://api.mymemory.translated.net/get?q=' . rawurlencode($q) . '&langpair=' . rawurlencode('en|' . $target) . ($email !== '' ? '&de=' . rawurlencode($email) : '');
-                $ch = curl_init($u);
-                curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 15, CURLOPT_HTTPHEADER => ['Accept: application/json']]);
-                $resp = curl_exec($ch); $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE); curl_close($ch);
-                if ($resp !== false && $code < 400) {
-                    $t = json_decode((string) $resp, true)['responseData']['translatedText'] ?? '';
-                    if (is_string($t) && $t !== '') $save($origIndex, $t);
+                $mh = curl_multi_init();
+                $handles = [];
+                foreach ($group as [$origIndex, $tx]) {
+                    $q = mb_substr($tx, 0, 500);
+                    $u = 'https://api.mymemory.translated.net/get?q=' . rawurlencode($q) . '&langpair=' . rawurlencode('en|' . $target) . ($email !== '' ? '&de=' . rawurlencode($email) : '');
+                    $ch = curl_init($u);
+                    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 15, CURLOPT_HTTPHEADER => ['Accept: application/json']]);
+                    curl_multi_add_handle($mh, $ch);
+                    $handles[(int) $origIndex] = $ch;
                 }
-            } catch (Throwable $e) { if (app_debug()) error_log('translate MyMemory: ' . $e->getMessage()); }
+                do { $status = curl_multi_exec($mh, $active); if ($active) curl_multi_select($mh, 1.0); } while ($active && $status === CURLM_OK);
+                foreach ($handles as $origIndex => $ch) {
+                    $resp = curl_multi_getcontent($ch);
+                    $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                    if ($resp !== false && $resp !== null && $code < 400) {
+                        $t = json_decode((string) $resp, true)['responseData']['translatedText'] ?? '';
+                        if (is_string($t) && $t !== '') $save($origIndex, $t);
+                    }
+                    curl_multi_remove_handle($mh, $ch); curl_close($ch);
+                }
+                curl_multi_close($mh);
+            } catch (Throwable $e) { if (app_debug()) error_log('translate MyMemory multi: ' . $e->getMessage()); }
         }
     }
     return $out;
