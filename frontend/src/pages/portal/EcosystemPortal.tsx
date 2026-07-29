@@ -357,14 +357,19 @@ export function LogoUploader({ role, current, reload }: { role: string; current?
     finally { setBusy(false) }
   }
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
-      <div style={{ width: 60, height: 60, borderRadius: 12, background: 'rgba(255,255,255,0.06)', border: '1px solid var(--line)', display: 'grid', placeItems: 'center', overflow: 'hidden' }}>
-        {current ? <img src={current} alt="Your organization logo" style={{ maxWidth: '90%', maxHeight: '90%', objectFit: 'contain' }} /> : <span style={{ color: 'var(--muted)', fontSize: 10 }}>No logo</span>}
+    <div style={{ display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap' }}>
+      <div style={{ width: 'clamp(120px,26vw,168px)', height: 'clamp(120px,26vw,168px)', borderRadius: 16, background: 'rgba(255,255,255,0.06)', border: '1px solid var(--line)', display: 'grid', placeItems: 'center', overflow: 'hidden', flex: '0 0 auto' }}>
+        {current ? <img src={current} alt="Your organization logo" style={{ maxWidth: '88%', maxHeight: '88%', objectFit: 'contain' }} /> : <span style={{ color: 'var(--muted)', fontSize: 12 }}>No logo</span>}
       </div>
-      <label className={`btn btn--sm${busy ? ' is-disabled' : ''}`} style={{ cursor: busy ? 'default' : 'pointer' }}>{busy ? 'Working…' : (current ? 'Replace logo' : 'Upload logo')}
-        <input type="file" accept="image/png,image/jpeg,image/webp" hidden disabled={busy} onChange={async (e) => { const f = e.target.files?.[0] || null; e.target.value = ''; if (!f) return; setBusy(true); try { await api.upload(`ecosystem/${role}/logo`, f); reload() } catch { /* ignore */ } finally { setBusy(false) } }} />
-      </label>
-      {current && <button type="button" className="btn btn--sm" disabled={busy} onClick={() => void removeLogo()}>Remove</button>}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minWidth: 0 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <label className={`btn btn--sm${busy ? ' is-disabled' : ''}`} style={{ cursor: busy ? 'default' : 'pointer' }}>{busy ? 'Working…' : (current ? 'Replace logo' : 'Upload logo')}
+            <input type="file" accept="image/png,image/jpeg,image/webp" hidden disabled={busy} onChange={async (e) => { const f = e.target.files?.[0] || null; e.target.value = ''; if (!f) return; setBusy(true); try { await api.upload(`ecosystem/${role}/logo`, f); reload() } catch { /* ignore */ } finally { setBusy(false) } }} />
+          </label>
+          {current && <button type="button" className="btn btn--sm" disabled={busy} onClick={() => void removeLogo()}>Remove</button>}
+        </div>
+        <p style={{ fontSize: 11.5, color: 'var(--muted)', margin: 0 }}>PNG, JPG or WebP. A square logo looks best.</p>
+      </div>
     </div>
   )
 }
