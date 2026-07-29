@@ -208,6 +208,14 @@ export function ApplicationsPanel({ jobs }: { jobs: SponsorJob[] }) {
   const [apps, setApps] = useState<JobApplication[]>([])
   const [loading, setLoading] = useState(false)
 
+  // When jobs arrive (or the selected job disappears), fall back to the first
+  // approved job so the panel never sits on an invalid/0 selection.
+  useEffect(() => {
+    if (approved.length === 0) { if (jobId !== 0) setJobId(0); return }
+    if (!approved.some((j) => j.id === jobId)) setJobId(approved[0].id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jobs])
+
   useEffect(() => {
     if (!jobId) { setApps([]); return }
     let alive = true

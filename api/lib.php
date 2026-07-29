@@ -4574,7 +4574,9 @@ function sponsor_job_create(int $sponsorUserId, array $body): array
         $questions !== [] ? json_encode($questions, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : null,
         $attach,
     ]);
-    if (function_exists('notify')) notify('New sponsor job awaiting approval', "A sponsor posted a job \"$title\" (min age $minAge). Review it in the admin Job Approvals tab.");
+    // Best-effort admin alert — must never fail the job creation itself.
+    try { if (function_exists('notify')) notify('New sponsor job awaiting approval', "A sponsor posted a job \"$title\" (min age $minAge). Review it in the admin Job Approvals tab."); }
+    catch (Throwable $e) { if (app_debug()) error_log('sponsor_job_create notify: ' . $e->getMessage()); }
     return sponsor_jobs_for_sponsor($sponsorUserId);
 }
 
@@ -4670,13 +4672,15 @@ function sponsor_jobs_for_student(array $student): array
     $studentId = (int) ($student['id'] ?? 0);
     $age = (int) ($student['age'] ?? 0);
     if ($studentId <= 0) return [];
-    // A student below a job's min_age (or with no age set → age 0) never sees it.
+    // A student below a job's min_age (or with no age set → age 0) never sees an
+    // open job. But a job the student has ALREADY applied to stays visible even if
+    // the sponsor later closes it, so an accepted student's chat + status persist.
     $s = db()->prepare(
         "SELECT j.*, UNIX_TIMESTAMP(j.created_at) AS created_ts,
                 a.id AS app_id, a.status AS app_status, a.answers AS app_answers, a.decline_reason AS app_decline
          FROM sponsor_jobs j
          LEFT JOIN sponsor_job_applications a ON a.job_id = j.id AND a.student_id = ?
-         WHERE j.status = 'approved' AND j.min_age <= ?
+         WHERE (j.status = 'approved' AND j.min_age <= ?) OR a.id IS NOT NULL
          ORDER BY j.created_at DESC"
     );
     $s->execute([$studentId, $age]);
@@ -4733,10 +4737,16 @@ function sponsor_job_apply(array $student, int $jobId, array $answers, string $r
     }
     $resume = preg_match('#^(/api/uploads/|https?://)#', $resumeUrl) ? mb_substr($resumeUrl, 0, 255) : null;
     $json = json_encode($clean, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    // Conditional upsert: only overwrite a row that is still 'submitted'. If a
+    // sponsor accepted/declined in the tiny window since the check above, the
+    // concurrent re-submit becomes a no-op instead of reverting their decision.
     db()->prepare(
         'INSERT INTO sponsor_job_applications (job_id, student_id, student_user_id, answers, resume_url, status)
          VALUES (?,?,?,?,?,\'submitted\')
-         ON DUPLICATE KEY UPDATE answers = VALUES(answers), resume_url = VALUES(resume_url), status = \'submitted\', decline_reason = NULL, updated_at = NOW()'
+         ON DUPLICATE KEY UPDATE
+            answers = IF(status = \'submitted\', VALUES(answers), answers),
+            resume_url = IF(status = \'submitted\', VALUES(resume_url), resume_url),
+            updated_at = IF(status = \'submitted\', NOW(), updated_at)'
     )->execute([$jobId, $studentId, (int) ($student['user_id'] ?? 0), $json, $resume]);
     // Notify the sponsor (email) that a new application arrived.
     if (function_exists('ecosystem_notify_user')) {
@@ -4793,7 +4803,7 @@ function sponsor_application_row(int $appId): ?array
     sponsor_jobs_ensure_schema();
     $s = db()->prepare(
         "SELECT a.*, j.sponsor_user_id, j.title AS job_title,
-                st.user_id AS student_user_id, st.id AS ns_student_id
+                st.user_id AS ns_user_id, st.id AS ns_student_id
          FROM sponsor_job_applications a
          JOIN sponsor_jobs j ON j.id = a.job_id
          LEFT JOIN new_school_students st ON st.id = a.student_id
