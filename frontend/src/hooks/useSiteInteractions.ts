@@ -126,14 +126,28 @@ export function useSiteInteractions({ onAuth, onRequest, onGallery, onSubscribe 
         })
         .filter(Boolean) as HTMLElement[]
     }
-    const updateIndicator = (link: HTMLAnchorElement | undefined) => {
-      if (!indicator || !link) return
-      const navBox = link.parentElement?.getBoundingClientRect()
-      const linkBox = link.getBoundingClientRect()
-      if (!navBox) return
-      indicator.style.width = `${linkBox.width}px`
-      indicator.style.transform = `translateX(${linkBox.left - navBox.left}px)`
+    // The golden line lives inside .nav__links (position:relative), so always
+    // measure offsets against that container — never link.parentElement, which
+    // for a dropdown item/trigger is the popup, not the bar.
+    const navLinksEl = document.querySelector<HTMLElement>('.nav__links')
+    const updateIndicator = (target: HTMLElement | undefined | null) => {
+      if (!indicator || !target || !navLinksEl) return
+      const navBox = navLinksEl.getBoundingClientRect()
+      const box = target.getBoundingClientRect()
+      if (box.width === 0) return // hidden (e.g. collapsed dropdown item)
+      indicator.style.width = `${box.width}px`
+      indicator.style.transform = `translateX(${box.left - navBox.left}px)`
       indicator.style.opacity = '1'
+    }
+    // Where the line rests when nothing is hovered: the active route link — but
+    // if that active link lives inside the "More" dropdown, rest under the
+    // dropdown's trigger (which is what's actually visible on the bar).
+    const restingTarget = (): HTMLElement | undefined => {
+      const active = nav?.querySelector<HTMLAnchorElement>('.nav__links a.active') || undefined
+      if (active && active.closest('.nav-dropdown__menu')) {
+        return active.closest('.nav-dropdown')?.querySelector<HTMLElement>('.nav-dropdown__trigger') || undefined
+      }
+      return active
     }
     const onScroll = () => {
       if (!nav) return
@@ -155,8 +169,7 @@ export function useSiteInteractions({ onAuth, onRequest, onGallery, onSubscribe 
         a.classList.toggle('active', isActive)
         if (isActive) activeLink = a
       })
-      const routeActive = nav?.querySelector<HTMLAnchorElement>('.nav__links a.active') || undefined
-      updateIndicator(activeLink ?? routeActive)
+      updateIndicator(activeLink ?? restingTarget())
     }
     window.addEventListener('scroll', onScroll, { passive: true })
     window.addEventListener('resize', onScroll)
@@ -166,11 +179,31 @@ export function useSiteInteractions({ onAuth, onRequest, onGallery, onSubscribe 
     const settle1 = window.setTimeout(onScroll, 300)
     const settle2 = window.setTimeout(onScroll, 900)
     if (document.fonts?.ready) document.fonts.ready.then(() => { refreshSectionAnchors(); onScroll() }).catch(() => {})
+    // Slide the golden line to whatever bar item is hovered (primary links AND
+    // dropdown triggers), and glide it back to the active target on mouse-out.
+    const onEnter = (e: Event) => updateIndicator(e.currentTarget as HTMLElement)
+    const onLeaveBar = () => updateIndicator(restingTarget())
+    let hoverBound: HTMLElement[] = []
+    const bindHover = () => {
+      hoverBound.forEach((el) => el.removeEventListener('mouseenter', onEnter))
+      hoverBound = [...(navLinksEl?.querySelectorAll<HTMLElement>(':scope > a, :scope > .nav-dropdown > .nav-dropdown__trigger') || [])]
+      hoverBound.forEach((el) => el.addEventListener('mouseenter', onEnter))
+    }
+    bindHover()
+    navLinksEl?.addEventListener('mouseleave', onLeaveBar)
+    // The layout never remounts on client-side navigation, so no scroll fires
+    // when the route (and the .active link) changes. Watch the bar for class
+    // mutations and re-seat the line so selecting a menu animates it every time.
+    const navMo = new MutationObserver(() => { bindHover(); updateIndicator(restingTarget()) })
+    if (navLinksEl) navMo.observe(navLinksEl, { attributes: true, subtree: true, attributeFilter: ['class'] })
     cleanups.push(() => {
       window.removeEventListener('scroll', onScroll)
       window.removeEventListener('resize', onScroll)
       clearTimeout(settle1)
       clearTimeout(settle2)
+      hoverBound.forEach((el) => el.removeEventListener('mouseenter', onEnter))
+      navLinksEl?.removeEventListener('mouseleave', onLeaveBar)
+      navMo.disconnect()
     })
 
     /* ---------- Scroll reveal ---------- */
