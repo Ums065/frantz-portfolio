@@ -22,32 +22,39 @@ export default function SiteHeader({ home = false }: { home?: boolean }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const [desktopSponsorOpen, setDesktopSponsorOpen] = useState(false)
   const [mobileSponsorOpen, setMobileSponsorOpen] = useState(false)
+  const [desktopMoreOpen, setDesktopMoreOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement | null>(null)
   const desktopSponsorRef = useRef<HTMLDivElement | null>(null)
   const mobileSponsorRef = useRef<HTMLDivElement | null>(null)
+  const desktopMoreRef = useRef<HTMLDivElement | null>(null)
   const dashboardHref = resolveDashboardRoute(user?.role)
   const fullName = user?.full_name || ''
   const initial = fullName.trim().charAt(0).toUpperCase() || 'U'
 
-  const navLinks: NavItem[] = [
+  // Primary links stay on the bar; everything else collapses into a "More"
+  // dropdown so the header doesn't overflow. Mobile shows the full list.
+  const primaryLinks: NavItem[] = [
     home
       ? { label: t('nav.home'), href: '#home', kind: 'anchor' }
       : { label: t('nav.home'), href: '/', kind: 'route', end: true },
     { label: t('nav.about'), href: '/about', kind: 'route' },
-    { label: t('nav.projects'), href: '/projects', kind: 'route' },
-    { label: t('nav.awards'), href: '/awards', kind: 'route' },
-    { label: t('nav.events'), href: '/events', kind: 'route' },
-    { label: t('nav.media'), href: '/media', kind: 'route' },
     { label: t('nav.challenge'), href: '/new-school', kind: 'route' },
+    { label: t('nav.awards'), href: '/awards', kind: 'route' },
     { label: t('nav.partners'), href: '/partner', kind: 'route' },
     ...(user ? [{ label: t('nav.dashboard'), href: dashboardHref, kind: 'route' as const }] : []),
+  ]
+  const moreLinks: NavItem[] = [
+    { label: t('nav.projects'), href: '/projects', kind: 'route' },
+    { label: t('nav.events'), href: '/events', kind: 'route' },
+    { label: t('nav.media'), href: '/media', kind: 'route' },
     { label: t('nav.merch'), href: '/store', kind: 'route' },
     { label: t('nav.news'), href: '/blog', kind: 'route' },
     { label: t('nav.contact'), href: '/contact', kind: 'route' },
   ]
+  const allNavLinks: NavItem[] = [...primaryLinks, ...moreLinks]
 
   useEffect(() => {
-    if (!menuOpen && !desktopSponsorOpen && !mobileSponsorOpen) return
+    if (!menuOpen && !desktopSponsorOpen && !mobileSponsorOpen && !desktopMoreOpen) return
 
     const onPointerDown = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
@@ -59,12 +66,16 @@ export default function SiteHeader({ home = false }: { home?: boolean }) {
       if (mobileSponsorRef.current && !mobileSponsorRef.current.contains(event.target as Node)) {
         setMobileSponsorOpen(false)
       }
+      if (desktopMoreRef.current && !desktopMoreRef.current.contains(event.target as Node)) {
+        setDesktopMoreOpen(false)
+      }
     }
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setMenuOpen(false)
       if (event.key === 'Escape') {
+        setMenuOpen(false)
         setDesktopSponsorOpen(false)
         setMobileSponsorOpen(false)
+        setDesktopMoreOpen(false)
       }
     }
 
@@ -74,15 +85,17 @@ export default function SiteHeader({ home = false }: { home?: boolean }) {
       document.removeEventListener('mousedown', onPointerDown)
       document.removeEventListener('keydown', onKeyDown)
     }
-  }, [menuOpen, desktopSponsorOpen, mobileSponsorOpen])
+  }, [menuOpen, desktopSponsorOpen, mobileSponsorOpen, desktopMoreOpen])
 
   const closeMenu = () => {
     setMenuOpen(false)
     setDesktopSponsorOpen(false)
     setMobileSponsorOpen(false)
+    setDesktopMoreOpen(false)
   }
   const closeDesktopSponsorMenu = () => setDesktopSponsorOpen(false)
   const closeMobileSponsorMenu = () => setMobileSponsorOpen(false)
+  const closeDesktopMoreMenu = () => setDesktopMoreOpen(false)
 
   return (
     <>
@@ -92,7 +105,7 @@ export default function SiteHeader({ home = false }: { home?: boolean }) {
         <div className="nav__inner">
           <Link to="/" className="logo-mono" aria-label="Frantz Coutard home"><img src={logo} alt="FC monogram" /></Link>
           <nav className="nav__links">
-            {navLinks.map((item) =>
+            {primaryLinks.map((item) =>
               item.kind === 'route' ? (
                 <NavLink
                   key={item.label}
@@ -108,6 +121,31 @@ export default function SiteHeader({ home = false }: { home?: boolean }) {
                 <a key={item.label} href={item.href} data-nav-section>{item.label}</a>
               ),
             )}
+            <div className={`nav-dropdown${desktopMoreOpen ? ' open' : ''}`} ref={desktopMoreRef}>
+              <button
+                type="button"
+                className="nav-dropdown__trigger"
+                aria-expanded={desktopMoreOpen}
+                aria-haspopup="true"
+                onClick={() => setDesktopMoreOpen((open) => !open)}
+              >
+                {t('nav.more')}
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
+              </button>
+              <div className="nav-dropdown__menu" role="menu" aria-label="More menu">
+                {moreLinks.map((item) => (
+                  <NavLink
+                    key={item.label}
+                    to={item.href}
+                    onClick={closeDesktopMoreMenu}
+                    role="menuitem"
+                    className={({ isActive }) => (isActive ? 'active' : undefined)}
+                  >
+                    {item.label}
+                  </NavLink>
+                ))}
+              </div>
+            </div>
             <div className={`nav-dropdown${desktopSponsorOpen ? ' open' : ''}`} ref={desktopSponsorRef}>
               <button
                 type="button"
@@ -179,7 +217,7 @@ export default function SiteHeader({ home = false }: { home?: boolean }) {
       <div className="mobile-menu">
         <button className="close-m" aria-label="Close menu"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth={2}><path d="M6 6l12 12M18 6L6 18" /></svg></button>
         <div className="m-scroll">
-          {navLinks.map((item) =>
+          {allNavLinks.map((item) =>
             item.kind === 'route' ? (
               <NavLink
                 key={item.label}
