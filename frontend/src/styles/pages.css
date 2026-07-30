@@ -26,9 +26,10 @@
 .page-hero__photo img { width: 100%; height: 100%; object-fit: cover; object-position: center top; }
 .page-hero__title {
   font-family: var(--f-poster);
-  font-size: clamp(46px, 7vw, 96px); line-height: 0.94; text-transform: uppercase;
+  font-size: clamp(30px, 8.5vw, 96px); line-height: 0.94; text-transform: uppercase;
   letter-spacing: 0.01em; margin: 14px 0 18px;
   filter: drop-shadow(0 6px 30px rgba(201,168,76,0.22));
+  overflow-wrap: break-word; word-break: break-word; max-width: 100%;
 }
 .page-hero__roles {
   display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center;
