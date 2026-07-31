@@ -28,6 +28,7 @@ export default function NotificationBell() {
   const [items, setItems] = useState<FeedItem[]>([])
   const [unread, setUnread] = useState(0)
   const [busy, setBusy] = useState(false)
+  const [q, setQ] = useState('')
   const [pos, setPos] = useState<{ top: number; right: number }>({ top: 56, right: 16 })
   const wrapRef = useRef<HTMLDivElement>(null)
   const btnRef = useRef<HTMLButtonElement>(null)
@@ -40,7 +41,7 @@ export default function NotificationBell() {
 
   const load = async () => {
     try {
-      const d = await api.get<{ items: FeedItem[]; unread: number }>('notifications/feed')
+      const d = await api.get<{ items: FeedItem[]; unread: number }>('notifications/feed?limit=50')
       setItems(Array.isArray(d.items) ? d.items : [])
       setUnread(Number(d.unread) || 0)
     } catch { /* silent */ }
@@ -103,6 +104,8 @@ export default function NotificationBell() {
   }
 
   const recentAnns = ann.items.slice(0, 4)
+  const needle = q.trim().toLowerCase()
+  const shown = needle ? items.filter((it) => `${it.title} ${it.message}`.toLowerCase().includes(needle)) : items
 
   return (
     <div ref={wrapRef} style={{ position: 'relative', display: 'inline-flex' }}>
@@ -122,16 +125,23 @@ export default function NotificationBell() {
 
       {open && createPortal(
         <div ref={dropRef} style={{ position: 'fixed', top: pos.top, right: pos.right, width: 'min(340px, 92vw)', maxHeight: 460, overflowY: 'auto', background: '#14130f', border: '1px solid var(--line)', borderRadius: 14, boxShadow: '0 24px 60px -20px rgba(0,0,0,0.8)', zIndex: 100000 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '12px 14px', borderBottom: '1px solid var(--line)', position: 'sticky', top: 0, background: '#14130f' }}>
-            <strong style={{ color: 'var(--gold-light)', fontSize: 13.5 }}>Notifications</strong>
-            {unread > 0 && <button type="button" className="linklike" disabled={busy} onClick={() => void markAll()} style={{ background: 'none', border: 0, color: 'var(--gold-light)', fontSize: 12, cursor: 'pointer' }}>Mark all read</button>}
+          <div style={{ position: 'sticky', top: 0, background: '#14130f', borderBottom: '1px solid var(--line)', zIndex: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '12px 14px 8px' }}>
+              <strong style={{ color: 'var(--gold-light)', fontSize: 13.5 }}>Notifications</strong>
+              {unread > 0 && <button type="button" className="linklike" disabled={busy} onClick={() => void markAll()} style={{ background: 'none', border: 0, color: 'var(--gold-light)', fontSize: 12, cursor: 'pointer' }}>Mark all read</button>}
+            </div>
+            {items.length > 4 && (
+              <div style={{ padding: '0 14px 10px' }}>
+                <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search notifications…" style={{ width: '100%', boxSizing: 'border-box', background: 'rgba(0,0,0,0.3)', border: '1px solid var(--line)', borderRadius: 8, padding: '7px 10px', color: 'var(--ivory)', fontSize: 12.5 }} />
+              </div>
+            )}
           </div>
 
           <div style={{ display: 'grid' }}>
-            {items.length === 0 && recentAnns.length === 0 && (
-              <div style={{ padding: '22px 16px', textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>You’re all caught up 🎉</div>
+            {shown.length === 0 && recentAnns.length === 0 && (
+              <div style={{ padding: '22px 16px', textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>{q.trim() ? 'No notifications match your search.' : 'You’re all caught up 🎉'}</div>
             )}
-            {items.map((it) => (
+            {shown.map((it) => (
               <button key={it.id} type="button" onClick={() => openItem(it)} style={{ textAlign: 'left', border: 0, borderBottom: '1px solid var(--line)', padding: '11px 14px', cursor: 'pointer', background: it.is_read ? 'transparent' : 'rgba(212,175,90,0.08)', display: 'grid', gap: 2 }}>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
                   {!it.is_read && <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#e5484d', flex: '0 0 auto', marginTop: 4 }} />}

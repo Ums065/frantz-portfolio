@@ -1534,7 +1534,8 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
         // Unified notifications bell: per-user feed + unread count (role-scoped).
         case $key === 'GET notifications/feed': {
             $u = require_login();
-            json(notifications_feed_for_user($u));
+            $limit = min(100, max(1, (int) ($_GET['limit'] ?? 20)));
+            json(notifications_feed_for_user($u, $limit));
         }
         case $key === 'POST notifications/read-all': {
             $u = require_login();
