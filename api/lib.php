@@ -7088,36 +7088,94 @@ function notifications_scope_for_user(array $user): array
     return ['ids' => [], 'roles' => []]; // others: only per-user (recipient_user_id) + 'all'
 }
 
-/** Build the WHERE clause + params matching every row this user should see. */
+/** Build the WHERE clause + params matching every row this user should see.
+ *  Precise scoping so notifications never leak across users of the same role:
+ *   - a row aimed at a specific user matches only via recipient_user_id
+ *   - student/parent/teacher/school role rows match only for THEIR student(s)
+ *   - judge/business/fellow role rows match only when NOT aimed at a specific user
+ *   - recipient_role='all' is a true global broadcast. */
 function notifications_where_for_user(array $user): array
 {
     $uid = (int) ($user['id'] ?? 0);
+    $role = (string) ($user['role'] ?? '');
+    if (in_array($role, ['admin', 'super_admin', 'editor'], true)) return ['1=1', []];
+
     $scope = notifications_scope_for_user($user);
-    if (!empty($scope['admin'])) return ['1=1', []];
     $ids = array_values(array_filter(array_map('intval', $scope['ids'] ?? []), static fn(int $i): bool => $i > 0));
-    $roles = array_values(array_filter($scope['roles'] ?? [], static fn($r): bool => $r !== ''));
-    $clauses = ["recipient_role = 'all'", 'recipient_user_id = ?'];
+
+    // Always: rows targeted at THIS user, plus true global broadcasts.
+    $clauses = ['recipient_user_id = ?', "recipient_role = 'all'"];
     $params = [$uid];
-    if ($ids) { $clauses[] = 'student_id IN (' . new_school_placeholder_list(count($ids)) . ')'; $params = array_merge($params, $ids); }
-    if ($roles) { $clauses[] = 'recipient_role IN (' . new_school_placeholder_list(count($roles)) . ')'; $params = array_merge($params, $roles); }
+
+    if (in_array($role, ['student', 'parent', 'teacher', 'school'], true)) {
+        // Role rows are scoped to the student(s) this user is responsible for —
+        // never every row of the role (that leaked across users).
+        if ($ids) {
+            $clauses[] = '(recipient_role = ? AND student_id IN (' . new_school_placeholder_list(count($ids)) . '))';
+            $params[] = $role;
+            $params = array_merge($params, $ids);
+        }
+    } elseif (in_array($role, ['judge', 'business', 'fellow'], true)) {
+        // Role broadcasts that are NOT aimed at one specific user.
+        $clauses[] = '(recipient_role = ? AND recipient_user_id IS NULL)';
+        $params[] = $role;
+    }
     return ['(' . implode(' OR ', $clauses) . ')', $params];
+}
+
+/** Where a notification should take the viewer when clicked — the viewer's own
+ *  dashboard, plus a best-effort tab hint by notification type. */
+function notifications_link_for(string $type, string $role): string
+{
+    $base = [
+        'student' => '/new-school', 'parent' => '/new-school', 'teacher' => '/new-school', 'school' => '/new-school',
+        'judge' => '/judge', 'business' => '/business', 'fellow' => '/fellow',
+        'sponsor' => '/sponsor', 'partner' => '/partner-portal', 'media' => '/media-portal', 'volunteer' => '/volunteer',
+    ][$role] ?? '/dashboard';
+    $isNs = in_array($role, ['student', 'parent', 'teacher', 'school'], true);
+    $isEco = in_array($role, ['sponsor', 'partner', 'media', 'volunteer'], true);
+
+    if ($type === 'chat') {
+        if ($isNs) return $base . '?tab=chat';
+        if ($role === 'business' || $isEco) return $base . '#messages';
+        if ($role === 'member') return '/dashboard#messages';
+        return $base;
+    }
+    if (in_array($type, ['job_offer', 'job_offer_consent', 'job_offer_info', 'offer_confirmed'], true)) {
+        if ($role === 'student') return $base . '?tab=jobs';
+        if ($role === 'parent') return $base . '?tab=overview';
+        if ($role === 'business') return $base . '#pipeline';
+        if ($role === 'sponsor') return $base . '#applications';
+        return $base;
+    }
+    if ($type === 'advanced') return $isNs ? $base . '?tab=overview' : $base;
+    if ($type === 'submissions_released') return $role === 'judge' ? '/judge' : $base;
+    if (in_array($type, ['approval', 'approval_needed', 'link_request'], true)) return $isNs ? $base . '?tab=approvals' : $base;
+    return $base;
 }
 
 /** Unified notifications feed for the signed-in user: {items, unread}. */
 function notifications_feed_for_user(array $user, int $limit = 20): array
 {
     new_school_workflow_ensure_schema();
+    $role = (string) ($user['role'] ?? '');
     [$where, $params] = notifications_where_for_user($user);
-    $stmt = db()->prepare('SELECT id, notification_type, title, message, is_read, created_at FROM new_school_notifications WHERE ' . $where . ' ORDER BY created_at DESC LIMIT ' . max(1, $limit));
+    $stmt = db()->prepare('SELECT id, notification_type, title, message, payload_json, is_read, created_at FROM new_school_notifications WHERE ' . $where . ' ORDER BY created_at DESC LIMIT ' . max(1, $limit));
     $stmt->execute($params);
-    $items = array_map(static fn(array $r): array => [
-        'id'         => (int) $r['id'],
-        'type'       => (string) ($r['notification_type'] ?? ''),
-        'title'      => (string) ($r['title'] ?? ''),
-        'message'    => (string) ($r['message'] ?? ''),
-        'is_read'    => (int) ($r['is_read'] ?? 0) === 1,
-        'created_ts' => isset($r['created_at']) ? strtotime((string) $r['created_at']) : 0,
-    ], $stmt->fetchAll());
+    $items = array_map(static function (array $r) use ($role): array {
+        $type = (string) ($r['notification_type'] ?? '');
+        $payload = !empty($r['payload_json']) ? (json_decode((string) $r['payload_json'], true) ?: []) : [];
+        return [
+            'id'         => (int) $r['id'],
+            'type'       => $type,
+            'title'      => (string) ($r['title'] ?? ''),
+            'message'    => (string) ($r['message'] ?? ''),
+            'payload'    => $payload,
+            'link'       => notifications_link_for($type, $role),
+            'is_read'    => (int) ($r['is_read'] ?? 0) === 1,
+            'created_ts' => isset($r['created_at']) ? strtotime((string) $r['created_at']) : 0,
+        ];
+    }, $stmt->fetchAll());
     return ['items' => $items, 'unread' => count(array_filter($items, static fn(array $i): bool => !$i['is_read']))];
 }
 

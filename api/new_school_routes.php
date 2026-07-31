@@ -1664,7 +1664,11 @@ function new_school_handle_route(string $method, string $route): bool
             $text = mb_substr($text, 0, 2000);
             db()->prepare('INSERT INTO new_school_chat_messages (thread_user_id, sender, sender_user_id, body, attachment_url) VALUES (?, "admin", ?, ?, ?)')
                 ->execute([$threadUserId, (int) $admin['id'], $text, $attach ?: null]);
-            new_school_add_notification(null, 'all', 'chat', 'Admin replied', 'You have a new message from the admin team.', ['user_id' => (string) $threadUserId]);
+            // Notify ONLY the user in this thread (never a broadcast to everyone).
+            $threadRoleStmt = db()->prepare('SELECT role FROM users WHERE id = ? LIMIT 1');
+            $threadRoleStmt->execute([$threadUserId]);
+            $threadRole = (string) ($threadRoleStmt->fetchColumn() ?: 'student');
+            new_school_add_notification(null, $threadRole, 'chat', 'Admin replied', 'You have a new message from the admin team.', ['user_id' => (string) $threadUserId], $threadUserId);
             json(['messages' => new_school_chat_fetch($threadUserId, 'admin')], 201);
         }
 

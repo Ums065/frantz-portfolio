@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import { useAuth } from '../context/AuthContext'
 import { useAnnouncementBadge } from './AnnouncementsFeed'
@@ -9,7 +10,7 @@ import { useAnnouncementBadge } from './AnnouncementsFeed'
    new_school_notifications) with global announcements (client-seen via
    useAnnouncementBadge). Auto-polls every ~30s while mounted. */
 
-interface FeedItem { id: number; type: string; title: string; message: string; is_read: boolean; created_ts: number }
+interface FeedItem { id: number; type: string; title: string; message: string; is_read: boolean; created_ts: number; link?: string }
 
 function timeAgo(ts: number): string {
   if (!ts) return ''
@@ -22,6 +23,7 @@ function timeAgo(ts: number): string {
 
 export default function NotificationBell() {
   const { user } = useAuth()
+  const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const [items, setItems] = useState<FeedItem[]>([])
   const [unread, setUnread] = useState(0)
@@ -87,6 +89,13 @@ export default function NotificationBell() {
     setUnread((u) => Math.max(0, u - 1))
     try { await api.post(`new-school/notifications/${id}/read`, {}) } catch { /* ignore */ }
   }
+  // Click a notification: mark it read, close the dropdown, and go to the
+  // relevant place (server-provided per-role deep link).
+  const openItem = (it: FeedItem) => {
+    if (!it.is_read) void markOne(it.id)
+    setOpen(false)
+    if (it.link) navigate(it.link)
+  }
   const markAll = async () => {
     setBusy(true)
     try { const d = await api.post<{ items: FeedItem[]; unread: number }>('notifications/read-all', {}); setItems(d.items || []); setUnread(Number(d.unread) || 0) }
@@ -123,7 +132,7 @@ export default function NotificationBell() {
               <div style={{ padding: '22px 16px', textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>You’re all caught up 🎉</div>
             )}
             {items.map((it) => (
-              <button key={it.id} type="button" onClick={() => !it.is_read && void markOne(it.id)} style={{ textAlign: 'left', border: 0, borderBottom: '1px solid var(--line)', padding: '11px 14px', cursor: it.is_read ? 'default' : 'pointer', background: it.is_read ? 'transparent' : 'rgba(212,175,90,0.08)', display: 'grid', gap: 2 }}>
+              <button key={it.id} type="button" onClick={() => openItem(it)} style={{ textAlign: 'left', border: 0, borderBottom: '1px solid var(--line)', padding: '11px 14px', cursor: 'pointer', background: it.is_read ? 'transparent' : 'rgba(212,175,90,0.08)', display: 'grid', gap: 2 }}>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
                   {!it.is_read && <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#e5484d', flex: '0 0 auto', marginTop: 4 }} />}
                   <span style={{ color: 'var(--ivory)', fontWeight: 700, fontSize: 13, flex: 1, minWidth: 0 }}>{it.title || 'Notification'}</span>
