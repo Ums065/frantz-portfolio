@@ -3270,6 +3270,20 @@ function new_school_workflow_ensure_schema(): void
     // Notifications: per-user targeting + judge/business as addressable roles (for the unified bell).
     $addCol('new_school_notifications', 'recipient_user_id', 'INT DEFAULT NULL');
     try { $pdo->exec("ALTER TABLE new_school_notifications MODIFY recipient_role ENUM('student','parent','school','teacher','admin','all','judge','business','fellow') NOT NULL DEFAULT 'student'"); } catch (Throwable $e) { if (app_debug()) error_log('notif role enum: ' . $e->getMessage()); }
+    // Some deploys (db/update.sql) created this table as latin1, so any title/
+    // message containing an emoji or a non-Latin name throws on INSERT and 500s
+    // the core action (chat send, offer create). Convert to utf8mb4 — but only
+    // when it isn't already, so we don't rebuild the table on every request.
+    try {
+        $cs = $pdo->query(
+            "SELECT ccsa.character_set_name FROM information_schema.TABLES t
+             JOIN information_schema.COLLATION_CHARACTER_SET_APPLICABILITY ccsa ON ccsa.collation_name = t.table_collation
+             WHERE t.table_schema = DATABASE() AND t.table_name = 'new_school_notifications' LIMIT 1"
+        )->fetchColumn();
+        if ($cs !== false && strtolower((string) $cs) !== 'utf8mb4') {
+            $pdo->exec("ALTER TABLE new_school_notifications CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+        }
+    } catch (Throwable $e) { if (app_debug()) error_log('notif charset heal: ' . $e->getMessage()); }
     // Per-school marker that its top-3 have been released (idempotency + UI state).
     $addCol('new_school_schools', 'top3_released_at', 'TIMESTAMP NULL DEFAULT NULL');
     // Internal score rows — SEPARATE from new_school_judge_scores; never feeds the main ranking.
@@ -4653,6 +4667,7 @@ function sponsor_jobs_ensure_schema(): void
             resume_url VARCHAR(255) DEFAULT NULL,
             status ENUM('submitted','accepted','declined') NOT NULL DEFAULT 'submitted',
             decline_reason TEXT DEFAULT NULL,
+            parent_consent VARCHAR(12) NOT NULL DEFAULT 'not_required',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             UNIQUE KEY uniq_job_student (job_id, student_id),
@@ -4660,6 +4675,12 @@ function sponsor_jobs_ensure_schema(): void
             INDEX idx_sja_student (student_id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
     );
+    // Child-safety: a minor applicant's chat + résumé stay closed until a parent
+    // consents. Self-heal the column on already-created tables.
+    try {
+        $has = $pdo->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'sponsor_job_applications' AND COLUMN_NAME = 'parent_consent'")->fetchColumn();
+        if ((int) $has === 0) $pdo->exec("ALTER TABLE sponsor_job_applications ADD COLUMN parent_consent VARCHAR(12) NOT NULL DEFAULT 'not_required'");
+    } catch (Throwable $e) { if (app_debug()) error_log('sponsor_job_applications parent_consent: ' . $e->getMessage()); }
     // Direct sponsor ⇄ student chat (admin oversight) once an application is accepted.
     $pdo->exec(
         "CREATE TABLE IF NOT EXISTS sponsor_application_messages (
@@ -4776,10 +4797,13 @@ function sponsor_jobs_for_sponsor(int $sponsorUserId): array
     }, $s->fetchAll());
 }
 
-/** Shape one application row for the sponsor/admin manage view. Résumé only when accepted. */
+/** Shape one application row for the sponsor/admin manage view. Résumé + chat
+ *  open only once the application is fully confirmed (accepted + any required
+ *  parent consent) — never for a minor still awaiting a parent's yes. */
 function sponsor_application_shape(array $r): array
 {
-    $accepted = (string) ($r['status'] ?? '') === 'accepted';
+    $confirmed = sponsor_application_is_accepted($r); // accepted + consent-safe
+    $pc = (string) ($r['parent_consent'] ?? 'not_required');
     $answers = json_decode((string) ($r['answers'] ?? ''), true);
     return [
         'id' => (int) $r['id'],
@@ -4788,11 +4812,13 @@ function sponsor_application_shape(array $r): array
         'student_name' => (string) ($r['student_name'] ?? 'Student'),
         'school_name' => (string) ($r['school_name'] ?? ''),
         'answers' => is_array($answers) ? $answers : [],
-        'resume_url' => $accepted ? (string) ($r['resume_url'] ?? '') : '',
+        'resume_url' => $confirmed ? (string) ($r['resume_url'] ?? '') : '',
         'status' => (string) $r['status'],
+        'parent_consent' => $pc,
+        'awaiting_parent' => (string) ($r['status'] ?? '') === 'accepted' && $pc === 'pending',
         'decline_reason' => (string) ($r['decline_reason'] ?? ''),
         'student_user_id' => (int) ($r['student_user_id'] ?? 0),
-        'unread' => $accepted ? sponsor_application_unread_count((int) $r['id'], 'sponsor') : 0,
+        'unread' => $confirmed ? sponsor_application_unread_count((int) $r['id'], 'sponsor') : 0,
         'created_ts' => (int) ($r['created_ts'] ?? 0),
     ];
 }
@@ -4835,7 +4861,7 @@ function sponsor_jobs_for_student(array $student): array
     // the sponsor later closes it, so an accepted student's chat + status persist.
     $s = db()->prepare(
         "SELECT j.*, UNIX_TIMESTAMP(j.created_at) AS created_ts,
-                a.id AS app_id, a.status AS app_status, a.answers AS app_answers, a.decline_reason AS app_decline
+                a.id AS app_id, a.status AS app_status, a.answers AS app_answers, a.decline_reason AS app_decline, a.parent_consent AS app_consent
          FROM sponsor_jobs j
          LEFT JOIN sponsor_job_applications a ON a.job_id = j.id AND a.student_id = ?
          WHERE (j.status = 'approved' AND j.min_age <= ?) OR a.id IS NOT NULL
@@ -4849,12 +4875,19 @@ function sponsor_jobs_for_student(array $student): array
         $job['sponsor_name'] = (string) ($sp->fetchColumn() ?: 'A sponsor');
         if (!empty($r['app_id'])) {
             $ans = json_decode((string) ($r['app_answers'] ?? ''), true);
+            $pc = (string) ($r['app_consent'] ?? 'not_required');
+            // Chat opens for the student only once fully confirmed (accepted +
+            // any required parent consent).
+            $confirmed = (string) ($r['app_status'] ?? '') === 'accepted' && in_array($pc, ['not_required', 'accepted'], true);
             $job['application'] = [
                 'id' => (int) $r['app_id'],
                 'status' => (string) ($r['app_status'] ?? ''),
                 'answers' => is_array($ans) ? $ans : [],
                 'decline_reason' => (string) ($r['app_decline'] ?? ''),
-                'unread' => (string) ($r['app_status'] ?? '') === 'accepted' ? sponsor_application_unread_count((int) $r['app_id'], 'student') : 0,
+                'parent_consent' => $pc,
+                'awaiting_parent' => (string) ($r['app_status'] ?? '') === 'accepted' && $pc === 'pending',
+                'chat_open' => $confirmed,
+                'unread' => $confirmed ? sponsor_application_unread_count((int) $r['app_id'], 'student') : 0,
             ];
         } else {
             $job['application'] = null;
@@ -4937,20 +4970,85 @@ function sponsor_application_respond(int $appId, string $decision, string $reaso
     if ((string) $row['status'] !== 'submitted') json(['error' => 'You have already responded to this application.'], 409);
     $dec = $decision === 'accept' ? 'accepted' : 'declined';
     if ($dec === 'declined' && trim($reason) === '') json(['error' => 'Please give a short reason when declining.'], 422);
-    db()->prepare('UPDATE sponsor_job_applications SET status = ?, decline_reason = CASE WHEN ?="declined" THEN ? ELSE decline_reason END WHERE id = ?')
-        ->execute([$dec, $dec, mb_substr($reason, 0, 2000) ?: null, $appId]);
     $nsStudentId = (int) ($row['ns_student_id'] ?? $row['student_id'] ?? 0);
+    $isMinor = (int) ($row['student_age'] ?? 0) < 18 && (int) ($row['student_age'] ?? 0) > 0;
+    // On accept: a minor needs a parent's yes before chat/résumé open; an adult
+    // (18+) confirms on their own, so no parent gate.
+    $consent = $dec === 'accepted' ? ($isMinor ? 'pending' : 'not_required') : 'not_required';
+    db()->prepare('UPDATE sponsor_job_applications SET status = ?, parent_consent = ?, decline_reason = CASE WHEN ?="declined" THEN ? ELSE decline_reason END WHERE id = ?')
+        ->execute([$dec, $consent, $dec, mb_substr($reason, 0, 2000) ?: null, $appId]);
     $jobTitle = (string) ($row['job_title'] ?? 'a job');
     if ($nsStudentId > 0) {
-        $title = $dec === 'accepted' ? 'Your job application was accepted 🎉' : 'Update on your job application';
-        $msg = $dec === 'accepted'
-            ? "The sponsor accepted your application for \"$jobTitle\". Open the Sponsor Jobs tab to chat with them."
-            : "The sponsor could not move forward with your application for \"$jobTitle\"." . ($reason !== '' ? " Reason: $reason" : '');
+        if ($dec === 'accepted' && $isMinor) {
+            $title = 'Your application was accepted — parent consent needed';
+            $msg = "A sponsor accepted your application for \"$jobTitle\". Your parent/guardian must approve before you can chat with them.";
+        } else {
+            $title = $dec === 'accepted' ? 'Your job application was accepted 🎉' : 'Update on your job application';
+            $msg = $dec === 'accepted'
+                ? "The sponsor accepted your application for \"$jobTitle\". Open the Sponsor Jobs tab to chat with them."
+                : "The sponsor could not move forward with your application for \"$jobTitle\"." . ($reason !== '' ? " Reason: $reason" : '');
+        }
         // Best-effort: a notification hiccup must never fail the accept/decline itself.
         try { new_school_add_notification($nsStudentId, 'student', 'job_offer', $title, $msg, ['application_id' => $appId]); }
         catch (Throwable $e) { if (app_debug()) error_log('sponsor_application_respond notify: ' . $e->getMessage()); }
+        // Ask the parent to consent (minor + accepted only).
+        if ($dec === 'accepted' && $isMinor) {
+            try { new_school_add_notification($nsStudentId, 'parent', 'job_offer_consent', 'Consent needed: sponsor opportunity', "A sponsor accepted your child's application for \"$jobTitle\". Please review and give consent in your dashboard before they connect.", ['application_id' => $appId]); }
+            catch (Throwable $e) { if (app_debug()) error_log('sponsor_application_respond parent notify: ' . $e->getMessage()); }
+        }
     }
     return sponsor_job_applications_for_job((int) $row['job_id']);
+}
+
+/** Sponsor-opportunity consents for a parent's child (pending first). Powers the
+ *  parent dashboard's consent card for accepted-but-minor applications. */
+function sponsor_consents_for_parent(int $parentUserId): array
+{
+    sponsor_jobs_ensure_schema();
+    $p = new_school_fetch_parent_by_user_id($parentUserId);
+    if (!$p) return [];
+    $s = db()->prepare(
+        "SELECT a.id, a.parent_consent, a.status, j.title AS job_title, ea.org_name AS sponsor_name,
+                UNIX_TIMESTAMP(a.updated_at) AS ts
+         FROM sponsor_job_applications a
+         JOIN sponsor_jobs j ON j.id = a.job_id
+         LEFT JOIN ecosystem_accounts ea ON ea.user_id = j.sponsor_user_id
+         WHERE a.student_id = ? AND a.status = 'accepted' AND a.parent_consent IN ('pending','accepted','declined')
+         ORDER BY (a.parent_consent = 'pending') DESC, a.updated_at DESC"
+    );
+    $s->execute([(int) $p['student_id']]);
+    return array_map(static fn(array $r): array => [
+        'id' => (int) $r['id'],
+        'job_title' => (string) ($r['job_title'] ?? ''),
+        'sponsor_name' => (string) ($r['sponsor_name'] ?? 'A sponsor'),
+        'parent_consent' => (string) $r['parent_consent'],
+        'ts' => (int) ($r['ts'] ?? 0),
+    ], $s->fetchAll());
+}
+
+/** Parent gives/declines consent for a minor's accepted sponsor application.
+ *  On consent the sponsor↔student chat + résumé become available. */
+function sponsor_application_parent_consent(int $parentUserId, int $appId, string $decision): array
+{
+    sponsor_jobs_ensure_schema();
+    $p = new_school_fetch_parent_by_user_id($parentUserId);
+    if (!$p) json(['error' => 'Parent profile not found.'], 404);
+    $row = sponsor_application_row($appId);
+    if (!$row || (int) ($row['student_id'] ?? 0) !== (int) $p['student_id']) json(['error' => 'Application not found.'], 404);
+    if ((string) $row['status'] !== 'accepted') json(['error' => 'This application is not ready for consent yet.'], 409);
+    if ((string) ($row['parent_consent'] ?? '') !== 'pending') json(['error' => 'You have already responded to this.'], 409);
+    $dec = $decision === 'accept' ? 'accepted' : 'declined';
+    db()->prepare('UPDATE sponsor_job_applications SET parent_consent = ? WHERE id = ?')->execute([$dec, $appId]);
+    $sponsorUid = (int) ($row['sponsor_user_id'] ?? 0);
+    $nsStudentId = (int) ($row['ns_student_id'] ?? 0);
+    $jobTitle = (string) ($row['job_title'] ?? 'a job');
+    if ($dec === 'accepted') {
+        if (function_exists('ecosystem_notify_user')) ecosystem_notify_user($sponsorUid, 'Parent consent received', "A parent/guardian approved the connection for \"$jobTitle\". You can now chat with the student.");
+        if ($nsStudentId > 0) { try { new_school_add_notification($nsStudentId, 'student', 'job_offer', 'Parent consent received 🎉', "Your parent/guardian approved — you can now chat with the sponsor about \"$jobTitle\".", ['application_id' => $appId]); } catch (Throwable $e) { /* non-fatal */ } }
+    } else {
+        if (function_exists('ecosystem_notify_user')) ecosystem_notify_user($sponsorUid, 'Parent declined the connection', "A parent/guardian declined consent for \"$jobTitle\".");
+    }
+    return sponsor_consents_for_parent($parentUserId);
 }
 
 /* ---- Sponsor application chat (student ⇄ sponsor, admin oversight) ---- */
@@ -4961,7 +5059,7 @@ function sponsor_application_row(int $appId): ?array
     sponsor_jobs_ensure_schema();
     $s = db()->prepare(
         "SELECT a.*, j.sponsor_user_id, j.title AS job_title,
-                st.user_id AS ns_user_id, st.id AS ns_student_id
+                st.user_id AS ns_user_id, st.id AS ns_student_id, st.age AS student_age
          FROM sponsor_job_applications a
          JOIN sponsor_jobs j ON j.id = a.job_id
          LEFT JOIN new_school_students st ON st.id = a.student_id
@@ -4971,10 +5069,18 @@ function sponsor_application_row(int $appId): ?array
     return $s->fetch() ?: null;
 }
 
-/** Chat opens only once the application is accepted. */
+/**
+ * The gate that opens the sponsor⇄student chat and releases the résumé. Accepted
+ * is necessary but NOT sufficient for a minor: an under-18 applicant also needs a
+ * recorded parent consent. Fails CLOSED — an unknown/pending consent keeps the
+ * channel shut, so a self-registered adult sponsor can never reach a child
+ * without a parent's yes.
+ */
 function sponsor_application_is_accepted(array $app): bool
 {
-    return (string) ($app['status'] ?? '') === 'accepted';
+    if ((string) ($app['status'] ?? '') !== 'accepted') return false;
+    $pc = (string) ($app['parent_consent'] ?? 'not_required');
+    return in_array($pc, ['not_required', 'accepted'], true);
 }
 
 function sponsor_application_messages_list(int $appId): array
@@ -5787,13 +5893,15 @@ function ecosystem_announcement_delete(int $id): void { ecosystem_shared_ensure_
 
 /**
  * Demo mode lets anyone sign in as a ready-made account for any role from the
- * /demo page — for live presentations. Set DEMO_MODE=off in api/.env to disable
- * it in production (the endpoints then 404). Default: on.
+ * /demo page — for live presentations. It is an unauthenticated one-click login,
+ * so it defaults to OFF (endpoints 404) and must be explicitly enabled with
+ * DEMO_MODE=on in api/.env — e.g. on staging for presentations, never on the
+ * public production site.
  */
 function demo_mode_enabled(): bool
 {
-    $v = strtolower((string) env('DEMO_MODE', 'on'));
-    return !in_array($v, ['off', '0', 'false', 'no'], true);
+    $v = strtolower((string) env('DEMO_MODE', 'off'));
+    return in_array($v, ['on', '1', 'true', 'yes'], true);
 }
 
 /** Ordered role => label list for the demo page. */

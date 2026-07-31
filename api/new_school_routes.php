@@ -725,6 +725,17 @@ function new_school_handle_route(string $method, string $route): bool
             $reason = trim((string) field($b, 'reason'));
             json(['message' => $decision === 'accept' ? 'Consent recorded — the business has been notified.' : 'Consent declined.', 'offers' => business_parent_respond((int) $user['id'], (int) $m[1], $decision, $reason)]);
         }
+        // Parent consent for a minor's accepted sponsor-job application (gates chat + résumé).
+        case $key === 'GET new-school/parent/sponsor-consents': {
+            $user = require_login();
+            json(['consents' => sponsor_consents_for_parent((int) $user['id'])]);
+        }
+        case $method === 'POST' && preg_match('#^new-school/parent/sponsor-application/(\d+)/consent$#', $route, $m) === 1: {
+            $user = require_login();
+            $decision = (string) field(body(), 'decision');
+            if (!in_array($decision, ['accept', 'decline'], true)) json(['error' => 'Choose accept or decline.'], 422);
+            json(['message' => $decision === 'accept' ? 'Consent recorded — the sponsor has been notified.' : 'Consent declined.', 'consents' => sponsor_application_parent_consent((int) $user['id'], (int) $m[1], $decision)]);
+        }
 
         case $key === 'GET new-school/dashboard': {
             $user = require_login();
@@ -2022,6 +2033,10 @@ function new_school_handle_route(string $method, string $route): bool
                 ? $rankPosition
                 : (($submission['rank_position'] ?? null) !== null && $submission['rank_position'] !== '' ? (int) $submission['rank_position'] : null);
 
+            // Warm schemas first: their CREATE TABLE / ALTER is an implicit COMMIT
+            // that would break atomicity if it fired mid-transaction below.
+            new_school_points_ensure_schema();
+            new_school_workflow_ensure_schema();
             $pdo->beginTransaction();
             try {
                 $reviewedAt = date('Y-m-d H:i:s');
@@ -3437,6 +3452,9 @@ function new_school_handle_route(string $method, string $route): bool
                 json(['error' => 'Submission not found.'], 404);
             }
 
+            // Warm schemas first (their DDL implicitly commits) so the transaction stays atomic.
+            new_school_points_ensure_schema();
+            new_school_workflow_ensure_schema();
             $pdo->beginTransaction();
             try {
                 $reviewer = require_admin();
@@ -3611,6 +3629,9 @@ function new_school_handle_route(string $method, string $route): bool
             }
 
             $pdo = db();
+            // Warm schemas first (their DDL implicitly commits) so the transaction stays atomic.
+            new_school_points_ensure_schema();
+            new_school_workflow_ensure_schema();
             $pdo->beginTransaction();
             try {
                 $published = [];

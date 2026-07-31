@@ -36,6 +36,7 @@ interface JobApplication {
   resume_url: string
   status: 'submitted' | 'accepted' | 'declined'
   decline_reason: string
+  awaiting_parent?: boolean
   unread: number
   created_ts: number
 }
@@ -303,7 +304,12 @@ function ApplicationCard({ app, reload }: { app: JobApplication; reload: () => v
         </div>
       )}
 
-      {app.status === 'accepted' && <OfferChat base={`ecosystem/sponsor/application/${app.id}`} role="sponsor" />}
+      {app.status === 'accepted' && app.awaiting_parent && (
+        <p style={{ marginTop: 12, fontSize: 12.5, color: 'var(--gold-light)', background: 'rgba(212,175,90,0.1)', border: '1px solid rgba(212,175,90,0.25)', borderRadius: 8, padding: '9px 12px' }}>
+          ⏳ Waiting for the student's parent/guardian to give consent. Chat and résumé unlock once they approve (the student is under 18).
+        </p>
+      )}
+      {app.status === 'accepted' && !app.awaiting_parent && <OfferChat base={`ecosystem/sponsor/application/${app.id}`} role="sponsor" />}
     </div>
   )
 }

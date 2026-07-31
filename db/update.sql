@@ -778,9 +778,12 @@ CREATE TABLE IF NOT EXISTS `new_school_notifications` (
   KEY `idx_new_school_notifications_role` (`recipient_role`),
   KEY `idx_new_school_notifications_created` (`created_at`),
   CONSTRAINT `fk_new_school_notifications_student` FOREIGN KEY (`student_id`) REFERENCES `new_school_students` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+-- Heal any older table that was created as latin1 (emoji/non-Latin names 500 on insert otherwise).
+ALTER TABLE `new_school_notifications` CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CALL add_column_if_missing('new_school_notifications', 'student_id', 'int DEFAULT NULL', 'id');
-CALL add_column_if_missing('new_school_notifications', 'recipient_role', 'enum(''student'',''parent'',''school'',''teacher'',''admin'',''all'') NOT NULL DEFAULT ''student''', 'student_id');
+CALL add_column_if_missing('new_school_notifications', 'recipient_role', 'enum(''student'',''parent'',''school'',''teacher'',''admin'',''all'',''judge'',''business'',''fellow'') NOT NULL DEFAULT ''student''', 'student_id');
+CALL add_column_if_missing('new_school_notifications', 'recipient_user_id', 'int DEFAULT NULL', 'recipient_role');
 CALL add_column_if_missing('new_school_notifications', 'notification_type', 'varchar(80) NOT NULL', 'recipient_role');
 CALL add_column_if_missing('new_school_notifications', 'title', 'varchar(180) NOT NULL', 'notification_type');
 CALL add_column_if_missing('new_school_notifications', 'message', 'text NOT NULL', 'title');

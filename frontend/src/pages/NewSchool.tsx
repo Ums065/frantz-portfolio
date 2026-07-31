@@ -976,6 +976,8 @@ interface StudentSponsorJob {
     status: 'submitted' | 'accepted' | 'declined'
     answers: { key: string; question: string; answer: string }[]
     decline_reason: string
+    awaiting_parent?: boolean
+    chat_open?: boolean
     unread: number
   }
 }
@@ -1049,7 +1051,12 @@ function StudentSponsorJobs({ jobs, hidden }: { jobs: StudentSponsorJob[]; hidde
                   {app && app.status === 'declined' && app.decline_reason && (
                     <p style={{ color: '#e0a0a0', fontSize: 12.5, margin: '10px 0 0' }}>Reason: {app.decline_reason}</p>
                   )}
-                  {app && app.status === 'accepted' && (
+                  {app && app.status === 'accepted' && app.awaiting_parent && (
+                    <p style={{ color: 'var(--gold-light)', fontSize: 12.5, margin: '12px 0 0', background: 'rgba(212,175,90,0.1)', border: '1px solid rgba(212,175,90,0.25)', borderRadius: 8, padding: '9px 12px' }}>
+                      ⏳ You're accepted! Your parent/guardian needs to approve before you can chat with the sponsor. We've asked them.
+                    </p>
+                  )}
+                  {app && app.status === 'accepted' && app.chat_open && (
                     <OfferChat base={`new-school/student/application/${app.id}`} role="student" />
                   )}
                 </div>
@@ -1066,6 +1073,50 @@ function StudentSponsorJobs({ jobs, hidden }: { jobs: StudentSponsorJob[]; hidde
           onDone={(fresh) => { setList(fresh); setApplyJob(null) }}
         />
       )}
+    </article>
+  )
+}
+
+interface SponsorConsent { id: number; job_title: string; sponsor_name: string; parent_consent: string; ts: number }
+
+/* Parent-facing consent card: a sponsor accepted their (minor) child's job
+   application — the parent must approve before the chat/résumé unlock. Self-fetches
+   so it doesn't need the parent payload. Hides entirely when there's nothing. */
+function ParentSponsorConsents({ hidden }: { hidden?: boolean }) {
+  const [items, setItems] = useState<SponsorConsent[]>([])
+  const [busy, setBusy] = useState(0)
+  useEffect(() => {
+    let alive = true
+    api.get<{ consents: SponsorConsent[] }>('new-school/parent/sponsor-consents')
+      .then((d) => { if (alive) setItems(Array.isArray(d.consents) ? d.consents : []) }).catch(() => {})
+    return () => { alive = false }
+  }, [])
+  const respond = async (id: number, decision: 'accept' | 'decline') => {
+    setBusy(id)
+    try {
+      const d = await api.post<{ consents: SponsorConsent[]; message?: string }>(`new-school/parent/sponsor-application/${id}/consent`, { decision })
+      setItems(Array.isArray(d.consents) ? d.consents : [])
+      window.fcToast?.(d.message || 'Saved.')
+    } catch (e) { window.fcToast?.(e instanceof Error ? e.message : 'Could not save your response.') } finally { setBusy(0) }
+  }
+  const pending = items.filter((i) => i.parent_consent === 'pending')
+  if (pending.length === 0) return null
+  return (
+    <article className="glass ns-dash-card ns-dash-card--wide reveal in" hidden={hidden}>
+      <div className="ns-dash-card__head"><span className="eyebrow">🛡️ Sponsor Opportunity — Your Consent</span></div>
+      <p style={{ color: 'var(--muted)', fontSize: 13, margin: '0 0 12px' }}>A sponsor accepted your child's application. As they are under 18, your approval is required before they can connect with the sponsor.</p>
+      <div style={{ display: 'grid', gap: 12 }}>
+        {pending.map((c) => (
+          <div key={c.id} style={{ border: '1px solid var(--line)', borderRadius: 12, background: 'rgba(0,0,0,0.16)', padding: '12px 14px' }}>
+            <div style={{ color: 'var(--white)', fontWeight: 700, fontSize: 15 }}>{c.job_title}</div>
+            <div style={{ color: 'var(--gold-light)', fontSize: 13, marginTop: 2 }}>{c.sponsor_name}</div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+              <button className="btn btn--sm btn--solid" disabled={busy === c.id} onClick={() => respond(c.id, 'accept')}>{busy === c.id ? '…' : 'Approve'}</button>
+              <button className="btn btn--sm" disabled={busy === c.id} onClick={() => respond(c.id, 'decline')}>Decline</button>
+            </div>
+          </div>
+        ))}
+      </div>
     </article>
   )
 }
@@ -3814,6 +3865,7 @@ export default function NewSchool() {
               {parentDashboard && (
             <div className="ns-dash-grid">
               <JobOffers role="parent" hidden={dashboardTab !== 'overview'} />
+              <ParentSponsorConsents hidden={dashboardTab !== 'overview'} />
               <article className="glass ns-dash-card reveal in">
                 <div className="ns-dash-card__head">
                   <span className="eyebrow">Parent Dashboard</span>
