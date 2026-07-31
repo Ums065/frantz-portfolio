@@ -1381,6 +1381,7 @@ export default function NewSchool() {
   const [recordForm, setRecordForm] = useState<Record<string, any>>({})
   const [recordBusy, setRecordBusy] = useState(false)
   const [schoolRecordsTab, setSchoolRecordsTab] = useState<SchoolRecordsTabKey>('students')
+  const [recordsSearch, setRecordsSearch] = useState('')
   const [schoolSubmissionReviewId, setSchoolSubmissionReviewId] = useState('')
   const [reviewForm, setReviewForm] = useState<{ status: string; score: string; rank_position: string; reviewer_notes: string }>({ status: 'approved', score: '', rank_position: '', reviewer_notes: '' })
 
@@ -2328,6 +2329,12 @@ export default function NewSchool() {
   const schoolUnreadNotifications = schoolNotifications.filter((item: any) => !item.is_read)
   const teacherUnreadNotifications = teacherNotifications.filter((item: any) => !item.is_read)
   const adminUnreadNotifications = adminNotifications.filter((item: any) => !item.is_read)
+  // Generic row matcher for the Records search box (matches any scalar field).
+  const recMatch = (row: any): boolean => {
+    const qq = recordsSearch.trim().toLowerCase()
+    if (!qq) return true
+    return Object.values(row).map((v) => (v && typeof v === 'object' ? '' : String(v ?? ''))).join(' ').toLowerCase().includes(qq)
+  }
   const schoolRecordsTabs: Array<{ key: SchoolRecordsTabKey; label: string; hint: string; count: number }> = [
     { key: 'students', label: 'Students', hint: 'Roster', count: activeStudents.length },
     ...(activeManagesTeachers ? [{ key: 'teachers' as SchoolRecordsTabKey, label: 'Teachers', hint: 'Faculty list', count: activeTeachers.length }] : []),
@@ -4306,9 +4313,17 @@ export default function NewSchool() {
                     </button>
                   ))}
                 </div>
+                <div style={{ margin: '4px 0 12px' }}>
+                  <input
+                    value={recordsSearch}
+                    onChange={(e) => setRecordsSearch(e.target.value)}
+                    placeholder="Search records…"
+                    style={{ width: '100%', boxSizing: 'border-box', background: 'rgba(0,0,0,0.25)', border: '1px solid var(--line)', borderRadius: 9, padding: '9px 12px', color: 'var(--ivory)', fontSize: 14 }}
+                  />
+                </div>
                 <div className="ns-record-panel">
                   {schoolRecordsTab === 'students' && (
-                    <PagedRows items={activeStudents}>{(rows) => (
+                    <PagedRows items={activeStudents.filter(recMatch)}>{(rows) => (
                     <div className="ns-table-wrap">
                       <table className="ns-table">
                         <thead>
@@ -4350,7 +4365,7 @@ export default function NewSchool() {
                                 )}
 
                   {schoolRecordsTab === 'teachers' && (
-                    <PagedRows items={activeTeachers}>{(rows) => (
+                    <PagedRows items={activeTeachers.filter(recMatch)}>{(rows) => (
                     <div className="ns-table-wrap">
                       <table className="ns-table">
                         <thead>
@@ -4383,7 +4398,7 @@ export default function NewSchool() {
                                 )}
 
                   {schoolRecordsTab === 'interviews' && (
-                    <PagedRows items={activeBusinesses}>{(rows) => (
+                    <PagedRows items={activeBusinesses.filter(recMatch)}>{(rows) => (
                     <div className="ns-table-wrap">
                       <table className="ns-table">
                         <thead>
@@ -4447,7 +4462,7 @@ export default function NewSchool() {
                                 )}
 
                   {schoolRecordsTab === 'projects' && (
-                    <PagedRows items={activeSubmissions}>{(rows) => (
+                    <PagedRows items={activeSubmissions.filter(recMatch)}>{(rows) => (
                     <div className="ns-table-wrap">
                       <table className="ns-table">
                         <thead>
