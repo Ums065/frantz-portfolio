@@ -5369,7 +5369,7 @@ function ecosystem_dashboard_payload(string $role, array $user): array
     if ($role === 'partner') {
         $code = (string) ($acc['referral_code'] ?? '');
         $bd = ecosystem_referral_breakdown($code);
-        $out['referral'] = ['code' => $code, 'count' => $bd['total'], 'by_role' => $bd['by_role']];
+        $out['referral'] = ['code' => $code, 'count' => $bd['total'], 'by_role' => $bd['by_role'], 'list' => ecosystem_referral_list($code)];
         $out['toolkit'] = [
             ['label' => 'Partnership Kit (PDF)', 'url' => '/docs/partnership_kit.pdf'],
             ['label' => 'Program One-Pager (PDF)', 'url' => '/docs/new_school_functionality.pdf'],
@@ -5778,6 +5778,21 @@ function attribute_referral(int $userId, ?string $code): void
 }
 
 /** Count everyone a partner code referred, grouped by role — powers the Partner dashboard. */
+/** The people a partner's referral code brought in (name + role + join date). */
+function ecosystem_referral_list(string $code, int $limit = 100): array
+{
+    $code = strtoupper(trim($code));
+    if ($code === '') return [];
+    referral_ensure_schema();
+    $s = db()->prepare('SELECT full_name, role, created_at FROM users WHERE UPPER(referred_by_code) = ? ORDER BY created_at DESC LIMIT ' . max(1, (int) $limit));
+    $s->execute([$code]);
+    return array_map(static fn(array $r): array => [
+        'name' => (string) ($r['full_name'] ?? 'Member'),
+        'role' => (string) ($r['role'] ?? ''),
+        'joined_ts' => isset($r['created_at']) ? (int) strtotime((string) $r['created_at']) : 0,
+    ], $s->fetchAll());
+}
+
 function ecosystem_referral_breakdown(string $code): array
 {
     $code = strtoupper(trim($code));

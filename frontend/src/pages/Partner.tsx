@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import EcosystemPortal, {
-  S, StatTile, Section, DownloadList, EcoDocuments, EcoRequests, EcoAnnouncements, EcoAssignments,
+  S, Section, DownloadList, EcoDocuments, EcoRequests, EcoAnnouncements, EcoAssignments,
   EcoEventCalendar, EcoMessages, LogoUploader, RequestButton, unseenAnnCount, markAnnSeen, unseenReqCount, markReqSeen, type EcoReq, type EcoAssign, type PortalConfig,
 } from './portal/EcosystemPortal'
 
@@ -45,23 +45,30 @@ const config: PortalConfig = {
       key: 'referrals',
       label: 'Referrals',
       render: (data) => {
-        const ref = data?.referral || { code: '', count: 0, by_role: {} }
-        const by = ref.by_role || {}
+        const ref = data?.referral || { code: '', count: 0, by_role: {}, list: [] }
+        const list: Array<{ name: string; role: string; joined_ts: number }> = Array.isArray(ref.list) ? ref.list : []
+        const fmtJoined = (ts: number) => { if (!ts) return ''; try { return new Date(ts * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) } catch { return '' } }
+        const roleLabel = (r: string) => (r || 'member').replace(/_/g, ' ')
         return (
           <>
             <Section title="Referral Center">
               <p style={{ color: 'var(--muted)', fontSize: 13, margin: '0 0 10px' }}>Share your link to refer schools, businesses, sponsors, volunteers and judges. Sign-ups that use it are attributed to your organization.</p>
               <ReferralCard code={ref.code || ''} />
             </Section>
-            <Section title="Referral Breakdown">
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(120px,100%),1fr))', gap: 12 }}>
-                <StatTile label="Partners" value={by.partner ?? 0} />
-                <StatTile label="Members" value={by.member ?? 0} />
-                <StatTile label="Sponsors" value={by.sponsor ?? 0} />
-                <StatTile label="Media" value={by.media ?? 0} />
-                <StatTile label="Volunteers" value={by.volunteer ?? 0} />
-                <StatTile label="Businesses" value={by.business ?? 0} />
-              </div>
+            <Section title={`People You've Referred (${ref.count ?? list.length})`}>
+              {list.length === 0 ? (
+                <p style={{ color: 'var(--muted)', fontSize: 13, margin: 0 }}>No referrals yet. Share your link above — everyone who signs up with it appears here.</p>
+              ) : (
+                <div style={{ display: 'grid', gap: 8 }}>
+                  {list.map((p, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', background: 'rgba(0,0,0,0.18)', border: '1px solid var(--line)', borderRadius: 10, padding: '9px 12px' }}>
+                      <span style={{ color: 'var(--ivory)', fontWeight: 600, fontSize: 13.5, flex: 1, minWidth: 0 }}>{p.name}</span>
+                      <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: 'var(--gold-light)', background: 'rgba(201,168,76,0.12)', border: '1px solid rgba(201,168,76,0.3)', borderRadius: 999, padding: '2px 9px' }}>{roleLabel(p.role)}</span>
+                      {p.joined_ts > 0 && <span style={{ color: 'var(--muted)', fontSize: 11.5, whiteSpace: 'nowrap' }}>{fmtJoined(p.joined_ts)}</span>}
+                    </div>
+                  ))}
+                </div>
+              )}
             </Section>
           </>
         )
