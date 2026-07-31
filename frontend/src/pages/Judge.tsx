@@ -152,6 +152,8 @@ export default function Judge() {
   const { items: annItems, unseen: annUnseen, markSeen: markAnnSeen } = useAnnouncementBadge()
   const [navOpen, setNavOpen] = useState(false)
   const [queue, setQueue] = useState<QueueRow[]>([])
+  const [queueSearch, setQueueSearch] = useState('')
+  const [queueStatus, setQueueStatus] = useState<'all' | 'unscored' | 'draft' | 'scored'>('all')
   const [reviews, setReviews] = useState<ReviewRow[]>([])
   const [chat, setChat] = useState<Array<{ id: number; sender: string; body: string; attachment_url?: string; created_at: string }>>([])
   const [chatText, setChatText] = useState('')
@@ -446,12 +448,33 @@ export default function Judge() {
           {tab === 'queue' && !listBusy && (
             queue.length === 0 ? (
               <div className="glass" style={{ padding: 22 }}><p style={{ color: 'var(--muted)', margin: 0 }}>No submitted projects to review yet.</p></div>
-            ) : (
+            ) : (() => {
+              const q = queueSearch.trim().toLowerCase()
+              const statusOf = (r: QueueRow) => (r.my_status === 'submitted' ? 'scored' : r.my_status === 'draft' ? 'draft' : 'unscored')
+              const filteredQueue = queue.filter((r) =>
+                (queueStatus === 'all' || statusOf(r) === queueStatus) &&
+                (q === '' || `${r.student_name} ${r.participant_id} ${r.school_name} ${r.teacher_name || ''} ${r.grade_level}`.toLowerCase().includes(q)),
+              )
+              return (
+              <>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
+                  <input value={queueSearch} onChange={(e) => setQueueSearch(e.target.value)} placeholder="Search student, school, teacher…" style={{ flex: 1, minWidth: 200, background: 'rgba(0,0,0,0.25)', border: '1px solid var(--line)', borderRadius: 9, padding: '9px 12px', color: 'var(--ivory)', fontSize: 14 }} />
+                  <select value={queueStatus} onChange={(e) => setQueueStatus(e.target.value as typeof queueStatus)} style={{ background: 'rgba(0,0,0,0.25)', border: '1px solid var(--line)', borderRadius: 9, padding: '9px 12px', color: 'var(--ivory)', fontSize: 14 }}>
+                    <option value="all">All statuses</option>
+                    <option value="unscored">Not scored</option>
+                    <option value="draft">Draft</option>
+                    <option value="scored">Scored</option>
+                  </select>
+                  <span style={{ color: 'var(--muted)', fontSize: 12.5, whiteSpace: 'nowrap' }}>{filteredQueue.length} of {queue.length}</span>
+                </div>
+              {filteredQueue.length === 0 ? (
+                <div className="glass" style={{ padding: 22 }}><p style={{ color: 'var(--muted)', margin: 0 }}>No submissions match your search or filter.</p></div>
+              ) : (
               <div className="glass admin-table-wrap" style={{ padding: 6 }}>
                 <table className="admin-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead><tr><th style={thS}>Student</th><th style={thS}>School</th><th style={thS}>Grade</th><th style={thS}>Teacher</th><th style={thS}>Status</th><th style={thS}>Score</th><th style={thS} /></tr></thead>
                   <tbody>
-                    {queue.map((r) => (
+                    {filteredQueue.map((r) => (
                       <tr key={r.submission_id} style={rowS}>
                         <td style={tdS}><strong>{r.student_name}</strong><br /><span style={{ color: 'var(--muted)', fontSize: 12 }}>{r.participant_id}</span></td>
                         <td style={tdS}>{r.school_name}</td>
@@ -465,7 +488,10 @@ export default function Judge() {
                   </tbody>
                 </table>
               </div>
-            )
+              )}
+              </>
+              )
+            })()
           )}
 
           {tab === 'reviews' && !listBusy && (
