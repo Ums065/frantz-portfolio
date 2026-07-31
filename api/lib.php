@@ -5455,6 +5455,37 @@ function ecosystem_messages_mark_read(int $userId, string $reader): void
     db()->prepare("UPDATE ecosystem_messages SET $col = 1 WHERE user_id = ?")->execute([$userId]);
 }
 
+/**
+ * Unified admin "Team Inbox": every user who has a 1:1 team-message thread
+ * (ecosystem_messages is keyed on user_id and role-agnostic, so this covers
+ * sponsor/partner/media/volunteer AND the generic team/messages channel used by
+ * business/member/fellow). Newest / most-unread first.
+ */
+function team_message_threads(): array
+{
+    ecosystem_shared_ensure_schema();
+    $rows = db()->query(
+        "SELECT m.user_id,
+                COUNT(*) AS total,
+                SUM(CASE WHEN m.sender = 'user' AND m.read_by_admin = 0 THEN 1 ELSE 0 END) AS unread,
+                MAX(UNIX_TIMESTAMP(m.created_at)) AS last_ts,
+                u.full_name, u.email, u.role
+         FROM ecosystem_messages m
+         JOIN users u ON u.id = m.user_id
+         GROUP BY m.user_id, u.full_name, u.email, u.role
+         ORDER BY unread DESC, last_ts DESC"
+    )->fetchAll() ?: [];
+    return array_map(static fn(array $r): array => [
+        'user_id'   => (int) $r['user_id'],
+        'full_name' => (string) ($r['full_name'] ?? ''),
+        'email'     => (string) ($r['email'] ?? ''),
+        'role'      => (string) ($r['role'] ?? ''),
+        'unread'    => (int) $r['unread'],
+        'total'     => (int) $r['total'],
+        'last_ts'   => (int) $r['last_ts'],
+    ], $rows);
+}
+
 /** Post a message from 'admin' or 'user'; notifies the other side. */
 function ecosystem_send_message(int $userId, string $sender, string $body): array
 {

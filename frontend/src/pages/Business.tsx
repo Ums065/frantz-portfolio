@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { useSeo } from '../hooks/useSeo'
 import { resolveDashboardRoute } from '../lib/dashboardRoute'
 import OfferStepper, { type OfferStage, type OfferEvent } from '../components/OfferStepper'
-import { unseenAnnCount, markAnnSeen, unseenReqCount, markReqSeen } from './portal/EcosystemPortal'
+import { unseenAnnCount, markAnnSeen, unseenReqCount, markReqSeen, EcoMessages, Section } from './portal/EcosystemPortal'
 import { useLiveRefresh } from '../hooks/useLiveRefresh'
 import { statHint } from '../lib/statHints'
 import ProfileSection, { AvatarPicker } from '../components/profile/ProfileSection'
@@ -109,7 +109,7 @@ interface BizDashboard {
   announcements?: BizAnn[]
 }
 
-type Tab = 'interviews' | 'solutions' | 'pipeline' | 'requests' | 'updates' | 'profile'
+type Tab = 'interviews' | 'solutions' | 'pipeline' | 'requests' | 'updates' | 'messages' | 'profile'
 
 const REQ_LABEL: Record<ReqType, string> = {
   implementation: 'Implementation Help',
@@ -146,7 +146,7 @@ export default function Business() {
   const [err, setErr] = useState('')
   // Persist the active tab in the URL hash so a refresh keeps you on it.
   const [tab, setTabState] = useState<Tab>(() => {
-    const keys: Tab[] = ['interviews', 'solutions', 'pipeline', 'requests', 'updates', 'profile']
+    const keys: Tab[] = ['interviews', 'solutions', 'pipeline', 'requests', 'updates', 'messages', 'profile']
     try { const h = window.location.hash.replace(/^#/, '') as Tab; return keys.includes(h) ? h : 'interviews' } catch { return 'interviews' }
   })
   const setTab = (k: Tab) => { setTabState(k); try { window.history.replaceState(null, '', `#${k}`) } catch { /* ignore */ } }
@@ -387,6 +387,7 @@ export default function Business() {
     { key: 'pipeline', label: `Internship Offers${offers.length ? ` (${offers.length})` : ''}` },
     { key: 'requests', label: `My Requests (${requests.length})`, badge: reqUnseen },
     { key: 'updates', label: `Updates${updatesCount ? ` (${updatesCount})` : ''}`, badge: annUnseen },
+    { key: 'messages', label: 'Messages' },
     { key: 'profile', label: 'Business Profile' },
   ]
   const openReq = (d: ReqDraft) => { setReqErr(''); setDraft(d) }
@@ -602,6 +603,12 @@ export default function Business() {
                     </div>}
               </div>
             </div>
+          )}
+
+          {tab === 'messages' && (
+            <Section title="Messages with the program team">
+              <EcoMessages fetchUrl="team/messages" sendUrl="team/message" sendPayload={(body) => ({ body })} mine="user" />
+            </Section>
           )}
 
           {tab === 'profile' && (

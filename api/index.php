@@ -618,6 +618,21 @@ try {
             json(['submissions' => gallery_user_submissions((int) $u['id'])]);
         }
 
+        // Generic 1:1 "Messages with the team" — available to ANY logged-in role
+        // that doesn't already have a dedicated chat (business/member/fellow…).
+        // Reuses the role-agnostic ecosystem_messages store; admin reads via the
+        // Team Inbox (admin/team/*).
+        case $key === 'GET team/messages': {
+            $u = require_login();
+            ecosystem_messages_mark_read((int) $u['id'], 'user');
+            json(['messages' => ecosystem_messages_for_user((int) $u['id'])]);
+        }
+        case $key === 'POST team/message': {
+            $u = require_login();
+            rate_limit('team_message', 30, 300, (string) $u['id']);
+            json(['messages' => ecosystem_send_message((int) $u['id'], 'user', (string) field(body(), 'body'))]);
+        }
+
         case $key === 'GET testimonials': {
             $rows = db()->query(
                 'SELECT id, quote, author_name, author_title, company, image, is_featured, sort_order, created_at
@@ -1772,6 +1787,24 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             $uid = (int) (field($b, 'user_id') ?: 0);
             if ($uid <= 0) json(['error' => 'A recipient is required.'], 422);
             json(['messages' => ecosystem_send_message($uid, 'admin', (string) field($b, 'body'))], 201);
+        }
+
+        // Unified admin Team Inbox: every user with a team-message thread + read/reply.
+        case $key === 'GET admin/team/threads': {
+            require_admin();
+            json(['threads' => team_message_threads()]);
+        }
+        case $method === 'GET' && preg_match('#^admin/team/messages/(\d+)$#', $route, $m) === 1: {
+            require_admin();
+            ecosystem_messages_mark_read((int) $m[1], 'admin');
+            json(['messages' => ecosystem_messages_for_user((int) $m[1])]);
+        }
+        case $key === 'POST admin/team/message': {
+            require_admin();
+            $b = body();
+            $uid = (int) (field($b, 'user_id') ?: 0);
+            if ($uid <= 0) json(['error' => 'A recipient is required.'], 422);
+            json(['messages' => ecosystem_send_message($uid, 'admin', (string) field($b, 'body'))]);
         }
 
         /* ---------------- DEMO ONE-CLICK LOGIN (presentations; DEMO_MODE=off to disable) ---------------- */

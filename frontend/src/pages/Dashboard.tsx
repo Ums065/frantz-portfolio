@@ -15,6 +15,7 @@ import { memberPerks } from '../lib/brandContent'
 import { useAuth } from '../context/AuthContext'
 import { useSeo } from '../hooks/useSeo'
 import { ProfilePhotoCard } from '../components/profile/ProfileSection'
+import { EcoMessages } from './portal/EcosystemPortal'
 import AnnouncementsFeed from '../components/AnnouncementsFeed'
 import NotificationBell from '../components/NotificationBell'
 
@@ -40,6 +41,7 @@ const dashboardTabs = [
   { key: 'rsvps', label: 'My RSVPs' },
   { key: 'saved', label: 'Saved Items' },
   { key: 'perks', label: 'Perks & Alerts' },
+  { key: 'messages', label: 'Messages' },
   { key: 'settings', label: 'Settings' },
 ] as const
 
@@ -539,6 +541,13 @@ export default function Dashboard() {
                   ))}
                 </div>
               </div>
+            </div>
+          )}
+
+          {tab === 'messages' && (
+            <div className="glass dashboard-panel">
+              <h2 className="gold-text">Messages with the team</h2>
+              <EcoMessages fetchUrl="team/messages" sendUrl="team/message" sendPayload={(body) => ({ body })} mine="user" />
             </div>
           )}
 

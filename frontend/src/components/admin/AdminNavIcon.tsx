@@ -217,6 +217,13 @@ const ICONS: Record<string, ReactNode> = {
       <rect width="20" height="14" x="2" y="6" rx="2" />
     </>
   ),
+  // Team Messages inbox — chat bubbles.
+  'team-inbox': (
+    <>
+      <path d="M8 10h8M8 14h5" />
+      <path d="M21 12a8 8 0 0 1-11.5 7.2L4 20l1-4.2A8 8 0 1 1 21 12z" />
+    </>
+  ),
   // Sponsor job posts — briefcase with a plus (post a job).
   'sponsor-jobs': (
     <>

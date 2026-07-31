@@ -20,6 +20,7 @@ const PartnersAdminPanel = lazy(() => import('../components/admin/PartnersAdminP
 const ResearchAdminPanel = lazy(() => import('../components/admin/ResearchAdminPanel'))
 const BusinessRequestsAdminPanel = lazy(() => import('../components/admin/BusinessRequestsAdminPanel'))
 const SponsorJobsAdminPanel = lazy(() => import('../components/admin/SponsorJobsAdminPanel'))
+const TeamInboxAdminPanel = lazy(() => import('../components/admin/TeamInboxAdminPanel'))
 import SubmissionScoresModal from '../components/admin/SubmissionScoresModal'
 
 const EDU_PEOPLE_PAGE_SIZE = 10
@@ -29,7 +30,7 @@ type TabKey =
   | 'members' | 'approvals' | 'business-requests' | 'sponsor-jobs' | 'ecosystem' | 'sponsors' | 'partners' | 'awards' | 'events' | 'blog'
   | 'testimonials' | 'media' | 'gallery' | 'community' | 'rsvps' | 'inventory'
   | 'ns-schools' | 'ns-ranking' | 'ns-submissions' | 'ns-interviews' | 'ns-chat' | 'ns-trendcatch' | 'ns-judges' | 'ns-timeline'
-  | 'research'
+  | 'research' | 'team-inbox'
 
 interface NavItem { key: TabKey; label: string }
 const NAV_GROUPS: Array<{ group: string; items: NavItem[] }> = [
@@ -66,6 +67,7 @@ const NAV_GROUPS: Array<{ group: string; items: NavItem[] }> = [
     { key: 'members', label: 'User Accounts' },
   ] },
   { group: 'Inbox', items: [
+    { key: 'team-inbox', label: 'Team Messages' },
     { key: 'contacts', label: 'Contact Messages' },
     { key: 'requests', label: 'Service Requests' },
     { key: 'subscribers', label: 'Newsletter' },
@@ -1815,6 +1817,7 @@ export default function Admin() {
         {tab === 'research' && <ResearchAdminPanel />}
         {tab === 'business-requests' && <BusinessRequestsAdminPanel />}
         {tab === 'sponsor-jobs' && <SponsorJobsAdminPanel />}
+        {tab === 'team-inbox' && <TeamInboxAdminPanel />}
         {tab === 'ecosystem' && <EcosystemAdminPanel />}
         {tab === 'awards' && <AwardsAdmin />}
         {tab === 'events' && <EventsAdmin />}

@@ -7,6 +7,7 @@ import SheetImport from '../components/SheetImport'
 import ProfileSection from '../components/profile/ProfileSection'
 import AnnouncementsFeed, { useAnnouncementBadge } from '../components/AnnouncementsFeed'
 import NotificationBell from '../components/NotificationBell'
+import { EcoMessages, Section } from './portal/EcosystemPortal'
 import {
   RESEARCH_CATEGORIES, EMPTY_ENTRY_FORM,
   type ResearchCategory, type ResearchEntry, type CategoryConfig,
@@ -21,7 +22,7 @@ interface Assignment {
   id: number; title: string; detail: string; assign_date: string | null
   status: string; volunteer_note: string; created_ts: number; responded_ts: number
 }
-type TabKey = 'overview' | 'profile' | 'announcements' | ResearchCategory
+type TabKey = 'overview' | 'profile' | 'announcements' | 'messages' | ResearchCategory
 type EntryForm = typeof EMPTY_ENTRY_FORM
 
 export default function Fellow() {
@@ -165,10 +166,16 @@ export default function Fellow() {
               </button>
             ))}
             <button type="button" role="tab" aria-selected={tab === 'announcements'} className={`admin-ov-tab${tab === 'announcements' ? ' is-active' : ''}`} onClick={() => { setTab('announcements'); markAnnSeen() }}>Announcements{annUnseen > 0 && <span style={{ marginLeft: 6, background: '#e5484d', color: '#fff', fontSize: 11, fontWeight: 700, lineHeight: 1, padding: '2px 6px', borderRadius: 999 }}>{annUnseen}</span>}</button>
+            <button type="button" role="tab" aria-selected={tab === 'messages'} className={`admin-ov-tab${tab === 'messages' ? ' is-active' : ''}`} onClick={() => setTab('messages')}>Messages</button>
             <button type="button" role="tab" aria-selected={tab === 'profile'} className={`admin-ov-tab${tab === 'profile' ? ' is-active' : ''}`} onClick={() => setTab('profile')}>Profile</button>
           </div>
 
           {tab === 'profile' && <ProfileSection />}
+          {tab === 'messages' && (
+            <Section title="Messages with the program team">
+              <EcoMessages fetchUrl="team/messages" sendUrl="team/message" sendPayload={(body) => ({ body })} mine="user" />
+            </Section>
+          )}
           {tab === 'announcements' && <AnnouncementsFeed items={annItems} />}
 
           {tab === 'overview' && (
