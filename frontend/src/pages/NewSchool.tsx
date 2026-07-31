@@ -2085,6 +2085,8 @@ export default function NewSchool() {
   const deadlineDays = deadlineDate && !Number.isNaN(deadlineDate.getTime())
     ? Math.max(0, Math.ceil((deadlineDate.getTime() - Date.now()) / 86400000))
     : null
+  // Past = more than a day after the deadline (the "deadline passed" notices take over then).
+  const deadlinePast = !!(deadlineDate && !Number.isNaN(deadlineDate.getTime()) && Date.now() > deadlineDate.getTime() + 86400000)
   const scholarshipsAwarded = winners.reduce((total: number, winner: any) => total + Number(winner.scholarship_amount || 0), 0)
   const challengeProgressPercent = getChallengeProgressPercent(challenge, liveStudents, liveSubmissions)
   const movementStats: Array<{ label: string; value: string | number }> = [
@@ -3157,6 +3159,22 @@ export default function NewSchool() {
                     </div>
                   </section>
                 </>
+              )}
+
+              {deadlineDays !== null && !deadlinePast && (
+                <section
+                  className="glass reveal in"
+                  aria-label="Submission deadline countdown"
+                  style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', padding: '12px 16px', margin: '0 0 14px', borderRadius: 14, border: `1px solid ${deadlineDays <= 3 ? 'rgba(229,72,77,0.5)' : 'var(--line)'}`, background: deadlineDays <= 3 ? 'rgba(229,72,77,0.12)' : 'rgba(201,168,76,0.08)' }}
+                >
+                  <span aria-hidden style={{ fontSize: 20 }}>⏳</span>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <strong style={{ color: 'var(--white)', fontSize: 15 }}>
+                      {deadlineDays === 0 ? 'Last day — the submission deadline is today' : `${deadlineDays} day${deadlineDays === 1 ? '' : 's'} left until the submission deadline`}
+                    </strong>
+                    <div style={{ color: 'var(--muted)', fontSize: 12.5 }}>Deadline: {deadlineLabel}</div>
+                  </div>
+                </section>
               )}
 
               {dashboardHero && !isReferenceLayout && (
