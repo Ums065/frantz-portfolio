@@ -310,9 +310,8 @@ function login_lock_check(string $email): void
 {
     $st = login_fail_status($email);
     if ($st['count'] >= LOGIN_MAX_FAILS) {
-        $mins = max(1, (int) ceil($st['retry_after'] / 60));
         json([
-            'error'       => "Too many incorrect password attempts. This account is locked — please try again in about $mins minute" . ($mins === 1 ? '' : 's') . ", or reset your password.",
+            'error'       => 'Too many incorrect password attempts. This account is locked for 5 minutes. Please wait for the timer to finish or reset your password.',
             'locked'      => true,
             'retry_after' => $st['retry_after'],
             'max'         => LOGIN_MAX_FAILS,
@@ -5177,12 +5176,15 @@ function sponsor_job_review(int $jobId, string $status, string $adminNote, int $
     if (!$job) json(['error' => 'Job not found.'], 404);
     db()->prepare('UPDATE sponsor_jobs SET status = ?, admin_note = ?, reviewed_by_user_id = ?, reviewed_at = NOW() WHERE id = ?')
         ->execute([$status, mb_substr($adminNote, 0, 2000) ?: null, $adminId, $jobId]);
-    if (function_exists('ecosystem_notify_user')) {
-        $body = $status === 'approved'
-            ? 'Your job "' . (string) $job['title'] . '" is approved and is now visible to eligible students.'
-            : 'Your job "' . (string) $job['title'] . '" was not approved.' . ($adminNote !== '' ? "\n\nNote: $adminNote" : '');
-        ecosystem_notify_user((int) $job['sponsor_user_id'], 'Update on your posted job', $body);
-    }
+    $sponsorUid = (int) $job['sponsor_user_id'];
+    $title = (string) $job['title'];
+    $body = $status === 'approved'
+        ? 'Your job "' . $title . '" is approved and is now visible to eligible students.'
+        : 'Your job "' . $title . '" was not approved.' . ($adminNote !== '' ? "\n\nNote: $adminNote" : '');
+    if (function_exists('ecosystem_notify_user')) ecosystem_notify_user($sponsorUid, 'Update on your posted job', $body);
+    // In-app bell notification for the sponsor (per-user targeted).
+    try { new_school_add_notification(null, 'sponsor', 'job_review', $status === 'approved' ? 'Your job is approved 🎉' : 'Your job needs changes', $body, ['job_id' => $jobId], $sponsorUid); }
+    catch (Throwable $e) { if (app_debug()) error_log('sponsor_job_review notify: ' . $e->getMessage()); }
     return sponsor_jobs_all();
 }
 

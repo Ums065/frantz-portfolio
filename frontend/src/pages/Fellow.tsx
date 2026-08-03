@@ -78,7 +78,17 @@ export default function Fellow() {
 
   const save = async () => {
     if (!activeCat) return
-    if (!form.title.trim()) { setMsg('Please fill in the name/title.'); return }
+    // Validate every field for this category: required unless it's a URL field
+    // (URLs optional); findings/notes are required; email/url formats checked.
+    const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    for (const f of activeCat.fields) {
+      const val = String((form as Record<string, string>)[f.name] ?? '').trim()
+      const req = f.required !== false // default required
+      if (req && !val) { setMsg(`Please fill in "${f.label}".`); return }
+      if (!val) continue
+      if (f.type === 'email' && !emailRe.test(val)) { setMsg(`"${f.label}" must be a valid email address.`); return }
+      if (f.type === 'url' && !val.includes('.')) { setMsg(`"${f.label}" must be a valid link.`); return }
+    }
     setBusy(true); setMsg('')
     try {
       if (editId) {
@@ -229,7 +239,7 @@ export default function Fellow() {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(220px,100%),1fr))', gap: 12, minWidth: 0 }}>
                   {activeCat.fields.map((f) => (
                     <div key={f.name} style={f.textarea ? { gridColumn: '1 / -1' } : undefined}>
-                      <label style={labelS}>{f.label}{f.name === 'title' ? ' *' : ''}</label>
+                      <label style={labelS}>{f.label}{f.required !== false ? ' *' : ' (optional)'}</label>
                       {f.textarea
                         ? <textarea style={{ ...inputS, minHeight: 76, resize: 'vertical' }} value={form[f.name]} placeholder={f.placeholder} onChange={(e) => setForm({ ...form, [f.name]: e.target.value })} />
                         : <input style={inputS} value={form[f.name]} placeholder={f.placeholder} onChange={(e) => setForm({ ...form, [f.name]: e.target.value })} />}

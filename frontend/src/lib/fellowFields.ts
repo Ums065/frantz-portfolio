@@ -49,17 +49,19 @@ export interface CategoryConfig {
   tabLabel: string
   /** One-line guidance shown above the form, mirroring the offer letter's tasks. */
   blurb: string
-  /** Ordered fields shown for this category. `title` is always required. */
-  fields: { name: ResearchField; label: string; placeholder?: string; textarea?: boolean }[]
+  /** Ordered fields shown for this category. All fields are required by default;
+   *  URL fields (`required: false`) are optional. `type` drives format checks. */
+  fields: { name: ResearchField; label: string; placeholder?: string; textarea?: boolean; required?: boolean; type?: 'email' | 'url' | 'tel' }[]
 }
 
 const F = {
   organization: { name: 'organization' as const, label: 'Organization' },
   contact_name: { name: 'contact_name' as const, label: 'Contact person' },
-  email: { name: 'email' as const, label: 'Email' },
-  phone: { name: 'phone' as const, label: 'Phone' },
-  website: { name: 'website' as const, label: 'Website / link' },
-  source_url: { name: 'source_url' as const, label: 'Source URL', placeholder: 'Where you found this' },
+  email: { name: 'email' as const, label: 'Email', type: 'email' as const },
+  phone: { name: 'phone' as const, label: 'Phone', type: 'tel' as const },
+  // URLs are optional everywhere.
+  website: { name: 'website' as const, label: 'Website / link', type: 'url' as const, required: false },
+  source_url: { name: 'source_url' as const, label: 'Source URL', placeholder: 'Where you found this (optional)', type: 'url' as const, required: false },
   notes: { name: 'notes' as const, label: 'Notes', textarea: true },
 }
 
@@ -72,9 +74,9 @@ export const RESEARCH_CATEGORIES: CategoryConfig[] = [
     fields: [
       { name: 'title', label: 'School name' },
       { name: 'contact_name', label: 'Principal / administrator' },
-      { name: 'email', label: 'Admin email' },
-      { name: 'phone', label: 'Main phone' },
-      { name: 'website', label: 'School website' },
+      { name: 'email', label: 'Admin email', type: 'email' },
+      { name: 'phone', label: 'Main phone', type: 'tel' },
+      { name: 'website', label: 'School website', type: 'url', required: false },
       { name: 'location', label: 'District / borough' },
       F.source_url,
       F.notes,
@@ -107,7 +109,7 @@ export const RESEARCH_CATEGORIES: CategoryConfig[] = [
       F.email,
       { name: 'location', label: 'Location' },
       F.source_url,
-      { name: 'notes', label: 'What they fund', textarea: true },
+      { name: 'notes', label: 'What they fund', textarea: true, required: true },
     ],
   },
   {
@@ -117,10 +119,10 @@ export const RESEARCH_CATEGORIES: CategoryConfig[] = [
     blurb: 'Identify positive youth content creators who may help spread awareness about the challenge.',
     fields: [
       { name: 'title', label: 'Creator name / handle' },
-      { name: 'website', label: 'Channel / profile link' },
+      { name: 'website', label: 'Channel / profile link', type: 'url', required: false },
       { name: 'location', label: 'Platform (YouTube, IG…)' },
       F.source_url,
-      { name: 'notes', label: 'Audience / why relevant', textarea: true },
+      { name: 'notes', label: 'Audience / why relevant', textarea: true, required: true },
     ],
   },
   {

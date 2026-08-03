@@ -142,7 +142,7 @@ try {
             $b     = body();
             $email = require_email(field($b, 'email'));
             // Account lockout: block sign-in if this account has 10+ recent wrong
-            // passwords (locked ~30 min). Runs before we check the password.
+            // passwords (locked for 5 minutes). Runs before we check the password.
             login_lock_check($email);
             $pass  = field($b, 'password');
 
@@ -161,7 +161,7 @@ try {
                 if ($remaining <= 0) {
                     // This attempt hit the limit — the account is now locked.
                     json([
-                        'error'       => "Too many incorrect password attempts. This account is locked for $lockMins minute" . ($lockMins === 1 ? '' : 's') . ". Please try again later or reset your password.",
+                        'error'       => "Too many incorrect password attempts. This account is locked for 5 minutes. Please wait for the timer to finish or reset your password.",
                         'locked'      => true,
                         'retry_after' => $st['retry_after'] ?: LOGIN_LOCK_SECONDS,
                         'max'         => LOGIN_MAX_FAILS,
@@ -2053,6 +2053,7 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
                     'ecosystem_requests' => $countWhere("SELECT COUNT(*) FROM ecosystem_requests WHERE status = 'pending'"),
                     'research_pending'   => $countWhere("SELECT COUNT(*) FROM research_entries WHERE status = 'submitted'"),
                     'sponsors_pending'   => $countWhere("SELECT COUNT(*) FROM sponsor_applications WHERE approval_status = 'pending_review'"),
+                    'sponsor_jobs_pending' => $countWhere("SELECT COUNT(*) FROM sponsor_jobs WHERE status = 'pending'"),
                     // Fully-consented internships — a headline achievement for the program.
                     'internships_confirmed' => $countWhere("SELECT COUNT(*) FROM business_requests br LEFT JOIN new_school_students s ON s.id = br.student_id WHERE br.request_type = 'internship' AND (br.parent_consent = 'accepted' OR (s.age >= 18 AND br.student_consent = 'accepted'))"),
                 ],
