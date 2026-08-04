@@ -1,0 +1,1092 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Leave It Better Than You Found It</title>
+<style>
+  @page { size: A5; margin: 20mm 18mm; }
+  * { box-sizing: border-box; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body {
+    font-family: Georgia, "Times New Roman", serif;
+    color: #23201a;
+    line-height: 1.62;
+    font-size: 11.5pt;
+    margin: 0;
+  }
+  p { margin: 0 0 0.85em; text-align: justify; }
+
+  /* ---- Cover ---- */
+  .cover {
+    height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center;
+    text-align: center; background: #14120d; color: #f4efe4; padding: 40px;
+    break-after: page;
+  }
+  .cover .kicker { letter-spacing: .35em; text-transform: uppercase; font-size: 10pt; color: #c9a84c; margin-bottom: 28px; }
+  .cover h1 { font-size: 30pt; line-height: 1.15; margin: 0 0 18px; font-weight: 700; }
+  .cover .rule { width: 70px; height: 2px; background: #c9a84c; margin: 18px auto; }
+  .cover .sub { font-style: italic; font-size: 13pt; color: #d8d3c6; max-width: 30em; }
+  .cover .foot { margin-top: 48px; font-size: 9.5pt; letter-spacing: .12em; text-transform: uppercase; color: #9a927f; }
+
+  /* ---- Section / chapter ---- */
+  .page-break { break-before: page; }
+  .frontpage { break-after: page; padding-top: 8mm; }
+  .frontpage h2 { color: #7a6a2f; font-size: 15pt; letter-spacing: .04em; }
+
+  .chapter { break-before: page; padding-top: 6mm; }
+  .chapter .chap-num { letter-spacing: .3em; text-transform: uppercase; font-size: 9.5pt; color: #c9a84c; margin-bottom: 6px; }
+  .chapter h2 { font-size: 21pt; margin: 0 0 4px; line-height: 1.15; color: #1c1a14; }
+  .chapter .role { font-style: italic; color: #8a7f63; font-size: 11pt; margin: 0 0 22px; }
+  .chapter .lead::first-letter {
+    float: left; font-size: 46pt; line-height: 0.78; padding: 4px 10px 0 0; color: #c9a84c; font-weight: 700;
+  }
+
+  h3.sceneline { text-align: center; letter-spacing: .3em; color: #b9ac82; font-size: 10pt; margin: 22px 0; font-weight: normal; }
+
+  /* ---- "How the system works" panel ---- */
+  .how {
+    background: #f6f1e4; border: 1px solid #e3d9bf; border-left: 4px solid #c9a84c;
+    padding: 14px 18px; margin: 22px 0; border-radius: 4px; break-inside: avoid;
+  }
+  .how h4 { margin: 0 0 8px; color: #7a6a2f; font-size: 10.5pt; letter-spacing: .06em; text-transform: uppercase; }
+  .how p, .how li { font-size: 10.5pt; text-align: left; }
+  .how ol, .how ul { margin: 0; padding-left: 20px; }
+  .how li { margin-bottom: 4px; }
+
+  /* ---- "Where this is going" (roadmap / vision) panel — deliberately distinct
+     from the gold "How it works" panel so a reader never mistakes it for today. */
+  .vision { background: #0f1a2b; border: 1px solid #23405f; border-left: 4px solid #5b9bd5; padding: 14px 18px; margin: 22px 0; border-radius: 4px; break-inside: avoid; }
+  .vision h4 { margin: 0 0 8px; color: #7fb0e0; font-size: 10.5pt; letter-spacing: .06em; text-transform: uppercase; }
+  .vision p, .vision li { font-size: 10.5pt; text-align: left; color: #cdd8e6; }
+  .vision ol, .vision ul { margin: 0; padding-left: 20px; }
+  .vision li { margin-bottom: 4px; }
+
+  /* ---- Takeaway ---- */
+  .takeaway {
+    background: #14120d; color: #f1ead9; padding: 14px 18px; margin: 22px 0; border-radius: 6px; break-inside: avoid;
+  }
+  .takeaway h4 { margin: 0 0 6px; color: #c9a84c; font-size: 10.5pt; letter-spacing: .08em; text-transform: uppercase; }
+  .takeaway p { margin: 0; font-style: italic; text-align: left; font-size: 11pt; color: #e7e0d0; }
+
+  /* ---- FAQ ---- */
+  .faq { margin: 26px 0 0; break-inside: avoid; }
+  .faq h4 { color: #7a6a2f; font-size: 12pt; letter-spacing: .04em; border-top: 2px solid #c9a84c; padding-top: 10px; }
+  .faq .q { font-weight: bold; color: #2a2620; margin: 12px 0 2px; font-size: 10.8pt; }
+  .faq .a { margin: 0 0 6px; font-size: 10.6pt; color: #3a352c; text-align: left; }
+
+  blockquote { margin: 14px 20px; font-style: italic; color: #4a4436; border-left: 2px solid #d8cba0; padding-left: 14px; }
+
+  /* ---- Page numbers (footer) ---- */
+  @page { @bottom-center { content: counter(page); font-family: Georgia, serif; font-size: 9pt; color: #9a927f; } }
+  @page:first { @bottom-center { content: ""; } }
+
+  /* ---- Part divider pages ---- */
+  .part {
+    break-before: page; height: 100vh; display: flex; flex-direction: column;
+    justify-content: center; align-items: center; text-align: center;
+    background: #14120d; color: #f4efe4; padding: 40px;
+  }
+  .part .pnum { letter-spacing: .42em; text-transform: uppercase; font-size: 10pt; color: #c9a84c; margin-bottom: 18px; }
+  .part h2 { font-size: 25pt; margin: 0; color: #f4efe4; border: none; line-height: 1.15; }
+  .part .prule { width: 60px; height: 2px; background: #c9a84c; margin: 18px auto; }
+  .part p { color: #c9b98a; font-style: italic; max-width: 24em; text-align: center; font-size: 11.5pt; }
+
+  /* ---- Table of contents ---- */
+  .toc { break-before: page; break-after: page; padding-top: 8mm; }
+  .toc h2 { color: #7a6a2f; font-size: 16pt; letter-spacing: .03em; margin-bottom: 18px; }
+  .toc .part-label { letter-spacing: .16em; text-transform: uppercase; font-size: 9pt; color: #c9a84c; margin: 16px 0 4px; }
+  .toc ol { list-style: none; margin: 0; padding: 0; }
+  .toc li { display: flex; justify-content: space-between; gap: 10px; padding: 5px 0; border-bottom: 1px dotted #ddd2b3; font-size: 10.6pt; }
+  .toc li .t { color: #2a2620; }
+  .toc li .r { color: #8a7f63; font-style: italic; white-space: nowrap; }
+
+  /* Scene timestamps (Showcase Night) */
+  .stamp { text-align: center; letter-spacing: .18em; color: #a8975f; font-size: 9.5pt; text-transform: uppercase; margin: 22px 0 10px; font-weight: bold; }
+</style>
+</head>
+<body>
+
+<!-- ============ COVER ============ -->
+<section class="cover">
+  <div class="kicker">A Story of a Movement</div>
+  <h1>Leave It Better<br>Than You Found It</h1>
+  <div class="rule"></div>
+  <div class="sub">The story of one platform, one community, and the people it refused to leave behind.</div>
+  <div class="foot">Sponsor Edition · An Invitation to Fund the Whole Movement</div>
+</section>
+
+<!-- ============ ABOUT ============ -->
+<section class="frontpage">
+  <h2>About This Book — for the Sponsor</h2>
+  <p>If you are holding this, you are probably deciding whether to fund something. So let us be clear about what we are asking, and what we are not. We are <strong>not</strong> asking you to adopt one photogenic child for a brochure. We are asking you to power the <strong>whole contest</strong> — the engine that reaches every student in it, the ones who will win and the far greater number who never will but are changed anyway.</p>
+  <p>Every person in these pages is imagined. Every problem they carry is not. The student who almost quit, the mother who once could not pay a fee, the business owner who could not find honest young help, the sponsor tired of writing checks that vanished into the fog — these are drawn from real lives in real neighborhoods. We tell it through people because a sponsor does not fund a feature list; a sponsor funds a room full of faces they can finally see.</p>
+  <p>Read it as a story. Use it as a map. By the last page you will not only <em>feel</em> why this movement exists — you will know exactly what your sponsorship funds, how the money is protected, and what you get to watch happen because of it. The final pages lay out the sponsorship tiers plainly.</p>
+  <p>The book follows a single thread: one school, <strong>Northgate High</strong> in the Bronx, entering one season of the challenge. Thirteen lives cross there. Each chapter is one of them, and each ends with the questions people actually ask — answered plainly, so you are never caught without words.</p>
+  <blockquote>"You are not being asked to rescue a child. You are being asked to fund the room where thousands of them get seen — and then to watch it work."</blockquote>
+</section>
+
+<!-- ============ TABLE OF CONTENTS ============ -->
+<section class="toc">
+  <h2>Contents</h2>
+  <ol>
+    <li><span class="t">Prologue — Frantz</span><span class="r">The Founder</span></li>
+  </ol>
+  <div class="part-label">Part One — The People Inside</div>
+  <ol>
+    <li><span class="t">1 · The Boy Who Almost Didn't</span><span class="r">Marcus · Student</span></li>
+    <li><span class="t">2 · The Fee She Could Not Pay</span><span class="r">Diane · Parent</span></li>
+    <li><span class="t">3 · The One Who Saw It First</span><span class="r">Amara Okafor · Teacher</span></li>
+    <li><span class="t">4 · The Weight of Choosing</span><span class="r">Grace Lin · Principal</span></li>
+  </ol>
+  <div class="part-label">Part Two — The World Steps In</div>
+  <ol>
+    <li><span class="t">5 · The Judge Who Had Seen Everything</span><span class="r">Dr. Reed · Judge</span></li>
+    <li><span class="t">6 · The Man Who Needed Someone He Could Trust</span><span class="r">Tony · Business</span></li>
+    <li><span class="t">7 · The Check That Finally Landed Somewhere</span><span class="r">Priya · Sponsor</span></li>
+  </ol>
+  <div class="part-label">Part Three — The Wider Circle</div>
+  <ol>
+    <li><span class="t">8 · The Man With a Megaphone and No Stage</span><span class="r">James · Partner</span></li>
+    <li><span class="t">9 · The Reporter Who Was Tired of the Wrong Story</span><span class="r">Nadia · Media</span></li>
+    <li><span class="t">10 · The Man Who Thought He Was Finished</span><span class="r">Ben · Volunteer</span></li>
+    <li><span class="t">11 · The Scout Who Widened the Map</span><span class="r">Aisha · Fellow</span></li>
+  </ol>
+  <div class="part-label">Part Four — The Room Itself</div>
+  <ol>
+    <li><span class="t">12 · The Chair in the Middle of the Room</span><span class="r">The Administrator</span></li>
+    <li><span class="t">13 · Showcase Night</span><span class="r">Everyone</span></li>
+    <li><span class="t">14 · Why Now</span><span class="r">The Cost of One More Year</span></li>
+    <li><span class="t">Epilogue — The Sentence, Again</span><span class="r">Frantz</span></li>
+    <li><span class="t">A Note for the Sponsor Conversation</span><span class="r">Using the book</span></li>
+    <li><span class="t">What Your Sponsorship Funds</span><span class="r">The tiers</span></li>
+  </ol>
+</section>
+
+<!-- ============ PROLOGUE ============ -->
+<section class="chapter">
+  <div class="chap-num">Prologue</div>
+  <h2>Frantz</h2>
+  <p class="role">The Founder — the one who built the room</p>
+
+  <p class="lead">Frantz did not begin with a platform. He began with a sentence. <em>Leave it better than you found it.</em> He had been saying it to himself for years — walking past the same broken bus shelter, watching the same bright kids in his neighborhood grow quiet. Not because they had no ideas. Because no one with any power had ever asked them for one.</p>
+
+  <p>He noticed something the whole city seemed to miss. The talent was already here. The problems were already here. The businesses that needed young energy were three blocks away. The sponsors who wanted to "give back" were writing checks into the dark, never once seeing where the money landed. The teachers knew exactly which student had something rare in them — and had no way to put that student in front of anyone who mattered.</p>
+
+  <p>Everyone was in the same neighborhood. No one was in the same room.</p>
+
+  <h3 class="sceneline">— • —</h3>
+
+  <p>So Frantz built the room. Not a building — a system. A single place where a fifteen-year-old with an idea about her flooded street corner could be seen by her teacher, scored by her school, judged fairly by experts, noticed by a local business, and funded by a sponsor who could finally watch, in real time, exactly whose life their money changed.</p>
+
+  <p>He was clear about one thing from the start, and he would repeat it in every meeting for the rest of his life: <strong>this was not a competition about money.</strong> It was a competition about ideas. A student with a laptop and a student with a borrowed phone had to stand on the same ground. If the platform ever rewarded polish over substance, or wealth over thinking, it would have betrayed the only reason it existed.</p>
+
+  <p>He gave the movement its name from the sentence that started it all. And then he did the hard part. He turned a feeling into a structure — thirteen kinds of people, each with their own door into the same house, each able to do their part without ever being able to harm, expose, or exploit anyone else in it. A student could dream. A parent could protect. A teacher could champion. A judge could decide. A business could hire. A sponsor could give. And none of them could step over the line that kept a child safe.</p>
+
+  <p>That structure is what the rest of this book describes. But Frantz never wanted you to remember the structure first. He wanted you to remember the faces. So we will start with a boy who almost never signed up at all.</p>
+
+  <div class="takeaway">
+    <h4>Frantz's Takeaway</h4>
+    <p>"I did not build a website. I built the one room my neighborhood never had — where the kid with the idea and the person who can act on it finally stand face to face."</p>
+  </div>
+
+  <div class="faq">
+    <h4>Questions People Ask Frantz</h4>
+    <div class="q">Q. In one sentence — what is this?</div>
+    <div class="a">A. It is one place where students solve real community problems, and where their schools, local businesses, and sponsors can find them, back them, and reward them — safely.</div>
+    <div class="q">Q. Is it a school program, a competition, or a charity?</div>
+    <div class="a">A. It is all three working as one: a challenge that runs like a competition, lives inside schools, and is funded like a cause — but built so the outcome is opportunity, not just a prize.</div>
+    <div class="q">Q. Why does it need to be a platform? Why not just run events?</div>
+    <div class="a">A. Because events end. A platform remembers. It keeps the student's work, the school's scores, the sponsor's impact, and the business's offer all connected in one trail — so an idea can travel from a classroom to a paid opportunity without falling through a crack.</div>
+    <div class="q">Q. What makes it fair to a poor student?</div>
+    <div class="a">A. The scoring rewards thinking, not production value. There is no fee to take part. And no outside party can contact a student directly — everything routes through the school and the platform, with consent built in.</div>
+  </div>
+</section>
+
+<!-- ============ PART I ============ -->
+<section class="part">
+  <div class="pnum">Part One</div>
+  <h2>The People Inside</h2>
+  <div class="prule"></div>
+  <p>Before the world could step in, four people inside one school had to believe a child was worth seeing. Your sponsorship is what puts a funded, trustworthy contest in front of them to believe in.</p>
+</section>
+
+<!-- ============ CHAPTER 1 — MARCUS ============ -->
+<section class="chapter">
+  <div class="chap-num">Chapter One</div>
+  <h2>The Boy Who Almost Didn't</h2>
+  <p class="role">Marcus Bell — The Student</p>
+
+  <p class="lead">Marcus Bell was good at two things: fixing what other people threw away, and talking himself out of things before they could disappoint him. At sixteen he had already rebuilt three bicycles from parts found on the curb. He had also already decided, quietly, that the flyer taped to the classroom wall was not for someone like him.</p>
+
+  <p>The flyer said his school was joining a challenge. Solve a real problem in your community. Win a scholarship. Marcus read it twice, and both times a small voice finished the sentence for him: <em>win a scholarship — for the kids whose parents can pay for the presentation, the poster board, the fancy laptop.</em> He had watched contests before. He knew who tended to win them. He folded the idea up and put it away, the way he put away most things he wanted.</p>
+
+  <p>What he did not know was that this challenge had been built, on purpose, by a man who had folded up the same idea a hundred times as a kid himself.</p>
+
+  <h3 class="sceneline">— • —</h3>
+
+  <p>His teacher, Ms. Okafor, did not let him fold it away for long. She had already registered the class. When Marcus logged in for the first time — on the cracked school laptop, because he did not have his own — the platform did not ask him for money, or for a device, or for a perfect essay. It asked him something stranger. It asked him to tell his story.</p>
+
+  <p>Before he could enter a single project, the platform walked him through a short set of questions. Why did he believe he deserved a chance. What was his story. What did he dream about. What change did he want to see on his own block. Marcus sat with the cursor blinking for a long time on that last one. Then he typed about the underpass on Willis Avenue — the one with three dead streetlights, where his little cousin was scared to walk home after dark, where the whole neighborhood had simply agreed to be afraid instead of fixing it.</p>
+
+  <p>Something happened while he typed that he had not expected. For the first time, the problem stopped feeling like weather — like something that just <em>was</em> — and started feeling like something with an author who could be answered. By the time he finished, he was not applying to a contest. He was making a case for a corner he loved.</p>
+
+  <h3 class="sceneline">— • —</h3>
+
+  <p>His actual idea was not expensive. It was good. Solar-charged motion lights, mounted where the dead ones hung, paired with a simple painted mural the neighborhood could do together so the space would feel watched-over instead of forgotten. He wrote up the problem, the solution, why it was his own idea, what evidence he had that it would help, and how it would change the people who used that underpass every day. He uploaded a photo he took on his phone and a rough sketch. He hit submit — and braced for nothing to happen.</p>
+
+  <p>Instead, the platform did three quiet things at once. It logged his submission. It gave him points immediately, before any judge had looked at anything — a small, deliberate reward just for showing up and doing the work. And it placed his idea, safely, in front of the only people who were allowed to see it first: his own teacher and his own principal. Not strangers. Not the internet. His school.</p>
+
+  <p>Marcus refreshed the page and saw a number next to his name climb. It was a small thing. It undid a large thing. For the first time, a system had told him that his effort counted the moment he made it — not months later, not only if he won.</p>
+
+  <div class="how">
+    <h4>How the system works here</h4>
+    <ol>
+      <li><strong>Joining is gated to a school, and free.</strong> A student registers under their school — no payment, and no device requirement beyond a browser.</li>
+      <li><strong>The intake questions come first.</strong> Before submitting work, the student answers a short set of personal questions (their story, their goals, the change they want). This both grounds the student emotionally and travels with them as context for scholarships.</li>
+      <li><strong>A submission is structured, not fancy.</strong> The student describes the problem, the solution, its originality, the supporting evidence, the community impact, and how they would present it — the same six areas judges will later use. Substance, not production value.</li>
+      <li><strong>Points arrive instantly.</strong> The platform automatically awards points the moment a project or interview is submitted — recognition for effort, before any judging happens.</li>
+      <li><strong>The student's work stays private to their school first.</strong> A new submission is visible only to that student's own teacher and principal — never to outside judges, businesses, or the public — until the school chooses to advance it.</li>
+    </ol>
+  </div>
+
+  <p>Over the next weeks Marcus watched his own rank inside the school move. He could see where he stood, not against the whole city, but against the people in his own building — a distance he could actually imagine crossing. He talked to the program team through the platform's chat when he got stuck. He was, though he would never have used the word, engaged.</p>
+
+  <p>He still did not know if he would win anything. But he had already stopped being the boy who talked himself out of things. That, it turned out, was the first thing the platform was designed to fix — and it fixed it before a single judge had read a word.</p>
+
+  <div class="takeaway">
+    <h4>Frantz's Takeaway</h4>
+    <p>"We reward the child the moment they try — not only if they win. Because the kids we are trying to reach have been taught that effort is safe to skip. We make effort pay on day one."</p>
+  </div>
+
+  <div class="faq">
+    <h4>Questions Students &amp; Families Ask</h4>
+    <div class="q">Q. Does it cost anything to take part?</div>
+    <div class="a">A. No. A student joins for free through their school. There is no entry fee and no requirement to own a device beyond access to a browser.</div>
+    <div class="q">Q. My idea isn't fancy. Can it still win?</div>
+    <div class="a">A. Yes — that is the point. Work is scored on the thinking: the problem, the solution, originality, evidence, and community impact. Expensive presentation earns nothing extra.</div>
+    <div class="q">Q. Who can see my work when I submit it?</div>
+    <div class="a">A. At first, only your own teacher and principal. Outside judges, businesses, sponsors, and the public cannot see it until your school decides to advance it.</div>
+    <div class="q">Q. How do I earn points?</div>
+    <div class="a">A. You earn points automatically the moment you submit work, and more later if the school awards a bonus and judges score your project. Showing up and doing the work counts first.</div>
+    <div class="q">Q. What do I actually have to write?</div>
+    <div class="a">A. You describe a real problem you care about and your solution — the problem, your idea, why it's original, your evidence, and the impact. You can attach a photo, a sketch, or a file. Plain and honest beats polished and empty.</div>
+    <div class="q">Q. Can I get help, or use AI?</div>
+    <div class="a">A. You can ask the program team through the built-in chat, and AI may be used where permitted — but judging rewards <em>your</em> thinking. Support is fine; substitution is not.</div>
+    <div class="q">Q. What if English isn't my first language?</div>
+    <div class="a">A. The platform can present itself in more than one language, so a student or parent can use it in the language they're most comfortable with.</div>
+  </div>
+</section>
+
+<!-- ============ CHAPTER 2 — DIANE ============ -->
+<section class="chapter">
+  <div class="chap-num">Chapter Two</div>
+  <h2>The Fee She Could Not Pay</h2>
+  <p class="role">Diane Bell — The Parent</p>
+
+  <p class="lead">Diane Bell had learned to read a school envelope by its weight. The light ones were newsletters. The heavier ones were problems. She had been holding her breath at the mailbox for eleven years — since the winter the heavy envelope came for her older son, Andre, and she did not have what was inside it.</p>
+
+  <p>It had not been a large amount. That was the part that still burned. A fee — for a trip, a kit, some line item she could no longer remember exactly — and a deadline, and a list, posted where the other students could see it, of who had paid and who had not. Andre's name sat on the wrong side of that list for three weeks. Kids are not cruel by accident; they are cruel with precision. By the time Diane scraped the money together, the damage was not financial. Andre had stopped raising his hand. He had started finding reasons not to go. Within a year he had dropped out — a full year of his life folded up and thrown away over a sum she could now, eleven years later, cover without thinking.</p>
+
+  <p>She never forgave the system that let a child's dignity hang on a posted list. So when her younger son, Marcus, came home talking about a "challenge" his school had joined — a scholarship, a competition — everything in Diane's body went cold and still. She had seen where these roads led for boys like hers.</p>
+
+  <h3 class="sceneline">— • —</h3>
+
+  <p>She did what she had trained herself to do. She went looking for the catch. She registered as a parent — not to cheer, but to guard. And what she found, slowly, over several evenings on the couch with the cracked laptop between them, was not a catch. It was a set of walls built in exactly the places she had once been left exposed.</p>
+
+  <p>There was no fee. Not a hidden one, not a deferred one, not a "materials" one. There was no list of who had paid, because no one paid. When she linked herself to Marcus's account, the platform did not simply take her word for it — Marcus had to confirm that she was really his parent, and his teacher had to approve the link before she was let in. At first that annoyed her. Then she understood it, and it was the first time a school system had ever made her feel that a <em>stranger</em> could not simply claim her child. The same wall that made her prove who she was, made everyone else prove it too.</p>
+
+  <p>She could see Marcus's progress — where he stood, what he had completed, what was pending. But she could not see the raw private guts of his work, and neither could anyone outside the school. And when, later in the season, something from the outside world wanted to reach her son — an opportunity, an offer — it could not simply land on him. It had to come to <em>her</em> first. Nothing involving Marcus and an outside adult could move forward without her consent, recorded, on the platform, in her own hand.</p>
+
+  <p>Diane sat back on the couch the night she finally understood that. Eleven years of bracing at a mailbox, and here was a system that had been built, it seemed, by someone who had also once stood on the wrong side of a posted list.</p>
+
+  <div class="how">
+    <h4>How the system works here</h4>
+    <ol>
+      <li><strong>A parent links to their child through a verified chain.</strong> A parent registers using the student's code; the student must confirm the parent is really theirs, and the student's teacher must approve the link before the parent gains access. No unverified adult can attach themselves to a child.</li>
+      <li><strong>Parents see standing, not secrets.</strong> A parent can follow their child's progress, approvals, and ranking — but a student's raw private work is not exposed to parents, outside judges, businesses, or the public.</li>
+      <li><strong>Consent is a gate, not a formality.</strong> When an outside party (like a business offering an internship) wants to engage a student, a minor's parent must give consent on the platform before anything proceeds. For students who are already adults (18+), the student confirms on their own and the parent is kept informed.</li>
+      <li><strong>No fees, no public shame.</strong> Participation is free, so a child's standing never depends on money — and there is no public payment list to expose anyone.</li>
+      <li><strong>Every step is notified.</strong> Parents receive alerts for anything that needs their attention, so consent decisions never slip past them unseen.</li>
+    </ol>
+  </div>
+
+  <p>Marcus never knew that his mother had joined the platform ready for a fight. He only knew that the night after she finished reading every page of it, she made his favorite dinner, sat across from him, and asked him to explain his underpass idea to her in full — the first time in years she had asked him to explain something as if his answer would matter.</p>
+
+  <p>Somewhere across the city, in a story Diane would never hear, Frantz had written the consent rules at two in the morning, thinking about a posted list he had seen on a wall when he was fourteen. Neither of them would ever know how alike their wounds were. The platform knew. The platform had been built out of exactly this.</p>
+
+  <div class="takeaway">
+    <h4>Frantz's Takeaway</h4>
+    <p>"A child's dignity must never hang on what their family can pay. We removed the fee, removed the list, and put the parent — not a stranger — at the first gate. Protection is not a feature we added. It is the floor we built on."</p>
+  </div>
+
+  <div class="faq">
+    <h4>Questions Parents Ask</h4>
+    <div class="q">Q. How do I join and connect to my child?</div>
+    <div class="a">A. You register as a parent using your child's code. Your child confirms it's really you, and their teacher approves the link — so only verified parents get access.</div>
+    <div class="q">Q. Can just anyone claim to be my child's parent?</div>
+    <div class="a">A. No. The confirm-and-approve chain means an unverified adult cannot attach to a student. The verification protects your child from impostors.</div>
+    <div class="q">Q. What can I actually see?</div>
+    <div class="a">A. Your child's progress, approvals, and standing. You do not see other students' private work, and outsiders do not see your child's — the platform keeps raw work inside the school.</div>
+    <div class="q">Q. Can an outside business or sponsor contact my child directly?</div>
+    <div class="a">A. Never directly. Any outside opportunity for a minor comes to you first and cannot proceed without your recorded consent. For an adult student, they decide and you are informed.</div>
+    <div class="q">Q. Does any of this cost money?</div>
+    <div class="a">A. No. Participation is free, and there is no public list of who has paid anything — because no one pays.</div>
+    <div class="q">Q. What if I want to stop something after I've agreed?</div>
+    <div class="a">A. Consent is yours. The program team is reachable through the platform, and you are notified of every step that needs you, so you are never moved along without your say.</div>
+  </div>
+</section>
+
+<!-- ============ CHAPTER 3 — MS. OKAFOR ============ -->
+<section class="chapter">
+  <div class="chap-num">Chapter Three</div>
+  <h2>The One Who Saw It First</h2>
+  <p class="role">Amara Okafor — The Teacher</p>
+
+  <p class="lead">Amara Okafor was good at one quiet thing, and she had never said it out loud. Usually within the first month, she could tell which student had something special. Not the best grades — the best mind. And for eighteen years she'd had the same problem. She could see it. But she had no way to show anyone else. Her classroom had no window to the outside world.</p>
+
+  <p>Marcus Bell caught her eye in September. In October she watched him fix the room's broken pencil sharpener during a lesson. Nobody asked him to. It just bothered him that it didn't work. That was Marcus, right there. He fixed things. He just didn't think anyone was counting the kind of things he fixed.</p>
+
+  <p>So when the school joined the challenge, Amara didn't wait for Marcus to sign up and talk himself out of it. She signed the class up herself and approved him. For her it was one click. For Marcus it was a door that was suddenly already open.</p>
+
+  <h3 class="sceneline">— • —</h3>
+
+  <p>What surprised her was not that she could enroll students. It was what she could do <em>after</em>. For the first time, she wasn't just watching talent go unseen — she could actually score it, and that score would count.</p>
+
+  <p>When Marcus's underpass project came in, it didn't fly off to some faraway panel of strangers. It landed on her screen, and on her principal's, and nowhere else. Next to it was a scorecard — the same six parts the real judges would use later: Problem. Solution. Creativity. Evidence. Community impact. Presentation. Amara scored each part honestly, the way she wished someone had scored the quiet kids she'd lost over the years. And she wasn't the only one who could. Any teacher in the building could score any student's work, not just their own — because a strong student is the whole school's business.</p>
+
+  <p>Her scores did not pick the winner, and that was the part she respected most. Her scores and the principal's were added together to make one thing: the school's own ranking of its students. It was kept completely separate from the points and from the outside judges. It was not a final verdict. It just answered one fair question — of everything this school made, which few projects were strong enough to be worth the judges' limited time?</p>
+
+  <p>That was the clever part. The judges would not be buried under five hundred projects. Each school sends forward only its best three — chosen not by a stranger, but by the teachers and principal who actually know the students. For eighteen years Amara could not get anyone to look at her best kids. Now she helped decide who got looked at. She took it seriously. She scored late into the night, twice, to be fair to Marcus and fair to every student standing next to him.</p>
+
+  <div class="how">
+    <h4>How the system works here</h4>
+    <ol>
+      <li><strong>Teachers gate entry.</strong> A teacher approves student registrations, so the roster is real and vetted — no unverified students floating in the system.</li>
+      <li><strong>A submission surfaces to the school first.</strong> Student work appears on the teacher's and principal's dashboards for review before any outside judge can see it.</li>
+      <li><strong>Internal scoring uses the judge rubric.</strong> Teachers and the principal score work across the same six categories the judges use (problem, solution, creativity, evidence, community impact, presentation) — a shared, fair yardstick.</li>
+      <li><strong>Any teacher in the school can score any student.</strong> Scoring isn't limited to a student's own teacher, so strong work gets more than one honest read.</li>
+      <li><strong>Internal scoring is a filter, not the final verdict.</strong> It builds the school's own internal ranking — kept separate from the automatic points and the outside judges' scores — and its purpose is to choose the school's top three to advance.</li>
+      <li><strong>The school sends forward only its best.</strong> Judges see a school's top three, not everything — so their attention lands where it matters, chosen by the people who know the students.</li>
+    </ol>
+  </div>
+
+  <p>On the last night of scoring, Amara did something she had never done in eighteen years. She looked at a ranked list of her own students' real ideas — and there was Marcus Bell near the top. Not because she wished it, but because his work really was that good, and now there was finally a fair way to show it.</p>
+
+  <p>She closed the laptop and sat in the dark classroom for a while. The pencil sharpener still worked. Somewhere in the building, without knowing it, a boy who fixed things had just been seen — for real, on the record — by more than one adult who could do something about it. That had never been possible before. It was the reason she stayed in teaching one more year.</p>
+
+  <div class="takeaway">
+    <h4>Frantz's Takeaway</h4>
+    <p>"The teacher already knows which kid is special. We didn't need to find the talent — we just gave the person who already sees it a way to lift that child up where others can see them too. The school picks its own best. No stranger overrules the people who know them."</p>
+  </div>
+
+  <div class="faq">
+    <h4>Questions Teachers &amp; Schools Ask</h4>
+    <div class="q">Q. How do students get into the system?</div>
+    <div class="a">A. You approve them. Teacher approval gates the roster, so every participating student is verified by the school.</div>
+    <div class="q">Q. Can I see and score my students' work?</div>
+    <div class="a">A. Yes. Submissions surface to teachers and the principal first, with a scorecard using the same six-category rubric the judges use.</div>
+    <div class="q">Q. Can I only score my own students?</div>
+    <div class="a">A. No — any teacher in your school can score any student's work, so strong ideas get more than one fair read.</div>
+    <div class="q">Q. Do my scores decide the overall winner?</div>
+    <div class="a">A. No. Internal scoring is a separate, honest filter kept apart from the points and the outside judges. Its job is to help the school choose which work to advance.</div>
+    <div class="q">Q. What does "top three to judges" mean?</div>
+    <div class="a">A. Each school forwards only its strongest few submissions to the outside judges, chosen from the internal ranking — so judges aren't buried, and the choice stays with the people who know the students.</div>
+    <div class="q">Q. What if we're slow and never pick our top three?</div>
+    <div class="a">A. There's a safeguard: if a school doesn't advance its top three by the deadline, the system releases them automatically, so no school's best students are ever left unseen.</div>
+  </div>
+</section>
+
+<!-- ============ CHAPTER 4 — PRINCIPAL LIN ============ -->
+<section class="chapter">
+  <div class="chap-num">Chapter Four</div>
+  <h2>The Weight of Choosing</h2>
+  <p class="role">Grace Lin — The Principal</p>
+
+  <p class="lead">Grace Lin had said no to eleven programs that year. Every one of them had arrived with a glossy folder and the same promise — <em>transform your school</em> — and every one of them had wanted something from Northgate High that Northgate did not have: money, or time, or teachers with a spare hour that did not exist. She had learned that the word "free" in an education pitch usually meant free for the first year. So when the twelfth folder landed on her desk, she was already reaching for the drawer where the others had gone to die.</p>
+
+  <p>What stopped her was a single line, not in the folder, but from Amara Okafor, who almost never asked her for anything. "Grace," she said, standing in the office doorway, "this one lets the school choose. Not them. Us." Grace had spent nineteen years watching outside panels and outside foundations decide which of her kids mattered, usually the ones who already had the most. A program that handed the choosing back to the people inside the building — that was not a pitch she had heard before.</p>
+
+  <p>She brought Northgate in. It was, she would say later, the first brave thing she had done in a long, tired while.</p>
+
+  <h3 class="sceneline">— • —</h3>
+
+  <p>Bringing a school in, she discovered, did not detonate her week. It was mostly a matter of letting the structure do its work. Her teachers approved their students. Parents linked in through the verified chain. The roster filled with real, vetted names — not a spreadsheet she had to police. From her dashboard she could see the shape of the whole thing: who had joined, what was pending, where approvals were waiting on her. She was the conductor, not the orchestra.</p>
+
+  <p>Then the submissions came in, and Grace felt the weight land.</p>
+
+  <p>Because the platform did not ask her to admire her students' work from a distance. It asked her to <em>score</em> it — alongside her teachers, on the same six-part rubric the outside judges would use — and then it asked her to do the hardest thing a principal can do. To choose. Every school could send only its top three submissions forward to the judges. Three. Out of everything her students had poured onto the screen. The internal ranking laid it out in front of her, honest and unsentimental: the school's own combined read of its own children, teacher and principal scores brought together, kept entirely apart from the automatic points and the outside judging. A clear-eyed answer to one question — <em>who is ready for the bigger room?</em></p>
+
+  <p>Grace sat with that list for a long time. Marcus Bell's underpass project sat near the top, and she knew — the way she knew every child in her building — how much it would mean to a boy like that to be sent forward, and how much it would cost him to be held back. But she also knew the two names just below his — a girl named Deja Freeman among them, who wanted this more, perhaps, than anyone in the building — and their stories, and their hunger. This was the part no glossy folder ever warned you about: that fairness has a price, and someone has to pay it with a decision. Deja would not make the top three. Grace already knew it, and it already ached.</p>
+
+  <p>She chose. She sent the top three forward — Marcus among them — with the button that every principal comes to feel in their chest before they click it. And she made herself a quiet promise about the students who did not make it: that their work had still counted, that their points still stood, that this was one season and not one verdict on their worth.</p>
+
+  <div class="how">
+    <h4>How the system works here</h4>
+    <ol>
+      <li><strong>A school joins and the principal oversees it.</strong> The principal's dashboard shows the roster, pending approvals, counts, and standing — a control room, not a pile of paperwork.</li>
+      <li><strong>Approvals flow through the school.</strong> Teachers approve students; the verified parent-link chain runs through the school — so every account in the building is real and vetted.</li>
+      <li><strong>The principal scores alongside teachers.</strong> Using the same six-category judge rubric, the principal's scores combine with teachers' to form the school's internal ranking — separate from points and outside judging.</li>
+      <li><strong>The school advances only its top three.</strong> From the internal ranking, the principal (or a teacher) sends the strongest three submissions forward to the outside judges — the school's own choice.</li>
+      <li><strong>A deadline safeguard protects everyone.</strong> If the top three aren't sent by the deadline, the system releases them automatically, so no school's best work is ever stranded.</li>
+      <li><strong>Roles stay in their lanes.</strong> The school sees rosters, approvals, and standing; a student's raw private work stays protected, surfaced only where scoring legitimately requires it.</li>
+    </ol>
+  </div>
+
+  <p>That night Grace Lin did something she had not done in years: she went home feeling like a principal instead of an administrator. She had not processed her students. She had championed three of them into a room they could never have reached alone — and she had done it with her own hands, on her own judgment, for her own kids. Eleven folders in the drawer, and the twelfth had given her back the one thing the job had slowly taken: the feeling that her choices mattered.</p>
+
+  <div class="takeaway">
+    <h4>Frantz's Takeaway</h4>
+    <p>"We do not tell a school which children deserve the spotlight. We hand the school the lever and trust the people who know the students. Choosing is heavy — but it belongs to them, and that is exactly why they take it seriously."</p>
+  </div>
+
+  <div class="faq">
+    <h4>Questions Principals &amp; Schools Ask</h4>
+    <div class="q">Q. How much work is it to bring my school in?</div>
+    <div class="a">A. Light. Teachers approve students, the parent-link chain is automatic, and your dashboard shows what needs you. The structure carries the load.</div>
+    <div class="q">Q. What does the principal do that a teacher doesn't?</div>
+    <div class="a">A. You oversee the whole roster and approvals, you score alongside teachers, and you (or a teacher) make the final call to advance the school's top three.</div>
+    <div class="q">Q. Why only three to the judges?</div>
+    <div class="a">A. So judges aren't buried and their attention lands on genuinely strong work — chosen by the people who know the students, not by strangers.</div>
+    <div class="q">Q. Is our internal scoring the same as the final result?</div>
+    <div class="a">A. No. Internal scoring is your school's private filter to choose what to advance. It's kept separate from the automatic points and the outside judges' scores.</div>
+    <div class="q">Q. Can the whole school see students' private work?</div>
+    <div class="a">A. No. The school sees rosters, approvals, and standing; raw student work is protected and surfaced only where scoring legitimately requires it.</div>
+    <div class="q">Q. What if we miss the deadline to send our top three?</div>
+    <div class="a">A. The system auto-releases your top three at the deadline, so your best students are never left unseen because of a busy week.</div>
+  </div>
+</section>
+
+<!-- ============ PART II ============ -->
+<section class="part">
+  <div class="pnum">Part Two</div>
+  <h2>The World Steps In</h2>
+  <div class="prule"></div>
+  <p>A fair judge, a business that needed to trust, a sponsor tired of the dark — the outside world, at last let in on the child's own terms. This is the part your sponsorship makes possible: a bridge between a neighborhood's students and the people who can invest in them, built so it can never be misused.</p>
+</section>
+
+<!-- ============ CHAPTER 5 — DR. REED ============ -->
+<section class="chapter">
+  <div class="chap-num">Chapter Five</div>
+  <h2>The Judge Who Had Seen Everything</h2>
+  <p class="role">Dr. Samuel Reed — The Judge</p>
+
+  <p class="lead">Dr. Samuel Reed had judged so many competitions that he had, quietly and to his own shame, stopped seeing the children. He saw production budgets. He saw which team had a parent in marketing, which project had been through a consultant's hands, which "student" presentation had clearly been polished by someone with a graduate degree. Thirty years of judging had taught him a cynical shorthand: the shiniest entry usually belonged to the family with the most money, and the quiet, cardboard-and-heart entries usually lost. He kept judging anyway, out of duty. He had stopped expecting to be moved.</p>
+
+  <p>When he agreed to judge this challenge, he braced for the same parade. What he got instead unsettled him in the best possible way.</p>
+
+  <h3 class="sceneline">— • —</h3>
+
+  <p>The first thing that was different: he was not handed five hundred entries and told to drown. His queue held only what schools had chosen to send forward — each school's best few, already filtered by the people who knew those students. His time, for once, was being treated as though it were worth something. He was there to judge finalists, not to pan for gold in a river of noise.</p>
+
+  <p>The second thing was subtler, and it took him two or three projects to notice. He could not tell who was rich. There was no slick sizzle reel to reward, no glossy over-production to be dazzled by. Each submission came to him as substance — a problem, a solution, the thinking behind it, the evidence, the impact — laid out on the same six-part scorecard for everyone. The playing field had been flattened before he ever arrived. He was being asked to judge <em>ideas</em>, stripped of the costume of money. He realized, with a small jolt, that this was the fair fight he had spent thirty years wishing for and had stopped believing existed.</p>
+
+  <p>Then he opened a project about an underpass on Willis Avenue. Solar motion-lights where the dead ones hung. A community mural so a forgotten place would feel watched-over instead of abandoned. It was not expensive. It was not slick. It was one of the best pieces of practical civic thinking Dr. Reed had read in years — clear about the problem, honest about the evidence, and written by someone who plainly loved the corner he was trying to fix. Reed scored it the way the rubric asked, category by category, and for the first time in a long time he was not scoring a budget. He was scoring a mind.</p>
+
+  <p>He did not know the student's name mattered less than his idea — that was the design. He did not know the boy had almost never signed up. He only knew that his scores here would not vanish into a ceremony; they would fold into the student's real standing, combined with the effort points the boy had already earned and any recognition his school had added — a whole picture, not a single gatekeeper's whim. Reed found that he was, against thirty years of scar tissue, moved. He scored two more projects that night just to stay in the feeling a little longer.</p>
+
+  <div class="how">
+    <h4>How the system works here</h4>
+    <ol>
+      <li><strong>Judges see only what schools advance.</strong> A judge's queue holds released top-three submissions — not every entry — so attention lands on genuine finalists.</li>
+      <li><strong>One shared rubric, no production bias.</strong> Every submission is scored on the same six categories (problem, solution, creativity, evidence, community impact, presentation). Substance is rewarded; expensive polish is not.</li>
+      <li><strong>Judge scores feed the real standing.</strong> A judge's scores combine with the student's automatically earned effort points and any school-awarded recognition to form the final standing — no single judge is the sole gate.</li>
+      <li><strong>Unreleased work is invisible to judges.</strong> A judge cannot see submissions a school hasn't advanced, protecting students and keeping the queue clean.</li>
+      <li><strong>Judges are kept current.</strong> The platform notifies judges when new finalists arrive, so nothing waits unseen.</li>
+    </ol>
+  </div>
+
+  <p>When Dr. Reed submitted his final scores that season, he sat back and did the arithmetic on his own career. Thirty years of rewarding the wrong thing because the format had left him no choice. And here, in a challenge built for kids most competitions never even reached, someone had quietly engineered the one thing he had given up on: a way to see the idea before you saw the income. He wrote a short note to the program team through the platform. It said only, "Thank you for letting me judge fairly again."</p>
+
+  <div class="takeaway">
+    <h4>Frantz's Takeaway</h4>
+    <p>"A judge's time is sacred, and so is a poor child's chance. So we show judges only the finalists, and we strip the work of everything except the thinking. Money should never be visible in the room where ideas are weighed."</p>
+  </div>
+
+  <div class="faq">
+    <h4>Questions Judges Ask</h4>
+    <div class="q">Q. Do I have to score every submission in the program?</div>
+    <div class="a">A. No. You score the finalists each school advances — its top three — not the entire field.</div>
+    <div class="q">Q. How do I score, and by what standard?</div>
+    <div class="a">A. On a shared six-category rubric — problem, solution, creativity, evidence, community impact, presentation — the same standard applied to every entry.</div>
+    <div class="q">Q. Does my score alone decide the winner?</div>
+    <div class="a">A. No. Judge scores combine with the student's earned effort points and any school-awarded recognition to form the final standing, so no single judge is the sole gate.</div>
+    <div class="q">Q. Can I see entries a school didn't advance?</div>
+    <div class="a">A. No. Only released finalists appear in your queue; unadvanced work stays protected and invisible to judges.</div>
+    <div class="q">Q. Can I tell which students are wealthy or not?</div>
+    <div class="a">A. The work is presented as substance, not production value — so you're judging the idea, not the family's budget. That fairness is by design.</div>
+    <div class="q">Q. How do I know when there's new work to judge?</div>
+    <div class="a">A. The platform notifies you when finalists arrive, so nothing sits waiting.</div>
+  </div>
+</section>
+
+<!-- ============ CHAPTER 6 — TONY ============ -->
+<section class="chapter">
+  <div class="chap-num">Chapter Six</div>
+  <h2>The Man Who Needed Someone He Could Trust</h2>
+  <p class="role">Tony Alvarez — The Business Owner</p>
+
+  <p class="lead">Tony Alvarez had owned the hardware store on 138th Street for twenty-two years, and in that time he had been burned by exactly the kind of hiring everyone told him to do. Post an ad, take a chance on a kid, and hope. Sometimes it worked. Too often it did not — a no-show, a cash-drawer he could not trust, a young person who needed a mentor more than a manager and whom Tony had neither the time nor the tools to become. He had slowly stopped hiring teenagers at all, which pained him, because Tony himself had been a fourteen-year-old that no one would hire until one man finally did.</p>
+
+  <p>He did not need cheap labor. He needed <em>someone he could trust</em> — a young person with their head on straight, who fixed things instead of breaking them, who actually lived in the neighborhood the store served. The trouble was that there was no honest way to find that kid. Talent did not walk in wearing a sign.</p>
+
+  <h3 class="sceneline">— • —</h3>
+
+  <p>Then a neighbor on the school's parent committee told him about the challenge, and Tony did something he had never done: he registered his business on a platform to find young talent. It asked him for real credentials — his business details, his tax identification, who the manager on site would be, what days and hours a student could actually work. It was not a dating app for cheap labor. It was making him prove he was a real, accountable business before it would let him anywhere near a student. Tony, who had been burned so many times, found that he respected being vetted himself.</p>
+
+  <p>Here is how he actually met the kid. As part of the challenge, students go out and interview local businesses about the real problems those businesses see in the neighborhood — and one of the students who walked into Tony's hardware store, notebook in hand, was a sixteen-year-old named Marcus Bell. Weeks later, when Marcus submitted his project, the platform did something quietly brilliant: because Marcus had interviewed <em>Tony's</em> store, his finished solution surfaced on Tony's dashboard. Tony did not go hunting through a database of strangers' children. The platform simply showed him the work of the young person who had already stood in his doorway.</p>
+
+  <p>What he could <em>not</em> do surprised him even more. He could not message that student. He could not pull up a phone number, an address, a name to cold-call. He could read the strength of the young person's thinking — but every wall reminded him that on the other side of it was somebody's child. When the work impressed him and he wanted to offer an internship, he could not simply reach out. He had to make the offer <em>through</em> the platform, and it went first to the program's administrators for approval, then to the student, and — because the student was a minor — to the student's parent for consent. Only when everyone had said yes did the wall come down.</p>
+
+  <p>The work that impressed him was an underpass on Willis Avenue. Tony had driven under those dead lights a thousand times, cursing them. Here was the same kid who had asked him, weeks earlier, what the neighborhood most needed fixed — and who had then gone and engineered those dead lights back to life on paper. Tony made the offer. It went up the chain. Somewhere across the city, a mother named Diane read a notification that a local business wanted to give her son an internship, and — because the platform had put her at the gate — <em>she</em> got to decide, calmly, at her kitchen table, whether to say yes. She said yes.</p>
+
+  <p>Only then did Tony receive what he had actually needed all along: the student's résumé, a way to reach him, and a private channel to talk — with the program able to see the conversation, so that everything between a grown man and a teenager stayed transparent and safe. Tony hired Marcus Bell three weeks later. He did not get cheap labor. He got the trustworthy kid he had spent years failing to find — and Marcus got the one man willing to hire him, the way one man had once hired Tony.</p>
+
+  <div class="how">
+    <h4>How the system works here — today</h4>
+    <ol>
+      <li><strong>Businesses register with real credentials.</strong> A business provides its details, tax identification, on-site manager, and availability — it must be an accountable, verified business before engaging any student.</li>
+      <li><strong>Discovery is interview-based.</strong> A business sees the students who interviewed <em>that business</em> as part of the challenge, and — once submitted — those students' solutions surface on its dashboard. A business cannot browse or search other students.</li>
+      <li><strong>A business can never contact a student directly.</strong> There is no way to message, call, or look up a student out of the blue. Everything routes through the platform.</li>
+      <li><strong>An internship offer travels a consent chain.</strong> The business raises an offer → the program's admins approve it → it goes to the student → for a minor, the parent must consent (an adult student confirms on their own, parent informed).</li>
+      <li><strong>Contact is released only when confirmed.</strong> The student's résumé and contact details reach the business only after the internship is fully consented — never before.</li>
+      <li><strong>The conversation is transparent.</strong> Once confirmed, a private student–business chat opens, with program oversight, so communication between an adult and a minor stays safe and on the record.</li>
+    </ol>
+  </div>
+
+  <div class="vision">
+    <h4>Where this is going — the vision</h4>
+    <p>Today a business meets a student only if that student happened to walk into their shop. The next step — on the roadmap, not yet live — is a <strong>searchable local solutions board</strong>: a place where a verified business can browse and search the community solutions students have posted, filtered by neighborhood, and discover talented young people it never crossed paths with. From there the business would reach out through the very same consent-protected chain — admin review, student, and parent — to offer an internship or, for older students, a job. Same safety, wider reach: instead of waiting for talent to walk in, a local employer could go find the smart kid three blocks over and open a door for them.</p>
+  </div>
+
+  <p>Tony kept a photo behind the register that year: the relit underpass, taken on the night the motion-lights first flickered on, with a lanky sixteen-year-old grinning underneath them in a store apron. Customers asked about it. Tony told them the truth. "I finally found a kid I could trust," he'd say. "Turns out he was three blocks away the whole time. I just never had an honest way to meet him."</p>
+
+  <div class="takeaway">
+    <h4>Frantz's Takeaway</h4>
+    <p>"Local businesses don't want to exploit kids — they want to trust them, and they've had no safe way to find them. So we let the business prove itself, keep it from ever contacting a child directly, and open the door only when a parent has said yes."</p>
+  </div>
+
+  <div class="faq">
+    <h4>Questions Businesses Ask</h4>
+    <div class="q">Q. How do I find a student today?</div>
+    <div class="a">A. Today, you see the students who interviewed your business as part of the challenge, and their solutions once submitted. You don't yet browse or search other students — discovery is based on who came to you.</div>
+    <div class="q">Q. Will I be able to search for local student solutions? <em>(Coming)</em></div>
+    <div class="a">A. That's on the roadmap: a searchable, neighborhood-filtered board of posted student solutions, so a verified business can discover talent beyond the students who walked in — then reach out through the same consent-protected chain. It is a planned capability, not live yet.</div>
+    <div class="q">Q. Can I contact a promising student directly?</div>
+    <div class="a">A. No — now or under the future search. You can never message, call, or look up a student on your own; every engagement routes through the platform and its consent chain.</div>
+    <div class="q">Q. How does making an internship offer work?</div>
+    <div class="a">A. You raise an offer; the program's admins approve it; it goes to the student; and for a minor, the parent must consent before anything proceeds.</div>
+    <div class="q">Q. When do I get the student's résumé and contact details?</div>
+    <div class="a">A. Only after the internship is fully confirmed and consented — never before. Then a private, program-supervised chat opens.</div>
+    <div class="q">Q. What about students who are already 18?</div>
+    <div class="a">A. An adult student confirms on their own; the parent is kept informed rather than gating the decision.</div>
+  </div>
+</section>
+
+<!-- ============ CHAPTER 7 — PRIYA ============ -->
+<section class="chapter">
+  <div class="chap-num">Chapter Seven</div>
+  <h2>The Check That Finally Landed Somewhere</h2>
+  <p class="role">Priya Nair — The Sponsor</p>
+
+  <p class="lead">Priya Nair signed off on a great deal of money every year, and she had quietly come to hate the feeling of it. As head of community impact for her firm, she approved donation after donation, sponsorship after sponsorship, and watched almost all of it disappear into the same fog. A logo on a banner. A line in an annual report. A photo of a check the size of a door. She had no idea, in any donation she had ever made, whether the money had actually built anything that lasted. She had started to suspect the honest answer was that no one knew, and no one was supposed to ask.</p>
+
+  <p>She had gotten into this work because of a scholarship — a small one, given to her by strangers, that had carried a girl from a crowded flat to a career she was now supposed to be grateful for by writing checks into the fog. Somewhere along the way the giving had become abstract. Priya did not want to adopt one photogenic child for a brochure. She wanted to fund something <em>whole</em> — and then be able to see it work.</p>
+
+  <h3 class="sceneline">— • —</h3>
+
+  <p>The challenge offered her exactly that, and it was honest with her about what her money bought. She was not sponsoring a student. She was sponsoring the <em>contest</em> — the entire engine. She chose a sponsorship tier, the way every sponsor does: a package, at a level she set, that funded the whole season at once. The scholarships. The school impact grant. The recognition for the teachers everyone else forgets. The plain, unglamorous infrastructure it takes to run a real, statewide challenge that thousands of students can trust. Her contribution did not attach to one winner; it powered the machine that reached every child in the program, the ones who would win and the far greater number who never would but were changed anyway.</p>
+
+  <p>And for the first time in her career, a sponsorship came with a dashboard that told the truth. Not a per-child story cherry-picked for her — the <em>program-wide</em> picture: how many students had joined, how many schools, how many businesses had been drawn in, how many real community problems were being worked on, how many solutions submitted, how many scholarships awarded. "Impact" stopped being a word in an annual report. It became a set of numbers she could watch climb, across the entire contest her tier kept running. She was funding the whole room, and she could finally see the whole room.</p>
+
+  <p>There was a second thing she could do, and the platform was careful to keep it separate from the funding. As a sponsor she could also <em>offer opportunity</em> — post a real job or internship out to eligible students across every participating school at once, on her own terms, with her own questions, age-gated and admin-approved before any student saw it. This was not her sponsorship; her sponsorship was the tier that funded the contest. This was a bonus door she could open on top of it — a way to turn her money into a mentor's handshake, not just a grant.</p>
+
+  <p>So she did both. She funded the season at a Presenting tier, and then she posted a paid summer associate role, open to students sixteen and up, with five questions that had nothing to do with GPAs and everything to do with character. One applicant wrote about relighting an underpass so his little cousin would not be afraid to walk home. Priya read it twice. When she accepted his application, the platform opened a safe, supervised channel between them, released what she needed and nothing she did not, and kept the whole thing on the record. She had written checks into the fog for years. This was the first time she had funded the whole lighthouse — and then walked down to the water and shaken one young person's hand.</p>
+
+  <div class="how">
+    <h4>How the system works here</h4>
+    <ol>
+      <li><strong>Sponsors fund the whole contest, via a tier.</strong> A sponsor chooses a sponsorship package at a level — Community, Silver, Gold, Presenting, Founding, or a custom amount — that funds the entire season, not a single student.</li>
+      <li><strong>The money powers program-wide goals.</strong> Scholarships, the school impact grant, educator recognition, and the infrastructure to run a professional statewide challenge — the engine every student relies on.</li>
+      <li><strong>Impact is reported program-wide.</strong> The sponsor's dashboard shows the whole picture — students, schools, businesses, community problems, solutions, and scholarships — not a cherry-picked story.</li>
+      <li><strong>Recognition, not adoption.</strong> Sponsors receive public recognition, branding, ceremony invitations, and documents — they never fund, choose, or "adopt" an individual child.</li>
+      <li><strong>Offering a job is a separate, optional channel.</strong> On top of funding, a sponsor may post an opportunity to eligible students across every school — age-gated, with their own questions, and admin-approved before any student sees it.</li>
+      <li><strong>That channel is consent-safe.</strong> Students apply with answers (not just résumés); the sponsor accepts or declines; only on acceptance is a résumé shared and a supervised one-to-one chat opened, always on the record.</li>
+    </ol>
+  </div>
+
+  <p>At the next board meeting, Priya did not present a photo of a check. She presented a dashboard — the whole contest her firm now funded, every number on it climbing — and then she read aloud, with permission, a few sentences a sixteen-year-old had written about an underpass. The room went quiet in a way no annual report had ever managed. One of the directors asked afterward how they could move up a tier. Priya smiled. For the first time in her career, she could tell him exactly what the next dollar would keep running.</p>
+
+  <div class="takeaway">
+    <h4>Frantz's Takeaway</h4>
+    <p>"A sponsor is not adopting a child — they are powering the whole contest that reaches all of them. We show them the program-wide impact their tier keeps alive, and we let them, if they wish, open a real door on top of it. Fund the engine; see the engine; then, if you like, hand one kid a job."</p>
+  </div>
+
+  <div class="faq">
+    <h4>Questions Sponsors Ask</h4>
+    <div class="q">Q. What am I actually funding — a student, or the program?</div>
+    <div class="a">A. The whole program. You choose a sponsorship tier that funds the entire season — scholarships, the school impact grant, educator recognition, and the infrastructure to run the challenge. You are not funding or adopting an individual student.</div>
+    <div class="q">Q. What are the tiers?</div>
+    <div class="a">A. Community, Silver, Gold, and Presenting levels, plus Founding and custom amounts — a package at the level you choose, funding program-wide goals.</div>
+    <div class="q">Q. What do I get to see for it?</div>
+    <div class="a">A. A program-wide impact dashboard — students, schools, businesses, community problems, solutions, and scholarships — the whole contest, not a cherry-picked story. Plus recognition, branding, ceremony invitations, and documents.</div>
+    <div class="q">Q. Can I also offer a job or internship?</div>
+    <div class="a">A. Yes — as a separate, optional channel on top of your funding. You post an opportunity to eligible students across every school, set a minimum age and up to twelve questions, and the program approves it before any student sees it.</div>
+    <div class="q">Q. How does that opportunity stay safe for students?</div>
+    <div class="a">A. Students apply with written answers; you accept or decline; only on acceptance is a résumé shared and a supervised one-to-one chat opened — always on the record.</div>
+    <div class="q">Q. Do I get to pick the winners because I funded the contest?</div>
+    <div class="a">A. No. Funding never buys influence over judging, scoring, or who wins — that line is absolute, and it is part of what makes your sponsorship trustworthy.</div>
+  </div>
+</section>
+
+<!-- ============ PART III ============ -->
+<section class="part">
+  <div class="pnum">Part Three</div>
+  <h2>The Wider Circle</h2>
+  <div class="prule"></div>
+  <p>A movement lives or dies on the people at its edges — the connectors, the storytellers, the mentors, the scouts who keep widening the map. A sponsor funds the reach: every new school and neighborhood the contest can afford to grow into is a wider map your dollars drew.</p>
+</section>
+
+<!-- ============ CHAPTER 8 — JAMES ============ -->
+<section class="chapter">
+  <div class="chap-num">Chapter Eight</div>
+  <h2>The Man With a Megaphone and No Stage</h2>
+  <p class="role">James Whitfield — The Partner</p>
+
+  <p class="lead">James Whitfield had spent fifteen years running a small community organization out of a former laundromat, and if you asked him what he did, the honest answer was: he connected things. A kid who needed tutoring to a retired teacher. A block that needed cleaning to the volunteers who would clean it. A parent who needed a form translated to someone who could translate it. James was a connector by temperament and by trade. His problem had never been passion. His problem had been that he had a megaphone and no stage — enormous reach into the community, and nothing solid to point that reach <em>at</em>.</p>
+
+  <p>He knew twenty schools. He knew hundreds of families. He knew, personally, which corners of the neighborhood held the most overlooked kids. What he had never had was a real machine to plug all of that into — something with structure, follow-through, and a way to prove that his connecting actually led somewhere. Too many good programs had used his network to get started and then forgotten he existed. He had learned to be wary of anyone who wanted his contacts.</p>
+
+  <h3 class="sceneline">— • —</h3>
+
+  <p>The challenge approached him differently. It did not just want his network — it gave him a role, and a way to see his own impact. When James joined as a partner and was approved, he received something that changed how he worked overnight: his own referral code. Every school he brought in, every family he pointed toward the platform, every community connection he made — it could all be traced back to him, counted, and shown to him on his dashboard. For the first time in fifteen years, James could <em>see</em> the fruit of his connecting instead of taking it on faith.</p>
+
+  <p>He got tools, too — a partnership kit, materials he could hand to a principal or a parents' group without having to make them himself, marketing pieces that spoke for the program better than a tired man in a former laundromat could. And when he wanted something — a meeting, a co-run event, support for a neighborhood he thought was being missed — he did not have to chase anyone down. He raised a request through the platform, and it went to the program team, tracked, answered, on the record. He was not a forgotten volunteer anymore. He was a recognized partner with a scoreboard.</p>
+
+  <p>Within one season, James had brought three new schools into the challenge — schools in exactly the overlooked corners he had always worried about. He watched, on his own dashboard, as students from those schools registered, submitted, and climbed. One of them, from a school he had personally walked into and convinced, ended up sending a project to the judges. James did not need his name on it. He just needed to know, finally, that his fifteen years of connecting had a stage worthy of the megaphone.</p>
+
+  <div class="how">
+    <h4>How the system works here</h4>
+    <ol>
+      <li><strong>Partners register and are approved.</strong> A community partner signs up and is approved by the program, then gets a dedicated dashboard.</li>
+      <li><strong>A referral code makes reach visible.</strong> Each partner gets their own referral code, so the schools, families, and members they bring in are traced back and counted for them.</li>
+      <li><strong>Partners get ready-made tools.</strong> A partnership kit and marketing materials let a partner represent the program without building anything themselves.</li>
+      <li><strong>Partners raise requests, on the record.</strong> Meetings, co-marketing, event support — requested through the platform and tracked, not chased down by phone.</li>
+      <li><strong>Partners amplify; they don't access children.</strong> A partner's power is reach and connection — not access to students' private work, which stays protected inside the school.</li>
+    </ol>
+  </div>
+
+  <p>The former laundromat still smelled faintly of detergent. But now there was a printout taped by the door — a simple dashboard number, the count of schools and families James had brought into the challenge — and every morning James looked at it before he unlocked the front. It was the proof he had waited fifteen years to hold: that a connector, given a real stage, could move a whole community onto it.</p>
+
+  <div class="takeaway">
+    <h4>Frantz's Takeaway</h4>
+    <p>"Every neighborhood has a connector — someone who knows everyone and can reach anyone. We give that person a code, a toolkit, and a scoreboard, so their reach finally lands on something real and they can see it happen."</p>
+  </div>
+
+  <div class="faq">
+    <h4>Questions Partners Ask</h4>
+    <div class="q">Q. What does a partner actually do?</div>
+    <div class="a">A. Partners amplify the program — bringing in schools, families, and community members, and helping the movement reach places it otherwise wouldn't.</div>
+    <div class="q">Q. How is a partner different from a sponsor?</div>
+    <div class="a">A. A sponsor funds and offers opportunities; a partner extends reach and connection. Different levers, same goal.</div>
+    <div class="q">Q. How do referrals work?</div>
+    <div class="a">A. You get your own referral code, so everyone you bring in is traced back and counted on your dashboard — visible proof of your impact.</div>
+    <div class="q">Q. What tools do I get?</div>
+    <div class="a">A. A partnership kit and marketing materials you can hand to schools or parent groups without creating them yourself.</div>
+    <div class="q">Q. Can I request support or meetings?</div>
+    <div class="a">A. Yes — you raise requests through the platform and they're tracked and answered, not lost in phone tag.</div>
+    <div class="q">Q. Do partners see students' work?</div>
+    <div class="a">A. No. A partner's role is reach; students' private work stays protected inside their school.</div>
+  </div>
+</section>
+
+<!-- ============ CHAPTER 9 — NADIA ============ -->
+<section class="chapter">
+  <div class="chap-num">Chapter Nine</div>
+  <h2>The Reporter Who Was Tired of the Wrong Story</h2>
+  <p class="role">Nadia Brooks — The Media</p>
+
+  <p class="lead">Nadia Brooks had written the same story about the Bronx too many times, and she had come to despise it. Reporters parachuted in, found the worst corner, photographed the worst hour, and flew out with a headline about an "at-risk" neighborhood full of "troubled youth." The people who lived there recognized none of it. Nadia had grown up on one of those blocks. She knew that the truth was not tragedy — it was talent that no one bothered to photograph. But every time she pitched that story, an editor asked where the data was, where the faces were, where the <em>proof</em> was. And she never had it, because no one had ever organized the good news the way they organized the bad.</p>
+
+  <p>She heard about the challenge the way reporters hear about everything — a rumor, a relit underpass, a school buzzing about a kid. She expected another feel-good crumb. She found, instead, the first fully-sourced good story of her career.</p>
+
+  <h3 class="sceneline">— • —</h3>
+
+  <p>When Nadia registered as media and was approved, the platform handed her exactly what fifteen years of editors had demanded and she had never been able to produce. Official statistics, verified and ready to cite — how many students, how many schools, how many real community problems worked on. A press kit and a media kit written for publication. A library of approved photos, logos, and clips she was actually cleared to use, so she was not stealing images or guessing at facts. For once, the good story came with the same rigor as the bad one always had.</p>
+
+  <p>But what impressed Nadia most was what she was <em>not</em> given. She could not pull up a single student's private submission. She could not see who the judges were or how they scored. She could not touch financial details or anything unpublished. At first, the old reporter in her bristled. Then the woman who had grown up on that block understood, and approved. The platform was protecting the very kids she wanted to celebrate. It would give her the truth and the numbers and the faces that had consented — and it would not let even a sympathetic journalist turn a child into content without permission. That was not an obstacle. That was integrity, built into the machine.</p>
+
+  <p>When she wanted more than the kit, she asked for it properly — through the platform. She requested press credentials to cover the season's showcase, and she requested an interview with Frantz himself, both tracked and routed to the program team rather than left to a cold email lost in a founder's inbox. When the answers came, she went to work. And the story she finally filed was not the one her editors had trained her to write. It was headlined with a photograph of an underpass full of light, and it was about a neighborhood that had quietly, and without anyone's permission, decided it was capable.</p>
+
+  <div class="how">
+    <h4>How the system works here</h4>
+    <ol>
+      <li><strong>Media registers and is approved.</strong> A journalist or outlet signs up and is approved, then gets a press room built for accurate coverage.</li>
+      <li><strong>Verified facts and assets, ready to use.</strong> Official statistics, a press kit and media kit, and a library of approved photos, logos, and clips cleared for publication.</li>
+      <li><strong>Hard walls protect the children.</strong> Media cannot see students' private submissions, judge identities or scores, or unpublished and financial data — celebration never becomes exposure.</li>
+      <li><strong>Credentials and interviews are requested in-platform.</strong> Press credentials to cover events and interview requests are routed to the program team and tracked, not lost in an inbox.</li>
+      <li><strong>The story is true and sourced.</strong> Everything a reporter is given is verified, so the good news carries the same rigor as any hard-news story.</li>
+    </ol>
+  </div>
+
+  <p>The piece ran on a Sunday. Nadia's editor, who had spent a decade asking her for proof, read it and said only, "Where did you get all this?" Nadia told him the truth: for the first time, someone had organized the good news as carefully as the world usually organized the bad. Down in the Bronx, a boy cut out the article and a mother framed it, and a neighborhood that had only ever seen itself described as a problem got to read, in a real newspaper, a description of itself as a place that fixed things.</p>
+
+  <div class="takeaway">
+    <h4>Frantz's Takeaway</h4>
+    <p>"The media wants the true story — but the truth about our kids must never cost them their safety. So we give reporters verified facts, approved images, and real access, and we lock the door on everything that could turn a child into content without consent."</p>
+  </div>
+
+  <div class="faq">
+    <h4>Questions Media Ask</h4>
+    <div class="q">Q. What can I access as media?</div>
+    <div class="a">A. Official statistics, a press and media kit, and a library of approved photos, logos, and clips — all verified and cleared for publication.</div>
+    <div class="q">Q. Can I see students' work or judges' scores?</div>
+    <div class="a">A. No. Student private submissions, judge identities and scores, and unpublished or financial data are off-limits — to protect the very people you're covering.</div>
+    <div class="q">Q. How do I get official numbers I can cite?</div>
+    <div class="a">A. They're provided in your press room, verified and ready to quote, so your reporting is accurate and sourced.</div>
+    <div class="q">Q. How do I cover an event or interview the founder?</div>
+    <div class="a">A. You request press credentials and interviews through the platform; they're routed to the program team and tracked, not lost in a cold inbox.</div>
+    <div class="q">Q. Why so many restrictions on a positive story?</div>
+    <div class="a">A. Because celebrating a child must never expose them. The walls protect students while still giving you a true, well-sourced story.</div>
+  </div>
+</section>
+
+<!-- ============ CHAPTER 10 — BEN ============ -->
+<section class="chapter">
+  <div class="chap-num">Chapter Ten</div>
+  <h2>The Man Who Thought He Was Finished</h2>
+  <p class="role">Ben Carter — The Volunteer</p>
+
+  <p class="lead">Ben Carter had built bridges for forty years — real ones, steel and cable, the kind cars drive over without ever thinking about the man who calculated the loads. Then he retired, and his wife passed the following spring, and Ben discovered a cruelty no one warns you about: that a lifetime of usefulness can end on a Tuesday, and no one comes to tell you what to do with the decades of skill still sitting in your hands. He had time. He had expertise. He had, most days, no reason to change out of his slippers. He had begun to believe, quietly, that he was finished.</p>
+
+  <p>What Ben did not have was a door. He would have mentored any young person in his neighborhood for free — gladly, gratefully — but there was no honest, safe, organized way for a seventy-one-year-old widower to walk up and say "let me help." The world had no slot for what he still had to give.</p>
+
+  <h3 class="sceneline">— • —</h3>
+
+  <p>The challenge built the slot. When Ben registered as a volunteer and was approved, he was not dropped into a void and told to be useful. He was shown a menu of actual ways to help — mentoring students, coaching them for interviews, speaking about careers, supporting events. He chose. He applied for the ones that fit, and the program handed him real assignments, which he could accept, decline, or mark complete as he went. There was structure around his willingness — something to say yes to, someone expecting him, a task with a beginning and an end. For a man who had spent forty years working to specifications, being given a clear assignment again felt like oxygen.</p>
+
+  <p>And the platform did something that made Ben, a stoic engineer, unexpectedly emotional the first time he noticed it: it counted his hours. Every hour he gave was logged, and as they added up, he crossed recognition milestones — small certificates that told him, in a world that had written him off, that his contribution was seen and measured. He was not a charity case being humored. He was a contributor with a record. He printed the first certificate and put it on the refrigerator, next to a photo of a bridge he had built in 1991.</p>
+
+  <p>He was careful to understand his own limits, and the platform was careful to enforce them. He was a mentor, not a judge — he could pour his experience into a young person, but he had no power over anyone's score or standing unless the program specifically assigned him such a role. That boundary reassured him. He wanted to lift kids up, not to hold anyone's fate. And he never once saw a student's private work he had no business seeing; his access was exactly the size of his role, and not one inch larger.</p>
+
+  <p>By the end of the season, Ben had mentored four students through their projects. One of them was working on lighting — an underpass, of all things — and Ben, who had spent forty years thinking about how to make structures safe for the people who used them, found that he had one last bridge in him after all. Not steel this time. A boy.</p>
+
+  <div class="how">
+    <h4>How the system works here</h4>
+    <ol>
+      <li><strong>Volunteers register and are approved.</strong> A volunteer signs up, is approved, and gets a dashboard of real ways to contribute.</li>
+      <li><strong>Opportunities are concrete.</strong> Mentoring, interview coaching, career talks, event support — a volunteer applies for the roles that fit them.</li>
+      <li><strong>Assignments have structure.</strong> The program hands out assignments a volunteer can accept, decline, or mark complete — clear tasks, not a vague "help out."</li>
+      <li><strong>Hours are tracked and recognized.</strong> Contributed hours are logged and build toward recognition milestones and certificates — contribution that is seen and measured.</li>
+      <li><strong>A volunteer is not a judge by default.</strong> Volunteers mentor and support; they have no power over scores or standing unless the program specifically assigns such a role — and their access never exceeds their role.</li>
+    </ol>
+  </div>
+
+  <div class="takeaway">
+    <h4>Frantz's Takeaway</h4>
+    <p>"There is an army of retired, skilled, generous people the world has quietly shelved. We give them a door, a real assignment, and a record of their hours — so their experience finds the young hands that need it, safely and with dignity."</p>
+  </div>
+
+  <div class="faq">
+    <h4>Questions Volunteers Ask</h4>
+    <div class="q">Q. What kinds of things can I do?</div>
+    <div class="a">A. Mentor students, coach them for interviews, give career talks, or support events — you apply for the opportunities that fit you.</div>
+    <div class="q">Q. How do assignments work?</div>
+    <div class="a">A. The program hands you clear assignments you can accept, decline, or mark complete — real tasks with a beginning and an end.</div>
+    <div class="q">Q. Are my hours and contributions tracked?</div>
+    <div class="a">A. Yes. Your hours are logged and build toward recognition milestones and certificates.</div>
+    <div class="q">Q. Am I a judge? Do I decide who wins?</div>
+    <div class="a">A. No. Volunteers mentor and support; you have no power over scores or standing unless the program specifically assigns you such a role.</div>
+    <div class="q">Q. Do I get access to students' private information?</div>
+    <div class="a">A. Only what your role legitimately needs — never more. Your access is exactly the size of your assignment.</div>
+  </div>
+</section>
+
+<!-- ============ CHAPTER 11 — AISHA ============ -->
+<section class="chapter">
+  <div class="chap-num">Chapter Eleven</div>
+  <h2>The Scout Who Widened the Map</h2>
+  <p class="role">Aisha Khan — The Fellow</p>
+
+  <p class="lead">Aisha Khan believed one thing with her whole stubborn heart: that somewhere three neighborhoods over, right now, there was a kid exactly as bright as Marcus Bell who would never once hear that this challenge existed — and that this, not any lack of talent, was how movements quietly die. They do not fail. They just stop widening. They serve the schools that already found them and never reach the schools that never will, and a generation of overlooked kids stays overlooked because no one drew a bigger map.</p>
+
+  <p>Aisha's job was to draw the bigger map. As a fellow, she was the researcher, the scout, the one who went looking for the schools nobody had invited yet — and, harder still, the one who verified them. A school on a list is worthless if the principal's email bounces and the phone number is three administrations out of date. Real outreach lives or dies on real, current, verified contacts. And for a long time, this crucial work had lived in the worst possible place: a sprawling personal spreadsheet, half-remembered, un-shareable, dying a little every time a laptop crashed.</p>
+
+  <h3 class="sceneline">— • —</h3>
+
+  <p>The platform pulled that work out of the shoebox and gave it a home. Now, when Aisha found a promising school, she logged it as a proper research entry — the school, the real contact, its verification status — inside the system itself, not a private file only she could read. Her research stopped being a secret she carried and became an asset the whole program could build on. When she verified a principal's real, current contact, that verified lead flowed into the program's own data, ready for outreach — no re-typing, no lost sticky notes, no single point of failure named Aisha's hard drive.</p>
+
+  <p>It changed how she worked, and how she felt about her work. She could see her verified schools accumulate. She could pick up assignments from the program and know exactly which corners of the city still needed a scout. She was not shouting leads into a void and hoping someone acted on them; she was feeding a machine that actually followed through, turning her cold discoveries into warm, real invitations. The three schools that James the partner brought in that season? Two of them had first been found, and verified, by Aisha — a quiet name most of them would never learn, working months ahead of everyone else, making sure the map kept getting bigger.</p>
+
+  <p>She kept a private tally of her own, separate from any dashboard. Not schools. Kids. The estimated number of overlooked students who could now, because of a verified contact she had chased down, someday hear that a challenge existed where their ideas would count. It was a number she could only guess at. It was the only number that had ever made her set an alarm early.</p>
+
+  <div class="how">
+    <h4>How the system works here</h4>
+    <ol>
+      <li><strong>Fellows research and log inside the system.</strong> A fellow records prospective schools and contacts as structured research entries in the platform — not a private spreadsheet.</li>
+      <li><strong>Verification is the real work.</strong> A fellow confirms real, current contacts (principals, teachers), so outreach targets are accurate, not stale.</li>
+      <li><strong>Verified leads flow into the program's data.</strong> A confirmed school contact feeds directly into the system, ready for outreach — no re-typing, no lost notes, no single point of failure.</li>
+      <li><strong>Fellows take assignments and see coverage.</strong> A fellow picks up research assignments and can see which areas still need a scout — feeding growth deliberately, not by luck.</li>
+      <li><strong>It replaces the shoebox.</strong> Work that once lived in fragile private files becomes a shared, durable asset the whole program builds on.</li>
+    </ol>
+  </div>
+
+  <div class="takeaway">
+    <h4>Frantz's Takeaway</h4>
+    <p>"A movement dies the day it stops widening. The fellow is the person who keeps drawing the bigger map — finding and verifying the schools no one has invited yet — so the overlooked kid three neighborhoods over finally gets the chance the lucky kid already has."</p>
+  </div>
+
+  <div class="faq">
+    <h4>Questions Fellows Ask</h4>
+    <div class="q">Q. What does a fellow do?</div>
+    <div class="a">A. Research and outreach groundwork — finding prospective schools, and verifying real, current contacts so the program can reach them.</div>
+    <div class="q">Q. How is a fellow different from a partner?</div>
+    <div class="a">A. A partner amplifies reach through their existing network; a fellow does the research and verification that discovers and confirms brand-new schools to invite.</div>
+    <div class="q">Q. What is a "research entry"?</div>
+    <div class="a">A. A structured record of a school and its contact, with verification status, logged inside the platform instead of a private spreadsheet.</div>
+    <div class="q">Q. Why does verification matter so much?</div>
+    <div class="a">A. Outreach fails on stale contacts. A verified, current contact is the difference between a real invitation and a bounced email.</div>
+    <div class="q">Q. Where does my work go?</div>
+    <div class="a">A. Verified leads flow directly into the program's data, ready for outreach — so your research becomes a shared, durable asset, not a file only you can read.</div>
+  </div>
+</section>
+
+<!-- ============ PART IV ============ -->
+<section class="part">
+  <div class="pnum">Part Four</div>
+  <h2>The Room Itself</h2>
+  <div class="prule"></div>
+  <p>Where every thread ties together — the chair that keeps the promises, the night it all comes true, and the reason it cannot wait. And, plainly, what your sponsorship funds to make all of it real.</p>
+</section>
+
+<!-- ============ CHAPTER 12 — THE ADMIN ============ -->
+<section class="chapter">
+  <div class="chap-num">Chapter Twelve</div>
+  <h2>The Chair in the Middle of the Room</h2>
+  <p class="role">The Administrator — where it all connects</p>
+
+  <p class="lead">At the end of the season, Frantz sat down in the one chair from which the whole thing could be seen at once. Not a throne — a control room. From here, every person in this book was a light on a board, and for the first time he could watch them all glow at the same time: the student who submitted, the parent who consented, the teacher who scored, the principal who chose, the judge who weighed, the business that offered, the sponsor who funded, the partner who spread the word, the reporter who told the truth, the volunteer who mentored, the fellow who widened the map. Twelve kinds of people, one room. And the chair in the middle, where the movement kept its promises.</p>
+
+  <p>Because that was what the admin's chair really was — not power, but <em>guardianship</em>. Every gate in this book passed through here. No account went live until it was approved from this chair. No business reached a student, no sponsor's job went out to a single school, no outside adult touched a child's world, without first passing an approval made here. The reason a mother in the Bronx could sleep while her son talked to a local business owner was that a human being in this chair had stood at the gate first. Safety was not a slogan in the movement. It was a queue of approvals somebody actually worked through.</p>
+
+  <h3 class="sceneline">— • —</h3>
+
+  <p>From the chair, Frantz could also finally see the thing he had spent his whole life unable to prove: <em>impact</em>, as a picture instead of a feeling. How many students had joined. How many schools. How many real problems worked on. How the internships flowed from offer to confirmation. Which schools were surging and which needed a call. The abstractions that had haunted every donor and every principal for decades were, from this chair, simply numbers on a board that told the truth.</p>
+
+  <p>And when something went wrong — a confused parent, a stuck student, a business that could not find a button — the chair could do a quiet, powerful thing: it could stand in that person's shoes. The team could view the platform exactly as a specific user saw it, to understand the problem from the inside and fix it, then step back out. Support was not "have you tried refreshing." Support was someone who could see precisely what you saw. Deadlines, too, were governed from here — the season's dates were the heartbeat that pushed everything forward, so that if a busy school forgot to advance its best students, the calendar itself made sure their work was not lost.</p>
+
+  <p>Frantz looked at the board for a long time that night. Everything he had scribbled at two in the morning years ago — the consent rules, the walls, the fairness, the free entry, the school choosing its own — was no longer an argument he was having with the world. It was a running system, humming, keeping thousands of small promises to people who would never know his name. The room he had imagined, because his neighborhood never had one, was real. And he was sitting in the middle of it.</p>
+
+  <div class="how">
+    <h4>The whole machine, in one view</h4>
+    <ol>
+      <li><strong>Every gate is an approval.</strong> Accounts, businesses, sponsor jobs, internship offers, outside requests — nothing reaches a student without passing an admin approval. Safety is enforced centrally.</li>
+      <li><strong>Impact is measured, not guessed.</strong> The admin sees students, schools, problems, internship funnels, and school leaderboards — real numbers, in real time.</li>
+      <li><strong>Support can stand in your shoes.</strong> The team can view the platform as a specific user to diagnose and fix problems from the inside, then step back out.</li>
+      <li><strong>The calendar is the heartbeat.</strong> Season deadlines drive the flow — and safeguards (like auto-advancing a school's top three) make sure no one's best work is lost to a busy week.</li>
+      <li><strong>One room, twelve roles, no crossed wires.</strong> Each role does its part and can never overstep into another's — the admin chair is where it all connects and stays honest.</li>
+    </ol>
+  </div>
+
+  <div class="takeaway">
+    <h4>Frantz's Takeaway</h4>
+    <p>"The admin's chair is not a throne — it is a gate and a witness. From here I keep every promise the movement makes: nothing reaches a child unapproved, and nothing good goes unseen. This is where safety and impact stop being words."</p>
+  </div>
+
+  <div class="faq">
+    <h4>Questions About Running the Platform</h4>
+    <div class="q">Q. What does the admin actually control?</div>
+    <div class="a">A. Every gate — approving accounts, businesses, sponsor jobs, internship offers, and outside requests — plus content, analytics, and the season timeline.</div>
+    <div class="q">Q. How is safety enforced across so many roles?</div>
+    <div class="a">A. Centrally. Nothing from the outside world reaches a student without first passing an admin approval, so protection isn't left to chance.</div>
+    <div class="q">Q. How do we help a user who's stuck?</div>
+    <div class="a">A. The team can view the platform exactly as that user sees it, diagnose the problem from the inside, fix it, and step back out.</div>
+    <div class="q">Q. How do we know if the program is working?</div>
+    <div class="a">A. The admin dashboard shows real impact — students, schools, problems, internship progress, and school standings — as live numbers, not anecdotes.</div>
+    <div class="q">Q. What keeps everything moving on time?</div>
+    <div class="a">A. The season's deadlines, with safeguards like auto-advancing a school's top three, so nothing stalls and no one's best work is lost.</div>
+  </div>
+</section>
+
+<!-- ============ CHAPTER 13 — SHOWCASE NIGHT ============ -->
+<section class="chapter">
+  <div class="chap-num">Chapter Thirteen</div>
+  <h2>Showcase Night</h2>
+  <p class="role">Everyone — the night the threads tie together</p>
+
+  <p class="lead">On the last Friday of the season, in a borrowed auditorium with a temperamental microphone, all of it finally stood in one room. Not on a dashboard — in the flesh. The student and the mother, the teacher and the principal, the judge, the business owner, the sponsor, the partner, the reporter, the volunteer, and somewhere in the back, a fellow who had found two of the schools whose banners now hung along the wall. For one night the whole machine wore human faces and sat in folding chairs.</p>
+
+  <p class="stamp">6:40 PM — the lobby</p>
+  <p>Diane Bell arrived early because she did not trust herself to arrive on time. She had a knot in her chest she recognized from eleven years ago, and she kept waiting for the old dread — the posted list, the whisper, the shame. It never came. Instead a woman with a lanyard found her by name, walked her to a reserved seat, and thanked her for consenting to Marcus's internship so promptly. <em>Thanked</em> her. Diane sat down and pressed her program flat against her knees so no one would see her hands shake.</p>
+
+  <p class="stamp">7:05 PM — backstage</p>
+  <p>Marcus was not the most nervous finalist backstage. That was a quieter distinction he would only understand later. He found Ben Carter fussing with the slide clicker like it was a load-bearing beam. "You built bridges," Marcus said, half to calm himself. "This is a footbridge," Ben said. "You've got the hard part — you already know your idea is true." It was the kind of sentence a boy remembers for thirty years. Ben had logged forty-one mentoring hours that season. He did not know it yet, but one of them, this one, was the bridge.</p>
+
+  <p class="stamp">7:20 PM — row C</p>
+  <p>Dr. Samuel Reed sat with the other judges, and for once he was not bored. He already knew the scores — the finalists had been judged on the platform, fairly, blind to budget — but he had come anyway, in person, because after thirty years he wanted to see the faces attached to the best civic thinking he had read in a decade. Two seats down, Priya Nair scrolled her phone one last time, not out of boredom but because the application that had moved her most was about to walk on stage, and she wanted to reread it before she watched him speak.</p>
+
+  <p class="stamp">7:35 PM — the thing no ceremony admits</p>
+  <p>Deja Freeman was in the audience, not on the stage, and that is the truest part of this whole book. She had wanted it more than anyone. She had worked harder than most. And she had not made her school's top three — the honest internal scoring had placed her fourth, and fourth does not go to the judges, and no amount of wanting rewrites a rank. For three weeks she had been furious, at the system and at herself. Frantz would have told her the furious part was fair. A thing worth winning has to be a thing you can lose, or it is not worth the stage.</p>
+
+  <p>But here is what the season had quietly done for the girl who did not win. Her points still stood; her effort had counted from the day she submitted. A volunteer had coached her through three mock interviews. A local café owner, browsing approved finalists' <em>public</em> profiles, had — through the proper channel, through the program, with her guardian's yes — offered her a weekend job that had nothing to do with a trophy. And somewhere in the fury, Deja had learned the thing the trophy could not have taught her: that she could put an idea in front of serious adults and survive their verdict. She sat in the dark clapping for Marcus with a complicated heart, which is the only honest kind. The platform had not promised her a win. It had promised her a fair shot and a floor she would not fall through. It kept both.</p>
+
+  <p class="stamp">7:52 PM — an empty seat</p>
+  <p>There was one finalist who was not there, and his absence told its own quiet truth. A boy from another school had earned an internship offer from a manufacturer that season — a good one. His father, reading the offer through the platform at his own kitchen table, had said no. Not because anything was wrong, but because he wanted his son focused on graduation first, and it was his to decide. The system did not argue, did not nag, did not route around him. It simply recorded the no and closed the door gently. Consent that cannot be refused is not consent. The empty seat was not a failure of the platform. It was the platform working exactly as promised.</p>
+
+  <p class="stamp">8:15 PM — the stage</p>
+  <p>Marcus presented the underpass. Dead lights brought back to life; a mural so a forgotten place would feel watched-over. He was not slick. He was true, which the room could feel. When he finished, Tony Alvarez stood in the third row before he could stop himself — the man who had spent years unable to find a young person he could trust, applauding the one he finally had, already on his payroll. Nadia Brooks photographed that exact moment: a store-apron handshake, a grinning kid, a lit underpass on the screen behind them. It would run on Sunday, and it would not be a story about an "at-risk" neighborhood. It would be a story about a place that fixed things.</p>
+
+  <p class="stamp">8:40 PM — the results</p>
+  <p>Marcus did not win first place. That is worth saying plainly, because a book where the hero wins everything is a brochure, not a story. First place — the top scholarship — went to a student named Priscilla Okonjo, from a school on the far side of the borough that had not even known this challenge existed a year ago, until a fellow named Aisha Khan verified a principal's email and a partner named James Whitfield made the call. The grand prize, in other words, went to a child the movement had reached only because someone kept widening the map. If you want the whole machine in a single sentence, it is that one.</p>
+
+  <p>Marcus placed second. He received a scholarship of his own, a certificate his mother would frame beside a newspaper article the following week, and an internship that had started before the ceremony even began. Second, it turned out, was not a consolation. It was a life, rearranged for the better, on a Friday night in a borrowed auditorium with a microphone that finally behaved.</p>
+
+  <p class="stamp">8:52 PM — where it all came from</p>
+  <p>No one in the room said the word "sponsor," and that is worth noticing. The scholarships handed out that night. The school impact grant Principal Lin's school would receive. The award for the teacher. The very lights, the auditorium rental, the platform humming behind all of it — none of it was funded by adopting a single child. It was funded by sponsors who paid for the <em>whole contest</em>, at a tier they chose, so that a night like this could exist for every school in the program, this year and next. Priscilla did not win because a donor picked her. She won inside a fair contest that sponsors kept running for everyone. That is the quiet, unglamorous truth beneath the applause: someone funded the engine, and the engine reached a girl no one had ever invited.</p>
+
+  <p class="stamp">9:10 PM — the back of the room</p>
+  <p>Frantz watched from the back, where he preferred to stand. He could have pulled up the dashboard on his phone and seen all of this as numbers climbing. He didn't. For one night he let it just be people. The mother whose hands had stopped shaking. The girl who lost and stayed anyway. The empty seat that honored a father's no. The winner from the school no one had invited. Every rule he had written at two in the morning was somewhere in this room, keeping a promise, wearing a face. He had built a room, and tonight the room was full.</p>
+
+  <div class="how">
+    <h4>How the system works here</h4>
+    <ol>
+      <li><strong>Winners are decided on the platform, then celebrated.</strong> Final standing combines earned effort points, school-awarded recognition, and judges' scores — the ceremony reveals a result the system already computed fairly.</li>
+      <li><strong>Losing is real, and still safe.</strong> Students who don't advance keep their points and their dignity; the platform is built so effort counts even when the trophy doesn't come.</li>
+      <li><strong>Opportunity isn't limited to winners.</strong> Non-winning finalists can still be reached for real opportunities through proper, consented channels — a fair shot, not just a prize.</li>
+      <li><strong>Consent can always say no.</strong> A parent or guardian can decline any outside offer, and the platform records the no and stops — refusal is honored, never bypassed.</li>
+      <li><strong>Recognition is issued, not just announced.</strong> Winners receive scholarships and certificates through the platform, tied to their real record.</li>
+      <li><strong>Reaching new schools changes who wins.</strong> Because fellows and partners widen the map, the field includes students who'd otherwise never have entered — and sometimes one of them wins it all.</li>
+    </ol>
+  </div>
+
+  <div class="takeaway">
+    <h4>Frantz's Takeaway</h4>
+    <p>"A night like this is the proof. Not that everyone wins — they don't, and they shouldn't. But that everyone who tried leaves with more than they came with, no one is exposed, every no is honored, and the child no one had ever invited can walk out holding first place."</p>
+  </div>
+
+  <div class="faq">
+    <h4>Questions People Ask About the Outcome</h4>
+    <div class="q">Q. What happens to students who don't win?</div>
+    <div class="a">A. Their effort points and standing remain, and they can still be reached for real opportunities through consented channels. The platform is built so trying is never wasted.</div>
+    <div class="q">Q. How is the winner actually decided?</div>
+    <div class="a">A. By the final standing the platform computes — earned points, any school recognition, and judges' scores combined — so the ceremony reveals a fair result, not a popularity contest.</div>
+    <div class="q">Q. Can a family turn down an opportunity a student earned?</div>
+    <div class="a">A. Yes, always. A parent or guardian can decline, and the platform records it and stops. Consent that can't be refused isn't consent.</div>
+    <div class="q">Q. Do winners actually receive something concrete?</div>
+    <div class="a">A. Yes — scholarships and certificates are issued through the platform, tied to the student's real record.</div>
+    <div class="q">Q. Does bringing in new schools really change the results?</div>
+    <div class="a">A. It can change everything. The students fellows and partners reach are often the ones no competition ever found — and any of them can win.</div>
+  </div>
+</section>
+
+<!-- ============ CHAPTER 14 — URGENCY ============ -->
+<section class="chapter">
+  <div class="chap-num">Chapter Fourteen</div>
+  <h2>Why Now</h2>
+  <p class="role">The cost of one more year</p>
+
+  <p class="lead">There is a man named Andre who does not appear in the happy parts of this book, because the platform did not exist in time for him. He is thirty now. He is fine, in the way people say "fine" when they mean "surviving." He built a life after he dropped out, slowly, the hard way, without the year he lost and never got back. His mother framed a newspaper article about his little brother's relit underpass, and Andre is proud of it, genuinely — and also, on some nights, he does the math on what a room like this might have meant for a boy who was shamed off a posted list eleven years too early.</p>
+
+  <p>That is the whole argument for urgency, and it fits in one sentence: <strong>every season this does not exist for a child, is a season that child does not get back.</strong></p>
+
+  <h3 class="sceneline">— • —</h3>
+
+  <p>Marcus Bell got his year. He submitted, he was seen, he was scored fairly, he was chosen by his own school, judged by a man who rediscovered why he judges, hired by a business owner who had waited years to trust someone, and read — really read — by a sponsor who had spent a career giving into the dark. The underpass on Willis Avenue is lit. His little cousin walks home unafraid. None of it required money he did not have. All of it required a room that existed <em>in time.</em></p>
+
+  <p>The difference between Andre and Marcus was not talent. It was not effort, or family, or neighborhood. The difference was eleven years and a system that finally showed up. And here is the uncomfortable truth for anyone holding this book: somewhere right now there is another Andre — a bright kid on the wrong side of a posted list, running out of the one thing no scholarship can refund. Time. He is not waiting for a miracle. He is waiting for an adult to bring his school into the room.</p>
+
+  <p>So the urgency is not a marketing tactic. It is arithmetic done in children's years:</p>
+
+  <blockquote>Every school that waits a season leaves its brightest overlooked kids invisible for a season. Every sponsor who delays funds no one this year. Every business that hesitates hires no one this summer. And every deadline that passes is a door that quietly closes on a student who never knew it was open.</blockquote>
+
+  <p>The scholarships are limited. The season has dates. The overlooked student three neighborhoods over is real, and getting older. This is not a program that will be more valuable if you get to it eventually. It is a room whose entire worth is measured in whether a specific child walks in <em>before</em> the year they cannot get back is already gone.</p>
+
+  <div class="how">
+    <h4>The call to action — by who you are</h4>
+    <ul>
+      <li><strong>A student or family:</strong> join through your school now — it's free, it's safe, and your idea counts the day you submit it.</li>
+      <li><strong>A teacher or principal:</strong> bring your school in this season. Your best kids are already in your classrooms; this is the room that lets the world see them.</li>
+      <li><strong>A business:</strong> post the opportunity now. The trustworthy young person you've been unable to find is three blocks away, waiting to be met safely.</li>
+      <li><strong>A sponsor:</strong> fund this season and watch exactly whose life it changes — then open a real door with a job only eligible students can see.</li>
+      <li><strong>A partner or fellow:</strong> widen the map today. The next Marcus is in a school no one has invited yet.</li>
+      <li><strong>A volunteer:</strong> give your hours now. There is a young person this season who needs precisely the experience sitting idle in your hands.</li>
+    </ul>
+  </div>
+
+  <div class="takeaway">
+    <h4>Frantz's Takeaway</h4>
+    <p>"I cannot give Andre his year back. No one can. But I can make sure the next Andre never loses his — and that is only true if we move now. Urgency here is not pressure. It is mercy with a deadline."</p>
+  </div>
+
+  <div class="faq">
+    <h4>The Questions Beneath the Urgency</h4>
+    <div class="q">Q. Why can't a school just join next year?</div>
+    <div class="a">A. Because a school year is a child's year. The bright, overlooked student in that building doesn't get this one back — the cost of waiting is paid by them, not by the calendar.</div>
+    <div class="q">Q. Isn't "limited scholarships" just a sales tactic?</div>
+    <div class="a">A. No — funding and seats really are finite each season. Earlier participation means a real student is reached instead of missed.</div>
+    <div class="q">Q. What actually happens if we act now?</div>
+    <div class="a">A. A student submits and is seen, a school champions its best, a business or sponsor opens a real door — this season, not someday.</div>
+    <div class="q">Q. What's the single reason to start today?</div>
+    <div class="a">A. Because somewhere a child exactly as capable as any winner in this book is running out of time, and the only thing missing is an adult who brings the room to them now.</div>
+  </div>
+</section>
+
+<!-- ============ EPILOGUE ============ -->
+<section class="chapter">
+  <div class="chap-num">Epilogue</div>
+  <h2>The Sentence, Again</h2>
+  <p class="role">Frantz</p>
+
+  <p class="lead">Frantz still walks past the bus shelter. It is fixed now — not by him, but by a group of students two schools over who took on public infrastructure as their project last season. He did not ask them to. He built a room, and the room did what rooms are for: it put the people with the problems in front of the people who could solve them, and then it got out of the way.</p>
+
+  <p>He never wanted anyone to remember the machinery — the approvals, the consent chains, the rubrics, the dashboards. He wanted them to remember the faces. Marcus, who almost never signed up. Diane, who came ready for a fight and found a wall built exactly where she had once been left exposed. Amara, who finally got a lever. Grace, who felt like a principal again. Samuel, who got to judge fairly after thirty years. Tony, who found the kid he could trust. Priya, whose check finally landed somewhere. James, who got his stage. Nadia, who told the true story. Ben, who wasn't finished after all. Aisha, who kept widening the map. Deja, who lost and stayed anyway. And Andre, who reminds us why the clock matters.</p>
+
+  <p>Every one of them was reached by the same sentence Frantz said to himself at a broken bus shelter, years before any of this existed. He offers it now to anyone who has read this far — not as a slogan, but as an instruction, and a dare:</p>
+
+  <blockquote style="text-align:center; font-size:14pt; border:none; margin:26px 0;">Leave it better than you found it.</blockquote>
+
+  <p style="text-align:center;">Then he adds the only line he ever asks people to remember after that:</p>
+
+  <blockquote style="text-align:center; font-size:12.5pt; border:none; margin:18px 0;">"Not someday. This season. There's a child waiting on it."</blockquote>
+</section>
+
+<!-- ============ CLOSING NOTE ============ -->
+<section class="frontpage" style="break-before: page;">
+  <h2>A Note for the Sponsor Conversation</h2>
+  <p>You did not read this book to recite it. You read it to <em>carry</em> it into the room where someone decides whether to fund this. When you sit across from a sponsor, you do not need the machinery. You need three things, and this book gave you all of them:</p>
+  <p><strong>Preparation.</strong> Every chapter's "How the system works" panel and FAQ is a real answer to a real question a sponsor will ask — how the money is used, whether it buys influence over winners (it never does), how a child stays safe, what impact they get to see. Read the FAQs until the words are yours.</p>
+  <p><strong>Emotion.</strong> Do not open with tiers. Open with Marcus, or Diane at the mailbox, or Andre's lost year. A sponsor does not fund a platform; they fund a room full of children they can finally picture. Give them a face before you give them a figure.</p>
+  <p><strong>Urgency.</strong> Close with the clock. Not "please consider a sponsorship," but "every season this contest is underfunded is a season a specific child does not get back — and your tier is what keeps the whole thing running for all of them, now."</p>
+  <blockquote>Preparation lets them trust you. Emotion lets them feel it. Urgency makes them move. Tell it in that order — then turn the page and show them exactly what their sponsorship funds.</blockquote>
+</section>
+
+<!-- ============ WHAT YOUR SPONSORSHIP FUNDS ============ -->
+<section class="frontpage" style="break-before: page;">
+  <h2>What Your Sponsorship Funds</h2>
+  <p>You are not funding one student. You are funding the <strong>entire contest</strong> — the engine that reaches every student in it. You choose a tier; your contribution powers program-wide goals for the whole season.</p>
+
+  <div class="how" style="background:#f6f1e4;">
+    <h4>The sponsorship tiers</h4>
+    <ul>
+      <li><strong>Community Partner — $1,000.</strong> Powers the shared program for a neighborhood of students; public recognition as a supporter.</li>
+      <li><strong>Silver — $5,000.</strong> Deeper program support; recognition and branding on the Our Partners page.</li>
+      <li><strong>Gold — $10,000.</strong> Major program support; prominent recognition, ceremony invitations, documents.</li>
+      <li><strong>Presenting — $25,000.</strong> Presenting-level backing of the whole season; top recognition and event presence.</li>
+      <li><strong>Founding &amp; Custom.</strong> Found the movement, or set your own amount — recognized as a Founding Sponsor.</li>
+    </ul>
+  </div>
+
+  <p><strong>Every tier funds the same program-wide goals</strong>, in proportion to its size:</p>
+  <ul style="color:#3a352c; font-size:11pt;">
+    <li>Student <strong>scholarships</strong> (up to $10,000 awarded to winning students)</li>
+    <li>The <strong>school impact grant</strong> (a $25,000 grant to schools)</li>
+    <li><strong>Educator recognition</strong> — awards for the teachers the world usually forgets</li>
+    <li>The <strong>infrastructure</strong> to run a professional, safe, statewide challenge thousands of students can trust</li>
+  </ul>
+
+  <p><strong>What you receive:</strong> program-wide impact reporting (students, schools, businesses, community problems, solutions, and scholarships you helped make possible), public recognition and branding, invitations to the awards ceremony, and your sponsorship documents. Optionally, you may also post a real job or internship to eligible students — a separate door you can open on top of your funding.</p>
+
+  <blockquote style="text-align:center; border:none; font-size:12.5pt; margin:22px 0;">"Fund the engine. See the engine. Then, if you like, hand one kid a job."</blockquote>
+</section>
+
+</body>
+</html>

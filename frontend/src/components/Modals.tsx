@@ -824,7 +824,7 @@ export function AuthModal({
               {mode === 'login' && lockRemaining > 0 && (
                 <div style={{ background: 'rgba(224,138,138,0.12)', border: '1px solid rgba(224,138,138,0.4)', borderRadius: 10, padding: '12px 14px', margin: '4px 0 2px', textAlign: 'center' }}>
                   <div style={{ color: '#e59a9a', fontWeight: 700, fontSize: 13 }}>🔒 Account temporarily locked</div>
-                  <div style={{ color: '#e8c9c9', fontSize: 12.5, marginTop: 4 }}>Too many wrong passwords. Try again in</div>
+                  <div style={{ color: '#e8c9c9', fontSize: 12.5, marginTop: 4 }}>Too many wrong passwords. Time remaining</div>
                   <div style={{ color: '#fff', fontFamily: 'var(--f-serif)', fontSize: 26, fontWeight: 800, marginTop: 4, letterSpacing: '.04em' }}>
                     {String(Math.floor(lockRemaining / 60)).padStart(2, '0')}:{String(lockRemaining % 60).padStart(2, '0')}
                   </div>
