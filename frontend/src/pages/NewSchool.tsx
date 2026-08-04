@@ -2623,15 +2623,11 @@ export default function NewSchool() {
         <div className="wrap ns-hero__grid-wrap">
           <div className="ns-hero__copy reveal">
             <p className="eyebrow">Frantz Coutard Presents · 1st Annual</p>
-            <h1 className="ns-hero__headline" style={{ margin: '0 0 18px' }}>
-              <img
-                src="/assets/sic-challenge-logo.png"
-                alt="Student Impact Challenge (S.I.C) — Leave It Better Than You Found It"
-                loading="eager"
-                decoding="async"
-                style={{ display: 'block', width: '100%', maxWidth: 440, height: 'auto', background: '#fff', borderRadius: 16, padding: '16px 20px', boxSizing: 'border-box', boxShadow: '0 16px 40px -18px rgba(0,0,0,0.55)' }}
-              />
+            <h1 className="ns-hero__headline">
+              <span className="ns-hero__headline-kicker">Student</span>
+              <span className="ns-hero__headline-main gold-text">Impact Challenge</span>
             </h1>
+            <p className="ns-hero__script">Leave It Better Than You Found It.</p>
             <p className="ns-lead">
               {challenge.lead || `Students interview local businesses, solve a real community problem, and compete for over ${totalAwardsLabel} in scholarships, school grants, and recognition.`}
             </p>
