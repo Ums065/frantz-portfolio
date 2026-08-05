@@ -1741,7 +1741,7 @@ CREATE TABLE IF NOT EXISTS new_school_internal_scores (
 -- 2026-07 (b): notifications per-user targeting + judge/business roles; chat attachments; app_meta.
 CALL add_column_if_missing('new_school_notifications', 'recipient_user_id', 'INT DEFAULT NULL', 'recipient_role');
 ALTER TABLE new_school_notifications
-  MODIFY recipient_role ENUM('student','parent','school','teacher','admin','all','judge','business','fellow') NOT NULL DEFAULT 'student';
+  MODIFY recipient_role ENUM('student','parent','school','teacher','admin','all','judge','business','fellow','sponsor','partner','media','volunteer') NOT NULL DEFAULT 'student';
 CALL add_column_if_missing('business_offer_messages', 'attachment_url', 'varchar(255) DEFAULT NULL', 'body');
 CALL add_column_if_missing('new_school_chat_messages', 'attachment_url', 'varchar(255) DEFAULT NULL', 'body');
 

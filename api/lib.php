@@ -3268,7 +3268,7 @@ function new_school_workflow_ensure_schema(): void
     $addCol('new_school_submissions', 'judge_released', 'TINYINT(1) NOT NULL DEFAULT 0');
     // Notifications: per-user targeting + judge/business as addressable roles (for the unified bell).
     $addCol('new_school_notifications', 'recipient_user_id', 'INT DEFAULT NULL');
-    try { $pdo->exec("ALTER TABLE new_school_notifications MODIFY recipient_role ENUM('student','parent','school','teacher','admin','all','judge','business','fellow') NOT NULL DEFAULT 'student'"); } catch (Throwable $e) { if (app_debug()) error_log('notif role enum: ' . $e->getMessage()); }
+    try { $pdo->exec("ALTER TABLE new_school_notifications MODIFY recipient_role ENUM('student','parent','school','teacher','admin','all','judge','business','fellow','sponsor','partner','media','volunteer') NOT NULL DEFAULT 'student'"); } catch (Throwable $e) { if (app_debug()) error_log('notif role enum: ' . $e->getMessage()); }
     // Some deploys (db/update.sql) created this table as latin1, so any title/
     // message containing an emoji or a non-Latin name throws on INSERT and 500s
     // the core action (chat send, offer create). Convert to utf8mb4 — but only
