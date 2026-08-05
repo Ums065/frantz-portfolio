@@ -894,43 +894,80 @@
 
 /* ---- Live countdown ---- */
 .feat-event__countdown {
-  display: flex;
-  gap: 8px;
-  margin: 2px 0;
-}
-.feat-event__cd-unit {
-  display: flex;
-  flex-direction: column;
+  display: inline-flex;
   align-items: center;
-  min-width: 46px;
-  padding: 6px 4px;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.04);
+  gap: 12px;
+  margin: 2px 0;
+  padding: 8px 14px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--fe-accent, #d4af37) 9%, transparent);
   border: 1px solid color-mix(in srgb, var(--fe-accent, #d4af37) 22%, transparent);
 }
+.feat-event__cd-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--fe-accent, #d4af37);
+}
+.feat-event__cd-units {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.feat-event__cd-unit {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 30px;
+}
 .feat-event__cd-unit b {
-  font-size: 20px;
+  font-size: 26px;
   font-weight: 800;
   color: #fff;
   line-height: 1;
   font-variant-numeric: tabular-nums;
 }
 .feat-event__cd-unit span {
-  font-size: 10px;
-  letter-spacing: 0.1em;
+  font-size: 9px;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--muted, #a9a396);
-  margin-top: 4px;
+  margin-top: 5px;
+}
+.feat-event__cd-sep {
+  position: absolute;
+  top: -1px;
+  right: -8px;
+  font-size: 22px;
+  font-weight: 700;
+  font-style: normal;
+  line-height: 1;
+  color: color-mix(in srgb, var(--fe-accent, #d4af37) 55%, transparent);
 }
 .feat-event__countdown--live {
   color: #6be29a;
   font-weight: 700;
-  font-size: 15px;
-  display: flex;
-  align-items: center;
+  font-size: 14px;
+  letter-spacing: 0.04em;
+  gap: 8px;
+  background: rgba(63, 191, 127, 0.12);
+  border-color: rgba(63, 191, 127, 0.35);
+}
+.feat-event__cd-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #6be29a;
+  box-shadow: 0 0 0 0 rgba(107, 226, 154, 0.6);
   animation: featLivePulse 1.6s ease-in-out infinite;
 }
-@keyframes featLivePulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+@keyframes featLivePulse {
+  0%   { box-shadow: 0 0 0 0 rgba(107, 226, 154, 0.6); }
+  70%  { box-shadow: 0 0 0 8px rgba(107, 226, 154, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(107, 226, 154, 0); }
+}
 
 /* ---- RSVP "going" pill ---- */
 .feat-event__going { color: #f0ead6; font-weight: 600; }

@@ -98,13 +98,20 @@ function track(id: number, type: 'view' | 'click') {
 
 function CountdownRow({ ev }: { ev: EventItem }) {
   const c = useCountdown(useMemo(() => eventDateTime(ev), [ev.id, ev.event_date, ev.event_time]))
-  if (c.done) return <div className="feat-event__countdown feat-event__countdown--live">● Happening now</div>
-  const units: [number, string][] = [[c.days, 'days'], [c.hours, 'hrs'], [c.mins, 'min'], [c.secs, 'sec']]
+  if (c.done) return <div className="feat-event__countdown feat-event__countdown--live"><span className="feat-event__cd-dot" />Happening now</div>
+  const units: [number, string][] = [[c.days, 'Days'], [c.hours, 'Hrs'], [c.mins, 'Min'], [c.secs, 'Sec']]
   return (
     <div className="feat-event__countdown" role="timer" aria-label="Time until event">
-      {units.map(([v, l]) => (
-        <span className="feat-event__cd-unit" key={l}><b>{String(v).padStart(2, '0')}</b><span>{l}</span></span>
-      ))}
+      <span className="feat-event__cd-label">Starts in</span>
+      <div className="feat-event__cd-units">
+        {units.map(([v, l], i) => (
+          <span className="feat-event__cd-unit" key={l}>
+            <b>{String(v).padStart(2, '0')}</b>
+            <span>{l}</span>
+            {i < units.length - 1 && <i className="feat-event__cd-sep" aria-hidden="true">:</i>}
+          </span>
+        ))}
+      </div>
     </div>
   )
 }
