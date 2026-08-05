@@ -189,6 +189,16 @@ export interface EventItem {
   description?: string | null
   is_featured?: number
   badge_label?: string | null
+  event_time?: string | null
+  end_date?: string | null
+  cta_label?: string | null
+  cta_url?: string | null
+  publish_at?: string | null
+  video_url?: string | null
+  gallery_images?: string | string[] | null
+  accent?: string | null
+  view_count?: number
+  click_count?: number
   rsvp_count?: number
 }
 

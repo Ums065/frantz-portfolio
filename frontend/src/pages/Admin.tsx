@@ -2144,23 +2144,51 @@ function AwardsAdmin() {
 const fldSelectS: React.CSSProperties = { width: '100%', background: 'rgba(0,0,0,0.45)', border: '1px solid var(--line)', borderRadius: 9, padding: '13px 15px', color: '#fff', fontFamily: 'inherit', fontSize: 14, outline: 'none' }
 
 /* ---------------- Events management (CRUD) ---------------- */
-const emptyEvent: EventItem = { id: 0, title: '', location: '', role: '', event_date: '', is_past: 0, image_url: '', description: '', is_featured: 0, badge_label: '' }
+const emptyEvent: EventItem = {
+  id: 0, title: '', location: '', role: '', event_date: '', is_past: 0, image_url: '', description: '',
+  is_featured: 0, badge_label: '', event_time: '', end_date: '', cta_label: '', cta_url: '',
+  publish_at: '', video_url: '', gallery_images: [], accent: 'gold',
+}
+
+// Parse the API's gallery_images (JSON string) into a real array for editing.
+const galleryToArray = (g: EventItem['gallery_images']): string[] => {
+  if (Array.isArray(g)) return g
+  if (typeof g === 'string' && g.trim()) { try { const a = JSON.parse(g); return Array.isArray(a) ? a : [] } catch { return [] } }
+  return []
+}
+const ACCENTS = [
+  { key: 'gold', label: 'Gold' }, { key: 'blue', label: 'Blue' },
+  { key: 'green', label: 'Green' }, { key: 'purple', label: 'Purple' },
+]
 
 function EventsAdmin() {
   const [rows, setRows] = useState<EventItem[]>([])
   const [editing, setEditing] = useState<EventItem | null>(null)
   const [busy, setBusy] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [galleryUploading, setGalleryUploading] = useState(false)
   const [error, setError] = useState('')
 
   const load = () => api.get<{ events: EventItem[] }>('admin/events').then((d) => setRows(d.events)).catch(() => {})
   useEffect(() => { load() }, [])
   const set = (patch: Partial<EventItem>) => setEditing((e) => (e ? { ...e, ...patch } : e))
+  // Normalize gallery_images to an array whenever we open an event for editing.
+  const openEditor = (ev: EventItem) => setEditing({ ...emptyEvent, ...ev, gallery_images: galleryToArray(ev.gallery_images), accent: ev.accent || 'gold' })
   const onUpload = async (file: File) => {
     setUploading(true); setError('')
     try { const d = await api.upload<{ url: string }>('admin/upload', file); set({ image_url: d.url }) }
     catch (err) { setError(err instanceof Error ? err.message : 'Upload failed.') } finally { setUploading(false) }
   }
+  const onGalleryUpload = async (files: FileList) => {
+    setGalleryUploading(true); setError('')
+    try {
+      const urls: string[] = []
+      for (const f of Array.from(files)) { const d = await api.upload<{ url: string }>('admin/upload', f); urls.push(d.url) }
+      setEditing((e) => (e ? { ...e, gallery_images: [...galleryToArray(e.gallery_images), ...urls] } : e))
+    } catch (err) { setError(err instanceof Error ? err.message : 'Upload failed.') } finally { setGalleryUploading(false) }
+  }
+  const removeGalleryImage = (url: string) =>
+    setEditing((e) => (e ? { ...e, gallery_images: galleryToArray(e.gallery_images).filter((u) => u !== url) } : e))
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault(); if (!editing) return
@@ -2179,7 +2207,7 @@ function EventsAdmin() {
         <p style={{ color: 'var(--muted)', fontSize: 13 }}>{rows.length} events · shown on the Events page &amp; home</p>
         <button className="btn btn--sm btn--solid" onClick={() => setEditing({ ...emptyEvent })}>+ Add Event</button>
       </div>
-      <Table stack head={['', 'Title', 'Location', 'Date', 'Featured', 'Past', 'Actions']}>
+      <Table stack head={['', 'Title', 'Location', 'Date', 'Featured', 'Views', 'Clicks', 'Past', 'Actions']}>
         {rows.map((ev) => (
           <tr key={ev.id} style={rowS}>
             <td style={tdS}>{ev.image_url ? <img src={ev.image_url} alt={ev.title ? `${ev.title} image` : 'Event image'} style={{ width: 52, height: 32, objectFit: 'cover', borderRadius: 4 }} /> : '—'}</td>
@@ -2187,9 +2215,11 @@ function EventsAdmin() {
             <td style={tdS} data-label="Location">{ev.location || '—'}</td>
             <td style={tdS} data-label="Date">{ev.event_date}</td>
             <td style={tdS} data-label="Featured">{ev.is_featured ? '⭐' : '—'}</td>
+            <td style={tdS} data-label="Views">{ev.view_count ?? 0}</td>
+            <td style={tdS} data-label="Clicks">{ev.click_count ?? 0}</td>
             <td style={tdS} data-label="Past">{ev.is_past ? 'Yes' : '—'}</td>
             <td style={tdS}><div style={{ display: 'flex', gap: 6 }}>
-              <button className="btn btn--sm" onClick={() => setEditing(ev)}>Edit</button>
+              <button className="btn btn--sm" onClick={() => openEditor(ev)}>Edit</button>
               <button className="btn btn--sm" onClick={() => remove(ev.id)} style={{ borderColor: '#7a3b3b', color: '#e08a8a' }}>Delete</button>
             </div></td>
           </tr>
@@ -2198,7 +2228,7 @@ function EventsAdmin() {
 
       {editing && (
         <div className="modal-overlay open" onClick={(e) => e.target === e.currentTarget && setEditing(null)}>
-          <form className="modal" style={{ maxWidth: 480, maxHeight: '90vh', overflowY: 'auto' }} onSubmit={save}>
+          <form className="modal" style={{ maxWidth: 560, maxHeight: '90vh', overflowY: 'auto' }} onSubmit={save}>
             <button type="button" className="close" onClick={() => setEditing(null)} aria-label="Close"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth={2}><path d="M6 6l12 12M18 6L6 18" /></svg></button>
             <h3 className="gold-text">{editing.id ? 'Edit Event' : 'New Event'}</h3>
             <div className="field"><label>Title</label>
@@ -2209,8 +2239,14 @@ function EventsAdmin() {
               <div className="field" style={{ flex: 1 }}><label>Role</label>
                 <input type="text" value={editing.role} onChange={(e) => set({ role: e.target.value })} placeholder="Keynote Speaker" /></div>
             </div>
-            <div className="field"><label>Date</label>
-              <input type="date" required value={editing.event_date} onChange={(e) => set({ event_date: e.target.value })} /></div>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <div className="field" style={{ flex: 1 }}><label>Date</label>
+                <input type="date" required value={editing.event_date} onChange={(e) => set({ event_date: e.target.value })} /></div>
+              <div className="field" style={{ flex: 1 }}><label>End date <span style={{ color: 'var(--muted)', fontWeight: 400 }}>(optional)</span></label>
+                <input type="date" value={editing.end_date || ''} onChange={(e) => set({ end_date: e.target.value })} /></div>
+            </div>
+            <div className="field"><label>Time <span style={{ color: 'var(--muted)', fontWeight: 400 }}>(optional — e.g. “6:00 PM”)</span></label>
+              <input type="text" maxLength={40} value={editing.event_time || ''} onChange={(e) => set({ event_time: e.target.value })} placeholder="6:00 PM" /></div>
             <div className="field"><label>Description <span style={{ color: 'var(--muted)', fontWeight: 400 }}>(optional — shown on the home banner)</span></label>
               <textarea rows={3} value={editing.description || ''} onChange={(e) => set({ description: e.target.value })} placeholder="A short line about the event that appears on the home page." /></div>
             <div className="field"><label>Event image <span style={{ color: 'var(--muted)', fontWeight: 400 }}>(optional)</span></label>
@@ -2228,8 +2264,39 @@ function EventsAdmin() {
               ⭐ Feature on the home page (highlighted banner above the Student Impact Challenge)
             </label>
             {!!editing.is_featured && (
-              <div className="field"><label>Banner label <span style={{ color: 'var(--muted)', fontWeight: 400 }}>(optional — defaults to “Featured Event”)</span></label>
-                <input type="text" maxLength={60} value={editing.badge_label || ''} onChange={(e) => set({ badge_label: e.target.value })} placeholder="Featured Event" /></div>
+              <div style={{ border: '1px solid rgba(212,175,55,0.28)', borderRadius: 10, padding: '14px 14px 4px', margin: '4px 0 14px', background: 'rgba(212,175,55,0.05)' }}>
+                <p style={{ fontSize: 12, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--gold, #d4af37)', margin: '0 0 12px' }}>Home banner options</p>
+                <div className="field"><label>Banner label <span style={{ color: 'var(--muted)', fontWeight: 400 }}>(defaults to “Featured Event”)</span></label>
+                  <input type="text" maxLength={60} value={editing.badge_label || ''} onChange={(e) => set({ badge_label: e.target.value })} placeholder="Featured Event" /></div>
+                <div className="field"><label>Accent colour</label>
+                  <select value={editing.accent || 'gold'} onChange={(e) => set({ accent: e.target.value })}>
+                    {ACCENTS.map((a) => <option key={a.key} value={a.key}>{a.label}</option>)}
+                  </select></div>
+                <div style={{ display: 'flex', gap: 12 }}>
+                  <div className="field" style={{ flex: 1 }}><label>Button text</label>
+                    <input type="text" maxLength={60} value={editing.cta_label || ''} onChange={(e) => set({ cta_label: e.target.value })} placeholder="RSVP / View Details" /></div>
+                  <div className="field" style={{ flex: 1 }}><label>Button link</label>
+                    <input type="text" value={editing.cta_url || ''} onChange={(e) => set({ cta_url: e.target.value })} placeholder="/events" /></div>
+                </div>
+                <div className="field"><label>Publish on home from <span style={{ color: 'var(--muted)', fontWeight: 400 }}>(optional — schedule; blank = now)</span></label>
+                  <input type="date" value={editing.publish_at || ''} onChange={(e) => set({ publish_at: e.target.value })} /></div>
+                <div className="field"><label>Video URL <span style={{ color: 'var(--muted)', fontWeight: 400 }}>(optional — YouTube/Vimeo; shows instead of image)</span></label>
+                  <input type="text" value={editing.video_url || ''} onChange={(e) => set({ video_url: e.target.value })} placeholder="https://youtu.be/…" /></div>
+                <div className="field"><label>Extra images <span style={{ color: 'var(--muted)', fontWeight: 400 }}>(optional — slideshow on the banner)</span></label>
+                  {galleryToArray(editing.gallery_images).length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+                      {galleryToArray(editing.gallery_images).map((u) => (
+                        <div key={u} style={{ position: 'relative' }}>
+                          <img src={u} alt="Extra" style={{ width: 72, height: 46, objectFit: 'cover', borderRadius: 6, border: '1px solid rgba(212,175,55,0.35)' }} />
+                          <button type="button" onClick={() => removeGalleryImage(u)} aria-label="Remove image" style={{ position: 'absolute', top: -6, right: -6, width: 20, height: 20, borderRadius: '50%', border: 'none', background: '#7a3b3b', color: '#fff', cursor: 'pointer', lineHeight: '18px', fontSize: 12 }}>×</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <input type="file" accept="image/*" multiple disabled={galleryUploading} onChange={(e) => { if (e.target.files?.length) void onGalleryUpload(e.target.files); e.target.value = '' }} />
+                  {galleryUploading && <p className="msub" style={{ color: 'var(--muted)' }}>Uploading…</p>}
+                </div>
+              </div>
             )}
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#d8d3c6', margin: '4px 0 16px' }}>
               <input type="checkbox" checked={!!editing.is_past} onChange={(e) => set({ is_past: e.target.checked ? 1 : 0 })} />

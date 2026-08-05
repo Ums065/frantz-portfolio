@@ -105,6 +105,16 @@ CREATE TABLE IF NOT EXISTS events (
   description TEXT DEFAULT NULL,                   -- shown on the home featured banner
   is_featured TINYINT(1) NOT NULL DEFAULT 0,       -- spotlight on the home page above the Challenge
   badge_label VARCHAR(60) DEFAULT NULL,            -- home banner badge text (defaults to "Featured Event")
+  event_time  VARCHAR(40) DEFAULT NULL,            -- e.g. "6:00 PM"
+  end_date    DATE DEFAULT NULL,                   -- multi-day events
+  cta_label   VARCHAR(60) DEFAULT NULL,            -- banner button text
+  cta_url     VARCHAR(255) DEFAULT NULL,           -- banner button link
+  publish_at  DATE DEFAULT NULL,                   -- show on home from this date (schedule)
+  video_url   VARCHAR(255) DEFAULT NULL,           -- YouTube/Vimeo or file url
+  gallery_images TEXT DEFAULT NULL,                -- JSON array of extra image urls
+  accent      VARCHAR(16) DEFAULT NULL,            -- banner theme: gold|blue|green|purple
+  view_count  INT NOT NULL DEFAULT 0,              -- analytics: banner impressions
+  click_count INT NOT NULL DEFAULT 0,              -- analytics: CTA clicks
   created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 

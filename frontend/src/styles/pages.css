@@ -722,3 +722,163 @@
     padding: 18px;
   }
 }
+
+/* ---- Accent theming: the card carries --fe-accent / --fe-accent-soft inline
+        (gold | blue | green | purple). These override the gold defaults. ---- */
+.feat-event__card {
+  --fe-accent: #d4af37;
+  --fe-accent-soft: rgba(212, 175, 55, 0.22);
+  border-color: color-mix(in srgb, var(--fe-accent) 50%, transparent);
+}
+.feat-event__card:hover {
+  border-color: color-mix(in srgb, var(--fe-accent) 85%, transparent);
+}
+.feat-event__card::before {
+  background: linear-gradient(90deg, transparent, var(--fe-accent), #fff2c4, var(--fe-accent), transparent);
+  background-size: 200% 100%;
+}
+.feat-event__glow {
+  background: radial-gradient(ellipse at center, var(--fe-accent-soft), transparent 70%);
+}
+.feat-event__date-chip { border-color: color-mix(in srgb, var(--fe-accent) 55%, transparent); }
+.feat-event__date-chip .m { color: var(--fe-accent); }
+.feat-event__badge {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--fe-accent) 55%, #fff), var(--fe-accent));
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--fe-accent) 40%, transparent);
+}
+.feat-event__meta-item svg { color: var(--fe-accent); }
+
+/* ---- Carousel shell (multiple featured events) ---- */
+.feat-event__carousel { position: relative; }
+.feat-event__nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 5;
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--fe-accent, #d4af37) 45%, transparent);
+  background: rgba(12, 11, 8, 0.72);
+  backdrop-filter: blur(6px);
+  color: #f4e6b8;
+  cursor: pointer;
+  transition: background .25s ease, transform .25s ease, border-color .25s ease;
+}
+.feat-event__nav:hover { background: rgba(20, 18, 12, 0.95); transform: translateY(-50%) scale(1.08); }
+.feat-event__nav--prev { left: -14px; }
+.feat-event__nav--next { right: -14px; }
+.feat-event__dots {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 16px;
+}
+.feat-event__dots button {
+  width: 9px;
+  height: 9px;
+  padding: 0;
+  border-radius: 50%;
+  border: none;
+  background: rgba(212, 175, 55, 0.3);
+  cursor: pointer;
+  transition: background .25s ease, transform .25s ease;
+}
+.feat-event__dots button.on { background: var(--gold, #d4af37); transform: scale(1.25); }
+
+/* ---- Image slideshow dots (within one event) ---- */
+.feat-event__img-dots {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+  z-index: 3;
+}
+.feat-event__img-dots button {
+  width: 8px; height: 8px; padding: 0; border-radius: 50%; border: none;
+  background: rgba(255, 255, 255, 0.45); cursor: pointer;
+}
+.feat-event__img-dots button.on { background: #fff; }
+
+/* ---- Video media ---- */
+.feat-event__media--video { aspect-ratio: 16 / 9; }
+.feat-event__media--video iframe,
+.feat-event__media--video video {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+  object-fit: cover;
+}
+
+/* ---- Live countdown ---- */
+.feat-event__countdown {
+  display: flex;
+  gap: 8px;
+  margin: 2px 0;
+}
+.feat-event__cd-unit {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 46px;
+  padding: 6px 4px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid color-mix(in srgb, var(--fe-accent, #d4af37) 22%, transparent);
+}
+.feat-event__cd-unit b {
+  font-size: 20px;
+  font-weight: 800;
+  color: #fff;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.feat-event__cd-unit span {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted, #a9a396);
+  margin-top: 4px;
+}
+.feat-event__countdown--live {
+  color: #6be29a;
+  font-weight: 700;
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  animation: featLivePulse 1.6s ease-in-out infinite;
+}
+@keyframes featLivePulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+/* ---- RSVP "going" pill ---- */
+.feat-event__going { color: #f0ead6; font-weight: 600; }
+
+/* ---- Actions row (CTA + Add to Calendar) ---- */
+.feat-event__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-top: 4px;
+}
+.feat-event__ical {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .feat-event__countdown--live { animation: none; }
+}
+
+@media (max-width: 760px) {
+  .feat-event__nav--prev { left: 4px; }
+  .feat-event__nav--next { right: 4px; }
+  .feat-event__nav { width: 36px; height: 36px; }
+  .feat-event__cd-unit { min-width: 40px; }
+}

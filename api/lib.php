@@ -131,7 +131,7 @@ function ensure_session_version_column(): void
  * request after a deploy, db_auto_migrate() notices the stored version is behind
  * and runs every *_ensure_schema() once; afterwards it's a single cheap SELECT.
  */
-const APP_SCHEMA_VERSION = 20260806; // yyyymmdd + seq — raise on each schema change
+const APP_SCHEMA_VERSION = 20260807; // yyyymmdd + seq — raise on each schema change
 
 /**
  * One-shot, version-gated auto-migration. Runs on app bootstrap: if the DB's
@@ -5765,6 +5765,16 @@ function events_ensure_schema(): void
         $addCol('description', "TEXT DEFAULT NULL");
         $addCol('is_featured', "TINYINT(1) NOT NULL DEFAULT 0");
         $addCol('badge_label', "VARCHAR(60) DEFAULT NULL");
+        $addCol('event_time', "VARCHAR(40) DEFAULT NULL");        // e.g. "6:00 PM"
+        $addCol('end_date', "DATE DEFAULT NULL");                 // multi-day events
+        $addCol('cta_label', "VARCHAR(60) DEFAULT NULL");         // banner button text
+        $addCol('cta_url', "VARCHAR(255) DEFAULT NULL");          // banner button link
+        $addCol('publish_at', "DATE DEFAULT NULL");               // show on home from this date (schedule)
+        $addCol('video_url', "VARCHAR(255) DEFAULT NULL");        // YouTube/Vimeo or file url
+        $addCol('gallery_images', "TEXT DEFAULT NULL");           // JSON array of extra image urls
+        $addCol('accent', "VARCHAR(16) DEFAULT NULL");            // banner theme: gold|blue|green|purple
+        $addCol('view_count', "INT NOT NULL DEFAULT 0");          // analytics: banner impressions
+        $addCol('click_count', "INT NOT NULL DEFAULT 0");         // analytics: CTA clicks
         // Some deploys (db/update.sql) created `events` as latin1, so a title or
         // description with a curly quote/emoji would throw on INSERT and 500 the
         // save. Convert to utf8mb4 — but only when it isn't already, so we don't
@@ -5781,6 +5791,22 @@ function events_ensure_schema(): void
         if (app_debug()) error_log('events_ensure_schema: ' . $e->getMessage());
     }
     $ready = true;
+}
+
+/** Announce a freshly-featured event to every signed-in user via the unified
+ *  notification bell (recipient_role 'all'). Best-effort — never breaks the save. */
+function events_notify_featured(int $eventId, string $title): void
+{
+    try {
+        new_school_add_notification(
+            null, 'all', 'event_featured',
+            'New event: ' . $title,
+            'A new event has been announced. Tap to see the details and RSVP.',
+            ['event_id' => $eventId]
+        );
+    } catch (Throwable $e) {
+        if (app_debug()) error_log('events_notify_featured: ' . $e->getMessage());
+    }
 }
 
 /** Attribute a newly-registered user to a referrer's code (partner referral).
@@ -7296,6 +7322,7 @@ function notifications_link_for(string $type, string $role): string
     $isNs = in_array($role, ['student', 'parent', 'teacher', 'school'], true);
     $isEco = in_array($role, ['sponsor', 'partner', 'media', 'volunteer'], true);
 
+    if ($type === 'event_featured') return '/events';
     if ($type === 'chat') {
         if ($isNs) return $base . '?tab=chat';
         if ($role === 'business' || $isEco) return $base . '#messages';

@@ -411,6 +411,16 @@ CREATE TABLE IF NOT EXISTS `events` (
   `description` text DEFAULT NULL,
   `is_featured` tinyint(1) NOT NULL DEFAULT '0',
   `badge_label` varchar(60) DEFAULT NULL,
+  `event_time` varchar(40) DEFAULT NULL,
+  `end_date` date DEFAULT NULL,
+  `cta_label` varchar(60) DEFAULT NULL,
+  `cta_url` varchar(255) DEFAULT NULL,
+  `publish_at` date DEFAULT NULL,
+  `video_url` varchar(255) DEFAULT NULL,
+  `gallery_images` text DEFAULT NULL,
+  `accent` varchar(16) DEFAULT NULL,
+  `view_count` int NOT NULL DEFAULT '0',
+  `click_count` int NOT NULL DEFAULT '0',
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
@@ -424,7 +434,17 @@ CALL add_column_if_missing('events', 'image_url', 'varchar(255) DEFAULT NULL', '
 CALL add_column_if_missing('events', 'description', 'text DEFAULT NULL', 'image_url');
 CALL add_column_if_missing('events', 'is_featured', 'tinyint(1) NOT NULL DEFAULT ''0''', 'description');
 CALL add_column_if_missing('events', 'badge_label', 'varchar(60) DEFAULT NULL', 'is_featured');
-CALL add_column_if_missing('events', 'created_at', 'timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP', 'badge_label');
+CALL add_column_if_missing('events', 'event_time', 'varchar(40) DEFAULT NULL', 'badge_label');
+CALL add_column_if_missing('events', 'end_date', 'date DEFAULT NULL', 'event_time');
+CALL add_column_if_missing('events', 'cta_label', 'varchar(60) DEFAULT NULL', 'end_date');
+CALL add_column_if_missing('events', 'cta_url', 'varchar(255) DEFAULT NULL', 'cta_label');
+CALL add_column_if_missing('events', 'publish_at', 'date DEFAULT NULL', 'cta_url');
+CALL add_column_if_missing('events', 'video_url', 'varchar(255) DEFAULT NULL', 'publish_at');
+CALL add_column_if_missing('events', 'gallery_images', 'text DEFAULT NULL', 'video_url');
+CALL add_column_if_missing('events', 'accent', 'varchar(16) DEFAULT NULL', 'gallery_images');
+CALL add_column_if_missing('events', 'view_count', 'int NOT NULL DEFAULT ''0''', 'accent');
+CALL add_column_if_missing('events', 'click_count', 'int NOT NULL DEFAULT ''0''', 'view_count');
+CALL add_column_if_missing('events', 'created_at', 'timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP', 'click_count');
 
 -- ---------- gallery_submission_files ----------
 CREATE TABLE IF NOT EXISTS `gallery_submission_files` (
