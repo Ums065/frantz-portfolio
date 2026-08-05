@@ -116,7 +116,8 @@ function Media({ ev }: { ev: EventItem }) {
     [ev.id, ev.image_url, ev.gallery_images],
   )
   const [idx, setIdx] = useState(0)
-  useEffect(() => { setIdx(0) }, [ev.id])
+  const [lightbox, setLightbox] = useState<string | null>(null)
+  useEffect(() => { setIdx(0); setLightbox(null) }, [ev.id])
   useEffect(() => {
     if (embed || ev.video_url || images.length < 2) return
     const t = window.setInterval(() => setIdx((i) => (i + 1) % images.length), 4000)
@@ -140,7 +141,12 @@ function Media({ ev }: { ev: EventItem }) {
   if (images.length === 0) return null
   return (
     <div className="feat-event__media">
-      <img src={images[idx]} alt={ev.title} loading="lazy" decoding="async" />
+      <button type="button" className="feat-event__img-btn" onClick={() => setLightbox(images[idx])} aria-label="View full image" title="Click to view full image">
+        <img src={images[idx]} alt={ev.title} loading="lazy" decoding="async" />
+        <span className="feat-event__zoom" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth={2}><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3M11 8v6M8 11h6" /></svg>
+        </span>
+      </button>
       <span className="feat-event__date-chip" aria-hidden="true">
         <span className="m">{monthAbbr(ev.event_date)}</span>
         <span className="d">{dayNum(ev.event_date)}</span>
@@ -152,6 +158,36 @@ function Media({ ev }: { ev: EventItem }) {
           ))}
         </div>
       )}
+      {lightbox && <ImageLightbox src={lightbox} title={ev.title} onClose={() => setLightbox(null)} />}
+    </div>
+  )
+}
+
+/** Full-screen image viewer with a download button. Closes on backdrop click or Esc. */
+function ImageLightbox({ src, title, onClose }: { src: string; title: string; onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { window.removeEventListener('keydown', onKey); document.body.style.overflow = prev }
+  }, [onClose])
+  const filename = (src.split('/').pop() || 'event-image').split('?')[0]
+  return (
+    <div className="feat-lightbox" onClick={(e) => { if (e.target === e.currentTarget) onClose() }} role="dialog" aria-modal="true" aria-label={`${title} image`}>
+      <div className="feat-lightbox__inner">
+        <img src={src} alt={title} />
+        <div className="feat-lightbox__bar">
+          <a className="btn btn--solid" href={src} download={filename}>
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth={1.8} style={{ marginRight: 6, verticalAlign: '-3px' }}><path d="M12 3v12M7 10l5 5 5-5M5 21h14" /></svg>
+            Download
+          </a>
+          <button type="button" className="btn" onClick={onClose}>Close</button>
+        </div>
+      </div>
+      <button type="button" className="feat-lightbox__x" onClick={onClose} aria-label="Close">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth={2}><path d="M6 6l12 12M18 6L6 18" /></svg>
+      </button>
     </div>
   )
 }
