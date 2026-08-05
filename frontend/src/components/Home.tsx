@@ -255,7 +255,7 @@ const homeChallengeTabs: HomeChallengeTab[] = [
     detail: 'The challenge rewards effort, leadership, and real-world impact with scholarships, school grants, and public recognition.',
     points: ['Student scholarships up to $10,000', 'School impact grant up to $25,000', 'Educator award and public recognition', 'Winner announcements and leaderboard visibility'],
     stats: [
-      { label: 'Scholarship Pool', value: '$35K+' },
+      { label: 'Prize Pool', value: '$100K+' },
       { label: 'Student Max', value: '$10K' },
       { label: 'School Grant', value: '$25K' },
       { label: 'Results', value: 'Live ranking' },

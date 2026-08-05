@@ -1389,7 +1389,7 @@ export default function NewSchool() {
     title: isDashboardRoute ? 'New School Dashboard' : '1st Annual Student Impact Challenge',
     description: isDashboardRoute
       ? 'Private role dashboard for approved students, parents, schools, teachers, and admins.'
-      : 'Leave It Better Than You Found It. Students interview local businesses, identify a community problem, build a solution, and compete for over $35,000 in scholarships, school grants, and recognition.',
+      : 'Leave It Better Than You Found It. Students interview local businesses, identify a community problem, build a solution, and compete for over $100,000 in cash, scholarships, school grants, and prizes.',
     noindex: isDashboardRoute,
   })
 
@@ -2104,11 +2104,11 @@ export default function NewSchool() {
   const educatorAwardLabel = String(challenge.educator_award_label || 'All-Inclusive Educator Vacation Award')
   const ageRange = String(challenge.age_range || '11-19')
   const gradeRange = String(challenge.grade_range || '6-12')
-  const totalAwardsLabel = `${formatMoney(grantAmount + scholarshipMax)}+`
+  const totalAwardsLabel = String(challenge.total_awards_label || '$100,000')
   const awardHighlights = [
-    { amount: formatMoney(grantAmount), label: 'School Impact Grant', detail: 'Fueling student-led solutions and lasting community impact.' },
-    { amount: `Up to ${formatMoney(scholarshipMax)}`, label: 'Student Scholarships', detail: 'Investing in the next generation of leaders.' },
-    { amount: educatorAwardLabel, label: 'Educator Award', detail: 'An all-inclusive vacation award for an outstanding educator.' },
+    { amount: formatMoney(grantAmount), label: 'School Impact Grant', detail: '1st $15,000 · 2nd $7,500 · 3rd $2,500 — plus additional prizes.' },
+    { amount: `Up to ${formatMoney(scholarshipMax)}`, label: 'Student Scholarships', detail: '1st $5,000 · 2nd $3,000 · 3rd $2,000 — plus additional prizes.' },
+    { amount: educatorAwardLabel, label: 'Educator Award', detail: '1st place: an all-expense vacation for two — plus additional prizes.' },
   ]
   const timelineMilestones = (Array.isArray(challenge.timeline) && challenge.timeline.length)
     ? (challenge.timeline as Array<{ phase: string; when: string; highlight?: boolean }>)
