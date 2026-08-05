@@ -2144,17 +2144,23 @@ function AwardsAdmin() {
 const fldSelectS: React.CSSProperties = { width: '100%', background: 'rgba(0,0,0,0.45)', border: '1px solid var(--line)', borderRadius: 9, padding: '13px 15px', color: '#fff', fontFamily: 'inherit', fontSize: 14, outline: 'none' }
 
 /* ---------------- Events management (CRUD) ---------------- */
-const emptyEvent: EventItem = { id: 0, title: '', location: '', role: '', event_date: '', is_past: 0 }
+const emptyEvent: EventItem = { id: 0, title: '', location: '', role: '', event_date: '', is_past: 0, image_url: '', description: '', is_featured: 0 }
 
 function EventsAdmin() {
   const [rows, setRows] = useState<EventItem[]>([])
   const [editing, setEditing] = useState<EventItem | null>(null)
   const [busy, setBusy] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
 
   const load = () => api.get<{ events: EventItem[] }>('admin/events').then((d) => setRows(d.events)).catch(() => {})
   useEffect(() => { load() }, [])
   const set = (patch: Partial<EventItem>) => setEditing((e) => (e ? { ...e, ...patch } : e))
+  const onUpload = async (file: File) => {
+    setUploading(true); setError('')
+    try { const d = await api.upload<{ url: string }>('admin/upload', file); set({ image_url: d.url }) }
+    catch (err) { setError(err instanceof Error ? err.message : 'Upload failed.') } finally { setUploading(false) }
+  }
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault(); if (!editing) return
@@ -2173,13 +2179,14 @@ function EventsAdmin() {
         <p style={{ color: 'var(--muted)', fontSize: 13 }}>{rows.length} events · shown on the Events page &amp; home</p>
         <button className="btn btn--sm btn--solid" onClick={() => setEditing({ ...emptyEvent })}>+ Add Event</button>
       </div>
-      <Table stack head={['Title', 'Location', 'Role', 'Date', 'Past', 'Actions']}>
+      <Table stack head={['', 'Title', 'Location', 'Date', 'Featured', 'Past', 'Actions']}>
         {rows.map((ev) => (
           <tr key={ev.id} style={rowS}>
+            <td style={tdS}>{ev.image_url ? <img src={ev.image_url} alt={ev.title ? `${ev.title} image` : 'Event image'} style={{ width: 52, height: 32, objectFit: 'cover', borderRadius: 4 }} /> : '—'}</td>
             <td style={tdS} data-label="Title">{ev.title}</td>
             <td style={tdS} data-label="Location">{ev.location || '—'}</td>
-            <td style={tdS} data-label="Role">{ev.role || '—'}</td>
             <td style={tdS} data-label="Date">{ev.event_date}</td>
+            <td style={tdS} data-label="Featured">{ev.is_featured ? '⭐' : '—'}</td>
             <td style={tdS} data-label="Past">{ev.is_past ? 'Yes' : '—'}</td>
             <td style={tdS}><div style={{ display: 'flex', gap: 6 }}>
               <button className="btn btn--sm" onClick={() => setEditing(ev)}>Edit</button>
@@ -2191,7 +2198,7 @@ function EventsAdmin() {
 
       {editing && (
         <div className="modal-overlay open" onClick={(e) => e.target === e.currentTarget && setEditing(null)}>
-          <form className="modal" style={{ maxWidth: 480 }} onSubmit={save}>
+          <form className="modal" style={{ maxWidth: 480, maxHeight: '90vh', overflowY: 'auto' }} onSubmit={save}>
             <button type="button" className="close" onClick={() => setEditing(null)} aria-label="Close"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth={2}><path d="M6 6l12 12M18 6L6 18" /></svg></button>
             <h3 className="gold-text">{editing.id ? 'Edit Event' : 'New Event'}</h3>
             <div className="field"><label>Title</label>
@@ -2204,6 +2211,22 @@ function EventsAdmin() {
             </div>
             <div className="field"><label>Date</label>
               <input type="date" required value={editing.event_date} onChange={(e) => set({ event_date: e.target.value })} /></div>
+            <div className="field"><label>Description <span style={{ color: 'var(--muted)', fontWeight: 400 }}>(optional — shown on the home banner)</span></label>
+              <textarea rows={3} value={editing.description || ''} onChange={(e) => set({ description: e.target.value })} placeholder="A short line about the event that appears on the home page." /></div>
+            <div className="field"><label>Event image <span style={{ color: 'var(--muted)', fontWeight: 400 }}>(optional)</span></label>
+              {editing.image_url
+                ? <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+                    <img src={editing.image_url} alt="Event preview" style={{ width: 96, height: 60, objectFit: 'cover', borderRadius: 6, border: '1px solid rgba(212,175,55,0.35)' }} />
+                    <button type="button" className="btn btn--sm" onClick={() => set({ image_url: '' })} style={{ borderColor: '#7a3b3b', color: '#e08a8a' }}>Remove</button>
+                  </div>
+                : null}
+              <input type="file" accept="image/*" disabled={uploading} onChange={(e) => { const f = e.target.files?.[0]; if (f) void onUpload(f); e.target.value = '' }} />
+              {uploading && <p className="msub" style={{ color: 'var(--muted)' }}>Uploading…</p>}
+            </div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#d8d3c6', margin: '4px 0 10px' }}>
+              <input type="checkbox" checked={!!editing.is_featured} onChange={(e) => set({ is_featured: e.target.checked ? 1 : 0 })} />
+              ⭐ Feature on the home page (highlighted banner above the Student Impact Challenge)
+            </label>
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#d8d3c6', margin: '4px 0 16px' }}>
               <input type="checkbox" checked={!!editing.is_past} onChange={(e) => set({ is_past: e.target.checked ? 1 : 0 })} />
               Past event (shown under “Past Appearances”)

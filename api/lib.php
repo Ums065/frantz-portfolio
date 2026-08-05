@@ -131,7 +131,7 @@ function ensure_session_version_column(): void
  * request after a deploy, db_auto_migrate() notices the stored version is behind
  * and runs every *_ensure_schema() once; afterwards it's a single cheap SELECT.
  */
-const APP_SCHEMA_VERSION = 20260729; // yyyymmdd + seq — raise on each schema change
+const APP_SCHEMA_VERSION = 20260805; // yyyymmdd + seq — raise on each schema change
 
 /**
  * One-shot, version-gated auto-migration. Runs on app bootstrap: if the DB's
@@ -166,7 +166,7 @@ function db_auto_migrate(): void
                     'new_school_parents_ensure_link_columns', 'partners_ensure_schema', 'business_ensure_schema',
                     'ecosystem_ensure_schema', 'ecosystem_shared_ensure_schema', 'referral_ensure_schema',
                     'mail_queue_ensure_schema', 'password_reset_ensure_schema', 'research_ensure_schema',
-                    'sponsor_jobs_ensure_schema',
+                    'sponsor_jobs_ensure_schema', 'events_ensure_schema',
                 ] as $fn) {
                     if (function_exists($fn)) {
                         try { $fn(); } catch (Throwable $e) { if (app_debug()) error_log("db_auto_migrate $fn: " . $e->getMessage()); }
@@ -5743,6 +5743,29 @@ function referral_ensure_schema(): void
         }
     } catch (Throwable $e) {
         if (app_debug()) error_log('referral_ensure_schema: ' . $e->getMessage());
+    }
+    $ready = true;
+}
+
+/** Self-heal the events table with the fields the home-page featured banner needs:
+ *  an image, an optional description, and a "feature on home" flag. Idempotent. */
+function events_ensure_schema(): void
+{
+    static $ready = false;
+    if ($ready) return;
+    try {
+        $addCol = static function (string $col, string $def): void {
+            $has = db()->query(
+                "SELECT COUNT(*) FROM information_schema.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'events' AND COLUMN_NAME = " . db()->quote($col)
+            )->fetchColumn();
+            if ((int) $has === 0) db()->exec("ALTER TABLE events ADD COLUMN $col $def");
+        };
+        $addCol('image_url', "VARCHAR(255) DEFAULT NULL");
+        $addCol('description', "TEXT DEFAULT NULL");
+        $addCol('is_featured', "TINYINT(1) NOT NULL DEFAULT 0");
+    } catch (Throwable $e) {
+        if (app_debug()) error_log('events_ensure_schema: ' . $e->getMessage());
     }
     $ready = true;
 }

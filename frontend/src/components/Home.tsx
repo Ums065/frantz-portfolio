@@ -364,6 +364,8 @@ export default function Home() {
   }, [])
 
   const safeEvents = Array.isArray(events) ? events : []
+  // The admin can spotlight one upcoming event as a highlighted banner on the home page.
+  const featuredEvent = safeEvents.find((e) => e.is_featured && !e.is_past)
   const safePosts = Array.isArray(posts) ? posts : []
   const featured = safePosts.find((p) => p.is_featured) || safePosts[0]
   const rest = safePosts.filter((p) => p !== featured).slice(0, 2)
@@ -463,6 +465,30 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      {featuredEvent && (
+        <section className="block feat-event" id="featured-event" data-screen-label="Event">
+          <div className="wrap">
+            <article className="feat-event__card reveal in">
+              {featuredEvent.image_url && (
+                <div className="feat-event__media">
+                  <img src={featuredEvent.image_url} alt={featuredEvent.title} loading="lazy" decoding="async" />
+                </div>
+              )}
+              <div className="feat-event__body">
+                <span className="feat-event__badge">★ Featured Event</span>
+                <h2 className="gold-text">{featuredEvent.title}</h2>
+                <div className="feat-event__meta">
+                  <span>📅 {fmtMonthYear(featuredEvent.event_date)} · {monthAbbr(featuredEvent.event_date)} {dayNum(featuredEvent.event_date)}</span>
+                  {featuredEvent.location && <span>📍 {featuredEvent.location}</span>}
+                </div>
+                {featuredEvent.description && <p className="feat-event__desc">{featuredEvent.description}</p>}
+                <Link className="btn btn--solid" to="/events">RSVP / View Details</Link>
+              </div>
+            </article>
+          </div>
+        </section>
+      )}
 
       <section className="block block--alt" id="challenge" data-screen-label="Challenge">
         <div className="wrap">

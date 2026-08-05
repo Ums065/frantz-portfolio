@@ -1811,5 +1811,10 @@ CREATE TABLE IF NOT EXISTS sponsor_application_messages (
   KEY idx_sam_app (application_id, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- 2026-08: featured event banner on the home page (image + description + feature flag).
+CALL add_column_if_missing('events', 'image_url', 'VARCHAR(255) DEFAULT NULL', 'is_past');
+CALL add_column_if_missing('events', 'description', 'TEXT DEFAULT NULL', 'image_url');
+CALL add_column_if_missing('events', 'is_featured', 'TINYINT(1) NOT NULL DEFAULT 0', 'description');
+
 DROP PROCEDURE IF EXISTS add_column_if_missing;
 SET FOREIGN_KEY_CHECKS = 1;

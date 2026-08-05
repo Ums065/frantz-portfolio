@@ -413,8 +413,10 @@ try {
 
         /* ---------------- PUBLIC CONTENT ---------------- */
         case $key === 'GET events': {
+            events_ensure_schema();
             $rows = db()->query(
                 'SELECT e.id, e.title, e.location, e.role, e.event_date, e.is_past,
+                        e.image_url, e.description, e.is_featured,
                         (SELECT COUNT(*) FROM event_rsvps r
                          WHERE r.event_id = e.id AND r.status IN ("going", "maybe", "interested")) AS rsvp_count
                  FROM events e ORDER BY e.event_date ASC'
@@ -3201,37 +3203,44 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
         /* ---------------- ADMIN: EVENTS CRUD ---------------- */
         case $key === 'GET admin/events': {
             require_admin();
+            events_ensure_schema();
             $rows = db()->query(
-                'SELECT id, title, location, role, event_date, is_past FROM events ORDER BY event_date ASC'
+                'SELECT id, title, location, role, event_date, is_past, image_url, description, is_featured
+                 FROM events ORDER BY event_date ASC'
             )->fetchAll();
             json(['events' => $rows]);
         }
 
         case $key === 'POST admin/event': {
             require_admin();
+            events_ensure_schema();
             $b = body();
             $title = field($b, 'title');
             $date  = field($b, 'event_date');
             if ($title === '') json(['error' => 'Title is required.'], 422);
             if ($date === '')  json(['error' => 'Event date is required.'], 422);
             $stmt = db()->prepare(
-                'INSERT INTO events (title, location, role, event_date, is_past) VALUES (?, ?, ?, ?, ?)'
+                'INSERT INTO events (title, location, role, event_date, is_past, image_url, description, is_featured)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
             );
-            $stmt->execute([$title, field($b, 'location') ?: null, field($b, 'role') ?: null, $date, !empty($b['is_past']) ? 1 : 0]);
+            $stmt->execute([$title, field($b, 'location') ?: null, field($b, 'role') ?: null, $date, !empty($b['is_past']) ? 1 : 0,
+                field($b, 'image_url') ?: null, field($b, 'description') ?: null, !empty($b['is_featured']) ? 1 : 0]);
             json(['id' => (int) db()->lastInsertId(), 'message' => 'Event created.'], 201);
         }
 
         case $method === 'PUT' && preg_match('#^admin/event/(\d+)$#', $route, $m) === 1: {
             require_admin();
+            events_ensure_schema();
             $b = body();
             $title = field($b, 'title');
             $date  = field($b, 'event_date');
             if ($title === '') json(['error' => 'Title is required.'], 422);
             if ($date === '')  json(['error' => 'Event date is required.'], 422);
             $stmt = db()->prepare(
-                'UPDATE events SET title=?, location=?, role=?, event_date=?, is_past=? WHERE id=?'
+                'UPDATE events SET title=?, location=?, role=?, event_date=?, is_past=?, image_url=?, description=?, is_featured=? WHERE id=?'
             );
-            $stmt->execute([$title, field($b, 'location') ?: null, field($b, 'role') ?: null, $date, !empty($b['is_past']) ? 1 : 0, (int) $m[1]]);
+            $stmt->execute([$title, field($b, 'location') ?: null, field($b, 'role') ?: null, $date, !empty($b['is_past']) ? 1 : 0,
+                field($b, 'image_url') ?: null, field($b, 'description') ?: null, !empty($b['is_featured']) ? 1 : 0, (int) $m[1]]);
             json(['message' => 'Event updated.']);
         }
 

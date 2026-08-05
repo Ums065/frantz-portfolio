@@ -502,3 +502,98 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   FEATURED EVENT — highlighted banner on the home page (admin-spotlighted).
+   Sits directly above the Student Impact Challenge block; designed to grab
+   attention with a gold glow + gradient frame.
+--------------------------------------------------------------------------- */
+.feat-event {
+  padding: 34px 0 8px;
+}
+.feat-event__card {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  gap: 28px;
+  align-items: center;
+  padding: 26px;
+  border-radius: 20px;
+  background:
+    linear-gradient(135deg, rgba(26,22,12,0.96), rgba(14,13,10,0.98));
+  border: 1px solid rgba(212, 175, 55, 0.55);
+  box-shadow:
+    0 0 0 1px rgba(212, 175, 55, 0.18),
+    0 18px 60px rgba(0, 0, 0, 0.55),
+    0 0 46px rgba(212, 175, 55, 0.18);
+  overflow: hidden;
+}
+/* animated gold sheen along the top edge */
+.feat-event__card::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, var(--gold, #d4af37), transparent);
+  opacity: 0.9;
+}
+.feat-event__media {
+  border-radius: 14px;
+  overflow: hidden;
+  aspect-ratio: 16 / 10;
+  border: 1px solid rgba(212, 175, 55, 0.28);
+}
+.feat-event__media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.feat-event__body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.feat-event__badge {
+  align-self: flex-start;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #1a1206;
+  background: linear-gradient(135deg, #f4d774, var(--gold, #d4af37));
+  padding: 5px 12px;
+  border-radius: 999px;
+}
+.feat-event__body h2 {
+  margin: 2px 0;
+  font-size: clamp(24px, 3.2vw, 34px);
+  line-height: 1.15;
+}
+.feat-event__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  color: #d8d3c6;
+  font-size: 14px;
+}
+.feat-event__desc {
+  color: var(--muted, #a9a396);
+  font-size: 15px;
+  line-height: 1.6;
+  margin: 2px 0 6px;
+}
+.feat-event__body .btn {
+  align-self: flex-start;
+  margin-top: 4px;
+}
+@media (max-width: 760px) {
+  .feat-event__card {
+    grid-template-columns: 1fr;
+    gap: 18px;
+    padding: 18px;
+  }
+  .feat-event__media {
+    aspect-ratio: 16 / 9;
+  }
+}

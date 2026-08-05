@@ -185,6 +185,9 @@ export interface EventItem {
   role: string
   event_date: string
   is_past: number
+  image_url?: string | null
+  description?: string | null
+  is_featured?: number
   rsvp_count?: number
 }
 
