@@ -5764,6 +5764,18 @@ function events_ensure_schema(): void
         $addCol('image_url', "VARCHAR(255) DEFAULT NULL");
         $addCol('description', "TEXT DEFAULT NULL");
         $addCol('is_featured', "TINYINT(1) NOT NULL DEFAULT 0");
+        // Some deploys (db/update.sql) created `events` as latin1, so a title or
+        // description with a curly quote/emoji would throw on INSERT and 500 the
+        // save. Convert to utf8mb4 — but only when it isn't already, so we don't
+        // rebuild the table on every request.
+        $cs = db()->query(
+            "SELECT ccsa.character_set_name FROM information_schema.TABLES t
+             JOIN information_schema.COLLATION_CHARACTER_SET_APPLICABILITY ccsa ON ccsa.collation_name = t.table_collation
+             WHERE t.table_schema = DATABASE() AND t.table_name = 'events' LIMIT 1"
+        )->fetchColumn();
+        if ($cs !== false && strtolower((string) $cs) !== 'utf8mb4') {
+            db()->exec("ALTER TABLE events CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+        }
     } catch (Throwable $e) {
         if (app_debug()) error_log('events_ensure_schema: ' . $e->getMessage());
     }

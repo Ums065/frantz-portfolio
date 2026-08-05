@@ -505,40 +505,79 @@
 
 /* ---------------------------------------------------------------------------
    FEATURED EVENT — highlighted banner on the home page (admin-spotlighted).
-   Sits directly above the Student Impact Challenge block; designed to grab
-   attention with a gold glow + gradient frame.
+   Sits directly above the Student Impact Challenge block. Designed to grab
+   attention: gold gradient frame, moving sheen, breathing glow, hover lift,
+   calendar date-chip, and a staggered entrance.
 --------------------------------------------------------------------------- */
 .feat-event {
-  padding: 34px 0 8px;
+  padding: 40px 0 10px;
 }
 .feat-event__card {
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
-  gap: 28px;
+  gap: 30px;
   align-items: center;
   padding: 26px;
-  border-radius: 20px;
+  border-radius: 22px;
   background:
-    linear-gradient(135deg, rgba(26,22,12,0.96), rgba(14,13,10,0.98));
-  border: 1px solid rgba(212, 175, 55, 0.55);
+    linear-gradient(135deg, rgba(30,25,13,0.97), rgba(13,12,9,0.98));
+  border: 1px solid rgba(212, 175, 55, 0.5);
   box-shadow:
-    0 0 0 1px rgba(212, 175, 55, 0.18),
-    0 18px 60px rgba(0, 0, 0, 0.55),
-    0 0 46px rgba(212, 175, 55, 0.18);
+    0 0 0 1px rgba(212, 175, 55, 0.16),
+    0 22px 64px rgba(0, 0, 0, 0.55),
+    0 0 46px rgba(212, 175, 55, 0.16);
   overflow: hidden;
+  isolation: isolate;
+  transition: transform .4s cubic-bezier(.2,.7,.3,1), box-shadow .4s ease, border-color .4s ease;
+  animation: featBreathe 5.5s ease-in-out infinite;
 }
-/* animated gold sheen along the top edge */
+.feat-event__card--noimg {
+  grid-template-columns: 1fr;
+  text-align: center;
+}
+.feat-event__card--noimg .feat-event__badge,
+.feat-event__card--noimg .feat-event__meta,
+.feat-event__card--noimg .feat-event__body .btn {
+  align-self: center;
+  justify-content: center;
+}
+.feat-event__card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(212, 175, 55, 0.85);
+  box-shadow:
+    0 0 0 1px rgba(212, 175, 55, 0.3),
+    0 28px 74px rgba(0, 0, 0, 0.6),
+    0 0 70px rgba(212, 175, 55, 0.3);
+}
+/* moving gold sheen along the top edge */
 .feat-event__card::before {
   content: '';
   position: absolute;
   inset: 0 0 auto 0;
   height: 3px;
-  background: linear-gradient(90deg, transparent, var(--gold, #d4af37), transparent);
-  opacity: 0.9;
+  background: linear-gradient(90deg, transparent, var(--gold, #d4af37), #fff2c4, var(--gold, #d4af37), transparent);
+  background-size: 200% 100%;
+  animation: featSheen 3.4s linear infinite;
+  z-index: 2;
+}
+/* soft radiating glow that "breathes" behind the card */
+.feat-event__glow {
+  position: absolute;
+  z-index: -1;
+  top: 50%;
+  left: 50%;
+  width: 60%;
+  height: 120%;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(ellipse at center, rgba(212,175,55,0.22), transparent 70%);
+  filter: blur(24px);
+  animation: featGlowPulse 5.5s ease-in-out infinite;
+  pointer-events: none;
 }
 .feat-event__media {
-  border-radius: 14px;
+  position: relative;
+  border-radius: 16px;
   overflow: hidden;
   aspect-ratio: 16 / 10;
   border: 1px solid rgba(212, 175, 55, 0.28);
@@ -548,52 +587,136 @@
   height: 100%;
   object-fit: cover;
   display: block;
+  transition: transform .6s cubic-bezier(.2,.7,.3,1);
+}
+.feat-event__card:hover .feat-event__media img {
+  transform: scale(1.06);
+}
+/* calendar-style date chip pinned on the image */
+.feat-event__date-chip {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 54px;
+  padding: 6px 10px 8px;
+  border-radius: 12px;
+  background: rgba(10, 9, 6, 0.82);
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(212, 175, 55, 0.5);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.4);
+  line-height: 1;
+}
+.feat-event__date-chip .m {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--gold, #d4af37);
+}
+.feat-event__date-chip .d {
+  font-size: 24px;
+  font-weight: 800;
+  color: #fff;
+  margin-top: 2px;
 }
 .feat-event__body {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 13px;
 }
 .feat-event__badge {
   align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 800;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: #1a1206;
-  background: linear-gradient(135deg, #f4d774, var(--gold, #d4af37));
-  padding: 5px 12px;
+  background: linear-gradient(135deg, #f7e08c, var(--gold, #d4af37));
+  padding: 6px 13px;
   border-radius: 999px;
+  box-shadow: 0 4px 14px rgba(212,175,55,0.35);
+}
+.feat-event__star {
+  display: inline-block;
+  animation: featStarSpin 6s linear infinite;
 }
 .feat-event__body h2 {
   margin: 2px 0;
-  font-size: clamp(24px, 3.2vw, 34px);
-  line-height: 1.15;
+  font-size: clamp(24px, 3.4vw, 36px);
+  line-height: 1.14;
 }
 .feat-event__meta {
   display: flex;
   flex-wrap: wrap;
   gap: 8px 18px;
-  color: #d8d3c6;
+  color: #ddd7c8;
   font-size: 14px;
+}
+.feat-event__meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.feat-event__meta-item svg {
+  color: var(--gold, #d4af37);
+  flex: none;
 }
 .feat-event__desc {
   color: var(--muted, #a9a396);
   font-size: 15px;
-  line-height: 1.6;
+  line-height: 1.62;
   margin: 2px 0 6px;
 }
-.feat-event__body .btn {
+.feat-event__cta {
   align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   margin-top: 4px;
 }
+.feat-event__cta svg {
+  transition: transform .3s ease;
+}
+.feat-event__cta:hover svg {
+  transform: translateX(4px);
+}
+
+@keyframes featSheen {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+@keyframes featGlowPulse {
+  0%, 100% { opacity: 0.55; transform: translate(-50%, -50%) scale(1); }
+  50%      { opacity: 1;    transform: translate(-50%, -50%) scale(1.08); }
+}
+@keyframes featBreathe {
+  0%, 100% { box-shadow: 0 0 0 1px rgba(212,175,55,0.16), 0 22px 64px rgba(0,0,0,0.55), 0 0 40px rgba(212,175,55,0.14); }
+  50%      { box-shadow: 0 0 0 1px rgba(212,175,55,0.24), 0 22px 64px rgba(0,0,0,0.55), 0 0 62px rgba(212,175,55,0.26); }
+}
+@keyframes featStarSpin {
+  0%   { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .feat-event__card,
+  .feat-event__card::before,
+  .feat-event__glow,
+  .feat-event__star { animation: none; }
+}
+
 @media (max-width: 760px) {
+  .feat-event { padding: 30px 0 6px; }
   .feat-event__card {
     grid-template-columns: 1fr;
     gap: 18px;
     padding: 18px;
   }
-  .feat-event__media {
-    aspect-ratio: 16 / 9;
-  }
+  .feat-event__media { aspect-ratio: 16 / 9; }
 }
