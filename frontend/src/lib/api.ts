@@ -259,6 +259,8 @@ export interface PartnerRow {
   is_media_partner: number
   status?: string
   sort_order: number
+  /** Where the row came from: admin `partners` table, or a live dashboard profile. */
+  source?: 'admin' | 'founding_sponsor' | 'sponsor' | 'partner'
 }
 export interface PartnerStat { label: string; value: string }
 export interface PartnerPage {

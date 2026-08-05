@@ -3678,13 +3678,105 @@ function partner_page_save(array $b): array
     return partner_page_payload();
 }
 
-/** Public payload: published partners + distinct filter values. */
+/** Live partner rows pulled from the sponsor & ecosystem dashboards: any
+ *  approved partner / sponsor / founding sponsor that has uploaded a logo shows
+ *  up on the public /partner page automatically (no admin re-entry needed).
+ *  Shaped exactly like a `partners` table row so the page renders them the same. */
+function partner_dynamic_rows(): array
+{
+    $out = [];
+    // 1) Founding / published sponsors (sponsor_applications) — the flagship tier.
+    try {
+        $rows = db()->query(
+            "SELECT id, organization_name, website, logo_url, company_bio, public_description,
+                    sponsorship_level_name, created_at
+             FROM sponsor_applications
+             WHERE approval_status = 'published' AND logo_url IS NOT NULL AND logo_url <> ''"
+        )->fetchAll();
+        foreach ($rows as $r) {
+            $out[] = [
+                'id' => 900000 + (int) $r['id'],
+                'name' => (string) $r['organization_name'],
+                'logo_url' => $r['logo_url'],
+                'partner_type' => 'Founding Sponsor',
+                'industry' => $r['sponsorship_level_name'] ?: null,
+                'borough' => null, 'county' => null, 'location' => null,
+                'partner_since' => $r['created_at'] ? substr((string) $r['created_at'], 0, 4) : null,
+                'website' => $r['website'] ?: null,
+                'blurb' => (trim((string) ($r['public_description'] ?? '')) ?: trim((string) ($r['company_bio'] ?? ''))) ?: null,
+                'is_featured' => 1,
+                'is_media_partner' => 0,
+                'sort_order' => 0,
+                'source' => 'founding_sponsor',
+            ];
+        }
+    } catch (Throwable $e) { if (app_debug()) error_log('partner_dynamic founding: ' . $e->getMessage()); }
+
+    // 2) Approved ecosystem partner / sponsor accounts that have uploaded a logo.
+    try {
+        ecosystem_ensure_schema();
+        $rows = db()->query(
+            "SELECT e.id, e.role, e.org_name, e.website, e.about, e.details
+             FROM ecosystem_accounts e JOIN users u ON u.id = e.user_id
+             WHERE e.role IN ('partner','sponsor') AND u.approval_status = 'approved'"
+        )->fetchAll();
+        foreach ($rows as $r) {
+            $d = json_decode((string) ($r['details'] ?? ''), true);
+            $logo = is_array($d) ? trim((string) ($d['logo_url'] ?? '')) : '';
+            if ($logo === '') continue;                          // only show once they have a logo
+            $isSponsor = $r['role'] === 'sponsor';
+            $type = $isSponsor
+                ? 'Sponsor'
+                : (is_array($d) && trim((string) ($d['partner_type'] ?? '')) !== '' ? trim((string) $d['partner_type']) : 'Partner');
+            $out[] = [
+                'id' => 800000 + (int) $r['id'],
+                'name' => (string) $r['org_name'],
+                'logo_url' => $logo,
+                'partner_type' => $type,
+                'industry' => $isSponsor && is_array($d) ? (trim((string) ($d['recognition_level'] ?? '')) ?: null) : null,
+                'borough' => null, 'county' => null, 'location' => null,
+                'partner_since' => null,
+                'website' => $r['website'] ?: null,
+                'blurb' => trim((string) ($r['about'] ?? '')) ?: null,
+                'is_featured' => 0,
+                'is_media_partner' => 0,
+                'sort_order' => 5,
+                'source' => $isSponsor ? 'sponsor' : 'partner',
+            ];
+        }
+    } catch (Throwable $e) { if (app_debug()) error_log('partner_dynamic ecosystem: ' . $e->getMessage()); }
+
+    return $out;
+}
+
+/** Public payload: published partners (admin) merged with live sponsor/partner
+ *  dashboard profiles + distinct filter values. */
 function partner_public_payload(): array
 {
-    $rows = db()->query(
+    $adminRows = db()->query(
         "SELECT id, name, logo_url, partner_type, industry, borough, county, location, partner_since, website, blurb, is_featured, is_media_partner, sort_order
-         FROM partners WHERE status = 'published' ORDER BY is_featured DESC, sort_order ASC, name ASC"
+         FROM partners WHERE status = 'published'"
     )->fetchAll();
+    foreach ($adminRows as &$ar) { $ar['source'] = 'admin'; }
+    unset($ar);
+
+    // Merge admin rows with live dashboard profiles, de-duping by name (admin wins).
+    $rows = $adminRows;
+    $seen = [];
+    foreach ($adminRows as $r) { $seen[mb_strtolower(trim((string) $r['name']))] = true; }
+    foreach (partner_dynamic_rows() as $r) {
+        $key = mb_strtolower(trim((string) $r['name']));
+        if ($key === '' || isset($seen[$key])) continue;
+        $seen[$key] = true;
+        $rows[] = $r;
+    }
+    // Featured first (founding sponsors), then admin sort order, then name.
+    usort($rows, static function (array $a, array $b): int {
+        return ((int) $b['is_featured'] <=> (int) $a['is_featured'])
+            ?: ((int) ($a['sort_order'] ?? 0) <=> (int) ($b['sort_order'] ?? 0))
+            ?: strcasecmp((string) $a['name'], (string) $b['name']);
+    });
+
     $uniq = static function (string $col) use ($rows): array {
         $vals = array_values(array_unique(array_filter(array_map(static fn(array $r): string => trim((string) ($r[$col] ?? '')), $rows))));
         sort($vals);
