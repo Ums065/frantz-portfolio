@@ -202,9 +202,9 @@ export default function Media() {
               {galleryImages.map((item) => (
                 <div
                   className="cell"
-                  data-cap={`${item.display_title} ? ${item.credit_name}${item.credit_organization ? ` ? ${item.credit_organization}` : ''}`}
+                  data-cap={`${item.display_title} · ${item.credit_name}${item.credit_organization ? ` · ${item.credit_organization}` : ''}`}
                   data-lightbox-src={item.file_url}
-                  data-lightbox-cap={`${item.display_title} ? ${item.credit_name}`}
+                  data-lightbox-cap={`${item.display_title} · ${item.credit_name}`}
                   data-lightbox-alt={item.display_title}
                   key={item.id}
                   role="button"
@@ -212,7 +212,7 @@ export default function Media() {
                 >
                   <img src={item.file_url} alt={item.display_title} loading="lazy" decoding="async" />
                   <span className="tagk">Approved Photo</span>
-                  <div className="cap">{item.display_title} ? {item.credit_name}{item.credit_organization ? ` ? ${item.credit_organization}` : ''}</div>
+                  <div className="cap">{item.display_title} · {item.credit_name}{item.credit_organization ? ` · ${item.credit_organization}` : ''}</div>
                 </div>
               ))}
             </div>
@@ -229,7 +229,7 @@ export default function Media() {
                   <div className="blog-card__body">
                     <div className="kicker"><span className="cat">Approved Video</span><span>&bull;</span><span>{item.credit_name}</span></div>
                     <h3>{item.display_title}</h3>
-                    <p>{item.credit_organization ? `${item.credit_name} ? ${item.credit_organization}` : item.credit_name}</p>
+                    <p>{item.credit_organization ? `${item.credit_name} · ${item.credit_organization}` : item.credit_name}</p>
                     <div className="item-actions">
                       <a className="read" href={item.file_url} target="_blank" rel="noreferrer">
                         Open Video

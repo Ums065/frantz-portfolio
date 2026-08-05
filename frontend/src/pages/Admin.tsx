@@ -1738,8 +1738,8 @@ export default function Admin() {
                             <span className="ns-edu-person__name">{t.teacher_full_name}</span>
                             <span className="ns-edu-person__status">{t.status}</span>
                             {t.status !== 'approved'
-                              ? <button type="button" className="btn btn--sm btn--solid" disabled={nsEduBusy === `teacher-${t.id}`} onClick={(event) => { event.stopPropagation(); void eduApproveTeacher(t) }}>{nsEduBusy === `teacher-${t.id}` ? '�' : 'Approve'}</button>
-                              : <span className="ns-edu-person__ok">? Approved</span>}
+                              ? <button type="button" className="btn btn--sm btn--solid" disabled={nsEduBusy === `teacher-${t.id}`} onClick={(event) => { event.stopPropagation(); void eduApproveTeacher(t) }}>{nsEduBusy === `teacher-${t.id}` ? '…' : 'Approve'}</button>
+                              : <span className="ns-edu-person__ok">✓ Approved</span>}
                           </div>
                         ))}
                       </div>
@@ -1758,10 +1758,10 @@ export default function Admin() {
                         {visibleStudents.map((s: any) => (
                           <div key={s.id} className="ns-edu-person ns-edu-person--clickable" role="button" tabIndex={0} onClick={() => openStudentProfile(Number(s.id))} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openStudentProfile(Number(s.id)) } }}>
                             <span className="ns-edu-person__name">{s.full_name}</span>
-                            <span className="ns-edu-person__status">{s.teacher_approval_status || '�'}</span>
+                            <span className="ns-edu-person__status">{s.teacher_approval_status || '—'}</span>
                             {s.teacher_approval_status !== 'approved'
-                              ? <button type="button" className="btn btn--sm btn--solid" disabled={nsEduBusy === `student-${s.id}`} onClick={(event) => { event.stopPropagation(); void eduApproveStudent(s) }}>{nsEduBusy === `student-${s.id}` ? '�' : 'Approve'}</button>
-                              : <span className="ns-edu-person__ok">? Approved</span>}
+                              ? <button type="button" className="btn btn--sm btn--solid" disabled={nsEduBusy === `student-${s.id}`} onClick={(event) => { event.stopPropagation(); void eduApproveStudent(s) }}>{nsEduBusy === `student-${s.id}` ? '…' : 'Approve'}</button>
+                              : <span className="ns-edu-person__ok">✓ Approved</span>}
                           </div>
                         ))}
                       </div>

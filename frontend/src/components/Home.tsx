@@ -144,7 +144,7 @@ const ventureVisionNodes: VisionNode[] = [
 const awardHighlights = [
   {
     title: 'Presidential Lifetime Achievement Award',
-    copy: 'Awarded through AmeriCorps and the Office of the President of the United States â€” one of the nationâ€™s highest volunteer service honors.',
+    copy: 'Awarded through AmeriCorps and the Office of the President of the United States — one of the nation’s highest volunteer service honors.',
     image: '/assets/awards/presidential-lifetime.webp',
   },
   {

@@ -268,7 +268,7 @@ function ProductQuickView({
           <img src={row.image || FALLBACK_IMAGE} alt={row.name} className="qv__photo" />
         </div>
         <div className="qv__body">
-          <div className="qv__cat">{row.category || 'Merch'} Ã‚Â· {inventoryBadge(row)}</div>
+          <div className="qv__cat">{row.category || 'Merch'} · {inventoryBadge(row)}</div>
           <h2 className="qv__name">{row.name}</h2>
           {row.tagline ? <p className="qv__tagline">{row.tagline}</p> : null}
           <div className="qv__price-row">
@@ -668,7 +668,7 @@ export default function Store() {
 
       <section className="shop-hero">
         <div className="wrap">
-          <div className="eyebrow">Premium Merchandise Ã‚Â· Purpose Driven</div>
+          <div className="eyebrow">Premium Merchandise · Purpose Driven</div>
           <h1>The Collection</h1>
           <p>Wear the movement. Every purchase fuels community impact.</p>
           <div className="hero-stats">
@@ -867,7 +867,7 @@ export default function Store() {
                 <button className="card__name-btn" type="button" onClick={() => openProduct(row)}>
                   <span className="line__name">{row.name}</span>
                 </button>
-                <div className="line__meta">{row.category || 'Merch'} Ã‚Â· {formatMoney(row.price)} each</div>
+                <div className="line__meta">{row.category || 'Merch'} · {formatMoney(row.price)} each</div>
                 <CartQuantityControl compact qty={qty} onDecrease={() => setQty(row.product_id, qty - 1)} onIncrease={() => setQty(row.product_id, qty + 1)} />
               </div>
               <div className="line__right">
@@ -1018,7 +1018,7 @@ export default function Store() {
                       </div>
                       <div>
                         <div className="sum-line__name">{row.name}</div>
-                        <div className="sum-line__meta">{row.category || 'Merch'} ? {formatMoney(row.price)} each</div>
+                        <div className="sum-line__meta">{row.category || 'Merch'} · {formatMoney(row.price)} each</div>
                       </div>
                       <div className="sum-line__price">{formatMoney(row.price * qty)}</div>
                     </div>
