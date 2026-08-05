@@ -104,6 +104,7 @@ CREATE TABLE IF NOT EXISTS events (
   image_url   VARCHAR(255) DEFAULT NULL,          -- optional banner image
   description TEXT DEFAULT NULL,                   -- shown on the home featured banner
   is_featured TINYINT(1) NOT NULL DEFAULT 0,       -- spotlight on the home page above the Challenge
+  badge_label VARCHAR(60) DEFAULT NULL,            -- home banner badge text (defaults to "Featured Event")
   created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 

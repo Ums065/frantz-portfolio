@@ -410,6 +410,7 @@ CREATE TABLE IF NOT EXISTS `events` (
   `image_url` varchar(255) DEFAULT NULL,
   `description` text DEFAULT NULL,
   `is_featured` tinyint(1) NOT NULL DEFAULT '0',
+  `badge_label` varchar(60) DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
@@ -422,7 +423,8 @@ CALL add_column_if_missing('events', 'is_past', 'tinyint(1) NOT NULL DEFAULT ''0
 CALL add_column_if_missing('events', 'image_url', 'varchar(255) DEFAULT NULL', 'is_past');
 CALL add_column_if_missing('events', 'description', 'text DEFAULT NULL', 'image_url');
 CALL add_column_if_missing('events', 'is_featured', 'tinyint(1) NOT NULL DEFAULT ''0''', 'description');
-CALL add_column_if_missing('events', 'created_at', 'timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP', 'is_featured');
+CALL add_column_if_missing('events', 'badge_label', 'varchar(60) DEFAULT NULL', 'is_featured');
+CALL add_column_if_missing('events', 'created_at', 'timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP', 'badge_label');
 
 -- ---------- gallery_submission_files ----------
 CREATE TABLE IF NOT EXISTS `gallery_submission_files` (

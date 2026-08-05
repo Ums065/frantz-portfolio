@@ -188,6 +188,7 @@ export interface EventItem {
   image_url?: string | null
   description?: string | null
   is_featured?: number
+  badge_label?: string | null
   rsvp_count?: number
 }
 

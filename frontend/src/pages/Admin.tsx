@@ -2144,7 +2144,7 @@ function AwardsAdmin() {
 const fldSelectS: React.CSSProperties = { width: '100%', background: 'rgba(0,0,0,0.45)', border: '1px solid var(--line)', borderRadius: 9, padding: '13px 15px', color: '#fff', fontFamily: 'inherit', fontSize: 14, outline: 'none' }
 
 /* ---------------- Events management (CRUD) ---------------- */
-const emptyEvent: EventItem = { id: 0, title: '', location: '', role: '', event_date: '', is_past: 0, image_url: '', description: '', is_featured: 0 }
+const emptyEvent: EventItem = { id: 0, title: '', location: '', role: '', event_date: '', is_past: 0, image_url: '', description: '', is_featured: 0, badge_label: '' }
 
 function EventsAdmin() {
   const [rows, setRows] = useState<EventItem[]>([])
@@ -2227,6 +2227,10 @@ function EventsAdmin() {
               <input type="checkbox" checked={!!editing.is_featured} onChange={(e) => set({ is_featured: e.target.checked ? 1 : 0 })} />
               ⭐ Feature on the home page (highlighted banner above the Student Impact Challenge)
             </label>
+            {!!editing.is_featured && (
+              <div className="field"><label>Banner label <span style={{ color: 'var(--muted)', fontWeight: 400 }}>(optional — defaults to “Featured Event”)</span></label>
+                <input type="text" maxLength={60} value={editing.badge_label || ''} onChange={(e) => set({ badge_label: e.target.value })} placeholder="Featured Event" /></div>
+            )}
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#d8d3c6', margin: '4px 0 16px' }}>
               <input type="checkbox" checked={!!editing.is_past} onChange={(e) => set({ is_past: e.target.checked ? 1 : 0 })} />
               Past event (shown under “Past Appearances”)

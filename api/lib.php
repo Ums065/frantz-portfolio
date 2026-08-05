@@ -131,7 +131,7 @@ function ensure_session_version_column(): void
  * request after a deploy, db_auto_migrate() notices the stored version is behind
  * and runs every *_ensure_schema() once; afterwards it's a single cheap SELECT.
  */
-const APP_SCHEMA_VERSION = 20260805; // yyyymmdd + seq — raise on each schema change
+const APP_SCHEMA_VERSION = 20260806; // yyyymmdd + seq — raise on each schema change
 
 /**
  * One-shot, version-gated auto-migration. Runs on app bootstrap: if the DB's
@@ -5764,6 +5764,7 @@ function events_ensure_schema(): void
         $addCol('image_url', "VARCHAR(255) DEFAULT NULL");
         $addCol('description', "TEXT DEFAULT NULL");
         $addCol('is_featured', "TINYINT(1) NOT NULL DEFAULT 0");
+        $addCol('badge_label', "VARCHAR(60) DEFAULT NULL");
         // Some deploys (db/update.sql) created `events` as latin1, so a title or
         // description with a curly quote/emoji would throw on INSERT and 500 the
         // save. Convert to utf8mb4 — but only when it isn't already, so we don't

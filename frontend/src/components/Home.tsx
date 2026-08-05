@@ -482,7 +482,7 @@ export default function Home() {
                 </div>
               )}
               <div className="feat-event__body">
-                <span className="feat-event__badge"><span className="feat-event__star">★</span> Featured Event</span>
+                <span className="feat-event__badge"><span className="feat-event__star">★</span> {featuredEvent.badge_label?.trim() || 'Featured Event'}</span>
                 <h2 className="gold-text">{featuredEvent.title}</h2>
                 <div className="feat-event__meta">
                   <span className="feat-event__meta-item">

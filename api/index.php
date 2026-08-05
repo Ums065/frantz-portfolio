@@ -416,7 +416,7 @@ try {
             events_ensure_schema();
             $rows = db()->query(
                 'SELECT e.id, e.title, e.location, e.role, e.event_date, e.is_past,
-                        e.image_url, e.description, e.is_featured,
+                        e.image_url, e.description, e.is_featured, e.badge_label,
                         (SELECT COUNT(*) FROM event_rsvps r
                          WHERE r.event_id = e.id AND r.status IN ("going", "maybe", "interested")) AS rsvp_count
                  FROM events e ORDER BY e.event_date ASC'
@@ -3205,7 +3205,7 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             require_admin();
             events_ensure_schema();
             $rows = db()->query(
-                'SELECT id, title, location, role, event_date, is_past, image_url, description, is_featured
+                'SELECT id, title, location, role, event_date, is_past, image_url, description, is_featured, badge_label
                  FROM events ORDER BY event_date ASC'
             )->fetchAll();
             json(['events' => $rows]);
@@ -3220,11 +3220,12 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             if ($title === '') json(['error' => 'Title is required.'], 422);
             if ($date === '')  json(['error' => 'Event date is required.'], 422);
             $stmt = db()->prepare(
-                'INSERT INTO events (title, location, role, event_date, is_past, image_url, description, is_featured)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+                'INSERT INTO events (title, location, role, event_date, is_past, image_url, description, is_featured, badge_label)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
             );
             $stmt->execute([$title, field($b, 'location') ?: null, field($b, 'role') ?: null, $date, !empty($b['is_past']) ? 1 : 0,
-                field($b, 'image_url') ?: null, field($b, 'description') ?: null, !empty($b['is_featured']) ? 1 : 0]);
+                field($b, 'image_url') ?: null, field($b, 'description') ?: null, !empty($b['is_featured']) ? 1 : 0,
+                field($b, 'badge_label') ?: null]);
             json(['id' => (int) db()->lastInsertId(), 'message' => 'Event created.'], 201);
         }
 
@@ -3237,10 +3238,11 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             if ($title === '') json(['error' => 'Title is required.'], 422);
             if ($date === '')  json(['error' => 'Event date is required.'], 422);
             $stmt = db()->prepare(
-                'UPDATE events SET title=?, location=?, role=?, event_date=?, is_past=?, image_url=?, description=?, is_featured=? WHERE id=?'
+                'UPDATE events SET title=?, location=?, role=?, event_date=?, is_past=?, image_url=?, description=?, is_featured=?, badge_label=? WHERE id=?'
             );
             $stmt->execute([$title, field($b, 'location') ?: null, field($b, 'role') ?: null, $date, !empty($b['is_past']) ? 1 : 0,
-                field($b, 'image_url') ?: null, field($b, 'description') ?: null, !empty($b['is_featured']) ? 1 : 0, (int) $m[1]]);
+                field($b, 'image_url') ?: null, field($b, 'description') ?: null, !empty($b['is_featured']) ? 1 : 0,
+                field($b, 'badge_label') ?: null, (int) $m[1]]);
             json(['message' => 'Event updated.']);
         }
 
