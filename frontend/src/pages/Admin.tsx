@@ -223,6 +223,7 @@ export default function Admin() {
   // Mobile: sidebar starts collapsed (content-first); toggled by the mobile bar.
   const [navOpen, setNavOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
+  const [roleTarget, setRoleTarget] = useState<MemberRow | null>(null)
   // Collapsible sidebar groups (accordion) — tames the long nav. Only the active
   // tab's group is open by default; the user's expand/collapse choices persist.
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => {
@@ -513,8 +514,8 @@ export default function Admin() {
     }
   }
 
-  const setRole = async (id: number, role: string) => {
-    if (!confirm(`Change this user's role to "${role}"? They will be signed out and must log in again.`)) return
+  const setRole = async (id: number, role: string, skipConfirm = false) => {
+    if (!skipConfirm && !confirm(`Change this user's role to "${role}"? They will be signed out and must log in again.`)) return
     const result = await api.put<{ message: string; user?: MemberRow }>(`admin/user/${id}/role`, { role })
     if (result.user) syncUpdatedUser(result.user)
     await refreshData()
@@ -1298,6 +1299,7 @@ export default function Admin() {
                           { label: 'Approve', onClick: () => void setApproval(m.id, 'approved'), disabled: status === 'approved' },
                           { label: 'Keep pending', onClick: () => void setApproval(m.id, 'pending'), disabled: status === 'pending' },
                           { label: 'Reject', onClick: () => void setApproval(m.id, 'rejected'), disabled: status === 'rejected' },
+                          { label: 'Change role…', onClick: () => setRoleTarget(m) },
                           { label: 'Delete account', danger: true, onClick: () => void deleteRow(`admin/user/${m.id}`, `Permanently delete ${m.full_name}'s account? This cannot be undone.`) },
                         ]} />
                       )}
@@ -1350,6 +1352,7 @@ export default function Admin() {
                         { label: 'Approve', onClick: () => void setApproval(m.id, 'approved'), disabled: status === 'approved' },
                         { label: 'Keep pending', onClick: () => void setApproval(m.id, 'pending'), disabled: status === 'pending' },
                         { label: 'Reject', onClick: () => void setApproval(m.id, 'rejected'), disabled: status === 'rejected' },
+                        { label: 'Change role…', onClick: () => setRoleTarget(m) },
                         { label: 'Delete account', danger: true, onClick: () => void deleteRow(`admin/user/${m.id}`, `Permanently delete ${m.full_name}'s account? This cannot be undone.`) },
                       ]} />
                     </td>
@@ -1992,6 +1995,12 @@ export default function Admin() {
 
       <AdminProfileModal open={profileOpen} user={user} onClose={() => setProfileOpen(false)} onSaved={() => { void refreshAuth() }} />
 
+      <RolePickerModal
+        target={roleTarget}
+        onClose={() => setRoleTarget(null)}
+        onConfirm={async (role) => { const t = roleTarget; setRoleTarget(null); if (t) await setRole(t.id, role, true) }}
+      />
+
       <NsRecordDetail
         open={!!nsDetail}
         onClose={() => setNsDetail(null)}
@@ -2048,6 +2057,42 @@ export default function Admin() {
 
 // Roles an admin may assign (super_admin is DB-only and intentionally excluded).
 const ASSIGNABLE_ROLES = ['member', 'vip', 'editor', 'admin', 'student', 'parent', 'school', 'teacher', 'judge', 'business', 'sponsor', 'partner', 'media', 'volunteer', 'fellow']
+
+/** Compact role picker opened from a user row's 3-dot menu (direct role change). */
+function RolePickerModal({ target, onClose, onConfirm }: { target: MemberRow | null; onClose: () => void; onConfirm: (role: string) => void }) {
+  const cur = (target?.role || 'member').toLowerCase()
+  const [role, setRoleVal] = useState(cur)
+  useEffect(() => { setRoleVal((target?.role || 'member').toLowerCase()) }, [target?.id, target?.role])
+  if (!target) return null
+  const isProtected = cur === 'super_admin'
+  return (
+    <div className="modal-overlay open" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal" style={{ maxWidth: 400 }}>
+        <button type="button" className="close" onClick={onClose} aria-label="Close"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth={2}><path d="M6 6l12 12M18 6L6 18" /></svg></button>
+        <h3 className="gold-text">Change Role</h3>
+        <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: 6 }}>{target.full_name} · {target.email}</p>
+        <p style={{ color: 'var(--muted)', fontSize: 12, margin: '10px 0 16px' }}>Current role: <b style={{ color: '#e8e2d2' }}>{cur}</b>. The user will be signed out and must log in again. Role-specific data isn't migrated automatically.</p>
+        {isProtected ? (
+          <p style={{ color: 'var(--muted)', fontSize: 13 }}>Super-admin accounts are protected and can only be changed in the database.</p>
+        ) : (
+          <>
+            <label className="admin-role-field"><span>New role</span>
+              <select className="admin-role-select" value={role} onChange={(e) => setRoleVal(e.target.value)}>
+                {ASSIGNABLE_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+              </select>
+            </label>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 18 }}>
+              <button type="button" className="btn btn--sm" onClick={onClose}>Cancel</button>
+              <button type="button" className="btn btn--sm btn--solid" disabled={role === cur} onClick={() => onConfirm(role)}>
+                {role === cur ? 'No change' : `Change to ${role}`}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
 
 /** Admin's own profile — change name, photo, and password. */
 function AdminProfileModal({ open, user, onClose, onSaved }: { open: boolean; user: User | null; onClose: () => void; onSaved: () => void }) {
@@ -2250,8 +2295,7 @@ function UserDetailModal({
             <p style={{ color: 'var(--muted)', fontSize: 13 }}>Super-admin accounts are protected and can only be changed in the database.</p>
           ) : (
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-              <select value={roleDraft} onChange={(e) => setRoleDraft(e.target.value)} disabled={loading}
-                style={{ padding: '9px 12px', borderRadius: 8, border: '1px solid var(--line)', background: 'rgba(0,0,0,0.25)', color: 'var(--ink, #e8e2d2)', fontSize: 14 }}>
+              <select className="admin-role-select" value={roleDraft} onChange={(e) => setRoleDraft(e.target.value)} disabled={loading}>
                 {ASSIGNABLE_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
               </select>
               <button type="button" className="btn btn--sm btn--solid" disabled={loading || roleDraft === currentRole}
