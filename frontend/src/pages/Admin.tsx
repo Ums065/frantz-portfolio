@@ -222,6 +222,7 @@ export default function Admin() {
   })
   // Mobile: sidebar starts collapsed (content-first); toggled by the mobile bar.
   const [navOpen, setNavOpen] = useState(false)
+  const [profileOpen, setProfileOpen] = useState(false)
   // Collapsible sidebar groups (accordion) — tames the long nav. Only the active
   // tab's group is open by default; the user's expand/collapse choices persist.
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => {
@@ -987,6 +988,7 @@ export default function Admin() {
             })}
           </nav>
           <div className="admin-sidebar__foot">
+            <button type="button" className="btn btn--sm" onClick={() => setProfileOpen(true)}>My Profile</button>
             <a className="btn btn--sm" href="/">View Site</a>
             <button className="btn btn--sm" onClick={() => logout()}>Logout</button>
           </div>
@@ -1988,6 +1990,8 @@ export default function Admin() {
         onRoleChange={(role) => selectedUser && setRole(selectedUser.id, role)}
       />
 
+      <AdminProfileModal open={profileOpen} user={user} onClose={() => setProfileOpen(false)} onSaved={() => { void refreshAuth() }} />
+
       <NsRecordDetail
         open={!!nsDetail}
         onClose={() => setNsDetail(null)}
@@ -2044,6 +2048,74 @@ export default function Admin() {
 
 // Roles an admin may assign (super_admin is DB-only and intentionally excluded).
 const ASSIGNABLE_ROLES = ['member', 'vip', 'editor', 'admin', 'student', 'parent', 'school', 'teacher', 'judge', 'business', 'sponsor', 'partner', 'media', 'volunteer', 'fellow']
+
+/** Admin's own profile — change name, photo, and password. */
+function AdminProfileModal({ open, user, onClose, onSaved }: { open: boolean; user: User | null; onClose: () => void; onSaved: () => void }) {
+  const [name, setName] = useState('')
+  const [avatar, setAvatar] = useState('')
+  const [pw, setPw] = useState('')
+  const [pw2, setPw2] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [msg, setMsg] = useState('')
+  const [err, setErr] = useState('')
+  useEffect(() => {
+    if (open && user) { setName(user.full_name || ''); setAvatar(user.avatar_url || ''); setPw(''); setPw2(''); setMsg(''); setErr('') }
+  }, [open, user?.id, user?.full_name, user?.avatar_url])
+  if (!open || !user) return null
+
+  const onUpload = async (file: File) => {
+    setUploading(true); setErr('')
+    try { const d = await api.upload<{ url: string }>('admin/upload', file); setAvatar(d.url) }
+    catch (e) { setErr(e instanceof Error ? e.message : 'Upload failed.') } finally { setUploading(false) }
+  }
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault(); setErr(''); setMsg('')
+    if (name.trim() === '') { setErr('Name is required.'); return }
+    if (pw && pw !== pw2) { setErr('The two passwords do not match.'); return }
+    setBusy(true)
+    try {
+      await api.put('user/profile', { full_name: name.trim(), avatar_url: avatar, ...(pw ? { password: pw } : {}) })
+      setMsg('Profile updated.'); setPw(''); setPw2(''); onSaved()
+    } catch (e2) { setErr(e2 instanceof Error ? e2.message : 'Could not save.') } finally { setBusy(false) }
+  }
+  const initials = (user.full_name || 'A').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase() || '').join('') || 'A'
+
+  return (
+    <div className="modal-overlay open" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <form className="modal" style={{ maxWidth: 460, maxHeight: '90vh', overflowY: 'auto' }} onSubmit={save}>
+        <button type="button" className="close" onClick={onClose} aria-label="Close"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth={2}><path d="M6 6l12 12M18 6L6 18" /></svg></button>
+        <h3 className="gold-text">My Profile</h3>
+        <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: 4 }}>{user.email} · {user.role}</p>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, margin: '18px 0' }}>
+          {avatar
+            ? <img src={avatar} alt="Profile" style={{ width: 74, height: 74, borderRadius: '50%', objectFit: 'cover', border: '2px solid rgba(212,175,55,0.5)' }} />
+            : <span style={{ width: 74, height: 74, borderRadius: '50%', display: 'grid', placeItems: 'center', fontFamily: 'var(--f-serif)', fontSize: 26, color: '#1a1206', background: 'linear-gradient(135deg,#f4d774,#d4af37)' }}>{initials}</span>}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <label className="btn btn--sm" style={{ cursor: 'pointer' }}>
+              {uploading ? 'Uploading…' : 'Upload photo'}
+              <input type="file" accept="image/*" hidden disabled={uploading} onChange={(e) => { const f = e.target.files?.[0]; if (f) void onUpload(f); e.target.value = '' }} />
+            </label>
+            {avatar && <button type="button" className="btn btn--sm" style={{ borderColor: '#7a3b3b', color: '#e08a8a' }} onClick={() => setAvatar('')}>Remove photo</button>}
+          </div>
+        </div>
+
+        <div className="field"><label>Full name</label>
+          <input type="text" required value={name} onChange={(e) => setName(e.target.value)} /></div>
+        <div className="field"><label>New password <span style={{ color: 'var(--muted)', fontWeight: 400 }}>(leave blank to keep current)</span></label>
+          <PasswordInput value={pw} onChange={(e) => setPw(e.target.value)} autoComplete="new-password" placeholder="At least 8 characters" /></div>
+        {pw && (
+          <div className="field"><label>Confirm new password</label>
+            <PasswordInput value={pw2} onChange={(e) => setPw2(e.target.value)} autoComplete="new-password" placeholder="Repeat the password" /></div>
+        )}
+        {err && <p className="msub" style={{ color: '#e08a8a' }}>{err}</p>}
+        {msg && <p className="msub" style={{ color: '#6be29a' }}>{msg}</p>}
+        <button type="submit" className="btn btn--solid" disabled={busy || uploading} style={{ marginTop: 6 }}>{busy ? 'Saving…' : 'Save Changes'}</button>
+      </form>
+    </div>
+  )
+}
 
 function UserDetailModal({
   open,

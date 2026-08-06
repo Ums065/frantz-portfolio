@@ -394,17 +394,30 @@ try {
             }
             if ($pass !== '') assert_password_strength($pass);
 
+            // Build the update dynamically so name, avatar, and password are all
+            // optional-but-together in one request.
+            $cols = ['full_name = ?'];
+            $args = [$name];
+            if (array_key_exists('avatar_url', $b)) {
+                $cols[] = 'avatar_url = ?';
+                $args[] = trim((string) $b['avatar_url']) !== '' ? trim((string) $b['avatar_url']) : null;
+            }
+            $bumpSession = false;
             if ($pass !== '') {
                 ensure_session_version_column();
-                $stmt = db()->prepare('UPDATE users SET full_name = ?, password_hash = ?, session_version = session_version + 1 WHERE id = ?');
-                $stmt->execute([$name, password_hash($pass, PASSWORD_DEFAULT), $u['id']]);
+                $cols[] = 'password_hash = ?';
+                $args[] = password_hash($pass, PASSWORD_DEFAULT);
+                $cols[] = 'session_version = session_version + 1';
+                $bumpSession = true;
+            }
+            $args[] = (int) $u['id'];
+            db()->prepare('UPDATE users SET ' . implode(', ', $cols) . ' WHERE id = ?')->execute($args);
+
+            if ($bumpSession) {
                 // Keep THIS session valid; only other sessions are evicted.
                 $nv = db()->prepare('SELECT session_version FROM users WHERE id = ?');
                 $nv->execute([(int) $u['id']]);
                 $_SESSION['sv'] = (int) $nv->fetchColumn();
-            } else {
-                $stmt = db()->prepare('UPDATE users SET full_name = ? WHERE id = ?');
-                $stmt->execute([$name, $u['id']]);
             }
 
             $_SESSION['uid'] = (int) $u['id'];
