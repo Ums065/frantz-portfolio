@@ -17,6 +17,24 @@ export default function BlogPost() {
     title: post?.title || 'Article',
     description: post?.excerpt || undefined,
     image: post?.cover_image || undefined,
+    type: 'article',
+    publishedTime: post?.published_at || undefined,
+    jsonLd: post ? {
+      '@context': 'https://schema.org',
+      '@type': 'Article',
+      headline: post.title,
+      description: post.excerpt || undefined,
+      image: post.cover_image || undefined,
+      datePublished: post.published_at || undefined,
+      articleSection: post.category || undefined,
+      author: { '@type': 'Person', name: 'Frantz Coutard' },
+      publisher: {
+        '@type': 'Organization',
+        name: 'Frantz Coutard',
+        logo: { '@type': 'ImageObject', url: 'https://frantzcoutard.com/assets/fc-logo.webp' },
+      },
+      mainEntityOfPage: `https://frantzcoutard.com/blog/${post.id}`,
+    } : undefined,
   })
 
   useEffect(() => {
