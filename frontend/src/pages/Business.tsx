@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import { useAuth } from '../context/AuthContext'
 import { useSeo } from '../hooks/useSeo'
+import PasswordInput from '../components/PasswordInput'
 import { resolveDashboardRoute } from '../lib/dashboardRoute'
 import OfferStepper, { type OfferStage, type OfferEvent } from '../components/OfferStepper'
 import { unseenAnnCount, markAnnSeen, unseenReqCount, markReqSeen, EcoMessages, Section } from './portal/EcosystemPortal'
@@ -300,7 +301,7 @@ export default function Business() {
           {mode === 'login' ? (
             <form onSubmit={doLogin} style={{ padding: '18px 30px 30px', display: 'grid', gap: 14 }}>
               <div><label style={labelS}>Email</label><input style={inputS} type="email" required value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} /></div>
-              <div><label style={labelS}>Password</label><input style={inputS} type="password" required value={loginPass} onChange={(e) => setLoginPass(e.target.value)} /></div>
+              <div><label style={labelS}>Password</label><PasswordInput style={inputS} required value={loginPass} onChange={(e) => setLoginPass(e.target.value)} /></div>
               <button className="btn btn--solid" disabled={busy === 'login'}>{busy === 'login' ? 'Signing in…' : 'Sign In'}</button>
             </form>
           ) : (
@@ -318,7 +319,7 @@ export default function Business() {
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(150px,100%), 1fr))', gap: 12 }}>
                 <div><label style={labelS}>Website</label><input style={inputS} value={f.website} onChange={(e) => setF({ ...f, website: e.target.value })} placeholder="https://…" /></div>
-                <div><label style={labelS}>Password *</label><input data-fld="password" style={{ ...inputS, ...errBorder('password') }} type="password" required value={f.password} onChange={(e) => { setF({ ...f, password: e.target.value }); clrErr('password') }} placeholder="6+ characters" /><FErr name="password" /></div>
+                <div><label style={labelS}>Password *</label><PasswordInput data-fld="password" style={{ ...inputS, ...errBorder('password') }} required value={f.password} onChange={(e) => { setF({ ...f, password: e.target.value }); clrErr('password') }} placeholder="6+ characters" /><FErr name="password" /></div>
               </div>
               <div><label style={labelS}>EIN (Employer Identification Number)</label><input style={inputS} value={f.ein} onChange={(e) => setF({ ...f, ein: e.target.value })} placeholder="e.g. 12-3456789 — for business authorization" /></div>
               <AvailabilityFields days={f.available_days} from={f.available_from} to={f.available_to} onDays={(v) => setF({ ...f, available_days: v })} onFrom={(v) => setF({ ...f, available_from: v })} onTo={(v) => setF({ ...f, available_to: v })} />

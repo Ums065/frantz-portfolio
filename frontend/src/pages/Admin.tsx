@@ -8,6 +8,7 @@ import { useLiveRefresh } from '../hooks/useLiveRefresh'
 import { statHint } from '../lib/statHints'
 import { resolveDashboardRoute } from '../lib/dashboardRoute'
 import NsRecordDetail from '../components/NsRecordDetail'
+import PasswordInput from '../components/PasswordInput'
 import AdminNavIcon from '../components/admin/AdminNavIcon'
 import NsProfileModal, { type ProfileView } from '../components/admin/NsProfileModal'
 import EcosystemAdminPanel from '../components/admin/EcosystemAdminPanel'
@@ -881,7 +882,7 @@ export default function Admin() {
             <div className="field"><label>Email</label>
               <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="admin@frantzcoutard.com" /></div>
             <div className="field"><label>Password</label>
-              <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" /></div>
+              <PasswordInput required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" /></div>
             {error && <p style={{ color: '#e08a8a', fontSize: 13 }}>{error}</p>}
             {user && !isAdmin(user.role) && <p style={{ color: '#e08a8a', fontSize: 13 }}>This account is not an admin.</p>}
             <button className="btn btn--solid" type="submit" style={{ width: '100%', marginTop: 8 }}>Login</button>
@@ -1918,7 +1919,7 @@ export default function Admin() {
                         <label>District<input name="school_district" required /></label>
                         <label>Address<input name="school_address" required /></label>
                         <label>Website<input name="school_website" defaultValue={school.school_website || ''} /></label>
-                        <label>Principal password<input name="password" type="password" minLength={6} required /></label>
+                        <label>Principal password<PasswordInput name="password" minLength={6} required /></label>
                       </div>
                       <div style={{ display: 'flex', gap: 8 }}>
                         <button type="submit" className="btn btn--sm btn--solid" disabled={nsEduBusy === `claim-${school.id}`}>{nsEduBusy === `claim-${school.id}` ? 'Claiming…' : 'Claim & hand over'}</button>

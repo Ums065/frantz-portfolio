@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { api } from '../../lib/api'
 import { useAuth } from '../../context/AuthContext'
 import { useSeo } from '../../hooks/useSeo'
+import PasswordInput from '../../components/PasswordInput'
 import { useLiveRefresh } from '../../hooks/useLiveRefresh'
 import { statHint } from '../../lib/statHints'
 import { resolveDashboardRoute } from '../../lib/dashboardRoute'
@@ -618,7 +619,7 @@ export default function EcosystemPortal({ config }: { config: PortalConfig }) {
           {mode === 'login' ? (
             <form onSubmit={doLogin} style={{ padding: '18px clamp(16px,5vw,30px) 30px', display: 'grid', gap: 14 }}>
               <div><label style={S.label}>Email</label><input style={S.input} type="email" required value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} /></div>
-              <div><label style={S.label}>Password</label><input style={S.input} type="password" required value={loginPass} onChange={(e) => setLoginPass(e.target.value)} /></div>
+              <div><label style={S.label}>Password</label><PasswordInput style={S.input} required value={loginPass} onChange={(e) => setLoginPass(e.target.value)} /></div>
               <button className="btn btn--solid" disabled={busy === 'login'}>{busy === 'login' ? 'Signing in…' : 'Sign In'}</button>
             </form>
           ) : (
@@ -651,7 +652,7 @@ export default function EcosystemPortal({ config }: { config: PortalConfig }) {
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(150px,100%), 1fr))', gap: 12 }}>
                 <div><label style={S.label}>Website</label><input style={S.input} value={f.website || ''} onChange={(e) => set('website', e.target.value)} placeholder="https://…" /></div>
-                <div><label style={S.label}>Password *</label><input data-fld="password" style={{ ...S.input, ...errBorder('password') }} type="password" required value={f.password || ''} onChange={(e) => set('password', e.target.value)} placeholder="8+ chars, a letter & a number" /><FErr name="password" /></div>
+                <div><label style={S.label}>Password *</label><PasswordInput data-fld="password" style={{ ...S.input, ...errBorder('password') }} required value={f.password || ''} onChange={(e) => set('password', e.target.value)} placeholder="8+ chars, a letter & a number" /><FErr name="password" /></div>
               </div>
               <div><label style={S.label}>About</label><textarea style={{ ...S.input, minHeight: 64, resize: 'vertical' }} value={f.about || ''} onChange={(e) => set('about', e.target.value)} /></div>
               <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', color: 'var(--ivory)', fontSize: 13 }}>

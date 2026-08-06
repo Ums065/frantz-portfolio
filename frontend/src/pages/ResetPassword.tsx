@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../lib/api'
+import PasswordInput from '../components/PasswordInput'
 
 /**
  * Landing page for the password-reset link emailed to a user.
@@ -90,11 +91,10 @@ export default function ResetPassword() {
                 <form onSubmit={submit} className="auth-form">
                   <div className="field">
                     <label>New Password</label>
-                    <input
-                      type="password"
+                    <PasswordInput
                       required
                       minLength={8}
-                      placeholder="At least 6 characters"
+                      placeholder="At least 8 characters"
                       autoComplete="new-password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
@@ -102,8 +102,7 @@ export default function ResetPassword() {
                   </div>
                   <div className="field">
                     <label>Confirm Password</label>
-                    <input
-                      type="password"
+                    <PasswordInput
                       required
                       minLength={8}
                       placeholder="Repeat the password"

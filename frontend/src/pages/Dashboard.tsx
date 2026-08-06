@@ -12,6 +12,7 @@ import {
   type SavedContentItem,
 } from '../lib/memberStorage'
 import { memberPerks } from '../lib/brandContent'
+import PasswordInput from '../components/PasswordInput'
 import { useAuth } from '../context/AuthContext'
 import { useSeo } from '../hooks/useSeo'
 import { ProfilePhotoCard } from '../components/profile/ProfileSection'
@@ -567,7 +568,7 @@ export default function Dashboard() {
                 </div>
                 <div className="field">
                   <label>New Password</label>
-                  <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Leave blank to keep current password" />
+                  <PasswordInput value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Leave blank to keep current password" />
                 </div>
                 {message && <p className="dashboard-success">{message}</p>}
                 {error && <p className="dashboard-error">{error}</p>}

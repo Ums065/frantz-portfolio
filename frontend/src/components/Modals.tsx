@@ -3,6 +3,7 @@ import { useAuth, type RegistrationRole } from '../context/AuthContext'
 import { api } from '../lib/api'
 import { BRAND_LOGO } from '../lib/brandAssets'
 import TermsAgreement from './TermsAgreement'
+import PasswordInput from './PasswordInput'
 import { AvatarPicker } from './profile/ProfileSection'
 import { recordTermsAcceptance } from '../lib/recordTermsAcceptance'
 
@@ -813,7 +814,7 @@ export function AuthModal({
                   </div>
                   <div className="field">
                     <label>Password</label>
-                    <input type="password" required placeholder="Enter your password" autoComplete="current-password" value={form.password} onChange={(e) => updateField('password', e.target.value)} />
+                    <PasswordInput required placeholder="Enter your password" autoComplete="current-password" value={form.password} onChange={(e) => updateField('password', e.target.value)} />
                   </div>
                   <div className="switch" style={{ textAlign: 'right', marginTop: 4 }}>
                     <button type="button" className="linklike" onClick={goForgot}>Forgot password?</button>
