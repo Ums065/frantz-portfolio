@@ -18,15 +18,18 @@ function email_brand(): array
     $base = storefront_public_base_url();
     return [
         'name'      => mail_from_name() !== '' ? mail_from_name() : 'FrantzCoutard',
+        'tagline'   => 'Leave It Better Than You Found It',
         'site'      => $base,
-        'bg'        => '#08080A',
-        'card'      => '#15130D',
-        'panel'     => '#1C1A12',
+        'bg'        => '#070708',
+        'bg2'       => '#0E0D0A',
+        'card'      => '#141209',
+        'panel'     => '#1B1810',
+        'panel2'    => '#211D12',
         'gold'      => '#C9A84C',
         'goldLight' => '#F5D48A',
-        'ink'       => '#F3EEE4',
-        'muted'     => '#A29B8A',
-        'border'    => '#2E2A1E',
+        'ink'       => '#F5F1E8',
+        'muted'     => '#9E9682',
+        'border'    => '#2C271A',
     ];
 }
 
@@ -102,42 +105,59 @@ function email_e(string $value): string
 }
 
 /** Wrap inner content in the full branded HTML document. */
-function email_layout(string $heading, string $bodyHtml, string $preheader = ''): string
+function email_layout(string $heading, string $bodyHtml, string $preheader = '', string $eyebrow = ''): string
 {
     $b = email_brand();
     $year = date('Y');
     $siteLabel = preg_replace('#^https?://#', '', $b['site']);
+    $sans = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
+    $serif = "Georgia,'Times New Roman',serif";
 
     return '<!doctype html><html lang="en"><head><meta charset="utf-8">'
         . '<meta name="viewport" content="width=device-width,initial-scale=1">'
-        . '<meta name="color-scheme" content="dark"><meta name="supported-color-schemes" content="dark"></head>'
+        . '<meta name="x-apple-disable-message-reformatting">'
+        . '<meta name="color-scheme" content="dark"><meta name="supported-color-schemes" content="dark">'
+        . '<!--[if mso]><style>body,table,td,a{font-family:Arial,Helvetica,sans-serif!important}</style><![endif]-->'
+        . '</head>'
         . '<body style="margin:0;padding:0;background:' . $b['bg'] . ';-webkit-font-smoothing:antialiased;">'
         . ($preheader !== ''
-            ? '<div style="display:none!important;max-height:0;overflow:hidden;opacity:0;color:' . $b['bg'] . ';">' . email_e($preheader) . '</div>'
+            ? '<div style="display:none!important;max-height:0;overflow:hidden;opacity:0;color:' . $b['bg'] . ';mso-hide:all;">' . email_e($preheader) . '&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;</div>'
             : '')
-        . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:' . $b['bg'] . ';padding:32px 12px;">'
+        . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="' . $b['bg'] . '" style="background:' . $b['bg'] . ';background-image:radial-gradient(1000px 400px at 50% -160px,rgba(201,168,76,0.10),transparent 70%);padding:36px 12px;">'
         . '<tr><td align="center">'
-        . '<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:' . $b['card'] . ';border:1px solid ' . $b['border'] . ';border-radius:18px;overflow:hidden;box-shadow:0 18px 50px rgba(0,0,0,0.55);">'
+        // Tiny brand kicker above the card
+        . '<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;"><tr><td style="padding:0 6px 14px;text-align:center;font-family:' . $sans . ';font-size:11px;letter-spacing:3px;text-transform:uppercase;color:' . $b['muted'] . ';">' . email_e($b['name']) . '</td></tr></table>'
+        . '<table role="presentation" width="600" cellpadding="0" cellspacing="0" bgcolor="' . $b['card'] . '" style="max-width:600px;width:100%;background:' . $b['card'] . ';border:1px solid ' . $b['border'] . ';border-radius:20px;overflow:hidden;box-shadow:0 20px 55px rgba(0,0,0,0.6);">'
         // Gold accent strip
-        . '<tr><td style="height:4px;line-height:4px;font-size:0;background:linear-gradient(90deg,#8A6A2F,#F5D48A,#C9A84C,#8A6A2F);">&nbsp;</td></tr>'
-        // Header
-        . '<tr><td style="background:linear-gradient(180deg,' . $b['panel'] . ',' . $b['card'] . ');padding:34px 32px 24px;text-align:center;">'
-        . '<img src="cid:' . EMAIL_LOGO_CID . '" width="64" height="64" alt="' . email_e($b['name']) . '" style="display:inline-block;border:0;outline:none;width:64px;height:64px;border-radius:14px;">'
-        . '<div style="margin-top:12px;font-family:Georgia,\'Times New Roman\',serif;font-size:22px;letter-spacing:1.5px;color:' . $b['goldLight'] . ';font-weight:700;">' . email_e($b['name']) . '</div>'
-        . '<div style="margin:14px auto 0;width:64px;height:2px;background:linear-gradient(90deg,transparent,' . $b['gold'] . ',transparent);"></div>'
+        . '<tr><td bgcolor="' . $b['gold'] . '" style="height:4px;line-height:4px;font-size:0;background:linear-gradient(90deg,#6E521F,#F5D48A,#C9A84C,#6E521F);">&nbsp;</td></tr>'
+        // Header — logo in a gold-ringed badge + brand + tagline
+        . '<tr><td style="background:linear-gradient(180deg,' . $b['panel2'] . ',' . $b['card'] . ');padding:38px 32px 26px;text-align:center;">'
+        . '<table role="presentation" cellpadding="0" cellspacing="0" align="center"><tr><td style="border-radius:50%;border:2px solid ' . $b['gold'] . ';padding:8px;background:' . $b['bg2'] . ';">'
+        . '<img src="cid:' . EMAIL_LOGO_CID . '" width="60" height="60" alt="' . email_e($b['name']) . '" style="display:block;border:0;outline:none;width:60px;height:60px;border-radius:50%;">'
+        . '</td></tr></table>'
+        . '<div style="margin-top:16px;font-family:' . $serif . ';font-size:23px;letter-spacing:1px;color:' . $b['goldLight'] . ';font-weight:700;">' . email_e($b['name']) . '</div>'
+        . '<div style="margin-top:6px;font-family:' . $sans . ';font-size:11px;letter-spacing:2px;text-transform:uppercase;color:' . $b['muted'] . ';">' . email_e($b['tagline']) . '</div>'
+        . '<div style="margin:18px auto 0;width:56px;height:2px;background:linear-gradient(90deg,transparent,' . $b['gold'] . ',transparent);"></div>'
         . '</td></tr>'
         // Body
-        . '<tr><td style="padding:34px 34px 26px;font-family:-apple-system,Segoe UI,Arial,Helvetica,sans-serif;color:' . $b['ink'] . ';">'
-        . '<h1 style="margin:0 0 20px;font-family:Georgia,\'Times New Roman\',serif;font-size:24px;line-height:1.3;color:' . $b['goldLight'] . ';font-weight:700;">' . email_e($heading) . '</h1>'
+        . '<tr><td style="padding:36px 36px 28px;font-family:' . $sans . ';color:' . $b['ink'] . ';">'
+        . ($eyebrow !== ''
+            ? '<div style="margin:0 0 10px;font-family:' . $sans . ';font-size:11px;letter-spacing:2px;text-transform:uppercase;color:' . $b['gold'] . ';font-weight:700;">' . email_e($eyebrow) . '</div>'
+            : '')
+        . '<h1 style="margin:0 0 20px;font-family:' . $serif . ';font-size:26px;line-height:1.3;color:' . $b['goldLight'] . ';font-weight:700;">' . email_e($heading) . '</h1>'
         . $bodyHtml
         . '</td></tr>'
         // Footer
-        . '<tr><td style="padding:22px 34px 28px;border-top:1px solid ' . $b['border'] . ';background:' . $b['panel'] . ';font-family:-apple-system,Segoe UI,Arial,Helvetica,sans-serif;font-size:12px;line-height:1.7;color:' . $b['muted'] . ';text-align:center;">'
-        . 'This is an automated message from ' . email_e($b['name']) . '.<br>'
-        . '<a href="' . email_e($b['site']) . '" style="color:' . $b['gold'] . ';text-decoration:none;font-weight:600;">' . email_e((string) $siteLabel) . '</a>'
-        . ' &nbsp;&middot;&nbsp; &copy; ' . $year . ' ' . email_e($b['name'])
+        . '<tr><td style="padding:24px 34px 30px;border-top:1px solid ' . $b['border'] . ';background:' . $b['panel'] . ';font-family:' . $sans . ';font-size:12px;line-height:1.8;color:' . $b['muted'] . ';text-align:center;">'
+        . '<a href="' . email_e($b['site']) . '" style="color:' . $b['goldLight'] . ';text-decoration:none;font-weight:700;font-size:13px;letter-spacing:0.4px;">' . email_e((string) $siteLabel) . '</a>'
+        . '<div style="margin:10px auto;width:40px;height:1px;background:' . $b['border'] . ';"></div>'
+        . 'This is an automated message — no need to reply.<br>'
+        . '&copy; ' . $year . ' ' . email_e($b['name']) . ' &nbsp;&middot;&nbsp; ' . email_e($b['tagline'])
         . '</td></tr>'
-        . '</table></td></tr></table></body></html>';
+        . '</table>'
+        // sign-off under card
+        . '<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;"><tr><td style="padding:16px 6px 0;text-align:center;font-family:' . $sans . ';font-size:11px;line-height:1.6;color:' . $b['muted'] . ';opacity:.8;">Sent with care by the ' . email_e($b['name']) . ' team.</td></tr></table>'
+        . '</td></tr></table></body></html>';
 }
 
 /** One body paragraph. */
@@ -147,12 +167,12 @@ function email_paragraph(string $text): string
     return '<p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:' . $b['ink'] . ';">' . nl2br(email_e($text)) . '</p>';
 }
 
-/** A gold call-to-action button. */
+/** A gold call-to-action button (solid bgcolor fallback for Outlook + gradient). */
 function email_button(string $label, string $url): string
 {
-    return '<table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 22px;"><tr>'
-        . '<td align="center" style="border-radius:12px;background:linear-gradient(180deg,#F6E2A8 0%,#EBC96B 45%,#C9A84C 100%);">'
-        . '<a href="' . email_e($url) . '" style="display:inline-block;padding:14px 30px;font-family:-apple-system,Segoe UI,Arial,sans-serif;font-size:15px;font-weight:700;letter-spacing:0.3px;color:#14110A;text-decoration:none;border-radius:12px;">' . email_e($label) . '</a>'
+    return '<table role="presentation" cellpadding="0" cellspacing="0" style="margin:10px 0 24px;"><tr>'
+        . '<td align="center" bgcolor="#D8BC63" style="border-radius:12px;background:linear-gradient(180deg,#F6E2A8 0%,#EBC96B 45%,#C9A84C 100%);box-shadow:0 8px 22px rgba(201,168,76,0.28);">'
+        . '<a href="' . email_e($url) . '" style="display:inline-block;padding:15px 34px;font-family:-apple-system,Segoe UI,Arial,sans-serif;font-size:15px;font-weight:700;letter-spacing:0.3px;color:#14110A;text-decoration:none;border-radius:12px;">' . email_e($label) . ' &nbsp;&rarr;</a>'
         . '</td></tr></table>';
 }
 
@@ -193,6 +213,17 @@ function email_callout(string $text): string
     return '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:4px 0 20px;"><tr>'
         . '<td style="padding:16px 18px;background:' . $b['panel'] . ';border-left:3px solid ' . $b['gold'] . ';border-radius:8px;font-size:15px;line-height:1.6;color:' . $b['ink'] . ';">' . nl2br(email_e($text)) . '</td>'
         . '</tr></table>';
+}
+
+/** A large, centered one-time code display. */
+function email_code(string $code): string
+{
+    $b = email_brand();
+    return '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:6px 0 22px;"><tr>'
+        . '<td align="center" bgcolor="' . $b['panel2'] . '" style="padding:22px;background:' . $b['panel2'] . ';border:1px solid ' . $b['border'] . ';border-radius:14px;">'
+        . '<div style="font-family:-apple-system,Segoe UI,Arial,sans-serif;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:' . $b['muted'] . ';margin-bottom:10px;">Your verification code</div>'
+        . '<div style="font-family:Georgia,\'Times New Roman\',serif;font-size:38px;font-weight:700;letter-spacing:10px;color:' . $b['goldLight'] . ';">' . email_e($code) . '</div>'
+        . '</td></tr></table>';
 }
 
 /** Build a plaintext fallback from an ordered list of lines. */
@@ -267,6 +298,27 @@ function email_account_rejected(string $name, string $role, string $note): array
         mail_from_name(),
     ]);
     return ['subject' => 'Update on your account request', 'html' => email_layout('Account Update', $html, 'About your account request'), 'text' => $text];
+}
+
+function email_verification_code(string $name, string $otp): array
+{
+    $safe = trim($name) !== '' ? trim($name) : 'there';
+    $html = email_paragraph('Hi ' . $safe . ',')
+        . email_paragraph('Welcome! Use the code below to verify your email address and activate your account.')
+        . email_code($otp)
+        . email_note('This code expires shortly. If you didn\'t create an account, you can safely ignore this email.');
+    $text = email_text([
+        'Hi ' . $safe . ',',
+        '',
+        'Use this code to verify your email address:',
+        $otp,
+        '',
+        'This code expires shortly. If you didn\'t create an account, ignore this email.',
+        '',
+        'Thanks,',
+        mail_from_name(),
+    ]);
+    return ['subject' => 'Verify your email address', 'html' => email_layout('Verify Your Email', $html, 'Your verification code', 'Getting started'), 'text' => $text];
 }
 
 /** Generic branded wrapper for the admin team notifications (plain text in → themed out). */

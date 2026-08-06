@@ -8822,12 +8822,15 @@ function verification_code_body(string $name, string $otp): string
 
 function send_verification_code_mail(string $email, string $name, string $otp): bool
 {
+    // Themed HTML (with a big code display) + plaintext fallback.
+    if (function_exists('email_verification_code')) {
+        return queue_themed_mail('verification', $email, email_verification_code($name, $otp));
+    }
     $subject = 'Verify your email address';
     $bodyText = verification_code_body($name, $otp);
     if (mail_queue_enqueue('verification', $email, $subject, $bodyText)) {
         return true;
     }
-
     return send_mail_message($email, $subject, $bodyText);
 }
 
