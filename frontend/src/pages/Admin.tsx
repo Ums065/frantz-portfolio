@@ -2053,6 +2053,7 @@ const ASSIGNABLE_ROLES = ['member', 'vip', 'editor', 'admin', 'student', 'parent
 function AdminProfileModal({ open, user, onClose, onSaved }: { open: boolean; user: User | null; onClose: () => void; onSaved: () => void }) {
   const [name, setName] = useState('')
   const [avatar, setAvatar] = useState('')
+  const [curPw, setCurPw] = useState('')
   const [pw, setPw] = useState('')
   const [pw2, setPw2] = useState('')
   const [busy, setBusy] = useState(false)
@@ -2060,7 +2061,7 @@ function AdminProfileModal({ open, user, onClose, onSaved }: { open: boolean; us
   const [msg, setMsg] = useState('')
   const [err, setErr] = useState('')
   useEffect(() => {
-    if (open && user) { setName(user.full_name || ''); setAvatar(user.avatar_url || ''); setPw(''); setPw2(''); setMsg(''); setErr('') }
+    if (open && user) { setName(user.full_name || ''); setAvatar(user.avatar_url || ''); setCurPw(''); setPw(''); setPw2(''); setMsg(''); setErr('') }
   }, [open, user?.id, user?.full_name, user?.avatar_url])
   if (!open || !user) return null
 
@@ -2072,11 +2073,14 @@ function AdminProfileModal({ open, user, onClose, onSaved }: { open: boolean; us
   const save = async (e: React.FormEvent) => {
     e.preventDefault(); setErr(''); setMsg('')
     if (name.trim() === '') { setErr('Name is required.'); return }
-    if (pw && pw !== pw2) { setErr('The two passwords do not match.'); return }
+    if (pw) {
+      if (!curPw) { setErr('Enter your current password.'); return }
+      if (pw !== pw2) { setErr('The new passwords do not match.'); return }
+    }
     setBusy(true)
     try {
-      await api.put('user/profile', { full_name: name.trim(), avatar_url: avatar, ...(pw ? { password: pw } : {}) })
-      setMsg('Profile updated.'); setPw(''); setPw2(''); onSaved()
+      await api.put('user/profile', { full_name: name.trim(), avatar_url: avatar, ...(pw ? { current_password: curPw, password: pw } : {}) })
+      setMsg('Profile updated.'); setCurPw(''); setPw(''); setPw2(''); onSaved()
     } catch (e2) { setErr(e2 instanceof Error ? e2.message : 'Could not save.') } finally { setBusy(false) }
   }
   const initials = (user.full_name || 'A').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase() || '').join('') || 'A'
@@ -2103,12 +2107,15 @@ function AdminProfileModal({ open, user, onClose, onSaved }: { open: boolean; us
 
         <div className="field"><label>Full name</label>
           <input type="text" required value={name} onChange={(e) => setName(e.target.value)} /></div>
-        <div className="field"><label>New password <span style={{ color: 'var(--muted)', fontWeight: 400 }}>(leave blank to keep current)</span></label>
-          <PasswordInput value={pw} onChange={(e) => setPw(e.target.value)} autoComplete="new-password" placeholder="At least 8 characters" /></div>
-        {pw && (
+        <div style={{ borderTop: '1px solid rgba(212,175,55,0.18)', margin: '8px 0 14px', paddingTop: 12 }}>
+          <p style={{ fontSize: 12, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--gold, #d4af37)', margin: '0 0 10px' }}>Change password <span style={{ color: 'var(--muted)', textTransform: 'none', letterSpacing: 0, fontWeight: 400 }}>(optional)</span></p>
+          <div className="field"><label>Current password</label>
+            <PasswordInput value={curPw} onChange={(e) => setCurPw(e.target.value)} autoComplete="current-password" placeholder="Your current password" /></div>
+          <div className="field"><label>New password</label>
+            <PasswordInput value={pw} onChange={(e) => setPw(e.target.value)} autoComplete="new-password" placeholder="At least 8 characters" /></div>
           <div className="field"><label>Confirm new password</label>
-            <PasswordInput value={pw2} onChange={(e) => setPw2(e.target.value)} autoComplete="new-password" placeholder="Repeat the password" /></div>
-        )}
+            <PasswordInput value={pw2} onChange={(e) => setPw2(e.target.value)} autoComplete="new-password" placeholder="Repeat the new password" /></div>
+        </div>
         {err && <p className="msub" style={{ color: '#e08a8a' }}>{err}</p>}
         {msg && <p className="msub" style={{ color: '#6be29a' }}>{msg}</p>}
         <button type="submit" className="btn btn--solid" disabled={busy || uploading} style={{ marginTop: 6 }}>{busy ? 'Saving…' : 'Save Changes'}</button>

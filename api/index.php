@@ -392,7 +392,20 @@ try {
             if ($name === '') {
                 json(['error' => 'Full name is required.'], 422);
             }
-            if ($pass !== '') assert_password_strength($pass);
+            if ($pass !== '') {
+                // Changing the password requires the current one, verified server-side.
+                $current = field($b, 'current_password');
+                if ($current === '') {
+                    json(['error' => 'Enter your current password to set a new one.'], 422);
+                }
+                $row = db()->prepare('SELECT password_hash FROM users WHERE id = ? LIMIT 1');
+                $row->execute([(int) $u['id']]);
+                $hash = (string) ($row->fetchColumn() ?: '');
+                if ($hash === '' || !password_verify($current, $hash)) {
+                    json(['error' => 'Your current password is incorrect.'], 422);
+                }
+                assert_password_strength($pass);
+            }
 
             // Build the update dynamically so name, avatar, and password are all
             // optional-but-together in one request.
