@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:seo": "tsc -b && vite build && node ../scripts/prerender.mjs",
     "seed:new-school": "php ../scripts/new_school_seed_demo.php",
     "test:new-school": "node ../scripts/new_school_smoke_test.mjs && php ../scripts/new_school_schema_smoke_test.php && php ../scripts/new_school_regression_test.php",
     "test:new-school:regression": "php ../scripts/new_school_regression_test.php",
