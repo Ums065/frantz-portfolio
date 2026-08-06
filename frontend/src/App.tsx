@@ -35,7 +35,6 @@ const Partner = lazy(() => import('./pages/Partner'))
 const MediaPortal = lazy(() => import('./pages/MediaPortal'))
 const Volunteer = lazy(() => import('./pages/Volunteer'))
 const Fellow = lazy(() => import('./pages/Fellow'))
-const DemoLogin = lazy(() => import('./pages/DemoLogin'))
 
 function RouteLoading() {
   return (
@@ -142,7 +141,6 @@ export default function App() {
           <Route path="/media-portal" element={<Suspense fallback={<RouteLoading />}><MediaPortal /></Suspense>} />
           <Route path="/volunteer" element={<Suspense fallback={<RouteLoading />}><Volunteer /></Suspense>} />
           <Route path="/fellow" element={<Suspense fallback={<RouteLoading />}><Fellow /></Suspense>} />
-          <Route path="/demo" element={<Suspense fallback={<RouteLoading />}><DemoLogin /></Suspense>} />
           <Route path="*" element={<RoutedPage pageKey="notfound"><NotFound /></RoutedPage>} />
         </Routes>
       </BrowserRouter>
