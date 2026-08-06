@@ -512,6 +512,14 @@ export default function Admin() {
     }
   }
 
+  const setRole = async (id: number, role: string) => {
+    if (!confirm(`Change this user's role to "${role}"? They will be signed out and must log in again.`)) return
+    const result = await api.put<{ message: string; user?: MemberRow }>(`admin/user/${id}/role`, { role })
+    if (result.user) syncUpdatedUser(result.user)
+    await refreshData()
+    if (selectedUser?.id === id) void openUserDetails(selectedUser)
+  }
+
   // Admin "view as user": swap the session to this user and open their real dashboard.
   const viewAsUser = async (m: MemberRow) => {
     if (viewBusyId) return
@@ -1977,6 +1985,7 @@ export default function Admin() {
         error={selectedUserError}
         onClose={closeUserDetails}
         onApproval={(status) => selectedUser && void setApproval(selectedUser.id, status)}
+        onRoleChange={(role) => selectedUser && setRole(selectedUser.id, role)}
       />
 
       <NsRecordDetail
@@ -2033,6 +2042,9 @@ export default function Admin() {
   )
 }
 
+// Roles an admin may assign (super_admin is DB-only and intentionally excluded).
+const ASSIGNABLE_ROLES = ['member', 'vip', 'editor', 'admin', 'student', 'parent', 'school', 'teacher', 'judge', 'business', 'sponsor', 'partner', 'media', 'volunteer', 'fellow']
+
 function UserDetailModal({
   open,
   summary,
@@ -2041,6 +2053,7 @@ function UserDetailModal({
   error,
   onClose,
   onApproval,
+  onRoleChange,
 }: {
   open: boolean
   summary: MemberRow | null
@@ -2049,9 +2062,15 @@ function UserDetailModal({
   error: string
   onClose: () => void
   onApproval: (status: 'pending' | 'approved' | 'rejected') => void
+  onRoleChange: (role: string) => void
 }) {
+  const currentRole = (detail?.user.role || summary?.role || 'member').toLowerCase()
+  const [roleDraft, setRoleDraft] = useState(currentRole)
+  useEffect(() => { setRoleDraft((detail?.user.role || summary?.role || 'member').toLowerCase()) }, [summary?.id, detail?.user.role, summary?.role])
+
   if (!open || !summary) return null
 
+  const isProtected = currentRole === 'super_admin'
   const status = (detail?.user.approval_status || summary.approval_status || 'pending').toLowerCase()
   const reviewer = detail?.user.approval_reviewed_by_name
     ? `${detail.user.approval_reviewed_by_name}${detail.user.approval_reviewed_by_email ? ` (${detail.user.approval_reviewed_by_email})` : ''}`
@@ -2141,6 +2160,28 @@ function UserDetailModal({
           </button>
           <span style={{ color: 'var(--muted)', fontSize: 12, alignSelf: 'center', marginLeft: 'auto' }}>Reviewed by: {reviewer}</span>
         </div>
+
+        {/* Role management — change a user's role (they'll be signed out to re-auth). */}
+        <section className="glass" style={{ padding: 16, borderRadius: 14, marginTop: 16 }}>
+          <h4 className="gold-text" style={{ fontSize: 16, marginBottom: 4 }}>Role</h4>
+          <p style={{ color: 'var(--muted)', fontSize: 12, marginBottom: 12 }}>
+            Change what this account can access. The user is signed out and must log in again. Role-specific data (e.g. School/Student records) is not migrated automatically.
+          </p>
+          {isProtected ? (
+            <p style={{ color: 'var(--muted)', fontSize: 13 }}>Super-admin accounts are protected and can only be changed in the database.</p>
+          ) : (
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+              <select value={roleDraft} onChange={(e) => setRoleDraft(e.target.value)} disabled={loading}
+                style={{ padding: '9px 12px', borderRadius: 8, border: '1px solid var(--line)', background: 'rgba(0,0,0,0.25)', color: 'var(--ink, #e8e2d2)', fontSize: 14 }}>
+                {ASSIGNABLE_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+              </select>
+              <button type="button" className="btn btn--sm btn--solid" disabled={loading || roleDraft === currentRole}
+                onClick={() => onRoleChange(roleDraft)}>
+                {roleDraft === currentRole ? 'Current role' : `Change to ${roleDraft}`}
+              </button>
+            </div>
+          )}
+        </section>
       </div>
     </div>
   )

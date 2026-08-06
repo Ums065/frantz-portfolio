@@ -2555,6 +2555,40 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             json(['message' => 'Account deleted.']);
         }
 
+        case $method === 'PUT' && preg_match('#^admin/user/(\d+)/role$#', $route, $m) === 1: {
+            $admin = require_admin();
+            $targetId = (int) $m[1];
+            $newRole = strtolower(trim((string) field(body(), 'role')));
+            // Admins may assign any role except super_admin (no privilege escalation
+            // beyond their own tier). super_admin can only be set in the database.
+            $allowed = ['member', 'vip', 'editor', 'admin', 'student', 'parent', 'school', 'teacher', 'judge', 'business', 'sponsor', 'partner', 'media', 'volunteer', 'fellow'];
+            if (!in_array($newRole, $allowed, true)) {
+                json(['error' => 'Invalid role.'], 422);
+            }
+            if ($targetId === (int) $admin['id']) {
+                json(['error' => 'You cannot change your own role.'], 422);
+            }
+            $lookup = db()->prepare('SELECT id, role FROM users WHERE id = ? LIMIT 1');
+            $lookup->execute([$targetId]);
+            $target = $lookup->fetch();
+            if (!$target) {
+                json(['error' => 'User not found.'], 404);
+            }
+            if ((string) $target['role'] === 'super_admin') {
+                json(['error' => 'Super-admin accounts are protected and cannot be changed here.'], 403);
+            }
+            // Bump session_version so the user's existing sessions are invalidated and
+            // they re-authenticate with the new role/permissions.
+            db()->prepare('UPDATE users SET role = ?, session_version = session_version + 1, updated_at = NOW() WHERE id = ?')
+                ->execute([$newRole, $targetId]);
+            $fresh = db()->prepare('SELECT id, full_name, email, role, approval_status, approval_note, approval_reviewed_at, created_at, updated_at FROM users WHERE id = ? LIMIT 1');
+            $fresh->execute([$targetId]);
+            json([
+                'message' => 'Role updated to ' . $newRole . '. The user will need to sign in again.',
+                'user' => $fresh->fetch() ?: null,
+            ]);
+        }
+
         case $method === 'DELETE' && preg_match('#^admin/event-rsvp/(\d+)$#', $route, $m) === 1: {
             require_admin();
             db()->prepare('DELETE FROM event_rsvps WHERE id = ?')->execute([(int) $m[1]]);
