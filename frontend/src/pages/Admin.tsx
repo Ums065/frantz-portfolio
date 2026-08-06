@@ -90,6 +90,52 @@ const NAV_GROUPS: Array<{ group: string; items: NavItem[] }> = [
   ] },
 ]
 
+// Flat lookup + label helper (used by search, sub-tabs, breadcrumb).
+const NAV_ITEMS: NavItem[] = NAV_GROUPS.flatMap((g) => g.items)
+const labelFor = (k: TabKey): string => NAV_ITEMS.find((i) => i.key === k)?.label ?? k
+
+// Per-group colour + glyph so the long nav reads as distinct sections at a glance.
+const GROUP_META: Record<string, { color: string; path: string }> = {
+  'Overview':               { color: '#d4af37', path: 'M3 3h8v8H3zM13 3h8v8h-8zM3 13h8v8H3zM13 13h8v8h-8z' },
+  'New School Challenge':   { color: '#4a90e2', path: 'M22 9L12 5 2 9l10 4 10-4zM6 11v5c0 1 2.7 2.5 6 2.5s6-1.5 6-2.5v-5' },
+  'Partnerships & Outreach':{ color: '#3fbf7f', path: 'M9 15l6-6M10 6l1-1a4 4 0 0 1 6 6l-1 1M14 18l-1 1a4 4 0 0 1-6-6l1-1' },
+  'Accounts':               { color: '#a06cd5', path: 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z' },
+  'Inbox':                  { color: '#e0785c', path: 'M3 5h18v14H3zM3 6l9 7 9-7' },
+  'Content & Media':        { color: '#d56ca0', path: 'M3 5h18v14H3zM3 16l5-5 4 4 3-3 6 6' },
+  'Engagement':             { color: '#2fb3c0', path: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z' },
+  'Store':                  { color: '#c8963f', path: 'M6 7h12l-1 13H7zM9 7a3 3 0 0 1 6 0' },
+}
+function GroupGlyph({ group }: { group: string }) {
+  const m = GROUP_META[group]
+  if (!m) return null
+  return <svg viewBox="0 0 24 24" width={15} height={15} fill="none" stroke={m.color} strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round"><path d={m.path} /></svg>
+}
+
+// The New School Challenge group's 8 tabs, folded into 4 friendly sections.
+// The underlying tab keys are unchanged; a sub-tab bar switches within a section.
+const NS_SECTIONS: Array<{ label: string; icon: TabKey; members: TabKey[] }> = [
+  { label: 'Schools & Setup',      icon: 'ns-schools',     members: ['ns-schools', 'ns-trendcatch'] },
+  { label: 'Submissions & Scoring',icon: 'ns-submissions', members: ['ns-submissions', 'ns-interviews', 'ns-judges'] },
+  { label: 'Results & Timeline',   icon: 'ns-ranking',     members: ['ns-ranking', 'ns-timeline'] },
+  { label: 'Messages',             icon: 'ns-chat',        members: ['ns-chat'] },
+]
+const NS_GROUP = 'New School Challenge'
+
+// Overview "Action Center": which counters mean "something needs you", and the
+// friendly phrasing for each. Only non-zero ones surface, most-urgent first.
+const ACTION_LABELS: Partial<Record<TabKey, string>> = {
+  approvals: 'account(s) to approve',
+  'business-requests': 'business request(s)',
+  'sponsor-jobs': 'sponsor job(s) to review',
+  ecosystem: 'ecosystem request(s)',
+  research: 'research entr(y/ies) to review',
+  sponsors: 'sponsor application(s)',
+  'ns-submissions': 'submission(s) to review',
+  'ns-chat': 'unread message(s)',
+  contacts: 'contact message(s)',
+  requests: 'service request(s)',
+}
+
 interface RequestRow {
   id: number; request_type: string; full_name: string; email: string
   organization: string | null; message: string | null; status: string; created_at: string
@@ -182,7 +228,18 @@ export default function Admin() {
     return {}
   })
   useEffect(() => { try { localStorage.setItem('fc_admin_nav_open', JSON.stringify(openGroups)) } catch { /* ignore */ } }, [openGroups])
-  const toggleGroup = (name: string) => setOpenGroups((p) => ({ ...p, [name]: !p[name] }))
+  // Accordion: opening a group collapses the others so only one section is open.
+  const toggleGroup = (name: string) => setOpenGroups((p) => (p[name] ? {} : { [name]: true }))
+  // Quick "jump to a section" search over the nav (⌘K-style, but always visible).
+  const [navQuery, setNavQuery] = useState('')
+  // First-run getting-started hint on the Overview (dismissible, remembered).
+  const [showGettingStarted, setShowGettingStarted] = useState<boolean>(() => {
+    try { return localStorage.getItem('fc_admin_intro_done') !== '1' } catch { return true }
+  })
+  const dismissGettingStarted = () => {
+    setShowGettingStarted(false)
+    try { localStorage.setItem('fc_admin_intro_done', '1') } catch { /* ignore */ }
+  }
   // Keep the URL in sync with the active tab (replaceState → no history spam).
   useEffect(() => {
     const url = new URL(window.location.href)
@@ -194,7 +251,7 @@ export default function Admin() {
   // Always keep the group that owns the active tab expanded.
   useEffect(() => {
     const g = NAV_GROUPS.find((gr) => gr.items.some((i) => i.key === tab))?.group
-    if (g) setOpenGroups((prev) => (prev[g] ? prev : { ...prev, [g]: true }))
+    if (g) setOpenGroups((prev) => (prev[g] ? prev : { [g]: true }))
   }, [tab])
   const [ovGroup, setOvGroup] = useState('People')
   const [viewBusyId, setViewBusyId] = useState<number | null>(null)
@@ -848,26 +905,61 @@ export default function Admin() {
             <span className="admin-kicker">Admin</span>
             <strong className="gold-text">Command Center</strong>
           </div>
+          <div className="admin-nav__search">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth={1.8}><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg>
+            <input type="search" value={navQuery} onChange={(e) => setNavQuery(e.target.value)} placeholder="Jump to a section…" aria-label="Search admin sections" />
+          </div>
           <nav className="admin-nav" onClick={() => setNavOpen(false)}>
-            {NAV_GROUPS.map((group) => {
+            {navQuery.trim() ? (
+              // Flat search results — quick jump to any section.
+              (() => {
+                const q = navQuery.trim().toLowerCase()
+                const matches = NAV_ITEMS.filter((i) => i.label.toLowerCase().includes(q))
+                if (matches.length === 0) return <p className="admin-nav__empty">No section matches “{navQuery}”.</p>
+                return (
+                  <div className="admin-nav__items admin-nav__items--flat">
+                    {matches.map((item) => (
+                      <button key={item.key} type="button" className={`admin-nav__item${tab === item.key ? ' is-active' : ''}`} onClick={() => { setTab(item.key); setNavQuery('') }}>
+                        <span className="admin-nav__icon" aria-hidden="true"><AdminNavIcon name={item.key} /></span>
+                        <span className="admin-nav__label">{item.label}</span>
+                        {notifications[item.key] ? <span className="admin-nav__badge admin-nav__badge--notify">{notifications[item.key]}</span> : null}
+                      </button>
+                    ))}
+                  </div>
+                )
+              })()
+            ) : NAV_GROUPS.map((group) => {
               const open = !!openGroups[group.group]
+              const isNs = group.group === NS_GROUP
               const groupCount = group.items.reduce((n, it) => n + (Number(notifications[it.key]) || 0), 0)
+              const color = GROUP_META[group.group]?.color || '#d4af37'
               return (
-                <div key={group.group} className={`admin-nav__group${open ? ' is-open' : ' is-collapsed'}`}>
+                <div key={group.group} className={`admin-nav__group${open ? ' is-open' : ' is-collapsed'}`} style={{ ['--grp' as string]: color }}>
                   <button
                     type="button"
                     className="admin-nav__group-label admin-nav__group-toggle"
                     aria-expanded={open}
                     onClick={(e) => { e.stopPropagation(); toggleGroup(group.group) }}
-                    style={{ display: 'flex', alignItems: 'center', width: '100%', background: 'none', border: 0, borderBottom: '1px solid rgba(201,168,76,0.14)', cursor: 'pointer' }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', background: 'none', border: 0, borderBottom: '1px solid rgba(201,168,76,0.14)', cursor: 'pointer' }}
                   >
-                    <span className="admin-nav__chevron" aria-hidden="true" style={{ display: 'inline-block', transition: 'transform .2s', transform: open ? 'rotate(90deg)' : 'none', marginRight: 6 }}>›</span>
+                    <span className="admin-nav__chevron" aria-hidden="true" style={{ display: 'inline-block', transition: 'transform .2s', transform: open ? 'rotate(90deg)' : 'none' }}>›</span>
+                    <span className="admin-nav__glyph" aria-hidden="true"><GroupGlyph group={group.group} /></span>
                     <span style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>{group.group}</span>
                     {!open && groupCount > 0 && <span className="admin-nav__badge admin-nav__badge--notify" title={`${groupCount} need attention`}>{groupCount}</span>}
                   </button>
                   {open && (
                     <div className="admin-nav__items">
-                      {group.items.map((item) => (
+                      {isNs ? NS_SECTIONS.map((sec) => {
+                        const activeSec = sec.members.includes(tab)
+                        const secCount = sec.members.reduce((n, k) => n + (Number(notifications[k]) || 0), 0)
+                        return (
+                          <button key={sec.label} type="button" className={`admin-nav__item${activeSec ? ' is-active' : ''}`} onClick={() => setTab(activeSec ? tab : sec.members[0])}>
+                            <span className="admin-nav__icon" aria-hidden="true"><AdminNavIcon name={sec.icon} /></span>
+                            <span className="admin-nav__label">{sec.label}</span>
+                            {secCount > 0 ? <span className="admin-nav__badge admin-nav__badge--notify">{secCount}</span> : null}
+                          </button>
+                        )
+                      }) : group.items.map((item) => (
                         <button
                           key={item.key}
                           type="button"
@@ -900,6 +992,25 @@ export default function Admin() {
             </div>
           </header>
 
+          {(() => {
+            // Sub-tab bar for the folded New School sections (only when the active
+            // section has more than one member).
+            const sec = NS_SECTIONS.find((s) => s.members.includes(tab))
+            if (!sec || sec.members.length < 2) return null
+            return (
+              <div className="admin-subtabs" role="tablist" aria-label={`${sec.label} sections`}>
+                {sec.members.map((k) => (
+                  <button key={k} type="button" role="tab" aria-selected={tab === k}
+                    className={`admin-subtab${tab === k ? ' is-active' : ''}`} onClick={() => setTab(k)}>
+                    <AdminNavIcon name={k} />
+                    <span>{labelFor(k)}</span>
+                    {notifications[k] ? <span className="admin-nav__badge admin-nav__badge--notify">{notifications[k]}</span> : null}
+                  </button>
+                ))}
+              </div>
+            )
+          })()}
+
           <Suspense fallback={<div style={{ padding: 40, color: 'var(--muted)', fontSize: 14 }}>Loading…</div>}>
           {tab === 'overview' && (
             <div className="admin-overview">
@@ -916,15 +1027,39 @@ export default function Admin() {
                   <span className="admin-achievement__hint">Students hired through the challenge — fully approved by admin, student & parent.</span>
                 </span>
               </button>
-              {approvalQueueCount > 0 && (
-                <div className="admin-overview__cta glass">
-                  <div>
-                    <strong className="gold-text">{approvalQueueCount} account{approvalQueueCount === 1 ? '' : 's'} awaiting review</strong>
-                    <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: 4 }}>Approve or reject pending registrations from the People section.</p>
-                  </div>
-                  <button type="button" className="btn btn--sm btn--solid" onClick={() => setTab('approvals')}>Open approvals</button>
+              {showGettingStarted && (
+                <div className="admin-intro glass">
+                  <button type="button" className="admin-intro__x" onClick={dismissGettingStarted} aria-label="Dismiss">✕</button>
+                  <strong className="gold-text">👋 Welcome to your Command Center</strong>
+                  <p>Everything lives in the left menu, grouped by colour. <b>Action Center</b> below always shows what needs you right now. Use <b>“Jump to a section…”</b> at the top of the menu to find anything fast.</p>
                 </div>
               )}
+              {(() => {
+                // Action Center — everything that needs attention, most-urgent first.
+                const items = (Object.keys(ACTION_LABELS) as TabKey[])
+                  .map((k) => ({ k, n: Number(notifications[k]) || 0, label: ACTION_LABELS[k] as string }))
+                  .filter((a) => a.n > 0)
+                  .sort((a, b) => b.n - a.n)
+                return (
+                  <div className="admin-action-center">
+                    <div className="admin-action-center__head">
+                      <span className="admin-kicker">Action Center</span>
+                      <strong className="gold-text">{items.length === 0 ? 'You’re all caught up 🎉' : 'Needs your attention'}</strong>
+                    </div>
+                    {items.length > 0 && (
+                      <div className="admin-action-grid">
+                        {items.map((a) => (
+                          <button key={a.k} type="button" className="admin-action-card glass" onClick={() => setTab(a.k)} title={`Open ${labelFor(a.k)}`}>
+                            <strong className="admin-action-card__n">{a.n}</strong>
+                            <span className="admin-action-card__lbl">{a.label}</span>
+                            <span className="admin-action-card__go">Open {labelFor(a.k)} →</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )
+              })()}
               <div className="admin-ov-tabs" role="tablist" aria-label="Overview sections">
                 {overviewGroups.map((group) => (
                   <button
