@@ -90,6 +90,16 @@ const CSS = `
 .opartners .octa__in{display:flex;align-items:center;justify-content:space-between;gap:24px;flex-wrap:wrap;padding:40px 0;}
 .opartners .octa h2{color:#fff;font-size:clamp(22px,3.5vw,26px);margin:0 0 6px;display:flex;align-items:center;gap:10px;}
 .opartners .octa p{color:#bdb6a5;font-size:14px;max-width:520px;margin:0;}
+.opartners .ocard--btn{width:100%;text-align:left;font:inherit;cursor:pointer;padding:0;}
+/* partner detail modal */
+.opartner-ov{position:fixed;inset:0;z-index:4000;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(4,4,3,.9);backdrop-filter:blur(4px);}
+.opartner-modal{position:relative;width:100%;max-width:520px;max-height:88vh;overflow-y:auto;background:linear-gradient(135deg,rgba(30,25,13,.98),rgba(13,12,9,.99));border:1px solid rgba(212,175,55,.4);border-radius:18px;padding:30px;box-shadow:0 24px 70px rgba(0,0,0,.6);color:#e8e2d2;}
+.opartner-modal__x{position:absolute;top:14px;right:14px;width:34px;height:34px;border-radius:50%;border:1px solid rgba(212,175,55,.3);background:rgba(0,0,0,.3);color:#e8e2d2;cursor:pointer;font-size:14px;}
+.opartner-modal__logo{width:96px;height:96px;border-radius:14px;background:#f6f1e6;display:flex;align-items:center;justify-content:center;overflow:hidden;border:1px solid rgba(212,175,55,.3);margin-bottom:16px;}
+.opartner-modal__logo img{max-width:86%;max-height:86%;object-fit:contain;}
+.opartner-modal h3{color:#fff;font-family:var(--f-serif,serif);}
+.opartner-modal__meta{display:flex;flex-wrap:wrap;gap:8px 16px;color:#c8c1b0;font-size:13px;margin:6px 0;}
+.opartner-modal__blurb{color:#a9a396;font-size:14px;line-height:1.65;margin:14px 0 0;}
 @media(max-width:900px){
   .opartners .ohero__grid{grid-template-columns:1fr;}
   .opartners .ohero__photo{min-height:180px;}
@@ -153,9 +163,9 @@ function LogoCard({ p }: { p: PartnerRow }) {
     : <div className="ologocard">{inner}</div>
 }
 
-function BrowseCard({ p }: { p: PartnerRow }) {
-  const body = (
-    <>
+function BrowseCard({ p, onOpen }: { p: PartnerRow; onOpen: (p: PartnerRow) => void }) {
+  return (
+    <button type="button" className="ocard ocard--btn" onClick={() => onOpen(p)}>
       <div className="ocard__bar" style={{ background: barColor(p.partner_type) }}>{p.partner_type || 'Partner'}</div>
       <div className="ocard__body">
         <div className="ocard__logo">
@@ -169,11 +179,41 @@ function BrowseCard({ p }: { p: PartnerRow }) {
           <span className="ocard__view">View Profile →</span>
         </div>
       </div>
-    </>
+    </button>
   )
-  return p.website
-    ? <a className="ocard" href={p.website} target="_blank" rel="noreferrer">{body}</a>
-    : <div className="ocard">{body}</div>
+}
+
+function PartnerDetailModal({ p, onClose }: { p: PartnerRow | null; onClose: () => void }) {
+  useEffect(() => {
+    if (!p) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    const prev = document.body.style.overflow; document.body.style.overflow = 'hidden'
+    return () => { window.removeEventListener('keydown', onKey); document.body.style.overflow = prev }
+  }, [p, onClose])
+  if (!p) return null
+  return (
+    <div className="opartner-ov" onClick={(e) => e.target === e.currentTarget && onClose()} role="dialog" aria-modal="true" aria-label={`${p.name} details`}>
+      <div className="opartner-modal">
+        <button type="button" className="opartner-modal__x" onClick={onClose} aria-label="Close">✕</button>
+        <div className="opartner-modal__logo">
+          {p.logo_url ? <img src={p.logo_url} alt={p.name} /> : <span className="ologomark" style={{ width: 72, height: 72, fontSize: 26 }}>{initials(p.name)}</span>}
+        </div>
+        {p.partner_type && <span className="opill" style={{ marginBottom: 10 }}>{p.partner_type}</span>}
+        <h3 style={{ margin: '4px 0 8px', fontSize: 26 }}>{p.name}</h3>
+        <div className="opartner-modal__meta">
+          {p.industry && <span>🏷️ {p.industry}</span>}
+          {p.location && <span>📍 {p.location}</span>}
+          {p.partner_since && <span>🗓️ Partner since {p.partner_since}</span>}
+        </div>
+        {p.blurb && <p className="opartner-modal__blurb">{p.blurb}</p>}
+        <div style={{ display: 'flex', gap: 10, marginTop: 18, flexWrap: 'wrap' }}>
+          {p.website && <a className="obtn obtn--gold" href={p.website} target="_blank" rel="noreferrer">Visit Website ↗</a>}
+          <button type="button" className="obtn obtn--ghost" onClick={onClose}>Close</button>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 export default function Partners() {
@@ -182,6 +222,7 @@ export default function Partners() {
   const [q, setQ] = useState(''); const [type, setType] = useState('all')
   const [industry, setIndustry] = useState('all'); const [borough, setBorough] = useState('all'); const [county, setCounty] = useState('all')
   const [sort, setSort] = useState<'name' | 'newest' | 'oldest'>('name')
+  const [detail, setDetail] = useState<PartnerRow | null>(null)
 
   useEffect(() => { window.scrollTo(0, 0); api.get<PartnersPayload>('partners').then(setData).catch(() => setData(null)) }, [])
 
@@ -338,7 +379,7 @@ export default function Partners() {
 
           {!data ? <p className="oempty">Loading partners…</p>
             : filtered.length === 0 ? <p className="oempty">No partners match your filters.{filtersActive && <> <button type="button" className="oclear" style={{ marginLeft: 4 }} onClick={clearFilters}>Clear all ✕</button></>}</p>
-            : <div className="ogrid">{filtered.map((p) => <BrowseCard key={p.id} p={p} />)}</div>}
+            : <div className="ogrid">{filtered.map((p) => <BrowseCard key={p.id} p={p} onOpen={setDetail} />)}</div>}
         </div>
       </section>
 
@@ -354,6 +395,8 @@ export default function Partners() {
           </div>
         </section>
       )}
+
+      <PartnerDetailModal p={detail} onClose={() => setDetail(null)} />
     </div>
   )
 }

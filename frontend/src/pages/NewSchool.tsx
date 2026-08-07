@@ -2664,7 +2664,7 @@ export default function NewSchool() {
 
           <aside className="ns-hero__portrait-wrap reveal">
             <div className="ns-hero__portrait glass">
-              <img src="/assets/challenge-poster.webp" alt="TrendCatch Student Impact Challenge — Leave It Better Than You Found It, founded by Frantz Coutard" loading="eager" decoding="async" />
+              <img src="/assets/new-school-impact-hero.png" alt="Students interviewing a local business owner for the Student Impact Challenge" loading="eager" decoding="async" />
             </div>
           </aside>
         </div>

@@ -370,6 +370,7 @@ export function LogoUploader({ role, current, reload }: { role: string; current?
           {current && <button type="button" className="btn btn--sm" disabled={busy} onClick={() => void removeLogo()}>Remove</button>}
         </div>
         <p style={{ fontSize: 11.5, color: 'var(--muted)', margin: 0 }}>PNG, JPG or WebP. A square logo looks best.</p>
+        <p style={{ fontSize: 11.5, color: 'var(--gold, #d4af37)', margin: '4px 0 0' }}>📸 {current ? 'An admin reviews your logo before it appears on our public Partners page.' : 'Upload your logo to appear on our public Partners page (after an admin review).'}</p>
       </div>
     </div>
   )

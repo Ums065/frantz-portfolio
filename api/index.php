@@ -1617,6 +1617,25 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             require_admin();
             json(ecosystem_admin_account_profile((int) $m[1]));
         }
+        // Toggle whether an ecosystem partner/sponsor's logo shows on the public /partner page.
+        case $method === 'PUT' && preg_match('#^admin/ecosystem/account/(\d+)/listing$#', $route, $m) === 1: {
+            require_admin();
+            ecosystem_ensure_schema();
+            $uid = (int) $m[1];
+            $listed = !empty(body()['listed']) ? 1 : 0;
+            db()->prepare('UPDATE ecosystem_accounts SET public_listed = ?, updated_at = NOW() WHERE user_id = ?')->execute([$listed, $uid]);
+            if ($listed) {
+                try {
+                    new_school_add_notification(
+                        null, 'all', 'partner_listed',
+                        'You\'re live on our Partners page 🎉',
+                        'Your logo and profile are now visible on the public Partners page. Thank you for being part of the movement!',
+                        ['user_id' => $uid], $uid
+                    );
+                } catch (Throwable $e) { if (app_debug()) error_log('partner_listed notify: ' . $e->getMessage()); }
+            }
+            json(['message' => $listed ? 'Listed on the public Partners page.' : 'Removed from the public Partners page.']);
+        }
         case $method === 'PUT' && preg_match('#^admin/ecosystem/request/(\d+)$#', $route, $m) === 1: {
             $admin = require_admin();
             $b = body();

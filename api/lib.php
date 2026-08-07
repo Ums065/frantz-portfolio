@@ -131,7 +131,7 @@ function ensure_session_version_column(): void
  * request after a deploy, db_auto_migrate() notices the stored version is behind
  * and runs every *_ensure_schema() once; afterwards it's a single cheap SELECT.
  */
-const APP_SCHEMA_VERSION = 20260807; // yyyymmdd + seq — raise on each schema change
+const APP_SCHEMA_VERSION = 20260808; // yyyymmdd + seq — raise on each schema change
 
 /**
  * One-shot, version-gated auto-migration. Runs on app bootstrap: if the DB's
@@ -3715,10 +3715,11 @@ function partner_dynamic_rows(): array
     // 2) Approved ecosystem partner / sponsor accounts that have uploaded a logo.
     try {
         ecosystem_ensure_schema();
+        // Admin must have both approved the account AND toggled it public (public_listed).
         $rows = db()->query(
             "SELECT e.id, e.role, e.org_name, e.website, e.about, e.details
              FROM ecosystem_accounts e JOIN users u ON u.id = e.user_id
-             WHERE e.role IN ('partner','sponsor') AND u.approval_status = 'approved'"
+             WHERE e.role IN ('partner','sponsor') AND u.approval_status = 'approved' AND e.public_listed = 1"
         )->fetchAll();
         foreach ($rows as $r) {
             $d = json_decode((string) ($r['details'] ?? ''), true);
@@ -5326,6 +5327,11 @@ function ecosystem_ensure_schema(): void
             INDEX idx_eco_refby (referred_by_code)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
     );
+    // Admin-controlled flag: is this account's logo shown on the public /partner page?
+    try {
+        $has = db()->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ecosystem_accounts' AND COLUMN_NAME = 'public_listed'")->fetchColumn();
+        if ((int) $has === 0) db()->exec("ALTER TABLE ecosystem_accounts ADD COLUMN public_listed TINYINT(1) NOT NULL DEFAULT 0");
+    } catch (Throwable $e) { if (app_debug()) error_log('eco public_listed: ' . $e->getMessage()); }
     $ready = true;
 }
 
@@ -5813,7 +5819,19 @@ function ecosystem_set_logo(array $user, string $url): array
     if (!$acc) json(['error' => 'Account not found.'], 404);
     $details = is_array($acc['details']) ? $acc['details'] : [];
     $details['logo_url'] = $url;
-    db()->prepare('UPDATE ecosystem_accounts SET details = ?, updated_at = NOW() WHERE user_id = ?')->execute([json_encode($details), (int) $user['id']]);
+    // A new/changed logo must be re-reviewed before it shows on the public page.
+    db()->prepare('UPDATE ecosystem_accounts SET details = ?, public_listed = 0, updated_at = NOW() WHERE user_id = ?')->execute([json_encode($details), (int) $user['id']]);
+    // Nudge an admin to review it for the public Partners page.
+    if (in_array((string) ($acc['role'] ?? ''), ['partner', 'sponsor'], true)) {
+        try {
+            new_school_add_notification(
+                null, 'admin', 'partner_logo_review',
+                'Logo ready to review: ' . (string) ($acc['org_name'] ?? 'Partner'),
+                'A ' . (string) $acc['role'] . ' uploaded a logo. Review it and list them on the public Partners page.',
+                ['user_id' => (int) $user['id']]
+            );
+        } catch (Throwable $e) { if (app_debug()) error_log('logo review notify: ' . $e->getMessage()); }
+    }
     return ['logo_url' => $url];
 }
 
@@ -5966,10 +5984,19 @@ function ecosystem_accounts_list(): array
 {
     ecosystem_shared_ensure_schema();
     // Ecosystem accounts + business accounts, so admin can issue documents to any of them.
-    $rows = db()->query("SELECT ea.user_id, ea.role, ea.org_name, u.email, u.approval_status FROM ecosystem_accounts ea JOIN users u ON u.id = ea.user_id")->fetchAll() ?: [];
+    $rows = db()->query("SELECT ea.user_id, ea.role, ea.org_name, u.email, u.approval_status, ea.public_listed, ea.details FROM ecosystem_accounts ea JOIN users u ON u.id = ea.user_id")->fetchAll() ?: [];
+    // Expose whether they have a logo + their public-listing flag (partner/sponsor only).
+    $rows = array_map(static function (array $r): array {
+        $d = json_decode((string) ($r['details'] ?? ''), true);
+        $r['has_logo'] = is_array($d) && trim((string) ($d['logo_url'] ?? '')) !== '';
+        $r['public_listed'] = (int) ($r['public_listed'] ?? 0);
+        unset($r['details']);
+        return $r;
+    }, $rows);
     try {
         business_ensure_schema();
         $biz = db()->query("SELECT ba.user_id, 'business' AS role, ba.business_name AS org_name, u.email, u.approval_status FROM business_accounts ba JOIN users u ON u.id = ba.user_id")->fetchAll() ?: [];
+        foreach ($biz as &$b) { $b['has_logo'] = false; $b['public_listed'] = 0; } unset($b);
         $rows = array_merge($rows, $biz);
     } catch (Throwable $e) { if (app_debug()) error_log('ecosystem_accounts_list business: ' . $e->getMessage()); }
     usort($rows, static fn($a, $b) => [$a['role'], $a['org_name']] <=> [$b['role'], $b['org_name']]);
@@ -7415,6 +7442,8 @@ function notifications_link_for(string $type, string $role): string
     $isEco = in_array($role, ['sponsor', 'partner', 'media', 'volunteer'], true);
 
     if ($type === 'event_featured') return '/events';
+    if ($type === 'partner_logo_review') return '/admin?tab=ecosystem';
+    if ($type === 'partner_listed') return $base;
     if ($type === 'chat') {
         if ($isNs) return $base . '?tab=chat';
         if ($role === 'business' || $isEco) return $base . '#messages';

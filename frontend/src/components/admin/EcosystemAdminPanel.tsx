@@ -15,7 +15,7 @@ interface AccountProfile {
   profile: Record<string, unknown>
   stats: { requests: number; documents: number; assignments: number }
 }
-interface EcoAccount { user_id: number; role: string; org_name: string; email: string; approval_status: string }
+interface EcoAccount { user_id: number; role: string; org_name: string; email: string; approval_status: string; public_listed?: number; has_logo?: boolean }
 interface EcoDoc { id: number; doc_type: string; label: string; url: string; created_ts: number }
 interface EcoAnn { id: number; audience: string; title: string; body: string; media_url?: string; created_ts: number }
 interface EcoAssign { id: number; title: string; detail: string; assign_date: string | null; status: string; created_ts: number }
@@ -156,6 +156,10 @@ export default function EcosystemAdminPanel() {
 
   const loadReqs = () => api.get<{ requests: EcoReq[] }>('admin/ecosystem/requests').then((d) => setReqs(d.requests || [])).catch((e) => setErr(String(e)))
   const loadAccounts = () => api.get<{ accounts: EcoAccount[] }>('admin/ecosystem/accounts').then((d) => setAccounts(d.accounts || [])).catch(() => {})
+  const toggleListing = async (a: EcoAccount, listed: boolean) => {
+    try { await api.put(`admin/ecosystem/account/${a.user_id}/listing`, { listed }); window.fcToast?.(listed ? 'Listed on Partners page.' : 'Removed from Partners page.'); loadAccounts() }
+    catch (e) { window.fcToast?.(e instanceof Error ? e.message : 'Could not update listing.') }
+  }
   useEffect(() => {
     void loadReqs(); void loadAccounts()
     api.get<{ announcements: EcoAnn[] }>('admin/ecosystem/announcements').then((d) => setAnns(d.announcements || [])).catch(() => {})
@@ -247,7 +251,7 @@ export default function EcosystemAdminPanel() {
             { label: 'Rejected', value: acctBy('rejected'), tone: 'red' },
           ]} />
           <EcoTable<EcoAccount>
-            head={['#', 'Organization', 'Role', 'Email', 'Approval', '']}
+            head={['#', 'Organization', 'Role', 'Email', 'Approval', 'Partners page', '']}
             rows={accounts}
             searchText={(a) => `${a.org_name} ${a.role} ${a.email}`}
             searchPlaceholder="Search accounts…"
@@ -266,6 +270,14 @@ export default function EcosystemAdminPanel() {
                 <td data-label="Role" style={{ textTransform: 'capitalize' }}>{a.role}</td>
                 <td data-label="Email" className="admin-cell--wrap" style={{ color: 'var(--muted)' }}>{a.email}</td>
                 <td data-label="Approval"><Pill status={a.approval_status} /></td>
+                <td data-label="Partners page" style={{ whiteSpace: 'nowrap' }} onClick={(e) => e.stopPropagation()}>
+                  {!['partner', 'sponsor'].includes(a.role) ? <span style={{ color: 'var(--muted)', fontSize: 12 }}>—</span>
+                    : a.approval_status !== 'approved' ? <span style={{ color: 'var(--muted)', fontSize: 12 }}>Approve first</span>
+                    : !a.has_logo ? <span style={{ color: 'var(--muted)', fontSize: 12 }}>No logo yet</span>
+                    : a.public_listed
+                      ? <button className="btn btn--sm" style={{ borderColor: '#3fbf7f', color: '#6be29a' }} onClick={() => void toggleListing(a, false)}>✓ Listed — unlist</button>
+                      : <button className="btn btn--sm btn--solid" onClick={() => void toggleListing(a, true)}>List on site</button>}
+                </td>
                 <td style={{ whiteSpace: 'nowrap' }}>
                   {a.approval_status === 'approved' && <button className="btn btn--sm" style={{ marginRight: 6 }} onClick={(e) => { e.stopPropagation(); setOpenAssign(a) }}>Assign</button>}
                   <button className="btn btn--sm" onClick={(e) => { e.stopPropagation(); setOpenAcct(a) }}>Manage</button>
