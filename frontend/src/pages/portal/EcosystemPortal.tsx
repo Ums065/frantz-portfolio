@@ -5,6 +5,7 @@ import { api } from '../../lib/api'
 import { useAuth } from '../../context/AuthContext'
 import { useSeo } from '../../hooks/useSeo'
 import PasswordInput from '../../components/PasswordInput'
+import ProgramDisclosure from '../../components/ProgramDisclosure'
 import { useLiveRefresh } from '../../hooks/useLiveRefresh'
 import { statHint } from '../../lib/statHints'
 import { resolveDashboardRoute } from '../../lib/dashboardRoute'
@@ -662,6 +663,7 @@ export default function EcosystemPortal({ config }: { config: PortalConfig }) {
               </label>
               <button className="btn btn--solid" disabled={busy === 'register' || !agree}>{busy === 'register' ? 'Submitting…' : 'Create Account'}</button>
               <p style={{ color: 'var(--muted)', fontSize: 12, margin: 0 }}>New accounts are reviewed by an admin before your dashboard unlocks.</p>
+              <ProgramDisclosure />
             </form>
           )}
         </div>

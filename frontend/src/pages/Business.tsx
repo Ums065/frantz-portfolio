@@ -4,6 +4,7 @@ import { api } from '../lib/api'
 import { useAuth } from '../context/AuthContext'
 import { useSeo } from '../hooks/useSeo'
 import PasswordInput from '../components/PasswordInput'
+import ProgramDisclosure from '../components/ProgramDisclosure'
 import { resolveDashboardRoute } from '../lib/dashboardRoute'
 import OfferStepper, { type OfferStage, type OfferEvent } from '../components/OfferStepper'
 import { unseenAnnCount, markAnnSeen, unseenReqCount, markReqSeen, EcoMessages, Section } from './portal/EcosystemPortal'
@@ -331,6 +332,7 @@ export default function Business() {
               </label>
               <button className="btn btn--solid" disabled={busy === 'register' || !f.agree}>{busy === 'register' ? 'Submitting…' : 'Create Business Account'}</button>
               <p style={{ color: 'var(--muted)', fontSize: 12, margin: 0 }}>New accounts are reviewed by an admin before your dashboard unlocks.</p>
+              <ProgramDisclosure />
             </form>
           )}
         </div>

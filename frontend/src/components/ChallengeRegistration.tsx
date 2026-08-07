@@ -3,6 +3,7 @@ import { api } from '../lib/api'
 import { useAuth } from '../context/AuthContext'
 import { CHALLENGE_TERMS_VERSION } from '../lib/terms'
 import TermsAgreement from './TermsAgreement'
+import ProgramDisclosure from './ProgramDisclosure'
 import { AvatarPicker } from './profile/ProfileSection'
 import {
   type FieldErrors,
@@ -964,6 +965,7 @@ export default function ChallengeRegistration({ tag, onTagChange, token, showCom
           <button className="btn btn--solid" type="submit" disabled={busy === tag || !ecoTermsOk}>{busy === tag ? 'Submitting…' : 'Create Account'}</button>
           <p className="ns-registration-note">New accounts are reviewed by an admin before your dashboard unlocks.</p>
         </form>
+        <ProgramDisclosure />
       </div>
     </>
   )
