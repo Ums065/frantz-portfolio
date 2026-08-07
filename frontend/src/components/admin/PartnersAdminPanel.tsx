@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api, type PartnerRow, type PartnerPage, type PartnerStat } from '../../lib/api'
 
+interface EcoAcct { user_id: number; role: string; org_name: string; email: string; approval_status: string; public_listed?: number; has_logo?: boolean }
+
 const TYPE_OPTIONS = ['Founding Partner', 'Presenting Sponsor', 'Corporate Partner', 'Business Partner', 'Media Partner', 'Government Partner', 'School Partner', 'Venue Partner', 'Civic Partner', 'Nonprofit Partner', 'Technology Partner', 'Financial Partner', 'Community Partner']
 const INDUSTRY_OPTIONS = ['Financial', 'Healthcare', 'Technology', 'Media', 'Television', 'Radio & News', 'Education', 'Government', 'Sports & Entertainment', 'Retail', 'Nonprofit']
 
@@ -17,12 +19,46 @@ export default function PartnersAdminPanel() {
   const [q, setQ] = useState('')
   const [page, setPage] = useState<PartnerPage | null>(null)
   const [pageBusy, setPageBusy] = useState(false); const [pageMsg, setPageMsg] = useState('')
+  // Live partner/sponsor accounts (from their dashboards) awaiting logo publication.
+  const [ecoAccts, setEcoAccts] = useState<EcoAcct[]>([])
+  const [selected, setSelected] = useState<Set<number>>(new Set())
+  const [publishing, setPublishing] = useState(false)
 
+  const loadEco = () => api.get<{ accounts: EcoAcct[] }>('admin/ecosystem/accounts')
+    .then((d) => setEcoAccts(d.accounts || [])).catch(() => {})
   const load = () => {
     api.get<{ partners: PartnerRow[] }>('admin/partners').then((d) => setRows(d.partners || [])).catch(() => {})
     api.get<{ page: PartnerPage }>('admin/partners/settings').then((d) => setPage(d.page)).catch(() => {})
+    loadEco()
   }
   useEffect(() => { load() }, [])
+
+  // Approved partner/sponsor accounts that uploaded a logo but aren't public yet.
+  const pendingLogos = useMemo(
+    () => ecoAccts.filter((a) => ['partner', 'sponsor'].includes(a.role) && a.approval_status === 'approved' && a.has_logo && !a.public_listed),
+    [ecoAccts],
+  )
+  const publishedLogos = useMemo(
+    () => ecoAccts.filter((a) => ['partner', 'sponsor'].includes(a.role) && a.public_listed),
+    [ecoAccts],
+  )
+  const toggleSel = (id: number) => setSelected((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
+  const allSel = pendingLogos.length > 0 && pendingLogos.every((a) => selected.has(a.user_id))
+  const toggleAll = () => setSelected(allSel ? new Set() : new Set(pendingLogos.map((a) => a.user_id)))
+  const publishSelected = async () => {
+    const ids = pendingLogos.filter((a) => selected.has(a.user_id)).map((a) => a.user_id)
+    if (ids.length === 0) return
+    if (!window.confirm(`Publish ${ids.length} partner logo${ids.length === 1 ? '' : 's'} to the public Partners page? They become visible immediately.`)) return
+    setPublishing(true)
+    try {
+      for (const id of ids) { try { await api.put(`admin/ecosystem/account/${id}/listing`, { listed: true }) } catch { /* skip one */ } }
+      setSelected(new Set()); await loadEco()
+    } finally { setPublishing(false) }
+  }
+  const unpublishOne = async (id: number) => {
+    if (!window.confirm('Remove this partner from the public Partners page?')) return
+    try { await api.put(`admin/ecosystem/account/${id}/listing`, { listed: false }); await loadEco() } catch { /* ignore */ }
+  }
 
   const filtered = useMemo(() => {
     const n = q.trim().toLowerCase()
@@ -64,6 +100,53 @@ export default function PartnersAdminPanel() {
 
   return (
     <div style={{ display: 'grid', gap: 22 }}>
+      {/* Logos awaiting publication — partners/sponsors who uploaded a logo from
+          their dashboard and were approved. Bulk-select and publish to /partner. */}
+      <div className="glass" style={{ padding: '16px 20px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <div>
+            <h3 className="gold-text" style={{ margin: 0 }}>Logos Awaiting Publication ({pendingLogos.length})</h3>
+            <p style={{ color: 'var(--muted)', fontSize: 13, margin: '4px 0 0' }}>Approved partners & sponsors who uploaded a logo. Select and publish to show them on the public Partners page.</p>
+          </div>
+          <button className="btn btn--solid btn--sm" type="button" disabled={publishing || pendingLogos.filter((a) => selected.has(a.user_id)).length === 0} onClick={publishSelected}>
+            {publishing ? 'Publishing…' : `Publish selected (${pendingLogos.filter((a) => selected.has(a.user_id)).length})`}
+          </button>
+        </div>
+        {pendingLogos.length === 0 ? (
+          <p className="msub" style={{ marginTop: 12 }}>Nothing waiting — all approved partner/sponsor logos are published. ✓</p>
+        ) : (
+          <div className="admin-table-wrap" style={{ marginTop: 12 }}>
+            <table className="admin-table">
+              <thead><tr>
+                <th style={{ width: 34 }}><input type="checkbox" checked={allSel} onChange={toggleAll} aria-label="Select all" /></th>
+                <th>Organization</th><th>Role</th><th>Email</th>
+              </tr></thead>
+              <tbody>{pendingLogos.map((a) => (
+                <tr key={a.user_id} onClick={() => toggleSel(a.user_id)} style={{ cursor: 'pointer' }}>
+                  <td onClick={(e) => e.stopPropagation()}><input type="checkbox" checked={selected.has(a.user_id)} onChange={() => toggleSel(a.user_id)} /></td>
+                  <td><strong>{a.org_name}</strong></td>
+                  <td style={{ textTransform: 'capitalize' }}>{a.role}</td>
+                  <td className="msub">{a.email}</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+        )}
+        {publishedLogos.length > 0 && (
+          <details style={{ marginTop: 12 }}>
+            <summary style={{ cursor: 'pointer', color: 'var(--muted)', fontSize: 13 }}>Published from dashboards ({publishedLogos.length})</summary>
+            <div style={{ display: 'grid', gap: 6, marginTop: 8 }}>
+              {publishedLogos.map((a) => (
+                <div key={a.user_id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, fontSize: 13 }}>
+                  <span>{a.org_name} <span className="msub" style={{ textTransform: 'capitalize' }}>· {a.role}</span></span>
+                  <button className="btn btn--sm" style={{ color: '#e08a8a', borderColor: '#e08a8a' }} onClick={() => unpublishOne(a.user_id)}>Unpublish</button>
+                </div>
+              ))}
+            </div>
+          </details>
+        )}
+      </div>
+
       {/* Page content */}
       {page && (
         <div className="glass" style={{ padding: '16px 20px' }}>
