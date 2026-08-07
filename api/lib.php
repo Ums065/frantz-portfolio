@@ -3726,9 +3726,13 @@ function partner_dynamic_rows(): array
             $logo = is_array($d) ? trim((string) ($d['logo_url'] ?? '')) : '';
             if ($logo === '') continue;                          // only show once they have a logo
             $isSponsor = $r['role'] === 'sponsor';
-            $type = $isSponsor
-                ? 'Sponsor'
-                : (is_array($d) && trim((string) ($d['partner_type'] ?? '')) !== '' ? trim((string) $d['partner_type']) : 'Partner');
+            // Admin can override the public type; else use the account's own, else a default.
+            $type = is_array($d) && trim((string) ($d['public_type'] ?? '')) !== ''
+                ? trim((string) $d['public_type'])
+                : ($isSponsor
+                    ? 'Sponsor'
+                    : (is_array($d) && trim((string) ($d['partner_type'] ?? '')) !== '' ? trim((string) $d['partner_type']) : 'Partner'));
+            $featured = is_array($d) && !empty($d['public_featured']) ? 1 : 0;
             $out[] = [
                 'id' => 800000 + (int) $r['id'],
                 'name' => (string) $r['org_name'],
@@ -3739,9 +3743,9 @@ function partner_dynamic_rows(): array
                 'partner_since' => null,
                 'website' => $r['website'] ?: null,
                 'blurb' => trim((string) ($r['about'] ?? '')) ?: null,
-                'is_featured' => 0,
+                'is_featured' => $featured,
                 'is_media_partner' => 0,
-                'sort_order' => 5,
+                'sort_order' => $featured ? 1 : 5,
                 'source' => $isSponsor ? 'sponsor' : 'partner',
             ];
         }
@@ -5988,15 +5992,20 @@ function ecosystem_accounts_list(): array
     // Expose whether they have a logo + their public-listing flag (partner/sponsor only).
     $rows = array_map(static function (array $r): array {
         $d = json_decode((string) ($r['details'] ?? ''), true);
-        $r['has_logo'] = is_array($d) && trim((string) ($d['logo_url'] ?? '')) !== '';
+        if (!is_array($d)) $d = [];
+        $r['logo_url'] = trim((string) ($d['logo_url'] ?? '')) ?: null;
+        $r['has_logo'] = $r['logo_url'] !== null;
         $r['public_listed'] = (int) ($r['public_listed'] ?? 0);
+        // Admin-set public presentation overrides (fall back to the account's own type).
+        $r['public_type'] = trim((string) ($d['public_type'] ?? $d['partner_type'] ?? '')) ?: null;
+        $r['public_featured'] = !empty($d['public_featured']) ? 1 : 0;
         unset($r['details']);
         return $r;
     }, $rows);
     try {
         business_ensure_schema();
         $biz = db()->query("SELECT ba.user_id, 'business' AS role, ba.business_name AS org_name, u.email, u.approval_status FROM business_accounts ba JOIN users u ON u.id = ba.user_id")->fetchAll() ?: [];
-        foreach ($biz as &$b) { $b['has_logo'] = false; $b['public_listed'] = 0; } unset($b);
+        foreach ($biz as &$b) { $b['has_logo'] = false; $b['public_listed'] = 0; $b['logo_url'] = null; $b['public_type'] = null; $b['public_featured'] = 0; } unset($b);
         $rows = array_merge($rows, $biz);
     } catch (Throwable $e) { if (app_debug()) error_log('ecosystem_accounts_list business: ' . $e->getMessage()); }
     usort($rows, static fn($a, $b) => [$a['role'], $a['org_name']] <=> [$b['role'], $b['org_name']]);
@@ -7444,6 +7453,7 @@ function notifications_link_for(string $type, string $role): string
     if ($type === 'event_featured') return '/events';
     if ($type === 'partner_logo_review') return '/admin?tab=ecosystem';
     if ($type === 'partner_listed') return $base;
+    if ($type === 'partner_logo_rejected') return $base . '#branding';
     if ($type === 'chat') {
         if ($isNs) return $base . '?tab=chat';
         if ($role === 'business' || $isEco) return $base . '#messages';

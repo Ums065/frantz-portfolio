@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api, type PartnerRow, type PartnerPage, type PartnerStat } from '../../lib/api'
 
-interface EcoAcct { user_id: number; role: string; org_name: string; email: string; approval_status: string; public_listed?: number; has_logo?: boolean }
+interface EcoAcct { user_id: number; role: string; org_name: string; email: string; approval_status: string; public_listed?: number; has_logo?: boolean; logo_url?: string | null; public_type?: string | null; public_featured?: number }
 
 const TYPE_OPTIONS = ['Founding Partner', 'Presenting Sponsor', 'Corporate Partner', 'Business Partner', 'Media Partner', 'Government Partner', 'School Partner', 'Venue Partner', 'Civic Partner', 'Nonprofit Partner', 'Technology Partner', 'Financial Partner', 'Community Partner']
 const INDUSTRY_OPTIONS = ['Financial', 'Healthcare', 'Technology', 'Media', 'Television', 'Radio & News', 'Education', 'Government', 'Sports & Entertainment', 'Retail', 'Nonprofit']
@@ -23,6 +23,16 @@ export default function PartnersAdminPanel() {
   const [ecoAccts, setEcoAccts] = useState<EcoAcct[]>([])
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [publishing, setPublishing] = useState(false)
+  const [preview, setPreview] = useState<string | null>(null)
+  const setMeta = async (id: number, patch: { partner_type?: string; featured?: boolean }) => {
+    setEcoAccts((list) => list.map((a) => a.user_id === id ? { ...a, ...(patch.partner_type !== undefined ? { public_type: patch.partner_type } : {}), ...(patch.featured !== undefined ? { public_featured: patch.featured ? 1 : 0 } : {}) } : a))
+    try { await api.put(`admin/ecosystem/account/${id}/public-meta`, patch) } catch { /* ignore */ }
+  }
+  const rejectLogo = async (a: EcoAcct) => {
+    const note = window.prompt(`Reject ${a.org_name}'s logo? Optionally add a reason for them (e.g. "use a square, transparent PNG"):`, '')
+    if (note === null) return
+    try { await api.put(`admin/ecosystem/account/${a.user_id}/logo-reject`, { note }); await loadEco() } catch { /* ignore */ }
+  }
 
   const loadEco = () => api.get<{ accounts: EcoAcct[] }>('admin/ecosystem/accounts')
     .then((d) => setEcoAccts(d.accounts || [])).catch(() => {})
@@ -119,14 +129,24 @@ export default function PartnersAdminPanel() {
             <table className="admin-table">
               <thead><tr>
                 <th style={{ width: 34 }}><input type="checkbox" checked={allSel} onChange={toggleAll} aria-label="Select all" /></th>
-                <th>Organization</th><th>Role</th><th>Email</th>
+                <th>Logo</th><th>Organization</th><th>Show as (type)</th><th>Featured</th><th></th>
               </tr></thead>
               <tbody>{pendingLogos.map((a) => (
-                <tr key={a.user_id} onClick={() => toggleSel(a.user_id)} style={{ cursor: 'pointer' }}>
-                  <td onClick={(e) => e.stopPropagation()}><input type="checkbox" checked={selected.has(a.user_id)} onChange={() => toggleSel(a.user_id)} /></td>
-                  <td><strong>{a.org_name}</strong></td>
-                  <td style={{ textTransform: 'capitalize' }}>{a.role}</td>
-                  <td className="msub">{a.email}</td>
+                <tr key={a.user_id}>
+                  <td><input type="checkbox" checked={selected.has(a.user_id)} onChange={() => toggleSel(a.user_id)} /></td>
+                  <td>
+                    {a.logo_url
+                      ? <img src={a.logo_url} alt={`${a.org_name} logo`} onClick={() => setPreview(a.logo_url || null)} title="Click to enlarge" style={{ width: 46, height: 46, objectFit: 'contain', background: '#fff', borderRadius: 8, cursor: 'zoom-in' }} />
+                      : <span className="msub">—</span>}
+                  </td>
+                  <td><strong>{a.org_name}</strong><div className="msub" style={{ fontSize: 12, textTransform: 'capitalize' }}>{a.role} · {a.email}</div></td>
+                  <td>
+                    <select value={a.public_type || (a.role === 'sponsor' ? 'Presenting Sponsor' : 'Business Partner')} onChange={(e) => void setMeta(a.user_id, { partner_type: e.target.value })} style={{ ...inp, minWidth: 150 }}>
+                      {TYPE_OPTIONS.map((o) => <option key={o} value={o} style={optStyle}>{o}</option>)}
+                    </select>
+                  </td>
+                  <td><label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}><input type="checkbox" checked={!!a.public_featured} onChange={(e) => void setMeta(a.user_id, { featured: e.target.checked })} /> ★</label></td>
+                  <td><button className="btn btn--sm" style={{ color: '#e08a8a', borderColor: '#e08a8a' }} onClick={() => void rejectLogo(a)}>Reject</button></td>
                 </tr>
               ))}</tbody>
             </table>
@@ -146,6 +166,12 @@ export default function PartnersAdminPanel() {
           </details>
         )}
       </div>
+
+      {preview && (
+        <div onClick={() => setPreview(null)} style={{ position: 'fixed', inset: 0, zIndex: 4000, background: 'rgba(4,4,3,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, cursor: 'zoom-out' }}>
+          <img src={preview} alt="Logo preview" style={{ maxWidth: '90vw', maxHeight: '85vh', objectFit: 'contain', background: '#fff', borderRadius: 12, padding: 20 }} />
+        </div>
+      )}
 
       {/* Page content */}
       {page && (

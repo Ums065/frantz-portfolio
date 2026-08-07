@@ -1636,6 +1636,41 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             }
             json(['message' => $listed ? 'Listed on the public Partners page.' : 'Removed from the public Partners page.']);
         }
+        // Set the public presentation (type / featured) for a dashboard partner.
+        case $method === 'PUT' && preg_match('#^admin/ecosystem/account/(\d+)/public-meta$#', $route, $m) === 1: {
+            require_admin();
+            ecosystem_ensure_schema();
+            $uid = (int) $m[1];
+            $b = body();
+            $acc = ecosystem_account_for_user($uid);
+            if (!$acc) json(['error' => 'Account not found.'], 404);
+            $d = is_array($acc['details']) ? $acc['details'] : [];
+            if (array_key_exists('partner_type', $b)) $d['public_type'] = mb_substr(trim((string) field($b, 'partner_type')), 0, 60) ?: null;
+            if (array_key_exists('featured', $b)) $d['public_featured'] = !empty($b['featured']) ? 1 : 0;
+            db()->prepare('UPDATE ecosystem_accounts SET details = ?, updated_at = NOW() WHERE user_id = ?')->execute([json_encode($d), $uid]);
+            json(['message' => 'Updated.']);
+        }
+        // Reject a partner/sponsor logo: clear it, unlist, and ask them to re-upload.
+        case $method === 'PUT' && preg_match('#^admin/ecosystem/account/(\d+)/logo-reject$#', $route, $m) === 1: {
+            require_admin();
+            ecosystem_ensure_schema();
+            $uid = (int) $m[1];
+            $note = trim((string) field(body(), 'note'));
+            $acc = ecosystem_account_for_user($uid);
+            if (!$acc) json(['error' => 'Account not found.'], 404);
+            $d = is_array($acc['details']) ? $acc['details'] : [];
+            $d['logo_url'] = '';
+            db()->prepare('UPDATE ecosystem_accounts SET details = ?, public_listed = 0, updated_at = NOW() WHERE user_id = ?')->execute([json_encode($d), $uid]);
+            try {
+                new_school_add_notification(
+                    null, 'all', 'partner_logo_rejected',
+                    'Please re-upload your logo',
+                    'Your logo wasn\'t approved for the Partners page.' . ($note !== '' ? ' Reason: ' . $note : '') . ' Please upload a new one from your dashboard.',
+                    ['user_id' => $uid], $uid
+                );
+            } catch (Throwable $e) { if (app_debug()) error_log('logo reject notify: ' . $e->getMessage()); }
+            json(['message' => 'Logo rejected — the partner has been asked to re-upload.']);
+        }
         case $method === 'PUT' && preg_match('#^admin/ecosystem/request/(\d+)$#', $route, $m) === 1: {
             $admin = require_admin();
             $b = body();
@@ -2115,6 +2150,8 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
                     'research_pending'   => $countWhere("SELECT COUNT(*) FROM research_entries WHERE status = 'submitted'"),
                     'sponsors_pending'   => $countWhere("SELECT COUNT(*) FROM sponsor_applications WHERE approval_status = 'pending_review'"),
                     'sponsor_jobs_pending' => $countWhere("SELECT COUNT(*) FROM sponsor_jobs WHERE status = 'pending'"),
+                    // Approved partner/sponsor accounts with an uploaded logo awaiting publication.
+                    'partner_logos_pending' => $countWhere("SELECT COUNT(*) FROM ecosystem_accounts e JOIN users u ON u.id = e.user_id WHERE e.role IN ('partner','sponsor') AND u.approval_status = 'approved' AND e.public_listed = 0 AND e.details LIKE '%\"logo_url\":\"/%'"),
                     // Fully-consented internships — a headline achievement for the program.
                     'internships_confirmed' => $countWhere("SELECT COUNT(*) FROM business_requests br LEFT JOIN new_school_students s ON s.id = br.student_id WHERE br.request_type = 'internship' AND (br.parent_consent = 'accepted' OR (s.age >= 18 AND br.student_consent = 'accepted'))"),
                 ],
