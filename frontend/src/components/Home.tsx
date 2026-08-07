@@ -345,6 +345,7 @@ export default function Home() {
   const [posts, setPosts] = useState<Post[]>([])
   const [galleryUploads, setGalleryUploads] = useState<PublicGalleryItemRow[]>([])
   const [partners, setPartners] = useState<PartnerRow[]>([])
+  const [partnerLightbox, setPartnerLightbox] = useState<PartnerRow | null>(null)
   const [challengeOverview, setChallengeOverview] = useState<any>(null)
   const [challengeTab, setChallengeTab] = useState<HomeChallengeTabKey>('overview')
 
@@ -367,6 +368,14 @@ export default function Home() {
       .then((d) => setPartners(Array.isArray(d.partners) ? d.partners : []))
       .catch(() => setPartners([]))
   }, [])
+
+  useEffect(() => {
+    if (!partnerLightbox) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setPartnerLightbox(null) }
+    window.addEventListener('keydown', onKey)
+    const prev = document.body.style.overflow; document.body.style.overflow = 'hidden'
+    return () => { window.removeEventListener('keydown', onKey); document.body.style.overflow = prev }
+  }, [partnerLightbox])
 
   const safeEvents = Array.isArray(events) ? events : []
   // Real partners with a logo (featured-first from the API), for the home strip.
@@ -1005,9 +1014,10 @@ export default function Home() {
           {homePartners.length > 0 ? (
             <div className="partners-logos reveal">
               {homePartners.map((p) => (
-                <Link className="partners-logo" to="/partner" key={p.id} title={p.name}>
-                  <img src={p.logo_url as string} alt={p.name} loading="lazy" decoding="async" />
-                </Link>
+                <button type="button" className="partners-logo" key={p.id} title={`View ${p.name}`} onClick={() => setPartnerLightbox(p)}>
+                  <span className="partners-logo__tile"><img src={p.logo_url as string} alt={p.name} loading="lazy" decoding="async" /></span>
+                  <span className="partners-logo__name">{p.name}</span>
+                </button>
               ))}
             </div>
           ) : (
@@ -1026,6 +1036,20 @@ export default function Home() {
             <a className="btn" href="/docs/partnership_kit.pdf" download>Download Partnership Kit</a>
           </div>
         </div>
+        {partnerLightbox && (
+          <div className="partner-lb" onClick={(e) => { if (e.target === e.currentTarget) setPartnerLightbox(null) }} role="dialog" aria-modal="true" aria-label={`${partnerLightbox.name} logo`}>
+            <div className="partner-lb__inner">
+              <button type="button" className="partner-lb__x" onClick={() => setPartnerLightbox(null)} aria-label="Close">✕</button>
+              <div className="partner-lb__img"><img src={partnerLightbox.logo_url as string} alt={partnerLightbox.name} /></div>
+              <div className="partner-lb__name">{partnerLightbox.name}</div>
+              {partnerLightbox.partner_type && <div className="partner-lb__type">{partnerLightbox.partner_type}</div>}
+              <div style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap', justifyContent: 'center' }}>
+                {partnerLightbox.website && <a className="btn btn--solid btn--sm" href={partnerLightbox.website} target="_blank" rel="noreferrer">Visit Website ↗</a>}
+                <Link className="btn btn--sm" to="/partner" onClick={() => setPartnerLightbox(null)}>All Partners</Link>
+              </div>
+            </div>
+          </div>
+        )}
       </section>
 
       <div className="wrap"><div className="sec-divider" /></div>
