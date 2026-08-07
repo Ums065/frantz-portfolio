@@ -378,8 +378,11 @@ export default function Home() {
   }, [partnerLightbox])
 
   const safeEvents = Array.isArray(events) ? events : []
-  // Real partners with a logo (featured-first from the API), for the home strip.
-  const homePartners = (Array.isArray(partners) ? partners : []).filter((p) => p.logo_url).slice(0, 12)
+  // Real partners with a logo (featured-first from the API). The home strip is a
+  // teaser — show up to 8; the full list lives on /partner.
+  const partnersWithLogo = (Array.isArray(partners) ? partners : []).filter((p) => p.logo_url)
+  const homePartners = partnersWithLogo.slice(0, 8)
+  const morePartners = Math.max(0, partnersWithLogo.length - homePartners.length)
   const safePosts = Array.isArray(posts) ? posts : []
   const featured = safePosts.find((p) => p.is_featured) || safePosts[0]
   const rest = safePosts.filter((p) => p !== featured).slice(0, 2)
@@ -1019,6 +1022,12 @@ export default function Home() {
                   <span className="partners-logo__name">{p.name}</span>
                 </button>
               ))}
+              {morePartners > 0 && (
+                <Link className="partners-logo partners-logo--more" to="/partner" title="See all partners">
+                  <span className="partners-logo__tile"><strong>+{morePartners}</strong></span>
+                  <span className="partners-logo__name">more partners</span>
+                </Link>
+              )}
             </div>
           ) : (
             <div className="partners-row reveal">
@@ -1031,7 +1040,7 @@ export default function Home() {
             </div>
           )}
           <div className="partners-cta reveal" style={{ display: 'flex', flexWrap: 'wrap', gap: 10, justifyContent: 'center' }}>
-            <Link className="btn" to="/partner">View All Partners</Link>
+            <Link className="btn" to="/partner">View All Partners{partnersWithLogo.length > 0 ? ` (${partnersWithLogo.length})` : ''}</Link>
             <button className="btn btn--solid" data-request="Partnership / Collaboration Inquiry">Become a Partner</button>
             <a className="btn" href="/docs/partnership_kit.pdf" download>Download Partnership Kit</a>
           </div>

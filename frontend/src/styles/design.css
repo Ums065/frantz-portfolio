@@ -3782,25 +3782,31 @@ section#challenge .challenge-features .ns-gain p {
 
 /* Home partner logo strip — real partners pulled from /partner (clickable → lightbox). */
 .partners-logos {
-  display:grid;
-  grid-template-columns:repeat(auto-fill, minmax(180px, 1fr));
-  gap:20px;
+  display:flex; flex-wrap:wrap; justify-content:center;
+  gap:22px 20px;
   margin-top:8px;
-  justify-content:center;
 }
 .partners-logo {
   display:flex; flex-direction:column; align-items:center; gap:10px;
-  background:none; border:0; padding:0; cursor:pointer; font:inherit;
+  width:172px;
+  background:none; border:0; padding:0; cursor:pointer; font:inherit; text-decoration:none;
 }
 .partners-logo__tile {
   display:flex; align-items:center; justify-content:center;
-  width:100%; height:130px; padding:18px;
+  width:172px; height:118px; padding:16px; box-sizing:border-box;
   background:#f6f1e6; border:1px solid rgba(201,168,76,.28); border-radius:14px;
   transition:transform .2s ease, box-shadow .2s ease, border-color .2s ease;
 }
 .partners-logo:hover .partners-logo__tile { transform:translateY(-4px); border-color:rgba(201,168,76,.65); box-shadow:0 14px 30px rgba(0,0,0,.45); }
 .partners-logo__tile img { max-width:100%; max-height:100%; object-fit:contain; }
-.partners-logo__name { color:var(--ivory,#f0ead6); font-size:14px; font-weight:600; text-align:center; line-height:1.3; }
+.partners-logo__name { color:var(--ivory,#f0ead6); font-size:13.5px; font-weight:600; text-align:center; line-height:1.3; max-width:172px; }
+/* "+N more" tile */
+.partners-logo--more .partners-logo__tile {
+  background:linear-gradient(135deg, rgba(30,25,13,.9), rgba(13,12,9,.95));
+  border:1px dashed rgba(201,168,76,.5);
+}
+.partners-logo--more .partners-logo__tile strong { color:var(--gold,#d4af37); font-family:var(--f-serif,serif); font-size:30px; }
+.partners-logo--more .partners-logo__name { color:var(--muted,#a9a396); }
 
 /* Partner logo lightbox */
 .partner-lb {
@@ -3827,7 +3833,8 @@ section#challenge .challenge-features .ns-gain p {
 .partner-lb__type { color:var(--gold,#d4af37); font-size:12px; letter-spacing:.1em; text-transform:uppercase; margin-top:4px; }
 
 @media (max-width:520px){
-  .partners-logos { grid-template-columns:repeat(auto-fill, minmax(130px, 1fr)); gap:14px; }
-  .partners-logo__tile { height:96px; padding:12px; }
-  .partners-logo__name { font-size:12.5px; }
+  .partners-logos { gap:16px 14px; }
+  .partners-logo, .partners-logo__tile { width:132px; }
+  .partners-logo__tile { height:92px; padding:12px; }
+  .partners-logo__name { font-size:12px; max-width:132px; }
 }
