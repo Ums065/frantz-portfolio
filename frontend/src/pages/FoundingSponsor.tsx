@@ -57,7 +57,7 @@ const interestOptions = [
 
 const defaultPaymentInstructions = [
   'MAKE CHECK PAYABLE TO:',
-  'Trend Catch Network Inc.',
+  'TrendCatch Gives Back Inc.',
   '',
   'MAIL CHECK TO:',
   'Attention: FrantzCoutard.com',

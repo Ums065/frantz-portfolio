@@ -1924,7 +1924,7 @@ function sponsor_payment_instruction_lines(): array
 {
     return [
         'MAKE CHECK PAYABLE TO:',
-        'Trend Catch Network Inc.',
+        'TrendCatch Gives Back Inc.',
         '',
         'MAIL CHECK TO:',
         'Attention: FrantzCoutard.com',
