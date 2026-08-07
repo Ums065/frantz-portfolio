@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { api, type EventItem, type Post, type PublicGalleryItemRow } from '../lib/api'
+import { api, type EventItem, type Post, type PublicGalleryItemRow, type PartnerRow } from '../lib/api'
 import ContactSection from './ContactSection'
 import FeaturedEventBanner from './FeaturedEventBanner'
 import { SocialIcon } from './SocialIcons'
@@ -344,6 +344,7 @@ export default function Home() {
   const [events, setEvents] = useState<EventItem[]>([])
   const [posts, setPosts] = useState<Post[]>([])
   const [galleryUploads, setGalleryUploads] = useState<PublicGalleryItemRow[]>([])
+  const [partners, setPartners] = useState<PartnerRow[]>([])
   const [challengeOverview, setChallengeOverview] = useState<any>(null)
   const [challengeTab, setChallengeTab] = useState<HomeChallengeTabKey>('overview')
 
@@ -362,9 +363,14 @@ export default function Home() {
     api.get<any>('new-school/overview')
       .then((data) => setChallengeOverview(data))
       .catch(() => setChallengeOverview(null))
+    api.get<{ partners: PartnerRow[] }>('partners')
+      .then((d) => setPartners(Array.isArray(d.partners) ? d.partners : []))
+      .catch(() => setPartners([]))
   }, [])
 
   const safeEvents = Array.isArray(events) ? events : []
+  // Real partners with a logo (featured-first from the API), for the home strip.
+  const homePartners = (Array.isArray(partners) ? partners : []).filter((p) => p.logo_url).slice(0, 12)
   const safePosts = Array.isArray(posts) ? posts : []
   const featured = safePosts.find((p) => p.is_featured) || safePosts[0]
   const rest = safePosts.filter((p) => p !== featured).slice(0, 2)
@@ -996,15 +1002,26 @@ export default function Home() {
             <div className="section-title"><span className="ln l" /><h2 className="gold-text">Partners &amp; Collaborators</h2><span className="ln r" /></div>
             <p className="sub">The organizations and leaders building alongside us.</p>
           </div>
-          <div className="partners-row reveal">
-            {partnerItems.map((p) => (
-              <div className="partner partner--visual" key={p.name}>
-                <img src={p.image} alt={p.name} loading="lazy" decoding="async" />
-                <span>{p.name}</span>
-              </div>
-            ))}
-          </div>
+          {homePartners.length > 0 ? (
+            <div className="partners-logos reveal">
+              {homePartners.map((p) => (
+                <Link className="partners-logo" to="/partner" key={p.id} title={p.name}>
+                  <img src={p.logo_url as string} alt={p.name} loading="lazy" decoding="async" />
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <div className="partners-row reveal">
+              {partnerItems.map((p) => (
+                <div className="partner partner--visual" key={p.name}>
+                  <img src={p.image} alt={p.name} loading="lazy" decoding="async" />
+                  <span>{p.name}</span>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="partners-cta reveal" style={{ display: 'flex', flexWrap: 'wrap', gap: 10, justifyContent: 'center' }}>
+            <Link className="btn" to="/partner">View All Partners</Link>
             <button className="btn btn--solid" data-request="Partnership / Collaboration Inquiry">Become a Partner</button>
             <a className="btn" href="/docs/partnership_kit.pdf" download>Download Partnership Kit</a>
           </div>

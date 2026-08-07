@@ -3779,3 +3779,15 @@ section#challenge .challenge-features .ns-gain p {
 }
 .admin-role-select:focus { outline:none; border-color:rgba(201,168,76,.65); }
 .admin-role-select option { background:#14120b; color:#e8e2d2; text-transform:capitalize; }
+
+/* Home partner logo strip — real partners pulled from /partner (compact, clickable). */
+.partners-logos { display:flex; flex-wrap:wrap; justify-content:center; align-items:center; gap:16px; margin-top:8px; }
+.partners-logo {
+  display:flex; align-items:center; justify-content:center;
+  width:132px; height:80px; padding:12px;
+  background:#f6f1e6; border:1px solid rgba(201,168,76,.28); border-radius:12px;
+  transition:transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+}
+.partners-logo:hover { transform:translateY(-3px); border-color:rgba(201,168,76,.6); box-shadow:0 12px 26px rgba(0,0,0,.4); }
+.partners-logo img { max-width:100%; max-height:100%; object-fit:contain; }
+@media (max-width:520px){ .partners-logo { width:104px; height:64px; } }
