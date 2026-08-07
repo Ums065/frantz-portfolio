@@ -3781,6 +3781,26 @@ section#challenge .challenge-features .ns-gain p {
 .admin-role-select option { background:#14120b; color:#e8e2d2; text-transform:capitalize; }
 
 /* Home partner logo strip — real partners pulled from /partner (clickable → lightbox). */
+/* Auto-scrolling partner logo marquee (pauses on hover; fades at the edges). */
+.partner-marquee {
+  overflow:hidden;
+  margin-top:8px;
+  -webkit-mask-image:linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
+  mask-image:linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
+}
+.partner-marquee__track {
+  display:flex;
+  gap:24px;
+  width:max-content;
+  animation:pmScroll 40s linear infinite;
+}
+.partner-marquee:hover .partner-marquee__track { animation-play-state:paused; }
+@keyframes pmScroll { from { transform:translateX(0); } to { transform:translateX(-50%); } }
+@media (prefers-reduced-motion: reduce) {
+  .partner-marquee__track { animation:none; flex-wrap:wrap; justify-content:center; width:auto; }
+  .partner-marquee { -webkit-mask-image:none; mask-image:none; }
+  .partner-marquee__track [aria-hidden="true"] { display:none; }
+}
 .partners-logos {
   display:flex; flex-wrap:wrap; justify-content:center;
   gap:22px 20px;

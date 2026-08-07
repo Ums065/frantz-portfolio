@@ -381,8 +381,7 @@ export default function Home() {
   // Real partners with a logo (featured-first from the API). The home strip is a
   // teaser — show up to 8; the full list lives on /partner.
   const partnersWithLogo = (Array.isArray(partners) ? partners : []).filter((p) => p.logo_url)
-  const homePartners = partnersWithLogo.slice(0, 8)
-  const morePartners = Math.max(0, partnersWithLogo.length - homePartners.length)
+  const homePartners = partnersWithLogo.slice(0, 12)
   const safePosts = Array.isArray(posts) ? posts : []
   const featured = safePosts.find((p) => p.is_featured) || safePosts[0]
   const rest = safePosts.filter((p) => p !== featured).slice(0, 2)
@@ -1015,19 +1014,15 @@ export default function Home() {
             <p className="sub">The organizations and leaders building alongside us.</p>
           </div>
           {homePartners.length > 0 ? (
-            <div className="partners-logos reveal">
-              {homePartners.map((p) => (
-                <button type="button" className="partners-logo" key={p.id} title={`View ${p.name}`} onClick={() => setPartnerLightbox(p)}>
-                  <span className="partners-logo__tile"><img src={p.logo_url as string} alt={p.name} loading="lazy" decoding="async" /></span>
-                  <span className="partners-logo__name">{p.name}</span>
-                </button>
-              ))}
-              {morePartners > 0 && (
-                <Link className="partners-logo partners-logo--more" to="/partner" title="See all partners">
-                  <span className="partners-logo__tile"><strong>+{morePartners}</strong></span>
-                  <span className="partners-logo__name">more partners</span>
-                </Link>
-              )}
+            <div className="partner-marquee reveal">
+              <div className="partner-marquee__track" style={{ animationDuration: `${Math.max(18, homePartners.length * 5)}s` }}>
+                {[...homePartners, ...homePartners].map((p, i) => (
+                  <button type="button" className="partners-logo" key={`${p.id}-${i}`} title={`View ${p.name}`} onClick={() => setPartnerLightbox(p)} aria-hidden={i >= homePartners.length}>
+                    <span className="partners-logo__tile"><img src={p.logo_url as string} alt={p.name} loading="lazy" decoding="async" /></span>
+                    <span className="partners-logo__name">{p.name}</span>
+                  </button>
+                ))}
+              </div>
             </div>
           ) : (
             <div className="partners-row reveal">
