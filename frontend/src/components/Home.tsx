@@ -382,6 +382,13 @@ export default function Home() {
   // teaser — show up to 8; the full list lives on /partner.
   const partnersWithLogo = (Array.isArray(partners) ? partners : []).filter((p) => p.logo_url)
   const homePartners = partnersWithLogo.slice(0, 12)
+  // For a seamless infinite marquee: repeat the list until one "unit" is wide
+  // enough to exceed the viewport (else few logos leave a visible gap), then
+  // render that unit twice and slide by exactly -50%.
+  const marqueeUnit = homePartners.length
+    ? Array.from({ length: Math.ceil(12 / homePartners.length) }).flatMap(() => homePartners)
+    : []
+  const marqueeItems = [...marqueeUnit, ...marqueeUnit]
   const safePosts = Array.isArray(posts) ? posts : []
   const featured = safePosts.find((p) => p.is_featured) || safePosts[0]
   const rest = safePosts.filter((p) => p !== featured).slice(0, 2)
@@ -1015,9 +1022,9 @@ export default function Home() {
           </div>
           {homePartners.length > 0 ? (
             <div className="partner-marquee reveal">
-              <div className="partner-marquee__track" style={{ animationDuration: `${Math.max(18, homePartners.length * 5)}s` }}>
-                {[...homePartners, ...homePartners].map((p, i) => (
-                  <button type="button" className="partners-logo" key={`${p.id}-${i}`} title={`View ${p.name}`} onClick={() => setPartnerLightbox(p)} aria-hidden={i >= homePartners.length}>
+              <div className="partner-marquee__track" style={{ animationDuration: `${Math.max(20, marqueeUnit.length * 4)}s` }}>
+                {marqueeItems.map((p, i) => (
+                  <button type="button" className="partners-logo" key={`${p.id}-${i}`} title={`View ${p.name}`} onClick={() => setPartnerLightbox(p)} aria-hidden={i >= marqueeUnit.length}>
                     <span className="partners-logo__tile"><img src={p.logo_url as string} alt={p.name} loading="lazy" decoding="async" /></span>
                     <span className="partners-logo__name">{p.name}</span>
                   </button>
