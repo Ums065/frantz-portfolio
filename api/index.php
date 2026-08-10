@@ -2151,7 +2151,7 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
                     'sponsors_pending'   => $countWhere("SELECT COUNT(*) FROM sponsor_applications WHERE approval_status = 'pending_review'"),
                     'sponsor_jobs_pending' => $countWhere("SELECT COUNT(*) FROM sponsor_jobs WHERE status = 'pending'"),
                     // Approved partner/sponsor accounts with an uploaded logo awaiting publication.
-                    'partner_logos_pending' => $countWhere("SELECT COUNT(*) FROM ecosystem_accounts e JOIN users u ON u.id = e.user_id WHERE e.role IN ('partner','sponsor') AND u.approval_status = 'approved' AND e.public_listed = 0 AND e.details LIKE '%\"logo_url\":\"/%'"),
+                    'partner_logos_pending' => $countWhere("SELECT COUNT(*) FROM ecosystem_accounts e JOIN users u ON u.id = e.user_id WHERE e.role IN ('partner','sponsor') AND u.approval_status = 'approved' AND e.public_listed = 0 AND e.details LIKE '%\"logo_url\":\"%' AND e.details NOT LIKE '%\"logo_url\":\"\"%'"),
                     // Fully-consented internships — a headline achievement for the program.
                     'internships_confirmed' => $countWhere("SELECT COUNT(*) FROM business_requests br LEFT JOIN new_school_students s ON s.id = br.student_id WHERE br.request_type = 'internship' AND (br.parent_consent = 'accepted' OR (s.age >= 18 AND br.student_consent = 'accepted'))"),
                 ],

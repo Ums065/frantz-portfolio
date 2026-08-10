@@ -24,14 +24,17 @@ export default function PartnersAdminPanel() {
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [publishing, setPublishing] = useState(false)
   const [preview, setPreview] = useState<string | null>(null)
+  const defaultType = (a: EcoAcct) => a.public_type || (a.role === 'sponsor' ? 'Presenting Sponsor' : 'Business Partner')
   const setMeta = async (id: number, patch: { partner_type?: string; featured?: boolean }) => {
     setEcoAccts((list) => list.map((a) => a.user_id === id ? { ...a, ...(patch.partner_type !== undefined ? { public_type: patch.partner_type } : {}), ...(patch.featured !== undefined ? { public_featured: patch.featured ? 1 : 0 } : {}) } : a))
-    try { await api.put(`admin/ecosystem/account/${id}/public-meta`, patch) } catch { /* ignore */ }
+    try { await api.put(`admin/ecosystem/account/${id}/public-meta`, patch) }
+    catch (e) { window.fcToast?.(e instanceof Error ? e.message : 'Could not save — please retry.'); await loadEco() }
   }
   const rejectLogo = async (a: EcoAcct) => {
     const note = window.prompt(`Reject ${a.org_name}'s logo? Optionally add a reason for them (e.g. "use a square, transparent PNG"):`, '')
     if (note === null) return
-    try { await api.put(`admin/ecosystem/account/${a.user_id}/logo-reject`, { note }); await loadEco() } catch { /* ignore */ }
+    try { await api.put(`admin/ecosystem/account/${a.user_id}/logo-reject`, { note }); await loadEco() }
+    catch (e) { window.fcToast?.(e instanceof Error ? e.message : 'Could not reject the logo.') }
   }
 
   const loadEco = () => api.get<{ accounts: EcoAcct[] }>('admin/ecosystem/accounts')
@@ -60,9 +63,18 @@ export default function PartnersAdminPanel() {
     if (ids.length === 0) return
     if (!window.confirm(`Publish ${ids.length} partner logo${ids.length === 1 ? '' : 's'} to the public Partners page? They become visible immediately.`)) return
     setPublishing(true)
+    let failed = 0
     try {
-      for (const id of ids) { try { await api.put(`admin/ecosystem/account/${id}/listing`, { listed: true }) } catch { /* skip one */ } }
+      for (const id of ids) {
+        const acct = pendingLogos.find((a) => a.user_id === id)
+        try {
+          // Persist the type shown in the table so the public page matches it.
+          if (acct && !acct.public_type) await api.put(`admin/ecosystem/account/${id}/public-meta`, { partner_type: defaultType(acct) })
+          await api.put(`admin/ecosystem/account/${id}/listing`, { listed: true })
+        } catch { failed++ }
+      }
       setSelected(new Set()); await loadEco()
+      if (failed) window.fcToast?.(`${failed} could not be published — please retry.`)
     } finally { setPublishing(false) }
   }
   const unpublishOne = async (id: number) => {
@@ -141,7 +153,7 @@ export default function PartnersAdminPanel() {
                   </td>
                   <td><strong>{a.org_name}</strong><div className="msub" style={{ fontSize: 12, textTransform: 'capitalize' }}>{a.role} · {a.email}</div></td>
                   <td>
-                    <select value={a.public_type || (a.role === 'sponsor' ? 'Presenting Sponsor' : 'Business Partner')} onChange={(e) => void setMeta(a.user_id, { partner_type: e.target.value })} style={{ ...inp, minWidth: 150 }}>
+                    <select value={defaultType(a)} onChange={(e) => void setMeta(a.user_id, { partner_type: e.target.value })} style={{ ...inp, minWidth: 150 }}>
                       {TYPE_OPTIONS.map((o) => <option key={o} value={o} style={optStyle}>{o}</option>)}
                     </select>
                   </td>
