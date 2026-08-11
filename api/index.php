@@ -1874,7 +1874,9 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             $c = db()->prepare('SELECT * FROM fellow_contacts WHERE org_id = ? ORDER BY is_primary DESC, id ASC'); $c->execute([$id]);
             $a = db()->prepare('SELECT type, detail, created_at FROM fellow_activities WHERE org_id = ? ORDER BY created_at DESC, id DESC LIMIT 100'); $a->execute([$id]);
             $f = db()->prepare("SELECT * FROM fellow_followups WHERE org_id = ? ORDER BY (status='pending') DESC, due_date ASC"); $f->execute([$id]);
-            json(['org' => $org, 'contacts' => $c->fetchAll(), 'timeline' => $a->fetchAll(), 'followups' => $f->fetchAll(), 'stages' => FELLOW_STAGES, 'priorities' => FELLOW_PRIORITIES]);
+            $pr = db()->prepare('SELECT * FROM fellow_proposals WHERE org_id = ? ORDER BY id DESC'); $pr->execute([$id]);
+            $mt = db()->prepare('SELECT * FROM fellow_meetings WHERE org_id = ? ORDER BY meeting_at DESC, id DESC'); $mt->execute([$id]);
+            json(['org' => $org, 'contacts' => $c->fetchAll(), 'timeline' => $a->fetchAll(), 'followups' => $f->fetchAll(), 'proposals' => $pr->fetchAll(), 'meetings' => $mt->fetchAll(), 'stages' => FELLOW_STAGES, 'priorities' => FELLOW_PRIORITIES, 'proposal_statuses' => FELLOW_PROPOSAL_STATUSES, 'meeting_types' => FELLOW_MEETING_TYPES]);
         }
         case $method === 'PUT' && preg_match('#^fellow/org/(\d+)$#', $route, $m) === 1: {
             $u = require_login();
@@ -1948,6 +1950,53 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             json(['message' => 'Logged.'], 201);
         }
 
+        /* ---- Proposals & Meetings (Phase 2a) ---- */
+        case $key === 'GET fellow/proposals': {
+            $u = require_login();
+            if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
+            fellow_ops_ensure_schema();
+            $s = db()->prepare("SELECT p.*, o.name AS org_name FROM fellow_proposals p JOIN fellow_orgs o ON o.id = p.org_id WHERE p.fellow_user_id = ? ORDER BY p.updated_at DESC");
+            $s->execute([(int) $u['id']]);
+            json(['proposals' => $s->fetchAll(), 'statuses' => FELLOW_PROPOSAL_STATUSES]);
+        }
+        case $method === 'POST' && preg_match('#^fellow/org/(\d+)/proposal$#', $route, $m) === 1: {
+            $u = require_login();
+            if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
+            fellow_ops_ensure_schema();
+            $fid = (int) $u['id']; $id = (int) $m[1]; $b = body();
+            $own = db()->prepare('SELECT name FROM fellow_orgs WHERE id = ? AND fellow_user_id = ?'); $own->execute([$id, $fid]);
+            $org = $own->fetch();
+            if (!$org) json(['error' => 'Not found.'], 404);
+            $status = in_array((string) field($b, 'status'), FELLOW_PROPOSAL_STATUSES, true) ? (string) field($b, 'status') : 'draft';
+            db()->prepare('INSERT INTO fellow_proposals (org_id, fellow_user_id, contact_name, amount, level, status, notes, next_followup) VALUES (?,?,?,?,?,?,?,?)')
+                ->execute([$id, $fid, mb_substr(trim((string) field($b, 'contact_name')), 0, 160) ?: null, max(0, (int) ($b['amount'] ?? 0)), mb_substr(trim((string) field($b, 'level')), 0, 80) ?: null, $status, mb_substr(trim((string) field($b, 'notes')), 0, 2000) ?: null, trim((string) field($b, 'next_followup')) ?: null]);
+            fellow_log($fid, $id, 'proposal', 'Proposal ' . ($status === 'submitted' ? 'submitted for approval' : $status) . (($b['amount'] ?? 0) ? ' ($' . (int) $b['amount'] . ')' : ''));
+            if ($status === 'submitted') { try { new_school_add_notification(null, 'admin', 'fellow_proposal', 'Proposal needs approval', ($org['name'] ?? 'Org') . ' — $' . (int) ($b['amount'] ?? 0), []); } catch (Throwable $e) {} }
+            json(['message' => 'Proposal saved.'], 201);
+        }
+        case $method === 'PUT' && preg_match('#^fellow/proposal/(\d+)$#', $route, $m) === 1: {
+            $u = require_login();
+            if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
+            fellow_ops_ensure_schema();
+            $status = (string) field(body(), 'status');
+            if (!in_array($status, FELLOW_PROPOSAL_STATUSES, true)) json(['error' => 'Invalid status.'], 422);
+            db()->prepare('UPDATE fellow_proposals SET status = ? WHERE id = ? AND fellow_user_id = ?')->execute([$status, (int) $m[1], (int) $u['id']]);
+            json(['message' => 'Updated.']);
+        }
+        case $method === 'POST' && preg_match('#^fellow/org/(\d+)/meeting$#', $route, $m) === 1: {
+            $u = require_login();
+            if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
+            fellow_ops_ensure_schema();
+            $fid = (int) $u['id']; $id = (int) $m[1]; $b = body();
+            $own = db()->prepare('SELECT id FROM fellow_orgs WHERE id = ? AND fellow_user_id = ?'); $own->execute([$id, $fid]);
+            if (!$own->fetch()) json(['error' => 'Not found.'], 404);
+            $type = in_array((string) field($b, 'type'), FELLOW_MEETING_TYPES, true) ? (string) field($b, 'type') : 'zoom';
+            $when = trim((string) field($b, 'meeting_at'));
+            db()->prepare('INSERT INTO fellow_meetings (org_id, fellow_user_id, contact_name, meeting_at, type, purpose, notes, outcome, next_steps) VALUES (?,?,?,?,?,?,?,?,?)')
+                ->execute([$id, $fid, mb_substr(trim((string) field($b, 'contact_name')), 0, 160) ?: null, $when !== '' ? str_replace('T', ' ', $when) : null, $type, mb_substr(trim((string) field($b, 'purpose')), 0, 255) ?: null, mb_substr(trim((string) field($b, 'notes')), 0, 2000) ?: null, mb_substr(trim((string) field($b, 'outcome')), 0, 255) ?: null, mb_substr(trim((string) field($b, 'next_steps')), 0, 2000) ?: null]);
+            fellow_log($fid, $id, 'meeting', trim(($type) . ' meeting' . (field($b, 'purpose') ? ' — ' . field($b, 'purpose') : '')));
+            json(['message' => 'Meeting logged.'], 201);
+        }
         case $key === 'GET fellow/crm/performance': {
             $u = require_login();
             if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
@@ -2071,6 +2120,23 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
                     in_array((string) field($b, 'priority'), ['low', 'medium', 'high'], true) ? (string) field($b, 'priority') : 'medium']);
             try { new_school_add_notification(null, 'fellow', 'fellow_task', 'New task assigned', $title, ['task' => $title], $fid); } catch (Throwable $e) { /* best effort */ }
             json(['message' => 'Task assigned.'], 201);
+        }
+        case $key === 'GET admin/fellow-ops/proposals': {
+            require_admin(); fellow_ops_ensure_schema();
+            $rows = db()->query("SELECT p.*, o.name AS org_name, u.full_name AS fellow_name FROM fellow_proposals p JOIN fellow_orgs o ON o.id = p.org_id LEFT JOIN users u ON u.id = p.fellow_user_id ORDER BY (p.status='submitted') DESC, p.updated_at DESC LIMIT 300")->fetchAll();
+            json(['proposals' => $rows, 'statuses' => FELLOW_PROPOSAL_STATUSES]);
+        }
+        case $method === 'PUT' && preg_match('#^admin/fellow-ops/proposal/(\d+)$#', $route, $m) === 1: {
+            require_admin(); fellow_ops_ensure_schema();
+            $b = body();
+            $status = (string) field($b, 'status');
+            if (!in_array($status, FELLOW_PROPOSAL_STATUSES, true)) json(['error' => 'Invalid status.'], 422);
+            db()->prepare('UPDATE fellow_proposals SET status = ?, admin_note = ? WHERE id = ?')
+                ->execute([$status, mb_substr(trim((string) field($b, 'admin_note')), 0, 500) ?: null, (int) $m[1]]);
+            // Notify the owning fellow.
+            $own = db()->prepare('SELECT fellow_user_id, org_id FROM fellow_proposals WHERE id = ?'); $own->execute([(int) $m[1]]); $row = $own->fetch();
+            if ($row) { try { new_school_add_notification(null, 'fellow', 'fellow_proposal', 'Proposal ' . $status, 'Your proposal was ' . $status . '.', [], (int) $row['fellow_user_id']); } catch (Throwable $e) {} }
+            json(['message' => 'Proposal ' . $status . '.']);
         }
         case $key === 'GET admin/fellow-ops/materials': {
             require_admin(); fellow_ops_ensure_schema();

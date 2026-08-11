@@ -5933,6 +5933,8 @@ const FELLOW_STAGES = [
 ];
 const FELLOW_PRIORITIES = ['unreviewed', 'researching', 'qualified', 'high', 'medium', 'low', 'not_fit'];
 const FELLOW_ACTIVITY_TYPES = ['research', 'contact', 'email', 'call', 'linkedin', 'follow_up', 'meeting', 'proposal', 'note', 'stage', 'sponsor'];
+const FELLOW_PROPOSAL_STATUSES = ['draft', 'submitted', 'approved', 'sent', 'under_review', 'accepted', 'declined'];
+const FELLOW_MEETING_TYPES = ['phone', 'zoom', 'meet', 'in_person'];
 
 /** Self-healing schema for the Fellow CRM (orgs, contacts, activities, tasks, follow-ups, targets). */
 function fellow_ops_ensure_schema(): void
@@ -6001,6 +6003,23 @@ function fellow_ops_ensure_schema(): void
             title VARCHAR(200) NOT NULL, description VARCHAR(400) DEFAULT NULL, url VARCHAR(500) DEFAULT NULL,
             sort_order INT NOT NULL DEFAULT 0, is_active TINYINT(1) NOT NULL DEFAULT 1,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        // Sponsorship proposals (with an admin approval workflow).
+        db()->exec("CREATE TABLE IF NOT EXISTS fellow_proposals (
+            id INT AUTO_INCREMENT PRIMARY KEY, org_id INT NOT NULL, fellow_user_id INT NOT NULL,
+            contact_name VARCHAR(160) DEFAULT NULL, amount INT NOT NULL DEFAULT 0, level VARCHAR(80) DEFAULT NULL,
+            status VARCHAR(24) NOT NULL DEFAULT 'draft', notes TEXT DEFAULT NULL, admin_note VARCHAR(500) DEFAULT NULL,
+            next_followup DATE DEFAULT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_fp_fellow (fellow_user_id, status), INDEX idx_fp_org (org_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        // Meetings log.
+        db()->exec("CREATE TABLE IF NOT EXISTS fellow_meetings (
+            id INT AUTO_INCREMENT PRIMARY KEY, org_id INT NOT NULL, fellow_user_id INT NOT NULL,
+            contact_name VARCHAR(160) DEFAULT NULL, meeting_at DATETIME DEFAULT NULL, type VARCHAR(20) DEFAULT 'zoom',
+            purpose VARCHAR(255) DEFAULT NULL, notes TEXT DEFAULT NULL, outcome VARCHAR(255) DEFAULT NULL,
+            next_steps TEXT DEFAULT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_fm_fellow (fellow_user_id), INDEX idx_fm_org (org_id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
         // End-of-day reports (qualitative notes + a snapshot of the auto numbers).
         db()->exec("CREATE TABLE IF NOT EXISTS fellow_reports (

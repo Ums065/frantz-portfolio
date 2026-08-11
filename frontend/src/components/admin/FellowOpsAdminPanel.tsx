@@ -15,7 +15,7 @@ export default function FellowOpsAdminPanel() {
   const [summary, setSummary] = useState<Summary | null>(null)
   const [fellows, setFellows] = useState<FellowRow[]>([])
   const [activity, setActivity] = useState<Activity[]>([])
-  const [tab, setTab] = useState<'today' | 'activity' | 'assign' | 'targets' | 'materials'>('today')
+  const [tab, setTab] = useState<'today' | 'activity' | 'proposals' | 'assign' | 'targets' | 'materials'>('today')
 
   const load = useCallback(() => {
     api.get<{ summary: Summary; fellows: FellowRow[] }>('admin/fellow-ops/summary').then((d) => { setSummary(d.summary); setFellows(d.fellows || []) }).catch(() => {})
@@ -38,9 +38,9 @@ export default function FellowOpsAdminPanel() {
       <p style={{ color: 'var(--muted)', fontSize: 13, margin: '4px 0 14px' }}>What the sponsorship team did today, live.</p>
 
       <div className="admin-ov-tabs" role="tablist" style={{ marginBottom: 16 }}>
-        {(['today', 'activity', 'assign', 'targets', 'materials'] as const).map((t) => (
+        {(['today', 'activity', 'proposals', 'assign', 'targets', 'materials'] as const).map((t) => (
           <button key={t} role="tab" aria-selected={tab === t} className={`admin-ov-tab${tab === t ? ' is-active' : ''}`} onClick={() => setTab(t)}>
-            {t === 'today' ? 'Today' : t === 'activity' ? 'Activity Feed' : t === 'assign' ? 'Assign Task' : t === 'targets' ? 'Targets' : 'Materials'}
+            {t === 'today' ? 'Today' : t === 'activity' ? 'Activity Feed' : t === 'proposals' ? 'Proposals' : t === 'assign' ? 'Assign Task' : t === 'targets' ? 'Targets' : 'Materials'}
           </button>
         ))}
       </div>
@@ -85,9 +85,43 @@ export default function FellowOpsAdminPanel() {
         </div>
       )}
 
+      {tab === 'proposals' && <ProposalsAdmin />}
       {tab === 'assign' && <AssignTask fellows={fellows} onDone={load} />}
       {tab === 'targets' && <TargetsForm onDone={load} />}
       {tab === 'materials' && <MaterialsAdmin />}
+    </div>
+  )
+}
+
+function ProposalsAdmin() {
+  const [rows, setRows] = useState<any[]>([])
+  const load = useCallback(() => { api.get<{ proposals: any[] }>('admin/fellow-ops/proposals').then((d) => setRows(d.proposals || [])).catch(() => {}) }, [])
+  useEffect(() => { load() }, [load])
+  const act = async (id: number, status: string) => {
+    const note = status === 'declined' ? (window.prompt('Reason (optional):', '') ?? '') : ''
+    await api.put(`admin/fellow-ops/proposal/${id}`, { status, admin_note: note }); load()
+  }
+  return (
+    <div className="admin-table-wrap">
+      <table className="admin-table">
+        <thead><tr><th>Organization</th><th>Fellow</th><th>Amount</th><th>Status</th><th></th></tr></thead>
+        <tbody>{rows.length === 0 ? <tr><td colSpan={5} className="msub" style={{ padding: 16 }}>No proposals yet.</td></tr> : rows.map((p) => (
+          <tr key={p.id}>
+            <td><strong>{p.org_name}</strong>{p.level ? <div className="msub" style={{ fontSize: 12 }}>{p.level}</div> : null}</td>
+            <td>{p.fellow_name || '—'}</td>
+            <td>{money(p.amount)}</td>
+            <td style={{ textTransform: 'capitalize' }}>{String(p.status).replace('_', ' ')}</td>
+            <td onClick={(e) => e.stopPropagation()}>
+              {p.status === 'submitted' ? (
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button className="btn btn--sm btn--solid" onClick={() => act(p.id, 'approved')}>Approve</button>
+                  <button className="btn btn--sm" style={{ color: '#e08a8a', borderColor: '#e08a8a' }} onClick={() => act(p.id, 'declined')}>Decline</button>
+                </div>
+              ) : <span className="msub">—</span>}
+            </td>
+          </tr>
+        ))}</tbody>
+      </table>
     </div>
   )
 }

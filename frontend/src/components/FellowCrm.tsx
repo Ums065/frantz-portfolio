@@ -218,9 +218,11 @@ function AddProspect({ priorities, onClose, onSaved }: { stages: string[]; prior
 }
 
 function OrgDrawer({ id, onClose, onChange }: { id: number; onClose: () => void; onChange: () => void }) {
-  const [data, setData] = useState<{ org: Org; contacts: Contact[]; timeline: Activity[]; followups: Followup[]; stages: string[] } | null>(null)
+  const [data, setData] = useState<{ org: Org; contacts: Contact[]; timeline: Activity[]; followups: Followup[]; stages: string[]; proposals?: any[]; meetings?: any[]; proposal_statuses?: string[]; meeting_types?: string[] } | null>(null)
   const [logType, setLogType] = useState('email'); const [logDetail, setLogDetail] = useState(''); const [logFu, setLogFu] = useState('')
   const [addingContact, setAddingContact] = useState(false)
+  const [showProp, setShowProp] = useState(false); const [prop, setProp] = useState<Record<string, string>>({ amount: '', level: '', notes: '', status: 'submitted' })
+  const [showMtg, setShowMtg] = useState(false); const [mtg, setMtg] = useState<Record<string, string>>({ meeting_at: '', type: 'zoom', purpose: '', notes: '', outcome: '', next_steps: '' })
   const load = useCallback(() => { api.get<any>(`fellow/org/${id}`).then(setData).catch(() => {}) }, [id])
   useEffect(() => { load() }, [load])
   if (!data) return <div className="modal-overlay open" onClick={onClose}><div className="modal" style={{ maxWidth: 640 }}><p className="msub">Loading…</p></div></div>
@@ -230,6 +232,8 @@ function OrgDrawer({ id, onClose, onChange }: { id: number; onClose: () => void;
     await api.post(`fellow/org/${id}/activity`, { type: logType, detail: logDetail, follow_up_date: logFu })
     setLogDetail(''); setLogFu(''); load(); onChange()
   }
+  const addProposal = async () => { await api.post(`fellow/org/${id}/proposal`, { ...prop, amount: Number(prop.amount) || 0 }); setShowProp(false); setProp({ amount: '', level: '', notes: '', status: 'submitted' }); load(); onChange() }
+  const addMeeting = async () => { await api.post(`fellow/org/${id}/meeting`, mtg); setShowMtg(false); setMtg({ meeting_at: '', type: 'zoom', purpose: '', notes: '', outcome: '', next_steps: '' }); load(); onChange() }
   return (
     <div className="modal-overlay open" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal" style={{ maxWidth: 720, maxHeight: '92vh', overflowY: 'auto' }}>
@@ -281,6 +285,40 @@ function OrgDrawer({ id, onClose, onChange }: { id: number; onClose: () => void;
                 ))}
               </ul>
             )}
+          </section>
+        </div>
+
+        <div className="fc-drawer-cols" style={{ marginTop: 14 }}>
+          {/* Proposals */}
+          <section>
+            <h4 className="gold-text" style={{ fontSize: 15 }}>Proposals <button type="button" className="btn btn--sm" onClick={() => setShowProp((v) => !v)}>＋</button></h4>
+            {showProp && (
+              <div style={{ display: 'grid', gap: 6, margin: '6px 0 10px' }}>
+                <input className="fc-input" type="number" placeholder="Amount ($)" value={prop.amount} onChange={(e) => setProp({ ...prop, amount: e.target.value })} />
+                <input className="fc-input" placeholder="Level (e.g. Gold)" value={prop.level} onChange={(e) => setProp({ ...prop, level: e.target.value })} />
+                <select className="fc-input" value={prop.status} onChange={(e) => setProp({ ...prop, status: e.target.value })}>{(data.proposal_statuses || ['draft', 'submitted']).map((s) => <option key={s} value={s} style={{ background: '#14120b' }}>{STAGE_LABEL(s)}</option>)}</select>
+                <button className="btn btn--sm btn--solid" onClick={addProposal}>Save proposal</button>
+              </div>
+            )}
+            {(data.proposals || []).length === 0 ? <p className="msub">None yet.</p> : (data.proposals || []).map((p: any) => (
+              <div key={p.id} className="fc-contact"><strong>{money(p.amount)}</strong> {p.level ? <span className="msub">· {p.level}</span> : null}<div><span className="fc-stage-pill">{STAGE_LABEL(p.status)}</span>{p.admin_note ? <span className="msub" style={{ fontSize: 12 }}> — {p.admin_note}</span> : null}</div></div>
+            ))}
+          </section>
+          {/* Meetings */}
+          <section>
+            <h4 className="gold-text" style={{ fontSize: 15 }}>Meetings <button type="button" className="btn btn--sm" onClick={() => setShowMtg((v) => !v)}>＋</button></h4>
+            {showMtg && (
+              <div style={{ display: 'grid', gap: 6, margin: '6px 0 10px' }}>
+                <input className="fc-input" type="datetime-local" value={mtg.meeting_at} onChange={(e) => setMtg({ ...mtg, meeting_at: e.target.value })} />
+                <select className="fc-input" value={mtg.type} onChange={(e) => setMtg({ ...mtg, type: e.target.value })}>{(data.meeting_types || ['phone', 'zoom', 'meet', 'in_person']).map((t) => <option key={t} value={t} style={{ background: '#14120b' }}>{STAGE_LABEL(t)}</option>)}</select>
+                <input className="fc-input" placeholder="Purpose" value={mtg.purpose} onChange={(e) => setMtg({ ...mtg, purpose: e.target.value })} />
+                <input className="fc-input" placeholder="Outcome / next steps" value={mtg.next_steps} onChange={(e) => setMtg({ ...mtg, next_steps: e.target.value })} />
+                <button className="btn btn--sm btn--solid" onClick={addMeeting}>Save meeting</button>
+              </div>
+            )}
+            {(data.meetings || []).length === 0 ? <p className="msub">None yet.</p> : (data.meetings || []).map((mt: any) => (
+              <div key={mt.id} className="fc-contact"><strong>{STAGE_LABEL(mt.type)}</strong> {mt.meeting_at ? <span className="msub">· {String(mt.meeting_at).slice(0, 16).replace('T', ' ')}</span> : null}{mt.purpose ? <div className="msub" style={{ fontSize: 12 }}>{mt.purpose}</div> : null}</div>
+            ))}
           </section>
         </div>
       </div>
