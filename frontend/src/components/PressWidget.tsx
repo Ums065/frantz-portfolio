@@ -38,14 +38,13 @@ export default function PressWidget() {
   const thumb = (it: PressItem) => it.thumbnail_url || (ytId(it.url) ? `https://img.youtube.com/vi/${ytId(it.url)}/hqdefault.jpg` : '')
 
   return (
-    <section className="block press-block" id="press">
-      <div className="wrap" style={{ textAlign: 'center' }}>
-        <div className="section-title"><span className="ln l" /><h2 className="gold-text">Featured In</h2><span className="ln r" /></div>
-        <p className="sub">Press coverage, interviews, and media features.</p>
-        <button type="button" className="btn btn--solid press-open" onClick={() => setOpen(true)}>
-          <span className="press-open__dot" aria-hidden="true">★</span> View Press &amp; Media ({items.length})
-        </button>
-      </div>
+    <>
+      {/* Floating trigger, pinned just above the language toggle so it's always visible. */}
+      <button type="button" className="press-fab" onClick={() => setOpen(true)} title="Press & Media">
+        <span className="press-fab__star" aria-hidden="true">★</span>
+        <span className="press-fab__txt">Featured In</span>
+        <span className="press-fab__count">{items.length}</span>
+      </button>
 
       {open && (
         <div className="press-modal" onClick={(e) => { if (e.target === e.currentTarget) { setActive(null); setOpen(false) } }} role="dialog" aria-modal="true" aria-label="Press and media">
@@ -80,6 +79,6 @@ export default function PressWidget() {
           </div>
         </div>
       )}
-    </section>
+    </>
   )
 }

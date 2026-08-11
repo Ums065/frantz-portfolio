@@ -3905,3 +3905,24 @@ section#challenge .challenge-features .ns-gain p {
 .press-viewer__photo img { width:100%; max-height:70vh; object-fit:contain; border-radius:14px; background:#000; }
 .press-viewer h4 { margin:14px 0 2px; color:#fff; }
 @media (max-width:520px){ .press-grid { grid-template-columns:repeat(auto-fill, minmax(150px,1fr)); gap:12px; } }
+
+/* Floating "Featured In" press button — pinned just above the language toggle. */
+.press-fab {
+  position: fixed; right: 18px; bottom: 74px; z-index: 90;
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 9px 15px; border-radius: 999px; cursor: pointer;
+  background: linear-gradient(180deg, #f6e2a8, #c9a84c); color: #1c1a14;
+  border: 1px solid rgba(201,168,76,0.55); font-weight: 800; font-size: 12.5px;
+  letter-spacing: .03em; box-shadow: 0 10px 30px -10px rgba(0,0,0,0.75);
+  transition: transform .25s ease, box-shadow .25s ease;
+}
+.press-fab:hover { transform: translateY(-2px); box-shadow: 0 16px 40px -12px rgba(0,0,0,0.85); }
+.press-fab__star { font-size: 13px; }
+.press-fab__count {
+  display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px;
+  border-radius: 999px; background: #1c1a14; color: #f6e2a8; font-size: 11px;
+}
+@media (max-width: 640px) {
+  .press-fab { right: 12px; bottom: 66px; padding: 8px 12px; }
+  .press-fab__txt { display: none; }
+}
