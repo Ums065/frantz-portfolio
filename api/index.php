@@ -2143,6 +2143,26 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             try { new_school_add_notification(null, 'fellow', 'fellow_task', 'New task assigned', $title, ['task' => $title], $fid); } catch (Throwable $e) { /* best effort */ }
             json(['message' => 'Task assigned.'], 201);
         }
+        case $key === 'GET admin/fellow-ops/analytics': {
+            require_admin(); fellow_ops_ensure_schema();
+            $byStage = db()->query("SELECT stage, COUNT(*) AS n, COALESCE(SUM(est_value),0) AS value FROM fellow_orgs GROUP BY stage")->fetchAll();
+            $stageMap = [];
+            foreach ($byStage as $r) $stageMap[(string) $r['stage']] = ['n' => (int) $r['n'], 'value' => (int) $r['value']];
+            $ordered = [];
+            foreach (FELLOW_STAGES as $s) if (isset($stageMap[$s])) $ordered[] = ['stage' => $s] + $stageMap[$s];
+            $totalFellows = (int) db()->query("SELECT COUNT(*) FROM users WHERE role = 'fellow'")->fetchColumn();
+            $activeToday = (int) db()->query("SELECT COUNT(DISTINCT fellow_user_id) FROM fellow_activities WHERE DATE(created_at) = CURDATE()")->fetchColumn();
+            $alerts = [
+                'overdue_followups' => (int) db()->query("SELECT COUNT(*) FROM fellow_followups WHERE status = 'pending' AND due_date < CURDATE()")->fetchColumn(),
+                'proposals_pending' => (int) db()->query("SELECT COUNT(*) FROM fellow_proposals WHERE status = 'submitted'")->fetchColumn(),
+                'inactive_fellows' => max(0, $totalFellows - $activeToday),
+                'verbal_commitments' => (int) db()->query("SELECT COUNT(*) FROM fellow_orgs WHERE stage = 'verbal_commitment'")->fetchColumn(),
+                'confirmed' => (int) db()->query("SELECT COUNT(*) FROM fellow_orgs WHERE stage IN ('confirmed','paid')")->fetchColumn(),
+            ];
+            $week = (int) db()->query("SELECT COUNT(*) FROM fellow_activities WHERE created_at >= CURDATE() - INTERVAL 6 DAY")->fetchColumn();
+            $month = (int) db()->query("SELECT COUNT(*) FROM fellow_activities WHERE created_at >= CURDATE() - INTERVAL 29 DAY")->fetchColumn();
+            json(['funnel' => $ordered, 'alerts' => $alerts, 'activity_week' => $week, 'activity_month' => $month]);
+        }
         case $key === 'GET admin/fellow-ops/proposals': {
             require_admin(); fellow_ops_ensure_schema();
             $rows = db()->query("SELECT p.*, o.name AS org_name, u.full_name AS fellow_name FROM fellow_proposals p JOIN fellow_orgs o ON o.id = p.org_id LEFT JOIN users u ON u.id = p.fellow_user_id ORDER BY (p.status='submitted') DESC, p.updated_at DESC LIMIT 300")->fetchAll();

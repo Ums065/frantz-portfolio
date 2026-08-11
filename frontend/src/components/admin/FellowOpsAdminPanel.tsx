@@ -15,7 +15,7 @@ export default function FellowOpsAdminPanel() {
   const [summary, setSummary] = useState<Summary | null>(null)
   const [fellows, setFellows] = useState<FellowRow[]>([])
   const [activity, setActivity] = useState<Activity[]>([])
-  const [tab, setTab] = useState<'today' | 'activity' | 'proposals' | 'assign' | 'targets' | 'materials' | 'templates'>('today')
+  const [tab, setTab] = useState<'today' | 'analytics' | 'activity' | 'proposals' | 'assign' | 'targets' | 'materials' | 'templates'>('today')
 
   const load = useCallback(() => {
     api.get<{ summary: Summary; fellows: FellowRow[] }>('admin/fellow-ops/summary').then((d) => { setSummary(d.summary); setFellows(d.fellows || []) }).catch(() => {})
@@ -38,9 +38,9 @@ export default function FellowOpsAdminPanel() {
       <p style={{ color: 'var(--muted)', fontSize: 13, margin: '4px 0 14px' }}>What the sponsorship team did today, live.</p>
 
       <div className="admin-ov-tabs" role="tablist" style={{ marginBottom: 16 }}>
-        {(['today', 'activity', 'proposals', 'assign', 'targets', 'materials', 'templates'] as const).map((t) => (
+        {(['today', 'analytics', 'activity', 'proposals', 'assign', 'targets', 'materials', 'templates'] as const).map((t) => (
           <button key={t} role="tab" aria-selected={tab === t} className={`admin-ov-tab${tab === t ? ' is-active' : ''}`} onClick={() => setTab(t)}>
-            {t === 'today' ? 'Today' : t === 'activity' ? 'Activity Feed' : t === 'proposals' ? 'Proposals' : t === 'assign' ? 'Assign Task' : t === 'targets' ? 'Targets' : t === 'materials' ? 'Materials' : 'Templates'}
+            {t === 'today' ? 'Today' : t === 'analytics' ? 'Analytics' : t === 'activity' ? 'Activity Feed' : t === 'proposals' ? 'Proposals' : t === 'assign' ? 'Assign Task' : t === 'targets' ? 'Targets' : t === 'materials' ? 'Materials' : 'Templates'}
           </button>
         ))}
       </div>
@@ -85,6 +85,7 @@ export default function FellowOpsAdminPanel() {
         </div>
       )}
 
+      {tab === 'analytics' && <AnalyticsView />}
       {tab === 'proposals' && <ProposalsAdmin />}
       {tab === 'assign' && <AssignTask fellows={fellows} onDone={load} />}
       {tab === 'targets' && <TargetsForm onDone={load} />}
@@ -143,6 +144,42 @@ function TemplatesAdmin() {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+function AnalyticsView() {
+  const [d, setD] = useState<any>(null)
+  useEffect(() => { api.get<any>('admin/fellow-ops/analytics').then(setD).catch(() => {}) }, [])
+  if (!d) return <p className="msub">Loading…</p>
+  const maxV = Math.max(1, ...(d.funnel || []).map((f: any) => f.value || 0))
+  const alertDefs: [string, number, string][] = [
+    ['Overdue follow-ups', d.alerts.overdue_followups, '#e08a5c'],
+    ['Proposals awaiting approval', d.alerts.proposals_pending, '#d4af37'],
+    ['Fellows inactive today', d.alerts.inactive_fellows, '#e0785c'],
+    ['Verbal commitments', d.alerts.verbal_commitments, '#6be29a'],
+    ['Confirmed sponsorships', d.alerts.confirmed, '#6be29a'],
+  ]
+  return (
+    <div>
+      <div className="admin-stats" style={{ marginBottom: 18 }}>
+        {alertDefs.map(([lbl, n, col]) => (
+          <div key={lbl} className="admin-stat glass" style={{ borderColor: n > 0 ? col : undefined }}>
+            <span className="admin-stat__label">{lbl}</span><strong style={{ color: n > 0 ? col : undefined }}>{n}</strong><p>{lbl.includes('Overdue') || lbl.includes('inactive') || lbl.includes('awaiting') ? 'needs attention' : 'pipeline'}</p>
+          </div>
+        ))}
+      </div>
+      <p className="msub" style={{ marginBottom: 10 }}>Team activity — {d.activity_week} this week · {d.activity_month} this month</p>
+      <h4 className="gold-text">Pipeline Funnel</h4>
+      <div style={{ display: 'grid', gap: 8 }}>
+        {(d.funnel || []).map((f: any) => (
+          <div key={f.stage} style={{ display: 'grid', gridTemplateColumns: '170px 1fr auto', gap: 10, alignItems: 'center' }}>
+            <span style={{ fontSize: 13, textTransform: 'capitalize' }}>{f.stage.replace(/_/g, ' ')} <span className="msub">({f.n})</span></span>
+            <div style={{ height: 18, borderRadius: 6, background: 'rgba(255,255,255,.05)', overflow: 'hidden' }}><span style={{ display: 'block', height: '100%', width: `${Math.max(3, Math.round((f.value / maxV) * 100))}%`, background: 'linear-gradient(90deg,#c9a84c,#f6e2a8)' }} /></div>
+            <strong style={{ fontSize: 13 }}>{money(f.value)}</strong>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
