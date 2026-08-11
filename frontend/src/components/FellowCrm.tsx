@@ -169,14 +169,14 @@ export default function FellowCrm() {
       {view === 'materials' && <MaterialsView />}
       {view === 'report' && <ReportView />}
 
-      {adding && <AddProspect stages={stages} priorities={priorities} onClose={() => setAdding(false)} onSaved={() => { setAdding(false); refresh() }} />}
+      {adding && <AddProspect priorities={priorities} onClose={() => setAdding(false)} onSaved={() => { setAdding(false); refresh() }} />}
       {importing && <ImportModal onClose={() => setImporting(false)} onSaved={() => { setImporting(false); refresh() }} />}
       {openId && <OrgDrawer id={openId} onClose={() => setOpenId(null)} onChange={refresh} />}
     </div>
   )
 }
 
-function AddProspect({ priorities, onClose, onSaved }: { stages: string[]; priorities: string[]; onClose: () => void; onSaved: () => void }) {
+function AddProspect({ priorities, onClose, onSaved }: { priorities: string[]; onClose: () => void; onSaved: () => void }) {
   const [f, setF] = useState<Record<string, string>>({ name: '', website: '', industry: '', category: '', location: '', priority: 'unreviewed', est_value: '', fit_notes: '' })
   const [dup, setDup] = useState<{ name: string; fellow_name?: string } | null>(null)
   const [busy, setBusy] = useState(false); const [err, setErr] = useState('')
@@ -299,7 +299,7 @@ function OrgDrawer({ id, onClose, onChange }: { id: number; onClose: () => void;
               <div style={{ display: 'grid', gap: 6, margin: '6px 0 10px' }}>
                 <input className="fc-input" type="number" placeholder="Amount ($)" value={prop.amount} onChange={(e) => setProp({ ...prop, amount: e.target.value })} />
                 <input className="fc-input" placeholder="Level (e.g. Gold)" value={prop.level} onChange={(e) => setProp({ ...prop, level: e.target.value })} />
-                <select className="fc-input" value={prop.status} onChange={(e) => setProp({ ...prop, status: e.target.value })}>{(data.proposal_statuses || ['draft', 'submitted']).map((s) => <option key={s} value={s} style={{ background: '#14120b' }}>{STAGE_LABEL(s)}</option>)}</select>
+                <select className="fc-input" value={prop.status} onChange={(e) => setProp({ ...prop, status: e.target.value })}>{(data.proposal_statuses || ['draft', 'submitted']).filter((s) => s !== 'approved').map((s) => <option key={s} value={s} style={{ background: '#14120b' }}>{STAGE_LABEL(s)}</option>)}</select>
                 <button className="btn btn--sm btn--solid" onClick={addProposal}>Save proposal</button>
               </div>
             )}

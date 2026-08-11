@@ -1967,7 +1967,9 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             $own = db()->prepare('SELECT name FROM fellow_orgs WHERE id = ? AND fellow_user_id = ?'); $own->execute([$id, $fid]);
             $org = $own->fetch();
             if (!$org) json(['error' => 'Not found.'], 404);
-            $status = in_array((string) field($b, 'status'), FELLOW_PROPOSAL_STATUSES, true) ? (string) field($b, 'status') : 'draft';
+            // Fellows may NOT set "approved" — that's the admin's gate.
+            $fellowStatuses = ['draft', 'submitted', 'sent', 'under_review', 'accepted', 'declined'];
+            $status = in_array((string) field($b, 'status'), $fellowStatuses, true) ? (string) field($b, 'status') : 'draft';
             db()->prepare('INSERT INTO fellow_proposals (org_id, fellow_user_id, contact_name, amount, level, status, notes, next_followup) VALUES (?,?,?,?,?,?,?,?)')
                 ->execute([$id, $fid, mb_substr(trim((string) field($b, 'contact_name')), 0, 160) ?: null, max(0, (int) ($b['amount'] ?? 0)), mb_substr(trim((string) field($b, 'level')), 0, 80) ?: null, $status, mb_substr(trim((string) field($b, 'notes')), 0, 2000) ?: null, trim((string) field($b, 'next_followup')) ?: null]);
             fellow_log($fid, $id, 'proposal', 'Proposal ' . ($status === 'submitted' ? 'submitted for approval' : $status) . (($b['amount'] ?? 0) ? ' ($' . (int) $b['amount'] . ')' : ''));
@@ -1979,8 +1981,14 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
             fellow_ops_ensure_schema();
             $status = (string) field(body(), 'status');
-            if (!in_array($status, FELLOW_PROPOSAL_STATUSES, true)) json(['error' => 'Invalid status.'], 422);
-            db()->prepare('UPDATE fellow_proposals SET status = ? WHERE id = ? AND fellow_user_id = ?')->execute([$status, (int) $m[1], (int) $u['id']]);
+            // Fellows may NOT self-approve — "approved" is admin-only.
+            if (!in_array($status, ['draft', 'submitted', 'sent', 'under_review', 'accepted', 'declined'], true)) json(['error' => 'Invalid status.'], 422);
+            $r = db()->prepare('UPDATE fellow_proposals SET status = ? WHERE id = ? AND fellow_user_id = ?');
+            $r->execute([$status, (int) $m[1], (int) $u['id']]);
+            if ($status === 'submitted' && $r->rowCount() > 0) {
+                $og = db()->prepare('SELECT o.name FROM fellow_proposals p JOIN fellow_orgs o ON o.id = p.org_id WHERE p.id = ?'); $og->execute([(int) $m[1]]);
+                try { new_school_add_notification(null, 'admin', 'fellow_proposal', 'Proposal needs approval', (string) ($og->fetchColumn() ?: 'Proposal'), []); } catch (Throwable $e) {}
+            }
             json(['message' => 'Updated.']);
         }
         case $method === 'POST' && preg_match('#^fellow/org/(\d+)/meeting$#', $route, $m) === 1: {
@@ -2111,9 +2119,10 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
                 if ($dup->fetch()) continue; // skip duplicates for this fellow
                 db()->prepare('INSERT INTO fellow_orgs (fellow_user_id, created_by_user_id, name, website, category, priority, stage, name_key) VALUES (?,?,?,?,?,?,?,?)')
                     ->execute([$fid, $fid, $name, mb_substr(trim((string) (is_array($r) ? ($r['website'] ?? '') : '')), 0, 255) ?: null, $cat, 'unreviewed', 'researching', $keyN]);
+                // One research activity per org so the scorecard credits each (matches the manual Add path).
+                fellow_log($fid, (int) db()->lastInsertId(), 'research', 'Imported: ' . $name);
                 $n++;
             }
-            if ($n > 0) fellow_log($fid, null, 'research', "Imported $n organizations");
             json(['message' => "Imported $n organizations.", 'imported' => $n], 201);
         }
         case $method === 'PUT' && preg_match('#^fellow/task/(\d+)$#', $route, $m) === 1: {
