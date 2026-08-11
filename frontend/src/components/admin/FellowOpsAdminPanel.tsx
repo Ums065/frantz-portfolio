@@ -15,7 +15,7 @@ export default function FellowOpsAdminPanel() {
   const [summary, setSummary] = useState<Summary | null>(null)
   const [fellows, setFellows] = useState<FellowRow[]>([])
   const [activity, setActivity] = useState<Activity[]>([])
-  const [tab, setTab] = useState<'today' | 'activity' | 'assign' | 'targets'>('today')
+  const [tab, setTab] = useState<'today' | 'activity' | 'assign' | 'targets' | 'materials'>('today')
 
   const load = useCallback(() => {
     api.get<{ summary: Summary; fellows: FellowRow[] }>('admin/fellow-ops/summary').then((d) => { setSummary(d.summary); setFellows(d.fellows || []) }).catch(() => {})
@@ -38,9 +38,9 @@ export default function FellowOpsAdminPanel() {
       <p style={{ color: 'var(--muted)', fontSize: 13, margin: '4px 0 14px' }}>What the sponsorship team did today, live.</p>
 
       <div className="admin-ov-tabs" role="tablist" style={{ marginBottom: 16 }}>
-        {(['today', 'activity', 'assign', 'targets'] as const).map((t) => (
+        {(['today', 'activity', 'assign', 'targets', 'materials'] as const).map((t) => (
           <button key={t} role="tab" aria-selected={tab === t} className={`admin-ov-tab${tab === t ? ' is-active' : ''}`} onClick={() => setTab(t)}>
-            {t === 'today' ? 'Today' : t === 'activity' ? 'Activity Feed' : t === 'assign' ? 'Assign Task' : 'Targets'}
+            {t === 'today' ? 'Today' : t === 'activity' ? 'Activity Feed' : t === 'assign' ? 'Assign Task' : t === 'targets' ? 'Targets' : 'Materials'}
           </button>
         ))}
       </div>
@@ -87,6 +87,58 @@ export default function FellowOpsAdminPanel() {
 
       {tab === 'assign' && <AssignTask fellows={fellows} onDone={load} />}
       {tab === 'targets' && <TargetsForm onDone={load} />}
+      {tab === 'materials' && <MaterialsAdmin />}
+    </div>
+  )
+}
+
+interface Material { id: number; category: string; title: string; description?: string; url?: string; sort_order?: number; is_active?: number }
+function MaterialsAdmin() {
+  const [rows, setRows] = useState<Material[]>([])
+  const [editing, setEditing] = useState<Partial<Material> | null>(null)
+  const load = useCallback(() => { api.get<{ materials: Material[] }>('admin/fellow-ops/materials').then((d) => setRows(d.materials || [])).catch(() => {}) }, [])
+  useEffect(() => { load() }, [load])
+  const set = (patch: Partial<Material>) => setEditing((e) => ({ ...(e || {}), ...patch }))
+  const save = async () => {
+    if (!editing || !String(editing.title || '').trim()) return
+    if (editing.id) await api.put(`admin/fellow-ops/material/${editing.id}`, editing)
+    else await api.post('admin/fellow-ops/material', editing)
+    setEditing(null); load()
+  }
+  const remove = async (id: number) => { if (!window.confirm('Delete this material?')) return; await api.del(`admin/fellow-ops/material/${id}`); load() }
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <p className="msub" style={{ margin: 0 }}>Approved documents & templates Fellows can use.</p>
+        <button className="btn btn--sm btn--solid" onClick={() => setEditing({ category: 'Sponsor Materials', is_active: 1 })}>＋ Add Material</button>
+      </div>
+      <div className="admin-table-wrap">
+        <table className="admin-table">
+          <thead><tr><th>Category</th><th>Title</th><th>Active</th><th></th></tr></thead>
+          <tbody>{rows.length === 0 ? <tr><td colSpan={4} className="msub" style={{ padding: 16 }}>No materials yet.</td></tr> : rows.map((r) => (
+            <tr key={r.id} style={{ cursor: 'pointer' }} onClick={() => setEditing({ ...r })}>
+              <td>{r.category}</td><td><strong>{r.title}</strong></td><td>{r.is_active ? '✓' : '—'}</td>
+              <td onClick={(e) => e.stopPropagation()}><button className="btn btn--sm" style={{ color: '#e08a8a', borderColor: '#e08a8a' }} onClick={() => remove(r.id)}>Delete</button></td>
+            </tr>
+          ))}</tbody>
+        </table>
+      </div>
+      {editing && (
+        <div className="modal-overlay open" onClick={(e) => e.target === e.currentTarget && setEditing(null)}>
+          <div className="modal" style={{ maxWidth: 440 }}>
+            <button type="button" className="close" onClick={() => setEditing(null)} aria-label="Close">✕</button>
+            <h3 className="gold-text">{editing.id ? 'Edit' : 'Add'} Material</h3>
+            <div style={{ display: 'grid', gap: 10, marginTop: 12 }}>
+              <label className="fc-fld">Category<input className="fc-input" value={editing.category || ''} onChange={(e) => set({ category: e.target.value })} placeholder="Sponsor Materials / Outreach Materials…" /></label>
+              <label className="fc-fld">Title<input className="fc-input" value={editing.title || ''} onChange={(e) => set({ title: e.target.value })} /></label>
+              <label className="fc-fld">Description<input className="fc-input" value={editing.description || ''} onChange={(e) => set({ description: e.target.value })} /></label>
+              <label className="fc-fld">Link (view/download)<input className="fc-input" value={editing.url || ''} onChange={(e) => set({ url: e.target.value })} placeholder="/docs/…pdf or https://…" /></label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#d8d3c6', fontSize: 13 }}><input type="checkbox" checked={!!editing.is_active} onChange={(e) => set({ is_active: e.target.checked ? 1 : 0 })} /> Active (visible to Fellows)</label>
+              <button className="btn btn--solid" onClick={save}>Save</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -1948,6 +1948,63 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             json(['message' => 'Logged.'], 201);
         }
 
+        case $key === 'GET fellow/crm/performance': {
+            $u = require_login();
+            if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
+            json(['performance' => fellow_performance((int) $u['id'])]);
+        }
+        case $key === 'GET fellow/materials': {
+            $u = require_login();
+            if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
+            fellow_ops_ensure_schema();
+            json(['materials' => db()->query("SELECT id, category, title, description, url FROM fellow_materials WHERE is_active = 1 ORDER BY category, sort_order, id")->fetchAll()]);
+        }
+        case $key === 'GET fellow/reports': {
+            $u = require_login();
+            if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
+            fellow_ops_ensure_schema();
+            $s = db()->prepare('SELECT report_date, numbers_json, wins, challenges, help_needed, plan FROM fellow_reports WHERE fellow_user_id = ? ORDER BY report_date DESC LIMIT 30');
+            $s->execute([(int) $u['id']]);
+            json(['reports' => $s->fetchAll(), 'today_numbers' => fellow_scorecard((int) $u['id'])['counts']]);
+        }
+        case $key === 'POST fellow/report': {
+            $u = require_login();
+            if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
+            fellow_ops_ensure_schema();
+            $b = body();
+            $numbers = json_encode(fellow_scorecard((int) $u['id'])['counts'], JSON_UNESCAPED_SLASHES);
+            db()->prepare('INSERT INTO fellow_reports (fellow_user_id, report_date, numbers_json, wins, challenges, help_needed, plan) VALUES (?, CURDATE(), ?, ?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE numbers_json=VALUES(numbers_json), wins=VALUES(wins), challenges=VALUES(challenges), help_needed=VALUES(help_needed), plan=VALUES(plan)')
+                ->execute([(int) $u['id'], $numbers,
+                    mb_substr(trim((string) field($b, 'wins')), 0, 2000) ?: null,
+                    mb_substr(trim((string) field($b, 'challenges')), 0, 2000) ?: null,
+                    mb_substr(trim((string) field($b, 'help_needed')), 0, 2000) ?: null,
+                    mb_substr(trim((string) field($b, 'plan')), 0, 2000) ?: null]);
+            json(['message' => 'Daily report submitted.'], 201);
+        }
+        case $key === 'POST fellow/orgs/import': {
+            $u = require_login();
+            if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
+            fellow_ops_ensure_schema();
+            rate_limit('fellow_import', 20, 3600, (string) $u['id']);
+            $fid = (int) $u['id'];
+            $rows = is_array(body()['rows'] ?? null) ? body()['rows'] : [];
+            $cat = mb_substr(trim((string) field(body(), 'category')), 0, 80) ?: null;
+            $n = 0;
+            foreach ($rows as $r) {
+                $name = mb_substr(trim((string) (is_array($r) ? ($r['name'] ?? '') : $r)), 0, 200);
+                if ($name === '') continue;
+                $keyN = fellow_name_key($name);
+                $dup = db()->prepare('SELECT id FROM fellow_orgs WHERE name_key = ? AND fellow_user_id = ? LIMIT 1');
+                $dup->execute([$keyN, $fid]);
+                if ($dup->fetch()) continue; // skip duplicates for this fellow
+                db()->prepare('INSERT INTO fellow_orgs (fellow_user_id, created_by_user_id, name, website, category, priority, stage, name_key) VALUES (?,?,?,?,?,?,?,?)')
+                    ->execute([$fid, $fid, $name, mb_substr(trim((string) (is_array($r) ? ($r['website'] ?? '') : '')), 0, 255) ?: null, $cat, 'unreviewed', 'researching', $keyN]);
+                $n++;
+            }
+            if ($n > 0) fellow_log($fid, null, 'research', "Imported $n organizations");
+            json(['message' => "Imported $n organizations.", 'imported' => $n], 201);
+        }
         case $method === 'PUT' && preg_match('#^fellow/task/(\d+)$#', $route, $m) === 1: {
             $u = require_login();
             if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
@@ -2014,6 +2071,39 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
                     in_array((string) field($b, 'priority'), ['low', 'medium', 'high'], true) ? (string) field($b, 'priority') : 'medium']);
             try { new_school_add_notification(null, 'fellow', 'fellow_task', 'New task assigned', $title, ['task' => $title], $fid); } catch (Throwable $e) { /* best effort */ }
             json(['message' => 'Task assigned.'], 201);
+        }
+        case $key === 'GET admin/fellow-ops/materials': {
+            require_admin(); fellow_ops_ensure_schema();
+            json(['materials' => db()->query('SELECT * FROM fellow_materials ORDER BY category, sort_order, id')->fetchAll()]);
+        }
+        case $key === 'POST admin/fellow-ops/material': {
+            require_admin(); fellow_ops_ensure_schema();
+            $b = body();
+            $title = mb_substr(trim((string) field($b, 'title')), 0, 200);
+            if ($title === '') json(['error' => 'Title required.'], 422);
+            db()->prepare('INSERT INTO fellow_materials (category, title, description, url, sort_order, is_active) VALUES (?,?,?,?,?,?)')
+                ->execute([mb_substr(trim((string) field($b, 'category')) ?: 'Sponsor Materials', 0, 80), $title,
+                    mb_substr(trim((string) field($b, 'description')), 0, 400) ?: null,
+                    mb_substr(trim((string) field($b, 'url')), 0, 500) ?: null,
+                    (int) ($b['sort_order'] ?? 0), empty($b['is_active']) ? 0 : 1]);
+            json(['id' => (int) db()->lastInsertId(), 'message' => 'Material added.'], 201);
+        }
+        case $method === 'PUT' && preg_match('#^admin/fellow-ops/material/(\d+)$#', $route, $m) === 1: {
+            require_admin(); fellow_ops_ensure_schema();
+            $b = body();
+            $title = mb_substr(trim((string) field($b, 'title')), 0, 200);
+            if ($title === '') json(['error' => 'Title required.'], 422);
+            db()->prepare('UPDATE fellow_materials SET category=?, title=?, description=?, url=?, sort_order=?, is_active=? WHERE id=?')
+                ->execute([mb_substr(trim((string) field($b, 'category')) ?: 'Sponsor Materials', 0, 80), $title,
+                    mb_substr(trim((string) field($b, 'description')), 0, 400) ?: null,
+                    mb_substr(trim((string) field($b, 'url')), 0, 500) ?: null,
+                    (int) ($b['sort_order'] ?? 0), empty($b['is_active']) ? 0 : 1, (int) $m[1]]);
+            json(['message' => 'Material updated.']);
+        }
+        case $method === 'DELETE' && preg_match('#^admin/fellow-ops/material/(\d+)$#', $route, $m) === 1: {
+            require_admin(); fellow_ops_ensure_schema();
+            db()->prepare('DELETE FROM fellow_materials WHERE id = ?')->execute([(int) $m[1]]);
+            json(['message' => 'Material deleted.']);
         }
         case $key === 'PUT admin/fellow-ops/targets': {
             require_admin();

@@ -16,7 +16,8 @@ const money = (n: number) => n > 0 ? '$' + n.toLocaleString('en-US') : '—'
 const ACTIVITY_QUICK: [string, string][] = [['email', '✉ Email sent'], ['call', '📞 Call'], ['linkedin', 'in LinkedIn'], ['meeting', '📅 Meeting'], ['proposal', '📄 Proposal'], ['note', '📝 Note']]
 
 export default function FellowCrm() {
-  const [view, setView] = useState<'day' | 'prospects' | 'pipeline'>('day')
+  const [view, setView] = useState<'day' | 'prospects' | 'pipeline' | 'performance' | 'materials' | 'report'>('day')
+  const [importing, setImporting] = useState(false)
   const [overview, setOverview] = useState<{ scorecard: { counts: Record<string, number>; targets: Record<string, number> }; tasks: Task[]; followups: Followup[]; followups_due: number; orgs_total: number } | null>(null)
   const [orgs, setOrgs] = useState<Org[]>([])
   const [stages, setStages] = useState<string[]>([])
@@ -57,9 +58,9 @@ export default function FellowCrm() {
   return (
     <div className="fc-crm">
       <div className="admin-ov-tabs" role="tablist" style={{ marginBottom: 18 }}>
-        {(['day', 'prospects', 'pipeline'] as const).map((v) => (
+        {(['day', 'prospects', 'pipeline', 'performance', 'materials', 'report'] as const).map((v) => (
           <button key={v} type="button" role="tab" aria-selected={view === v} className={`admin-ov-tab${view === v ? ' is-active' : ''}`} onClick={() => setView(v)}>
-            {v === 'day' ? 'My Day' : v === 'prospects' ? `Prospects (${orgs.length})` : 'Pipeline'}
+            {v === 'day' ? 'My Day' : v === 'prospects' ? `Prospects (${orgs.length})` : v === 'pipeline' ? 'Pipeline' : v === 'performance' ? 'Performance' : v === 'materials' ? 'Materials' : 'Daily Report'}
           </button>
         ))}
       </div>
@@ -118,6 +119,7 @@ export default function FellowCrm() {
         <div>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 14 }}>
             <input className="fc-input" style={{ flex: '1 1 220px' }} type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search prospects…" />
+            <button className="btn btn--sm" onClick={() => setImporting(true)}>⇪ Import list</button>
             <button className="btn btn--sm btn--solid" onClick={() => setAdding(true)}>＋ Add Prospect</button>
           </div>
           {filtered.length === 0 ? <p className="msub">No prospects yet. Add your first organization.</p> : (
@@ -160,7 +162,12 @@ export default function FellowCrm() {
         </div>
       )}
 
+      {view === 'performance' && <PerformanceView />}
+      {view === 'materials' && <MaterialsView />}
+      {view === 'report' && <ReportView />}
+
       {adding && <AddProspect stages={stages} priorities={priorities} onClose={() => setAdding(false)} onSaved={() => { setAdding(false); refresh() }} />}
+      {importing && <ImportModal onClose={() => setImporting(false)} onSaved={() => { setImporting(false); refresh() }} />}
       {openId && <OrgDrawer id={openId} onClose={() => setOpenId(null)} onChange={refresh} />}
     </div>
   )
@@ -276,6 +283,106 @@ function OrgDrawer({ id, onClose, onChange }: { id: number; onClose: () => void;
             )}
           </section>
         </div>
+      </div>
+    </div>
+  )
+}
+
+const PERF_ROWS: [string, string][] = [['research', 'Organizations'], ['contact', 'Contacts'], ['email', 'Emails'], ['call', 'Calls'], ['linkedin', 'LinkedIn'], ['follow_up', 'Follow-ups'], ['meeting', 'Meetings'], ['proposal', 'Proposals']]
+function PerformanceView() {
+  const [p, setP] = useState<any>(null)
+  useEffect(() => { api.get<{ performance: any }>('fellow/crm/performance').then((d) => setP(d.performance)).catch(() => {}) }, [])
+  if (!p) return <p className="msub">Loading…</p>
+  const cols: [string, string][] = [['today', 'Today'], ['week', 'This Week'], ['month', 'This Month'], ['all', 'All Time']]
+  return (
+    <div>
+      <div className="fc-sc-grid" style={{ marginBottom: 16 }}>
+        <div className="glass" style={{ padding: '14px 16px', borderRadius: 12 }}><div className="msub" style={{ fontSize: 11, textTransform: 'uppercase' }}>Total Prospects</div><strong className="gold-text" style={{ fontSize: 24, fontFamily: 'var(--f-serif)' }}>{p.orgs}</strong></div>
+        <div className="glass" style={{ padding: '14px 16px', borderRadius: 12 }}><div className="msub" style={{ fontSize: 11, textTransform: 'uppercase' }}>Pipeline Value</div><strong className="gold-text" style={{ fontSize: 24, fontFamily: 'var(--f-serif)' }}>{money(p.pipeline)}</strong></div>
+        <div className="glass" style={{ padding: '14px 16px', borderRadius: 12 }}><div className="msub" style={{ fontSize: 11, textTransform: 'uppercase' }}>Sponsorships Won</div><strong className="gold-text" style={{ fontSize: 24, fontFamily: 'var(--f-serif)' }}>{p.won}</strong></div>
+      </div>
+      <div className="admin-table-wrap">
+        <table className="admin-table">
+          <thead><tr><th>Activity</th>{cols.map(([, l]) => <th key={l}>{l}</th>)}</tr></thead>
+          <tbody>{PERF_ROWS.map(([k, lbl]) => (
+            <tr key={k}><td>{lbl}</td>{cols.map(([c]) => <td key={c}>{p[c]?.[k] || 0}</td>)}</tr>
+          ))}</tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+function MaterialsView() {
+  const [items, setItems] = useState<{ id: number; category: string; title: string; description?: string; url?: string }[]>([])
+  useEffect(() => { api.get<{ materials: any[] }>('fellow/materials').then((d) => setItems(d.materials || [])).catch(() => {}) }, [])
+  if (items.length === 0) return <p className="msub">No approved materials yet. Ask an admin to add them.</p>
+  const cats = Array.from(new Set(items.map((m) => m.category)))
+  return (
+    <div style={{ display: 'grid', gap: 18 }}>
+      {cats.map((cat) => (
+        <section key={cat}>
+          <h4 className="gold-text">{cat}</h4>
+          <div className="fc-sc-grid">
+            {items.filter((m) => m.category === cat).map((m) => (
+              <div key={m.id} className="glass" style={{ padding: 14, borderRadius: 12 }}>
+                <strong>{m.title}</strong>
+                {m.description && <p className="msub" style={{ fontSize: 12, margin: '4px 0' }}>{m.description}</p>}
+                {m.url && <a className="btn btn--sm" href={m.url} target="_blank" rel="noreferrer" style={{ marginTop: 6 }}>View / Download ↗</a>}
+              </div>
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
+  )
+}
+
+function ReportView() {
+  const [f, setF] = useState<Record<string, string>>({ wins: '', challenges: '', help_needed: '', plan: '' })
+  const [nums, setNums] = useState<Record<string, number>>({})
+  const [msg, setMsg] = useState('')
+  const load = useCallback(() => { api.get<{ today_numbers: Record<string, number> }>('fellow/reports').then((d) => setNums(d.today_numbers || {})).catch(() => {}) }, [])
+  useEffect(() => { load() }, [load])
+  const set = (k: string, v: string) => setF((p) => ({ ...p, [k]: v }))
+  const submit = async () => { await api.post('fellow/report', f); setMsg('Report submitted for today. ✓'); load() }
+  return (
+    <div style={{ maxWidth: 620 }}>
+      <section className="glass" style={{ padding: 16, borderRadius: 12, marginBottom: 14 }}>
+        <h4 className="gold-text" style={{ marginTop: 0 }}>Today's numbers (auto)</h4>
+        <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+          {PERF_ROWS.map(([k, lbl]) => <span key={k} className="msub"><strong style={{ color: '#f0ead6' }}>{nums[k] || 0}</strong> {lbl}</span>)}
+        </div>
+      </section>
+      {(['wins', 'challenges', 'help_needed', 'plan'] as const).map((k) => (
+        <label key={k} className="fc-fld" style={{ marginBottom: 10, display: 'block' }}>{k === 'help_needed' ? 'Help needed from management' : k === 'plan' ? 'Plan for tomorrow' : k}
+          <textarea className="fc-input" rows={2} value={f[k]} onChange={(e) => set(k, e.target.value)} /></label>
+      ))}
+      {msg && <p className="msub" style={{ color: '#6be29a' }}>{msg}</p>}
+      <button className="btn btn--solid" onClick={submit}>Submit End-of-Day Report</button>
+    </div>
+  )
+}
+
+function ImportModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+  const [text, setText] = useState(''); const [cat, setCat] = useState(''); const [busy, setBusy] = useState(false); const [msg, setMsg] = useState('')
+  const run = async () => {
+    const rows = text.split('\n').map((l) => l.trim()).filter(Boolean).map((name) => ({ name }))
+    if (rows.length === 0) { setMsg('Paste at least one organization name.'); return }
+    setBusy(true)
+    try { const d = await api.post<{ imported: number }>('fellow/orgs/import', { rows, category: cat }); setMsg(`Imported ${d.imported}. Duplicates were skipped.`); setTimeout(onSaved, 800) }
+    catch (e) { setMsg(e instanceof Error ? e.message : 'Import failed.') } finally { setBusy(false) }
+  }
+  return (
+    <div className="modal-overlay open" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal" style={{ maxWidth: 460 }}>
+        <button type="button" className="close" onClick={onClose} aria-label="Close">✕</button>
+        <h3 className="gold-text">Import Prospects</h3>
+        <p className="msub">Paste organization names — one per line (e.g. from a target list). Duplicates are skipped automatically.</p>
+        <label className="fc-fld" style={{ display: 'block', margin: '10px 0' }}>Category (optional)<input className="fc-input" value={cat} onChange={(e) => setCat(e.target.value)} placeholder="Corporate Sponsor…" /></label>
+        <textarea className="fc-input" rows={8} value={text} onChange={(e) => setText(e.target.value)} placeholder={'Royal Caribbean\nCarnival Cruise Line\nBrunswick Corporation'} />
+        {msg && <p className="msub" style={{ color: msg.startsWith('Imported') ? '#6be29a' : '#e08a8a', marginTop: 8 }}>{msg}</p>}
+        <button className="btn btn--solid" onClick={run} disabled={busy} style={{ marginTop: 10 }}>{busy ? 'Importing…' : 'Import'}</button>
       </div>
     </div>
   )

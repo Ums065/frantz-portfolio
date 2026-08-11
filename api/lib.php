@@ -5995,8 +5995,48 @@ function fellow_ops_ensure_schema(): void
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
         db()->exec("INSERT IGNORE INTO fellow_targets (id) VALUES (1)");
+        // Admin-approved outreach/marketing materials Fellows use.
+        db()->exec("CREATE TABLE IF NOT EXISTS fellow_materials (
+            id INT AUTO_INCREMENT PRIMARY KEY, category VARCHAR(80) NOT NULL DEFAULT 'Sponsor Materials',
+            title VARCHAR(200) NOT NULL, description VARCHAR(400) DEFAULT NULL, url VARCHAR(500) DEFAULT NULL,
+            sort_order INT NOT NULL DEFAULT 0, is_active TINYINT(1) NOT NULL DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        // End-of-day reports (qualitative notes + a snapshot of the auto numbers).
+        db()->exec("CREATE TABLE IF NOT EXISTS fellow_reports (
+            id INT AUTO_INCREMENT PRIMARY KEY, fellow_user_id INT NOT NULL, report_date DATE NOT NULL,
+            numbers_json TEXT DEFAULT NULL, wins TEXT DEFAULT NULL, challenges TEXT DEFAULT NULL,
+            help_needed TEXT DEFAULT NULL, plan TEXT DEFAULT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uniq_fellow_day (fellow_user_id, report_date)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     } catch (Throwable $e) { if (app_debug()) error_log('fellow_ops_ensure_schema: ' . $e->getMessage()); }
     $ready = true;
+}
+
+/** Activity + pipeline stats for a Fellow across today / week / month / all-time. */
+function fellow_performance(int $fellowId): array
+{
+    fellow_ops_ensure_schema();
+    $periods = [
+        'today' => 'DATE(created_at) = CURDATE()',
+        'week' => 'created_at >= CURDATE() - INTERVAL 6 DAY',
+        'month' => 'created_at >= CURDATE() - INTERVAL 29 DAY',
+        'all' => '1=1',
+    ];
+    $out = [];
+    foreach ($periods as $key => $where) {
+        $s = db()->prepare("SELECT type, COUNT(*) n FROM fellow_activities WHERE fellow_user_id = ? AND $where GROUP BY type");
+        $s->execute([$fellowId]);
+        $c = [];
+        foreach ($s->fetchAll() as $r) $c[(string) $r['type']] = (int) $r['n'];
+        $out[$key] = $c;
+    }
+    $out['orgs'] = (int) (static function () use ($fellowId) { $q = db()->prepare('SELECT COUNT(*) FROM fellow_orgs WHERE fellow_user_id = ?'); $q->execute([$fellowId]); return $q->fetchColumn(); })();
+    $q = db()->prepare("SELECT COALESCE(SUM(est_value),0) FROM fellow_orgs WHERE fellow_user_id = ? AND stage NOT IN ('closed_lost','not_interested','no_response')");
+    $q->execute([$fellowId]); $out['pipeline'] = (int) $q->fetchColumn();
+    $q2 = db()->prepare("SELECT COUNT(*) FROM fellow_orgs WHERE fellow_user_id = ? AND stage IN ('confirmed','paid')");
+    $q2->execute([$fellowId]); $out['won'] = (int) $q2->fetchColumn();
+    return $out;
 }
 
 /** Timestamped activity log entry (the backbone of the scorecard + timeline). */
