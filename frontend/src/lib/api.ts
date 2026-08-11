@@ -1,9 +1,21 @@
 /* Tiny fetch wrapper around the PHP API.
-   Base is root-absolute (/api) so requests resolve to /api/... from any
-   client-side route rather than relative to the current page. Override via
-   VITE_API_BASE for a subfolder deployment (e.g. /frantz-portfolio/api). */
+   The API lives next to the built app, at "<app-root>/api". We derive the app
+   root from this module's own URL (import.meta.url → ".../assets/index-x.js"),
+   so it works whether the site is served at the domain root (/api) OR under a
+   subfolder like /frantz-portfolio/ (/frantz-portfolio/api) — from any route.
+   An explicit VITE_API_BASE still wins when set. */
 
-const BASE = (import.meta.env.VITE_API_BASE ?? '/api').replace(/\/+$/, '')
+function detectApiBase(): string {
+  try {
+    const u = import.meta.url // e.g. http://host/frantz-portfolio/assets/index-abc.js
+    const i = u.indexOf('/assets/')
+    if (i > 0) return u.slice(0, i) + '/api'
+  } catch { /* non-browser / dev */ }
+  return '/api'
+}
+
+const envBase = (import.meta.env.VITE_API_BASE ?? '').trim()
+const BASE = (envBase !== '' ? envBase : detectApiBase()).replace(/\/+$/, '')
 let csrfToken = ''
 let csrfBootstrap: Promise<void> | null = null
 
