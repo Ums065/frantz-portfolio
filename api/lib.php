@@ -5998,6 +5998,15 @@ function fellow_ops_ensure_schema(): void
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
         db()->exec("INSERT IGNORE INTO fellow_targets (id) VALUES (1)");
+        // Per-Fellow target overrides: 0 = the global default (row id=1).
+        try {
+            $has = db()->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'fellow_targets' AND COLUMN_NAME = 'fellow_user_id'")->fetchColumn();
+            if ((int) $has === 0) {
+                db()->exec("ALTER TABLE fellow_targets ADD COLUMN fellow_user_id INT NOT NULL DEFAULT 0");
+                db()->exec("UPDATE fellow_targets SET fellow_user_id = 0 WHERE id = 1");
+                db()->exec("ALTER TABLE fellow_targets ADD UNIQUE KEY uniq_target_fellow (fellow_user_id)");
+            }
+        } catch (Throwable $e) { if (app_debug()) error_log('fellow_targets fellow_user_id: ' . $e->getMessage()); }
         // Admin-approved outreach templates (email / call scripts / LinkedIn / follow-up).
         db()->exec("CREATE TABLE IF NOT EXISTS fellow_templates (
             id INT AUTO_INCREMENT PRIMARY KEY, kind VARCHAR(20) NOT NULL DEFAULT 'email',
@@ -6138,7 +6147,10 @@ function fellow_scorecard(int $fellowId): array
     $stmt->execute([$fellowId]);
     $counts = [];
     foreach ($stmt->fetchAll() as $r) $counts[(string) $r['type']] = (int) $r['n'];
-    $t = db()->query('SELECT * FROM fellow_targets WHERE id = 1')->fetch() ?: [];
+    // Per-Fellow targets if set, else the global default (fellow_user_id = 0).
+    $tq = db()->prepare('SELECT * FROM fellow_targets WHERE fellow_user_id IN (?, 0) ORDER BY (fellow_user_id = ?) DESC LIMIT 1');
+    $tq->execute([$fellowId, $fellowId]);
+    $t = $tq->fetch() ?: [];
     return [
         'counts' => $counts,
         'targets' => [

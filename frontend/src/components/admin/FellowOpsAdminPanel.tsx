@@ -88,7 +88,7 @@ export default function FellowOpsAdminPanel() {
       {tab === 'analytics' && <AnalyticsView />}
       {tab === 'proposals' && <ProposalsAdmin />}
       {tab === 'assign' && <AssignTask fellows={fellows} onDone={load} />}
-      {tab === 'targets' && <TargetsForm onDone={load} />}
+      {tab === 'targets' && <TargetsForm fellows={fellows} onDone={load} />}
       {tab === 'materials' && <MaterialsAdmin />}
       {tab === 'templates' && <TemplatesAdmin />}
       {tab === 'training' && <ModulesAdmin />}
@@ -349,14 +349,27 @@ function AssignTask({ fellows, onDone }: { fellows: FellowRow[]; onDone: () => v
   )
 }
 
-function TargetsForm({ onDone }: { onDone: () => void }) {
+function TargetsForm({ fellows, onDone }: { fellows: FellowRow[]; onDone: () => void }) {
+  const [who, setWho] = useState('0')
   const [t, setT] = useState<Record<string, number>>({ orgs: 10, emails: 10, calls: 5, linkedin: 5, follow_ups: 10 })
   const [msg, setMsg] = useState('')
+  const load = useCallback((fid: string) => {
+    api.get<{ targets: Record<string, number> }>(`admin/fellow-ops/targets?fellow_user_id=${fid}`).then((d) => setT({ ...t, ...d.targets })).catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  useEffect(() => { load('0') }, [load])
+  const onWho = (fid: string) => { setWho(fid); setMsg(''); load(fid) }
   const set = (k: string, v: string) => setT((p) => ({ ...p, [k]: Number(v) || 0 }))
-  const save = async () => { await api.put('admin/fellow-ops/targets', t); setMsg('Saved.'); onDone() }
+  const save = async () => { await api.put('admin/fellow-ops/targets', { ...t, fellow_user_id: Number(who) }); setMsg('Saved.'); onDone() }
   return (
-    <div style={{ display: 'grid', gap: 10, maxWidth: 420 }}>
-      <p className="msub">Daily targets shown on every Fellow's scorecard.</p>
+    <div style={{ display: 'grid', gap: 10, maxWidth: 440 }}>
+      <p className="msub">Daily targets shown on a Fellow's scorecard. Pick "Global default" for everyone, or a Fellow to override just them.</p>
+      <label className="fc-fld">Apply to
+        <select className="fc-input" value={who} onChange={(e) => onWho(e.target.value)}>
+          <option value="0" style={{ background: '#14120b' }}>Global default (all Fellows)</option>
+          {fellows.map((f) => <option key={f.id} value={f.id} style={{ background: '#14120b' }}>{f.full_name}</option>)}
+        </select>
+      </label>
       {(['orgs', 'emails', 'calls', 'linkedin', 'follow_ups'] as const).map((k) => (
         <label key={k} className="fc-fld" style={{ display: 'flex', alignItems: 'center', gap: 10, textTransform: 'capitalize' }}>
           <span style={{ minWidth: 120 }}>{k.replace('_', ' ')}</span>

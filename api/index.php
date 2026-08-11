@@ -2295,12 +2295,23 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             db()->prepare('DELETE FROM fellow_materials WHERE id = ?')->execute([(int) $m[1]]);
             json(['message' => 'Material deleted.']);
         }
+        case $key === 'GET admin/fellow-ops/targets': {
+            require_admin(); fellow_ops_ensure_schema();
+            $fid = (int) ($_GET['fellow_user_id'] ?? 0);
+            $q = db()->prepare('SELECT orgs, emails, calls, linkedin, follow_ups FROM fellow_targets WHERE fellow_user_id = ? LIMIT 1');
+            $q->execute([$fid]);
+            $row = $q->fetch();
+            if (!$row && $fid !== 0) { $g = db()->query('SELECT orgs, emails, calls, linkedin, follow_ups FROM fellow_targets WHERE fellow_user_id = 0'); $row = $g->fetch(); }
+            json(['targets' => $row ?: ['orgs' => 10, 'emails' => 10, 'calls' => 5, 'linkedin' => 5, 'follow_ups' => 10], 'custom' => (bool) ($q->rowCount() && $fid !== 0)]);
+        }
         case $key === 'PUT admin/fellow-ops/targets': {
             require_admin();
             fellow_ops_ensure_schema();
             $b = body();
-            db()->prepare('UPDATE fellow_targets SET orgs=?, emails=?, calls=?, linkedin=?, follow_ups=? WHERE id=1')
-                ->execute([max(0, (int) ($b['orgs'] ?? 10)), max(0, (int) ($b['emails'] ?? 10)), max(0, (int) ($b['calls'] ?? 5)), max(0, (int) ($b['linkedin'] ?? 5)), max(0, (int) ($b['follow_ups'] ?? 10))]);
+            $fid = max(0, (int) ($b['fellow_user_id'] ?? 0));
+            db()->prepare('INSERT INTO fellow_targets (fellow_user_id, orgs, emails, calls, linkedin, follow_ups) VALUES (?,?,?,?,?,?)
+                ON DUPLICATE KEY UPDATE orgs=VALUES(orgs), emails=VALUES(emails), calls=VALUES(calls), linkedin=VALUES(linkedin), follow_ups=VALUES(follow_ups)')
+                ->execute([$fid, max(0, (int) ($b['orgs'] ?? 10)), max(0, (int) ($b['emails'] ?? 10)), max(0, (int) ($b['calls'] ?? 5)), max(0, (int) ($b['linkedin'] ?? 5)), max(0, (int) ($b['follow_ups'] ?? 10))]);
             json(['message' => 'Targets saved.']);
         }
 
