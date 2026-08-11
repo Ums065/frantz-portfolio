@@ -15,7 +15,7 @@ export default function FellowOpsAdminPanel() {
   const [summary, setSummary] = useState<Summary | null>(null)
   const [fellows, setFellows] = useState<FellowRow[]>([])
   const [activity, setActivity] = useState<Activity[]>([])
-  const [tab, setTab] = useState<'today' | 'activity' | 'proposals' | 'assign' | 'targets' | 'materials'>('today')
+  const [tab, setTab] = useState<'today' | 'activity' | 'proposals' | 'assign' | 'targets' | 'materials' | 'templates'>('today')
 
   const load = useCallback(() => {
     api.get<{ summary: Summary; fellows: FellowRow[] }>('admin/fellow-ops/summary').then((d) => { setSummary(d.summary); setFellows(d.fellows || []) }).catch(() => {})
@@ -38,9 +38,9 @@ export default function FellowOpsAdminPanel() {
       <p style={{ color: 'var(--muted)', fontSize: 13, margin: '4px 0 14px' }}>What the sponsorship team did today, live.</p>
 
       <div className="admin-ov-tabs" role="tablist" style={{ marginBottom: 16 }}>
-        {(['today', 'activity', 'proposals', 'assign', 'targets', 'materials'] as const).map((t) => (
+        {(['today', 'activity', 'proposals', 'assign', 'targets', 'materials', 'templates'] as const).map((t) => (
           <button key={t} role="tab" aria-selected={tab === t} className={`admin-ov-tab${tab === t ? ' is-active' : ''}`} onClick={() => setTab(t)}>
-            {t === 'today' ? 'Today' : t === 'activity' ? 'Activity Feed' : t === 'proposals' ? 'Proposals' : t === 'assign' ? 'Assign Task' : t === 'targets' ? 'Targets' : 'Materials'}
+            {t === 'today' ? 'Today' : t === 'activity' ? 'Activity Feed' : t === 'proposals' ? 'Proposals' : t === 'assign' ? 'Assign Task' : t === 'targets' ? 'Targets' : t === 'materials' ? 'Materials' : 'Templates'}
           </button>
         ))}
       </div>
@@ -89,6 +89,60 @@ export default function FellowOpsAdminPanel() {
       {tab === 'assign' && <AssignTask fellows={fellows} onDone={load} />}
       {tab === 'targets' && <TargetsForm onDone={load} />}
       {tab === 'materials' && <MaterialsAdmin />}
+      {tab === 'templates' && <TemplatesAdmin />}
+    </div>
+  )
+}
+
+interface Template { id: number; kind: string; category?: string; name: string; subject?: string; body?: string; sort_order?: number; is_active?: number }
+function TemplatesAdmin() {
+  const [rows, setRows] = useState<Template[]>([]); const [kinds, setKinds] = useState<string[]>([])
+  const [editing, setEditing] = useState<Partial<Template> | null>(null)
+  const load = useCallback(() => { api.get<{ templates: Template[]; kinds: string[] }>('admin/fellow-ops/templates').then((d) => { setRows(d.templates || []); setKinds(d.kinds || []) }).catch(() => {}) }, [])
+  useEffect(() => { load() }, [load])
+  const set = (patch: Partial<Template>) => setEditing((e) => ({ ...(e || {}), ...patch }))
+  const save = async () => {
+    if (!editing || !String(editing.name || '').trim()) return
+    if (editing.id) await api.put(`admin/fellow-ops/template/${editing.id}`, editing); else await api.post('admin/fellow-ops/template', editing)
+    setEditing(null); load()
+  }
+  const remove = async (id: number) => { if (!window.confirm('Delete this template?')) return; await api.del(`admin/fellow-ops/template/${id}`); load() }
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <p className="msub" style={{ margin: 0 }}>Approved email / call / LinkedIn scripts Fellows can copy.</p>
+        <button className="btn btn--sm btn--solid" onClick={() => setEditing({ kind: 'email', is_active: 1 })}>＋ Add Template</button>
+      </div>
+      <div className="admin-table-wrap">
+        <table className="admin-table">
+          <thead><tr><th>Kind</th><th>Name</th><th>Active</th><th></th></tr></thead>
+          <tbody>{rows.length === 0 ? <tr><td colSpan={4} className="msub" style={{ padding: 16 }}>No templates yet.</td></tr> : rows.map((r) => (
+            <tr key={r.id} style={{ cursor: 'pointer' }} onClick={() => setEditing({ ...r })}>
+              <td style={{ textTransform: 'capitalize' }}>{r.kind.replace('_', ' ')}</td><td><strong>{r.name}</strong></td><td>{r.is_active ? '✓' : '—'}</td>
+              <td onClick={(e) => e.stopPropagation()}><button className="btn btn--sm" style={{ color: '#e08a8a', borderColor: '#e08a8a' }} onClick={() => remove(r.id)}>Delete</button></td>
+            </tr>
+          ))}</tbody>
+        </table>
+      </div>
+      {editing && (
+        <div className="modal-overlay open" onClick={(e) => e.target === e.currentTarget && setEditing(null)}>
+          <div className="modal" style={{ maxWidth: 560, maxHeight: '90vh', overflowY: 'auto' }}>
+            <button type="button" className="close" onClick={() => setEditing(null)} aria-label="Close">✕</button>
+            <h3 className="gold-text">{editing.id ? 'Edit' : 'Add'} Template</h3>
+            <div style={{ display: 'grid', gap: 10, marginTop: 12 }}>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <label className="fc-fld" style={{ flex: 1 }}>Kind<select className="fc-input" value={editing.kind || 'email'} onChange={(e) => set({ kind: e.target.value })}>{kinds.map((k) => <option key={k} value={k} style={{ background: '#14120b' }}>{k.replace('_', ' ')}</option>)}</select></label>
+                <label className="fc-fld" style={{ flex: 1 }}>Category<input className="fc-input" value={editing.category || ''} onChange={(e) => set({ category: e.target.value })} placeholder="Corporate / Foundation…" /></label>
+              </div>
+              <label className="fc-fld">Name<input className="fc-input" value={editing.name || ''} onChange={(e) => set({ name: e.target.value })} /></label>
+              <label className="fc-fld">Subject (email)<input className="fc-input" value={editing.subject || ''} onChange={(e) => set({ subject: e.target.value })} /></label>
+              <label className="fc-fld">Body / script<textarea className="fc-input" rows={7} value={editing.body || ''} onChange={(e) => set({ body: e.target.value })} placeholder="Use [Name], [Organization] as placeholders." /></label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#d8d3c6', fontSize: 13 }}><input type="checkbox" checked={!!editing.is_active} onChange={(e) => set({ is_active: e.target.checked ? 1 : 0 })} /> Active</label>
+              <button className="btn btn--solid" onClick={save}>Save</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

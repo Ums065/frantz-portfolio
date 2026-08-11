@@ -2002,6 +2002,28 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
             json(['performance' => fellow_performance((int) $u['id'])]);
         }
+        case $key === 'GET fellow/templates': {
+            $u = require_login();
+            if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
+            fellow_ops_ensure_schema();
+            json(['templates' => db()->query("SELECT id, kind, category, name, subject, body FROM fellow_templates WHERE is_active = 1 ORDER BY kind, sort_order, id")->fetchAll(), 'kinds' => FELLOW_TEMPLATE_KINDS]);
+        }
+        case $key === 'GET fellow/call-list': {
+            $u = require_login();
+            if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
+            fellow_ops_ensure_schema();
+            $s = db()->prepare(
+                "SELECT o.id, o.name, o.stage, o.priority,
+                        (SELECT c.name FROM fellow_contacts c WHERE c.org_id = o.id AND c.phone <> '' ORDER BY c.is_primary DESC LIMIT 1) AS contact_name,
+                        (SELECT c.phone FROM fellow_contacts c WHERE c.org_id = o.id AND c.phone <> '' ORDER BY c.is_primary DESC LIMIT 1) AS phone,
+                        (SELECT MAX(a.created_at) FROM fellow_activities a WHERE a.org_id = o.id AND a.type = 'call') AS last_call
+                 FROM fellow_orgs o
+                 WHERE o.fellow_user_id = ? AND EXISTS (SELECT 1 FROM fellow_contacts c WHERE c.org_id = o.id AND c.phone <> '')
+                 ORDER BY (last_call IS NULL) DESC, last_call ASC LIMIT 100"
+            );
+            $s->execute([(int) $u['id']]);
+            json(['calls' => $s->fetchAll()]);
+        }
         case $key === 'GET fellow/materials': {
             $u = require_login();
             if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
@@ -2137,6 +2159,39 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             $own = db()->prepare('SELECT fellow_user_id, org_id FROM fellow_proposals WHERE id = ?'); $own->execute([(int) $m[1]]); $row = $own->fetch();
             if ($row) { try { new_school_add_notification(null, 'fellow', 'fellow_proposal', 'Proposal ' . $status, 'Your proposal was ' . $status . '.', [], (int) $row['fellow_user_id']); } catch (Throwable $e) {} }
             json(['message' => 'Proposal ' . $status . '.']);
+        }
+        case $key === 'GET admin/fellow-ops/templates': {
+            require_admin(); fellow_ops_ensure_schema();
+            json(['templates' => db()->query('SELECT * FROM fellow_templates ORDER BY kind, sort_order, id')->fetchAll(), 'kinds' => FELLOW_TEMPLATE_KINDS]);
+        }
+        case $key === 'POST admin/fellow-ops/template': {
+            require_admin(); fellow_ops_ensure_schema();
+            $b = body();
+            $name = mb_substr(trim((string) field($b, 'name')), 0, 160);
+            if ($name === '') json(['error' => 'Name required.'], 422);
+            db()->prepare('INSERT INTO fellow_templates (kind, category, name, subject, body, sort_order, is_active) VALUES (?,?,?,?,?,?,?)')
+                ->execute([in_array((string) field($b, 'kind'), FELLOW_TEMPLATE_KINDS, true) ? (string) field($b, 'kind') : 'email',
+                    mb_substr(trim((string) field($b, 'category')), 0, 80) ?: null, $name,
+                    mb_substr(trim((string) field($b, 'subject')), 0, 240) ?: null,
+                    mb_substr(trim((string) field($b, 'body')), 0, 6000) ?: null, (int) ($b['sort_order'] ?? 0), empty($b['is_active']) ? 0 : 1]);
+            json(['id' => (int) db()->lastInsertId(), 'message' => 'Template added.'], 201);
+        }
+        case $method === 'PUT' && preg_match('#^admin/fellow-ops/template/(\d+)$#', $route, $m) === 1: {
+            require_admin(); fellow_ops_ensure_schema();
+            $b = body();
+            $name = mb_substr(trim((string) field($b, 'name')), 0, 160);
+            if ($name === '') json(['error' => 'Name required.'], 422);
+            db()->prepare('UPDATE fellow_templates SET kind=?, category=?, name=?, subject=?, body=?, sort_order=?, is_active=? WHERE id=?')
+                ->execute([in_array((string) field($b, 'kind'), FELLOW_TEMPLATE_KINDS, true) ? (string) field($b, 'kind') : 'email',
+                    mb_substr(trim((string) field($b, 'category')), 0, 80) ?: null, $name,
+                    mb_substr(trim((string) field($b, 'subject')), 0, 240) ?: null,
+                    mb_substr(trim((string) field($b, 'body')), 0, 6000) ?: null, (int) ($b['sort_order'] ?? 0), empty($b['is_active']) ? 0 : 1, (int) $m[1]]);
+            json(['message' => 'Template updated.']);
+        }
+        case $method === 'DELETE' && preg_match('#^admin/fellow-ops/template/(\d+)$#', $route, $m) === 1: {
+            require_admin(); fellow_ops_ensure_schema();
+            db()->prepare('DELETE FROM fellow_templates WHERE id = ?')->execute([(int) $m[1]]);
+            json(['message' => 'Template deleted.']);
         }
         case $key === 'GET admin/fellow-ops/materials': {
             require_admin(); fellow_ops_ensure_schema();

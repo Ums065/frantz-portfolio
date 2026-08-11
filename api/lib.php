@@ -5935,6 +5935,7 @@ const FELLOW_PRIORITIES = ['unreviewed', 'researching', 'qualified', 'high', 'me
 const FELLOW_ACTIVITY_TYPES = ['research', 'contact', 'email', 'call', 'linkedin', 'follow_up', 'meeting', 'proposal', 'note', 'stage', 'sponsor'];
 const FELLOW_PROPOSAL_STATUSES = ['draft', 'submitted', 'approved', 'sent', 'under_review', 'accepted', 'declined'];
 const FELLOW_MEETING_TYPES = ['phone', 'zoom', 'meet', 'in_person'];
+const FELLOW_TEMPLATE_KINDS = ['email', 'call', 'linkedin', 'follow_up', 'meeting'];
 
 /** Self-healing schema for the Fellow CRM (orgs, contacts, activities, tasks, follow-ups, targets). */
 function fellow_ops_ensure_schema(): void
@@ -5997,6 +5998,13 @@ function fellow_ops_ensure_schema(): void
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
         db()->exec("INSERT IGNORE INTO fellow_targets (id) VALUES (1)");
+        // Admin-approved outreach templates (email / call scripts / LinkedIn / follow-up).
+        db()->exec("CREATE TABLE IF NOT EXISTS fellow_templates (
+            id INT AUTO_INCREMENT PRIMARY KEY, kind VARCHAR(20) NOT NULL DEFAULT 'email',
+            category VARCHAR(80) DEFAULT NULL, name VARCHAR(160) NOT NULL, subject VARCHAR(240) DEFAULT NULL,
+            body TEXT DEFAULT NULL, sort_order INT NOT NULL DEFAULT 0, is_active TINYINT(1) NOT NULL DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
         // Admin-approved outreach/marketing materials Fellows use.
         db()->exec("CREATE TABLE IF NOT EXISTS fellow_materials (
             id INT AUTO_INCREMENT PRIMARY KEY, category VARCHAR(80) NOT NULL DEFAULT 'Sponsor Materials',

@@ -16,7 +16,7 @@ const money = (n: number) => n > 0 ? '$' + n.toLocaleString('en-US') : '—'
 const ACTIVITY_QUICK: [string, string][] = [['email', '✉ Email sent'], ['call', '📞 Call'], ['linkedin', 'in LinkedIn'], ['meeting', '📅 Meeting'], ['proposal', '📄 Proposal'], ['note', '📝 Note']]
 
 export default function FellowCrm() {
-  const [view, setView] = useState<'day' | 'prospects' | 'pipeline' | 'performance' | 'materials' | 'report'>('day')
+  const [view, setView] = useState<'day' | 'prospects' | 'pipeline' | 'calls' | 'outreach' | 'performance' | 'materials' | 'report'>('day')
   const [importing, setImporting] = useState(false)
   const [overview, setOverview] = useState<{ scorecard: { counts: Record<string, number>; targets: Record<string, number> }; tasks: Task[]; followups: Followup[]; followups_due: number; orgs_total: number } | null>(null)
   const [orgs, setOrgs] = useState<Org[]>([])
@@ -58,9 +58,9 @@ export default function FellowCrm() {
   return (
     <div className="fc-crm">
       <div className="admin-ov-tabs" role="tablist" style={{ marginBottom: 18 }}>
-        {(['day', 'prospects', 'pipeline', 'performance', 'materials', 'report'] as const).map((v) => (
+        {(['day', 'prospects', 'pipeline', 'calls', 'outreach', 'performance', 'materials', 'report'] as const).map((v) => (
           <button key={v} type="button" role="tab" aria-selected={view === v} className={`admin-ov-tab${view === v ? ' is-active' : ''}`} onClick={() => setView(v)}>
-            {v === 'day' ? 'My Day' : v === 'prospects' ? `Prospects (${orgs.length})` : v === 'pipeline' ? 'Pipeline' : v === 'performance' ? 'Performance' : v === 'materials' ? 'Materials' : 'Daily Report'}
+            {v === 'day' ? 'My Day' : v === 'prospects' ? `Prospects (${orgs.length})` : v === 'pipeline' ? 'Pipeline' : v === 'calls' ? 'Calls' : v === 'outreach' ? 'Outreach' : v === 'performance' ? 'Performance' : v === 'materials' ? 'Materials' : 'Daily Report'}
           </button>
         ))}
       </div>
@@ -162,6 +162,8 @@ export default function FellowCrm() {
         </div>
       )}
 
+      {view === 'calls' && <CallsView onLogged={refresh} onOpen={setOpenId} />}
+      {view === 'outreach' && <OutreachView />}
       {view === 'performance' && <PerformanceView />}
       {view === 'materials' && <MaterialsView />}
       {view === 'report' && <ReportView />}
@@ -327,6 +329,75 @@ function OrgDrawer({ id, onClose, onChange }: { id: number; onClose: () => void;
 }
 
 const PERF_ROWS: [string, string][] = [['research', 'Organizations'], ['contact', 'Contacts'], ['email', 'Emails'], ['call', 'Calls'], ['linkedin', 'LinkedIn'], ['follow_up', 'Follow-ups'], ['meeting', 'Meetings'], ['proposal', 'Proposals']]
+const CALL_OUTCOMES = ['no_answer', 'voicemail', 'receptionist', 'reached', 'interested', 'callback', 'meeting', 'not_interested', 'wrong_contact']
+function CallsView({ onLogged, onOpen }: { onLogged: () => void; onOpen: (id: number) => void }) {
+  const [calls, setCalls] = useState<any[]>([])
+  const [active, setActive] = useState<number | null>(null)
+  const [oc, setOc] = useState('reached'); const [note, setNote] = useState(''); const [fu, setFu] = useState('')
+  const load = useCallback(() => { api.get<{ calls: any[] }>('fellow/call-list').then((d) => setCalls(d.calls || [])).catch(() => {}) }, [])
+  useEffect(() => { load() }, [load])
+  const logCall = async (orgId: number) => {
+    await api.post(`fellow/org/${orgId}/activity`, { type: 'call', detail: oc.replace('_', ' ') + (note ? ` — ${note}` : ''), follow_up_date: fu })
+    setActive(null); setNote(''); setFu(''); setOc('reached'); load(); onLogged()
+  }
+  if (calls.length === 0) return <p className="msub">No call list yet — add prospects with a phone contact.</p>
+  return (
+    <div className="admin-table-wrap">
+      <table className="admin-table">
+        <thead><tr><th>Organization</th><th>Contact</th><th>Phone</th><th>Last call</th><th></th></tr></thead>
+        <tbody>{calls.map((c) => (
+          <tr key={c.id}>
+            <td><button type="button" className="fc-link" onClick={() => onOpen(c.id)}>{c.name}</button></td>
+            <td>{c.contact_name || '—'}</td><td>{c.phone || '—'}</td>
+            <td className="msub">{c.last_call ? String(c.last_call).slice(0, 10) : 'never'}</td>
+            <td onClick={(e) => e.stopPropagation()}>
+              {active === c.id ? (
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <select className="fc-input" style={{ width: 'auto' }} value={oc} onChange={(e) => setOc(e.target.value)}>{CALL_OUTCOMES.map((o) => <option key={o} value={o} style={{ background: '#14120b' }}>{o.replace('_', ' ')}</option>)}</select>
+                  <input className="fc-input" style={{ width: 120 }} placeholder="note" value={note} onChange={(e) => setNote(e.target.value)} />
+                  <input className="fc-input" style={{ width: 'auto' }} type="date" value={fu} onChange={(e) => setFu(e.target.value)} title="Next follow-up" />
+                  <button className="btn btn--sm btn--solid" onClick={() => logCall(c.id)}>Save</button>
+                </div>
+              ) : <button className="btn btn--sm" onClick={() => setActive(c.id)}>Log call</button>}
+            </td>
+          </tr>
+        ))}</tbody>
+      </table>
+    </div>
+  )
+}
+
+function OutreachView() {
+  const [templates, setTemplates] = useState<any[]>([])
+  const [copied, setCopied] = useState<number | null>(null)
+  useEffect(() => { api.get<{ templates: any[] }>('fellow/templates').then((d) => setTemplates(d.templates || [])).catch(() => {}) }, [])
+  if (templates.length === 0) return <p className="msub">No approved templates yet. Ask an admin to add email/call/LinkedIn scripts.</p>
+  const kinds = Array.from(new Set(templates.map((t) => t.kind)))
+  const copy = (t: any) => { navigator.clipboard?.writeText(`${t.subject ? `Subject: ${t.subject}\n\n` : ''}${t.body || ''}`).then(() => { setCopied(t.id); setTimeout(() => setCopied(null), 1500) }).catch(() => {}) }
+  return (
+    <div style={{ display: 'grid', gap: 18 }}>
+      <p className="msub">Approved scripts. Copy, personalize for the contact, send, then log it from the prospect's page ("Log activity → Email").</p>
+      {kinds.map((k) => (
+        <section key={k}>
+          <h4 className="gold-text" style={{ textTransform: 'capitalize' }}>{STAGE_LABEL(k)} templates</h4>
+          <div style={{ display: 'grid', gap: 10 }}>
+            {templates.filter((t) => t.kind === k).map((t) => (
+              <div key={t.id} className="glass" style={{ padding: 14, borderRadius: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center' }}>
+                  <strong>{t.name}</strong>
+                  <button className="btn btn--sm" onClick={() => copy(t)}>{copied === t.id ? 'Copied ✓' : 'Copy'}</button>
+                </div>
+                {t.subject && <div className="msub" style={{ fontSize: 12, margin: '4px 0' }}>Subject: {t.subject}</div>}
+                {t.body && <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', fontSize: 13, color: '#cfc9ba', margin: '6px 0 0', maxHeight: 160, overflow: 'auto' }}>{t.body}</pre>}
+              </div>
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
+  )
+}
+
 function PerformanceView() {
   const [p, setP] = useState<any>(null)
   useEffect(() => { api.get<{ performance: any }>('fellow/crm/performance').then((d) => setP(d.performance)).catch(() => {}) }, [])

@@ -3986,3 +3986,5 @@ section#challenge .challenge-features .ns-gain p {
 .fc-timeline__t { font-size:11px; color:var(--muted); }
 .fc-contact { padding:8px 0; border-bottom:1px solid rgba(255,255,255,.06); }
 .fc-dup { padding:8px 10px; border-radius:8px; background:rgba(224,120,92,.12); border:1px solid rgba(224,120,92,.4); color:#f0b8a8; font-size:12.5px; }
+.fc-link { background:none; border:0; padding:0; font:inherit; color:var(--gold-light,#f6e2a8); font-weight:700; cursor:pointer; }
+.fc-link:hover { text-decoration:underline; }
