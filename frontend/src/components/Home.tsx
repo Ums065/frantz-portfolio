@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { api, type EventItem, type Post, type PublicGalleryItemRow, type PartnerRow } from '../lib/api'
 import ContactSection from './ContactSection'
 import FeaturedEventBanner from './FeaturedEventBanner'
+import PressWidget from './PressWidget'
 import { SocialIcon } from './SocialIcons'
 import { socials } from '../lib/social'
 import { useSeo } from '../hooks/useSeo'
@@ -1013,6 +1014,8 @@ export default function Home() {
       </section>
 
       <div className="wrap"><div className="sec-divider" /></div>
+
+      <PressWidget />
 
       <section className="block" id="partners" data-screen-label="Partners">
         <div className="wrap">

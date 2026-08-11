@@ -5923,6 +5923,111 @@ function events_notify_featured(int $eventId, string $title): void
     }
 }
 
+/* ==================== Press / Featured Media ("As Seen In") ==================== */
+
+/** Self-healing table for the home Press widget (articles, videos, photos). */
+function press_ensure_schema(): void
+{
+    static $ready = false;
+    if ($ready) return;
+    try {
+        db()->exec(
+            "CREATE TABLE IF NOT EXISTS press_items (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                kind VARCHAR(20) NOT NULL DEFAULT 'website',
+                title VARCHAR(200) NOT NULL,
+                url VARCHAR(500) DEFAULT NULL,
+                thumbnail_url VARCHAR(500) DEFAULT NULL,
+                source_name VARCHAR(120) DEFAULT NULL,
+                sort_order INT NOT NULL DEFAULT 0,
+                is_active TINYINT(1) NOT NULL DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+        );
+    } catch (Throwable $e) { if (app_debug()) error_log('press_ensure_schema: ' . $e->getMessage()); }
+    $ready = true;
+}
+
+/** Extract a YouTube video id from any common YouTube URL form. */
+function press_youtube_id(string $url): ?string
+{
+    if (preg_match('~(?:youtube\.com/(?:watch\?v=|embed/|shorts/)|youtu\.be/)([\w-]{11})~', $url, $m)) return $m[1];
+    return null;
+}
+
+/** Resolve a URL into {kind, thumbnail, title, source} — YouTube derived directly,
+ *  everything else via a best-effort og:image / og:title scrape. */
+function press_resolve(string $url): array
+{
+    $url = trim($url);
+    $out = ['kind' => 'website', 'thumbnail' => '', 'title' => '', 'source' => ''];
+    if ($url === '') return $out;
+
+    $host = strtolower((string) parse_url($url, PHP_URL_HOST));
+    $out['source'] = preg_replace('/^www\./', '', $host);
+
+    $yt = press_youtube_id($url);
+    if ($yt) {
+        $out['kind'] = 'youtube';
+        $out['thumbnail'] = 'https://img.youtube.com/vi/' . $yt . '/hqdefault.jpg';
+        $out['source'] = 'YouTube';
+    } elseif (str_contains($host, 'instagram.com')) {
+        $out['kind'] = 'instagram';
+        $out['source'] = 'Instagram';
+    }
+
+    // Best-effort og: scrape for the thumbnail/title (skipped for YouTube — already have it).
+    if ($out['kind'] !== 'youtube') {
+        try {
+            $html = press_fetch_url($url);
+            if ($html !== '') {
+                if (preg_match('/<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)["\']/i', $html, $m)
+                    || preg_match('/<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image["\']/i', $html, $m)) {
+                    $out['thumbnail'] = html_entity_decode($m[1], ENT_QUOTES);
+                }
+                if (preg_match('/<meta[^>]+property=["\']og:title["\'][^>]+content=["\']([^"\']+)["\']/i', $html, $t)) {
+                    $out['title'] = html_entity_decode($t[1], ENT_QUOTES);
+                } elseif (preg_match('/<title[^>]*>([^<]+)<\/title>/i', $html, $t)) {
+                    $out['title'] = trim(html_entity_decode($t[1], ENT_QUOTES));
+                }
+            }
+        } catch (Throwable $e) { if (app_debug()) error_log('press_resolve scrape: ' . $e->getMessage()); }
+    }
+    return $out;
+}
+
+/** Fetch a URL's HTML with a short timeout + browser UA (best-effort, never throws). */
+function press_fetch_url(string $url): string
+{
+    if (!preg_match('~^https?://~i', $url)) return '';
+    if (function_exists('curl_init')) {
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true, CURLOPT_FOLLOWLOCATION => true, CURLOPT_MAXREDIRS => 4,
+            CURLOPT_TIMEOUT => 7, CURLOPT_CONNECTTIMEOUT => 5, CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_USERAGENT => 'Mozilla/5.0 (compatible; FrantzCoutardBot/1.0)',
+            CURLOPT_RANGE => '0-200000',
+        ]);
+        $body = (string) curl_exec($ch);
+        curl_close($ch);
+        return $body;
+    }
+    if (ini_get('allow_url_fopen')) {
+        $ctx = stream_context_create(['http' => ['timeout' => 7, 'header' => "User-Agent: Mozilla/5.0\r\n"]]);
+        return (string) @file_get_contents($url, false, $ctx, 0, 200000);
+    }
+    return '';
+}
+
+/** Public list of active press items for the home widget. */
+function press_public_items(): array
+{
+    press_ensure_schema();
+    return db()->query(
+        "SELECT id, kind, title, url, thumbnail_url, source_name FROM press_items WHERE is_active = 1 ORDER BY sort_order ASC, id DESC"
+    )->fetchAll() ?: [];
+}
+
 /** Attribute a newly-registered user to a referrer's code (partner referral).
  *  First non-empty code wins; a user is never attributed to their own code. Codes are
  *  normalized to upper-case to match the generated ecosystem/partner codes. */

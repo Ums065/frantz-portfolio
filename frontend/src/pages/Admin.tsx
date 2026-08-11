@@ -18,6 +18,7 @@ const SponsorsAdminPanel = lazy(() => import('../components/admin/SponsorsAdminP
 const GalleryAdminPanel = lazy(() => import('../components/admin/GalleryAdminPanel'))
 const JudgesAdminPanel = lazy(() => import('../components/admin/JudgesAdminPanel'))
 const PartnersAdminPanel = lazy(() => import('../components/admin/PartnersAdminPanel'))
+const PressAdminPanel = lazy(() => import('../components/admin/PressAdminPanel'))
 const ResearchAdminPanel = lazy(() => import('../components/admin/ResearchAdminPanel'))
 const BusinessRequestsAdminPanel = lazy(() => import('../components/admin/BusinessRequestsAdminPanel'))
 const SponsorJobsAdminPanel = lazy(() => import('../components/admin/SponsorJobsAdminPanel'))
@@ -31,7 +32,7 @@ type TabKey =
   | 'members' | 'approvals' | 'business-requests' | 'sponsor-jobs' | 'ecosystem' | 'sponsors' | 'partners' | 'awards' | 'events' | 'blog'
   | 'testimonials' | 'media' | 'gallery' | 'community' | 'rsvps' | 'inventory'
   | 'ns-schools' | 'ns-ranking' | 'ns-submissions' | 'ns-interviews' | 'ns-chat' | 'ns-trendcatch' | 'ns-judges' | 'ns-timeline'
-  | 'research' | 'team-inbox'
+  | 'research' | 'team-inbox' | 'press'
 
 interface NavItem { key: TabKey; label: string }
 const NAV_GROUPS: Array<{ group: string; items: NavItem[] }> = [
@@ -80,6 +81,7 @@ const NAV_GROUPS: Array<{ group: string; items: NavItem[] }> = [
     { key: 'testimonials', label: 'Testimonials' },
     { key: 'media', label: 'Media Library' },
     { key: 'gallery', label: 'Gallery' },
+    { key: 'press', label: 'Press / Featured' },
   ] },
   { group: 'Engagement', items: [
     { key: 'rsvps', label: 'Event RSVPs' },
@@ -1976,6 +1978,7 @@ export default function Admin() {
         {tab === 'testimonials' && <TestimonialsAdmin />}
         {tab === 'media' && <MediaAdmin />}
         {tab === 'gallery' && <GalleryAdminPanel />}
+        {tab === 'press' && <PressAdminPanel />}
         {tab === 'community' && <CommunityAdmin />}
         {tab === 'rsvps' && <RsvpsAdmin />}
         {tab === 'inventory' && <InventoryAdmin />}

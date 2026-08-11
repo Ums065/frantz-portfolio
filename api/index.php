@@ -438,6 +438,10 @@ try {
         }
 
         /* ---------------- PUBLIC CONTENT ---------------- */
+        case $key === 'GET press': {
+            json(['items' => press_public_items()]);
+        }
+
         case $key === 'GET events': {
             events_ensure_schema();
             $rows = db()->query(
@@ -3402,6 +3406,51 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             $stmt = db()->prepare('DELETE FROM events WHERE id = ?');
             $stmt->execute([(int) $m[1]]);
             json(['message' => 'Event deleted.']);
+        }
+
+        /* ---------------- ADMIN: PRESS / FEATURED MEDIA ---------------- */
+        case $key === 'GET admin/press': {
+            require_admin(); press_ensure_schema();
+            json(['items' => db()->query('SELECT id, kind, title, url, thumbnail_url, source_name, sort_order, is_active FROM press_items ORDER BY sort_order ASC, id DESC')->fetchAll() ?: []]);
+        }
+        case $key === 'POST admin/press/resolve': {
+            require_admin();
+            json(press_resolve((string) field(body(), 'url')));
+        }
+        case $key === 'POST admin/press': {
+            require_admin(); press_ensure_schema();
+            $b = body();
+            $title = mb_substr(trim((string) field($b, 'title')), 0, 200);
+            if ($title === '') json(['error' => 'Title is required.'], 422);
+            $stmt = db()->prepare('INSERT INTO press_items (kind, title, url, thumbnail_url, source_name, sort_order, is_active) VALUES (?,?,?,?,?,?,?)');
+            $stmt->execute([
+                mb_substr(trim((string) field($b, 'kind')) ?: 'website', 0, 20), $title,
+                mb_substr(trim((string) field($b, 'url')), 0, 500) ?: null,
+                mb_substr(trim((string) field($b, 'thumbnail_url')), 0, 500) ?: null,
+                mb_substr(trim((string) field($b, 'source_name')), 0, 120) ?: null,
+                (int) ($b['sort_order'] ?? 0), empty($b['is_active']) ? 0 : 1,
+            ]);
+            json(['id' => (int) db()->lastInsertId(), 'message' => 'Press item added.'], 201);
+        }
+        case $method === 'PUT' && preg_match('#^admin/press/(\d+)$#', $route, $m) === 1: {
+            require_admin(); press_ensure_schema();
+            $b = body();
+            $title = mb_substr(trim((string) field($b, 'title')), 0, 200);
+            if ($title === '') json(['error' => 'Title is required.'], 422);
+            $stmt = db()->prepare('UPDATE press_items SET kind=?, title=?, url=?, thumbnail_url=?, source_name=?, sort_order=?, is_active=? WHERE id=?');
+            $stmt->execute([
+                mb_substr(trim((string) field($b, 'kind')) ?: 'website', 0, 20), $title,
+                mb_substr(trim((string) field($b, 'url')), 0, 500) ?: null,
+                mb_substr(trim((string) field($b, 'thumbnail_url')), 0, 500) ?: null,
+                mb_substr(trim((string) field($b, 'source_name')), 0, 120) ?: null,
+                (int) ($b['sort_order'] ?? 0), empty($b['is_active']) ? 0 : 1, (int) $m[1],
+            ]);
+            json(['message' => 'Press item updated.']);
+        }
+        case $method === 'DELETE' && preg_match('#^admin/press/(\d+)$#', $route, $m) === 1: {
+            require_admin(); press_ensure_schema();
+            db()->prepare('DELETE FROM press_items WHERE id = ?')->execute([(int) $m[1]]);
+            json(['message' => 'Press item deleted.']);
         }
 
         /* ---------------- ADMIN: POSTS CRUD ---------------- */

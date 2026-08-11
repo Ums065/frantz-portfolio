@@ -262,6 +262,16 @@ export interface PartnerRow {
   /** Where the row came from: admin `partners` table, or a live dashboard profile. */
   source?: 'admin' | 'founding_sponsor' | 'sponsor' | 'partner'
 }
+export interface PressItem {
+  id: number
+  kind: string // youtube | instagram | website | video | photo
+  title: string
+  url: string | null
+  thumbnail_url: string | null
+  source_name: string | null
+  sort_order?: number
+  is_active?: number
+}
 export interface PartnerStat { label: string; value: string }
 export interface PartnerPage {
   hero: { title: string; subtitle: string; tagline: string; image?: string }
