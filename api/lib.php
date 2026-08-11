@@ -6036,6 +6036,46 @@ function fellow_scorecard(int $fellowId): array
     ];
 }
 
+/** Admin Command Center aggregates: today's team activity + pipeline value. */
+function fellow_admin_summary(): array
+{
+    fellow_ops_ensure_schema();
+    $today = static function (string $type): int {
+        $s = db()->prepare("SELECT COUNT(*) FROM fellow_activities WHERE type = ? AND DATE(created_at) = CURDATE()");
+        $s->execute([$type]);
+        return (int) $s->fetchColumn();
+    };
+    $activeFellows = (int) db()->query("SELECT COUNT(DISTINCT fellow_user_id) FROM fellow_activities WHERE DATE(created_at) = CURDATE()")->fetchColumn();
+    $totalPipeline = (int) db()->query("SELECT COALESCE(SUM(est_value),0) FROM fellow_orgs WHERE stage NOT IN ('closed_lost','not_interested','no_response')")->fetchColumn();
+    $newPipeline = (int) db()->query("SELECT COALESCE(SUM(est_value),0) FROM fellow_orgs WHERE DATE(created_at) = CURDATE()")->fetchColumn();
+    $proposalVal = (int) db()->query("SELECT COALESCE(SUM(est_value),0) FROM fellow_orgs WHERE stage IN ('proposal_sent','negotiation')")->fetchColumn();
+    $confirmedVal = (int) db()->query("SELECT COALESCE(SUM(est_value),0) FROM fellow_orgs WHERE stage IN ('confirmed','paid')")->fetchColumn();
+    return [
+        'active_fellows' => $activeFellows,
+        'prospects_added' => $today('research'),
+        'emails' => $today('email'), 'calls' => $today('call'), 'linkedin' => $today('linkedin'),
+        'follow_ups' => $today('follow_up'), 'meetings' => $today('meeting'), 'proposals' => $today('proposal'),
+        'sponsors' => $today('sponsor'),
+        'pipeline_total' => $totalPipeline, 'pipeline_new' => $newPipeline,
+        'pipeline_proposal' => $proposalVal, 'pipeline_confirmed' => $confirmedVal,
+    ];
+}
+
+/** Per-Fellow rollup for the admin team table. */
+function fellow_admin_fellows(): array
+{
+    fellow_ops_ensure_schema();
+    $rows = db()->query(
+        "SELECT u.id, u.full_name, u.email,
+                (SELECT COUNT(*) FROM fellow_orgs o WHERE o.fellow_user_id = u.id) AS orgs,
+                (SELECT COALESCE(SUM(o.est_value),0) FROM fellow_orgs o WHERE o.fellow_user_id = u.id AND o.stage NOT IN ('closed_lost','not_interested','no_response')) AS pipeline,
+                (SELECT COUNT(*) FROM fellow_activities a WHERE a.fellow_user_id = u.id AND DATE(a.created_at) = CURDATE()) AS today_activity,
+                (SELECT COUNT(*) FROM fellow_orgs o WHERE o.fellow_user_id = u.id AND o.stage IN ('confirmed','paid')) AS won
+         FROM users u WHERE u.role = 'fellow' ORDER BY today_activity DESC, u.full_name ASC"
+    )->fetchAll() ?: [];
+    return $rows;
+}
+
 /* ==================== Press / Featured Media ("As Seen In") ==================== */
 
 /** Self-healing table for the home Press widget (articles, videos, photos). */

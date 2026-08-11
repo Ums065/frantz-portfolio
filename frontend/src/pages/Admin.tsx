@@ -19,6 +19,7 @@ const GalleryAdminPanel = lazy(() => import('../components/admin/GalleryAdminPan
 const JudgesAdminPanel = lazy(() => import('../components/admin/JudgesAdminPanel'))
 const PartnersAdminPanel = lazy(() => import('../components/admin/PartnersAdminPanel'))
 const PressAdminPanel = lazy(() => import('../components/admin/PressAdminPanel'))
+const FellowOpsAdminPanel = lazy(() => import('../components/admin/FellowOpsAdminPanel'))
 const ResearchAdminPanel = lazy(() => import('../components/admin/ResearchAdminPanel'))
 const BusinessRequestsAdminPanel = lazy(() => import('../components/admin/BusinessRequestsAdminPanel'))
 const SponsorJobsAdminPanel = lazy(() => import('../components/admin/SponsorJobsAdminPanel'))
@@ -32,7 +33,7 @@ type TabKey =
   | 'members' | 'approvals' | 'business-requests' | 'sponsor-jobs' | 'ecosystem' | 'sponsors' | 'partners' | 'awards' | 'events' | 'blog'
   | 'testimonials' | 'media' | 'gallery' | 'community' | 'rsvps' | 'inventory'
   | 'ns-schools' | 'ns-ranking' | 'ns-submissions' | 'ns-interviews' | 'ns-chat' | 'ns-trendcatch' | 'ns-judges' | 'ns-timeline'
-  | 'research' | 'team-inbox' | 'press'
+  | 'research' | 'team-inbox' | 'press' | 'fellow-ops'
 
 interface NavItem { key: TabKey; label: string }
 const NAV_GROUPS: Array<{ group: string; items: NavItem[] }> = [
@@ -60,6 +61,7 @@ const NAV_GROUPS: Array<{ group: string; items: NavItem[] }> = [
     { key: 'sponsor-jobs', label: 'Sponsor Jobs' },
     { key: 'ecosystem', label: 'Ecosystem' },
     { key: 'research', label: 'Research (Fellow)' },
+    { key: 'fellow-ops', label: 'Fellow Command Center' },
     { key: 'sponsors', label: 'Founding Sponsors' },
     { key: 'partners', label: 'Partners' },
   ] },
@@ -1979,6 +1981,7 @@ export default function Admin() {
         {tab === 'media' && <MediaAdmin />}
         {tab === 'gallery' && <GalleryAdminPanel />}
         {tab === 'press' && <PressAdminPanel />}
+        {tab === 'fellow-ops' && <FellowOpsAdminPanel />}
         {tab === 'community' && <CommunityAdmin />}
         {tab === 'rsvps' && <RsvpsAdmin />}
         {tab === 'inventory' && <InventoryAdmin />}

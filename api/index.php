@@ -1948,6 +1948,53 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             json(['message' => 'Logged.'], 201);
         }
 
+        /* ---------- Admin: Fellow Operating Command Center ---------- */
+        case $key === 'GET admin/fellow-ops/summary': {
+            require_admin();
+            json(['summary' => fellow_admin_summary(), 'fellows' => fellow_admin_fellows()]);
+        }
+        case $key === 'GET admin/fellow-ops/activity': {
+            require_admin();
+            fellow_ops_ensure_schema();
+            $rows = db()->query(
+                "SELECT a.type, a.detail, a.created_at, u.full_name AS fellow_name, o.name AS org_name
+                 FROM fellow_activities a JOIN users u ON u.id = a.fellow_user_id
+                 LEFT JOIN fellow_orgs o ON o.id = a.org_id ORDER BY a.created_at DESC, a.id DESC LIMIT 60"
+            )->fetchAll();
+            json(['activity' => $rows]);
+        }
+        case $key === 'GET admin/fellow-ops/pipeline': {
+            require_admin();
+            fellow_ops_ensure_schema();
+            $rows = db()->query(
+                "SELECT o.*, u.full_name AS fellow_name FROM fellow_orgs o LEFT JOIN users u ON u.id = o.fellow_user_id
+                 ORDER BY o.est_value DESC, o.updated_at DESC LIMIT 500"
+            )->fetchAll();
+            json(['orgs' => $rows, 'stages' => FELLOW_STAGES]);
+        }
+        case $key === 'POST admin/fellow-ops/task': {
+            $admin = require_admin();
+            fellow_ops_ensure_schema();
+            $b = body();
+            $fid = (int) ($b['fellow_user_id'] ?? 0);
+            $title = mb_substr(trim((string) field($b, 'title')), 0, 200);
+            if ($fid <= 0 || $title === '') json(['error' => 'Pick a Fellow and enter a task title.'], 422);
+            db()->prepare('INSERT INTO fellow_tasks (fellow_user_id, assigned_by_user_id, title, instructions, due_date, priority) VALUES (?,?,?,?,?,?)')
+                ->execute([$fid, (int) $admin['id'], $title, mb_substr(trim((string) field($b, 'instructions')), 0, 2000) ?: null,
+                    trim((string) field($b, 'due_date')) ?: null,
+                    in_array((string) field($b, 'priority'), ['low', 'medium', 'high'], true) ? (string) field($b, 'priority') : 'medium']);
+            try { new_school_add_notification(null, 'fellow', 'fellow_task', 'New task assigned', $title, ['task' => $title], $fid); } catch (Throwable $e) { /* best effort */ }
+            json(['message' => 'Task assigned.'], 201);
+        }
+        case $key === 'PUT admin/fellow-ops/targets': {
+            require_admin();
+            fellow_ops_ensure_schema();
+            $b = body();
+            db()->prepare('UPDATE fellow_targets SET orgs=?, emails=?, calls=?, linkedin=?, follow_ups=? WHERE id=1')
+                ->execute([max(0, (int) ($b['orgs'] ?? 10)), max(0, (int) ($b['emails'] ?? 10)), max(0, (int) ($b['calls'] ?? 5)), max(0, (int) ($b['linkedin'] ?? 5)), max(0, (int) ($b['follow_ups'] ?? 10))]);
+            json(['message' => 'Targets saved.']);
+        }
+
         // Admin side of the Research Workspace.
         case $key === 'POST admin/research/import': {
             require_admin();
