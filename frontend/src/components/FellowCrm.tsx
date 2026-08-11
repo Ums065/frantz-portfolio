@@ -31,6 +31,13 @@ export default function FellowCrm() {
   }, [])
   useEffect(() => { loadOverview(); loadOrgs() }, [loadOverview, loadOrgs])
   const refresh = () => { loadOverview(); loadOrgs() }
+  const followupDone = async (id: number) => {
+    const next = window.prompt('Follow-up done! Schedule the next follow-up date (YYYY-MM-DD) or leave blank:', '')
+    if (next === null) return
+    await api.post(`fellow/followup/${id}/done`, { next_date: next.trim() })
+    refresh()
+  }
+  const setTaskStatus = async (id: number, status: string) => { await api.put(`fellow/task/${id}`, { status }); loadOverview() }
 
   const filtered = orgs.filter((o) => !q.trim() || `${o.name} ${o.category || ''} ${o.industry || ''} ${o.location || ''}`.toLowerCase().includes(q.trim().toLowerCase()))
 
@@ -79,7 +86,10 @@ export default function FellowCrm() {
                   {(overview?.followups || []).map((f) => (
                     <li key={f.id} className={f.due_date <= today ? 'is-due' : ''}>
                       <button type="button" onClick={() => setOpenId(f.org_id)}>{f.org_name}</button>
-                      <span className="msub">{f.due_date}{f.reason ? ` · ${f.reason}` : ''}</span>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span className="msub">{f.due_date}{f.reason ? ` · ${f.reason}` : ''}</span>
+                        <button type="button" className="btn btn--sm btn--solid" onClick={() => followupDone(f.id)}>Done</button>
+                      </span>
                     </li>
                   ))}
                 </ul>
@@ -90,7 +100,12 @@ export default function FellowCrm() {
               {(overview?.tasks || []).length === 0 ? <p className="msub">No open tasks.</p> : (
                 <ul className="fc-list">
                   {(overview?.tasks || []).map((t) => (
-                    <li key={t.id}><span>{t.title}</span><span className="msub">{t.priority}{t.due_date ? ` · due ${t.due_date}` : ''}</span></li>
+                    <li key={t.id}>
+                      <span>{t.title}<span className="msub" style={{ display: 'block', fontSize: 12 }}>{t.priority}{t.due_date ? ` · due ${t.due_date}` : ''}</span></span>
+                      <select className="fc-input" style={{ width: 'auto', padding: '5px 8px' }} value={t.status} onChange={(e) => setTaskStatus(t.id, e.target.value)}>
+                        {['not_started', 'in_progress', 'waiting', 'completed', 'needs_review'].map((s) => <option key={s} value={s} style={{ background: '#14120b' }}>{s.replace('_', ' ')}</option>)}
+                      </select>
+                    </li>
                   ))}
                 </ul>
               )}

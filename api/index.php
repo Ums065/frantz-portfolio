@@ -1948,6 +1948,35 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             json(['message' => 'Logged.'], 201);
         }
 
+        case $method === 'PUT' && preg_match('#^fellow/task/(\d+)$#', $route, $m) === 1: {
+            $u = require_login();
+            if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
+            fellow_ops_ensure_schema();
+            $status = (string) field(body(), 'status');
+            if (!in_array($status, ['not_started', 'in_progress', 'waiting', 'completed', 'needs_review'], true)) json(['error' => 'Invalid status.'], 422);
+            $done = $status === 'completed' ? date('Y-m-d H:i:s') : null;
+            $r = db()->prepare('UPDATE fellow_tasks SET status = ?, completed_at = ? WHERE id = ? AND fellow_user_id = ?');
+            $r->execute([$status, $done, (int) $m[1], (int) $u['id']]);
+            json(['message' => 'Task updated.']);
+        }
+        case $method === 'POST' && preg_match('#^fellow/followup/(\d+)/done$#', $route, $m) === 1: {
+            $u = require_login();
+            if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
+            fellow_ops_ensure_schema();
+            $fid = (int) $u['id']; $b = body();
+            $fu = db()->prepare('SELECT org_id FROM fellow_followups WHERE id = ? AND fellow_user_id = ?'); $fu->execute([(int) $m[1], $fid]);
+            $row = $fu->fetch();
+            if (!$row) json(['error' => 'Not found.'], 404);
+            db()->prepare("UPDATE fellow_followups SET status='done', done_at=NOW() WHERE id=?")->execute([(int) $m[1]]);
+            fellow_log($fid, (int) $row['org_id'], 'follow_up', (string) field($b, 'note'));
+            $next = trim((string) field($b, 'next_date'));
+            if ($next !== '') {
+                db()->prepare('INSERT INTO fellow_followups (org_id, fellow_user_id, due_date, reason) VALUES (?,?,?,?)')
+                    ->execute([(int) $row['org_id'], $fid, $next, mb_substr(trim((string) field($b, 'reason')), 0, 255) ?: null]);
+            }
+            json(['message' => 'Follow-up completed.']);
+        }
+
         /* ---------- Admin: Fellow Operating Command Center ---------- */
         case $key === 'GET admin/fellow-ops/summary': {
             require_admin();
