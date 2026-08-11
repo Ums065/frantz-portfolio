@@ -3906,23 +3906,55 @@ section#challenge .challenge-features .ns-gain p {
 .press-viewer h4 { margin:14px 0 2px; color:#fff; }
 @media (max-width:520px){ .press-grid { grid-template-columns:repeat(auto-fill, minmax(150px,1fr)); gap:12px; } }
 
-/* Floating "Featured In" press button — pinned just above the language toggle. */
+/* Floating "Featured In" press button — pinned just above the language toggle.
+   Premium dark-glass pill with a gold rim, a breathing highlight glow to draw
+   the eye, and a lift + sheen on hover. */
 .press-fab {
   position: fixed; right: 18px; bottom: 74px; z-index: 90;
-  display: inline-flex; align-items: center; gap: 8px;
-  padding: 9px 15px; border-radius: 999px; cursor: pointer;
-  background: linear-gradient(180deg, #f6e2a8, #c9a84c); color: #1c1a14;
-  border: 1px solid rgba(201,168,76,0.55); font-weight: 800; font-size: 12.5px;
-  letter-spacing: .03em; box-shadow: 0 10px 30px -10px rgba(0,0,0,0.75);
-  transition: transform .25s ease, box-shadow .25s ease;
+  display: inline-flex; align-items: center; gap: 9px;
+  padding: 10px 16px; border-radius: 999px; cursor: pointer;
+  background: linear-gradient(150deg, rgba(38,33,18,0.96), rgba(20,19,15,0.96));
+  color: var(--gold-light, #f6e2a8);
+  border: 1px solid rgba(201,168,76,0.55);
+  font-weight: 800; font-size: 12.5px; letter-spacing: .05em; text-transform: uppercase;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 10px 30px -10px rgba(0,0,0,0.75), inset 0 1px 0 rgba(255,255,255,0.06);
+  overflow: hidden; isolation: isolate;
+  transition: transform .25s var(--ease, ease), box-shadow .25s ease, border-color .25s ease;
+  animation: pressFabGlow 3s ease-in-out infinite;
 }
-.press-fab:hover { transform: translateY(-2px); box-shadow: 0 16px 40px -12px rgba(0,0,0,0.85); }
-.press-fab__star { font-size: 13px; }
+/* moving sheen sweeping across the pill */
+.press-fab::before {
+  content: ''; position: absolute; inset: 0; z-index: -1;
+  background: linear-gradient(115deg, transparent 30%, rgba(246,226,168,0.28) 50%, transparent 70%);
+  transform: translateX(-120%);
+  animation: pressFabSheen 3.6s ease-in-out infinite;
+}
+.press-fab:hover {
+  transform: translateY(-3px);
+  border-color: rgba(201,168,76,0.9);
+  box-shadow: 0 18px 42px -12px rgba(0,0,0,0.85), 0 0 26px rgba(201,168,76,0.4);
+  animation-play-state: paused;
+}
+.press-fab__star { color: var(--gold, #d4af37); font-size: 14px; transition: transform .4s ease; }
+.press-fab:hover .press-fab__star { transform: rotate(72deg) scale(1.15); }
 .press-fab__count {
-  display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px;
-  border-radius: 999px; background: #1c1a14; color: #f6e2a8; font-size: 11px;
+  display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px;
+  border-radius: 999px; background: linear-gradient(180deg, #f6e2a8, #c9a84c); color: #1c1a14;
+  font-size: 11px; font-weight: 900; box-shadow: 0 2px 6px -1px rgba(201,168,76,0.6);
+}
+@keyframes pressFabGlow {
+  0%, 100% { box-shadow: 0 10px 30px -10px rgba(0,0,0,0.75), 0 0 0 rgba(201,168,76,0); }
+  50%      { box-shadow: 0 10px 30px -10px rgba(0,0,0,0.75), 0 0 22px rgba(201,168,76,0.45); }
+}
+@keyframes pressFabSheen {
+  0%, 100% { transform: translateX(-120%); }
+  55%, 70% { transform: translateX(120%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .press-fab, .press-fab::before { animation: none; }
 }
 @media (max-width: 640px) {
-  .press-fab { right: 12px; bottom: 66px; padding: 8px 12px; }
+  .press-fab { right: 12px; bottom: 66px; padding: 9px 13px; }
   .press-fab__txt { display: none; }
 }
