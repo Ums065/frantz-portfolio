@@ -6036,8 +6036,54 @@ function fellow_ops_ensure_schema(): void
             help_needed TEXT DEFAULT NULL, plan TEXT DEFAULT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             UNIQUE KEY uniq_fellow_day (fellow_user_id, report_date)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        // Training Academy modules + per-Fellow completion.
+        db()->exec("CREATE TABLE IF NOT EXISTS fellow_modules (
+            id INT AUTO_INCREMENT PRIMARY KEY, doc_key VARCHAR(255) NOT NULL UNIQUE,
+            category VARCHAR(60) NOT NULL DEFAULT 'Training & Playbooks', title VARCHAR(240) NOT NULL,
+            description VARCHAR(400) DEFAULT NULL, doc_url VARCHAR(500) DEFAULT NULL, video_url VARCHAR(500) DEFAULT NULL,
+            sort_order INT NOT NULL DEFAULT 0, is_active TINYINT(1) NOT NULL DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        db()->exec("CREATE TABLE IF NOT EXISTS fellow_module_progress (
+            id INT AUTO_INCREMENT PRIMARY KEY, fellow_user_id INT NOT NULL, module_id INT NOT NULL,
+            completed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE KEY uniq_fm (fellow_user_id, module_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     } catch (Throwable $e) { if (app_debug()) error_log('fellow_ops_ensure_schema: ' . $e->getMessage()); }
     $ready = true;
+}
+
+/** Scan the Academy folder and register any new document as a training module.
+ *  Titles/order/category are derived from the filename so admin needn't hand-type. */
+function fellow_modules_sync(): int
+{
+    fellow_ops_ensure_schema();
+    $dirs = [dirname(__DIR__) . '/frontend/public/academy', dirname(__DIR__) . '/frontend/dist/academy'];
+    $dir = '';
+    foreach ($dirs as $d) { if (is_dir($d)) { $dir = $d; break; } }
+    if ($dir === '') return 0;
+    $files = glob($dir . '/*.{pdf,pptx,PDF,PPTX}', GLOB_BRACE) ?: [];
+    $added = 0;
+    foreach ($files as $path) {
+        $file = basename($path);
+        $exists = db()->prepare('SELECT id FROM fellow_modules WHERE doc_key = ? LIMIT 1');
+        $exists->execute([$file]);
+        if ($exists->fetch()) continue;
+        // Order from a leading "Document_NN_" or "NN_" number; title from the rest.
+        $order = 999; $name = $file;
+        if (preg_match('/^Document[_ ]?(\d+)[_ ](.+)$/i', $file, $m)) { $order = (int) $m[1]; $name = $m[2]; }
+        elseif (preg_match('/^(\d+)[_ ](.+)$/', $file, $m)) { $order = (int) $m[1]; $name = $m[2]; }
+        $title = trim(preg_replace('/\s+/', ' ', str_replace(['_', '-'], ' ', preg_replace('/\.(pdf|pptx)$/i', '', $name))));
+        $title = preg_replace('/\s*\(\d+\)$/', '', $title); // drop " (1)" dup suffix
+        $lc = strtolower($file);
+        $cat = 'Training & Playbooks';
+        if (preg_match('/exam|certification/', $lc)) $cat = 'Certification';
+        elseif (preg_match('/target|list|book|prospect|organizations|briefs|ranking/', $lc)) $cat = 'Prospect Target Lists';
+        elseif (preg_match('/one_pager|onepager|pitch|prospectus|benefits|due_diligence|deck/', $lc)) $cat = 'Sponsor Collateral';
+        db()->prepare('INSERT INTO fellow_modules (doc_key, category, title, doc_url, sort_order) VALUES (?,?,?,?,?)')
+            ->execute([$file, $cat, mb_substr($title, 0, 240), 'academy/' . rawurlencode($file), $order]);
+        $added++;
+    }
+    return $added;
 }
 
 /** Activity + pipeline stats for a Fellow across today / week / month / all-time. */

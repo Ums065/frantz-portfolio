@@ -16,7 +16,7 @@ const money = (n: number) => n > 0 ? '$' + n.toLocaleString('en-US') : '—'
 const ACTIVITY_QUICK: [string, string][] = [['email', '✉ Email sent'], ['call', '📞 Call'], ['linkedin', 'in LinkedIn'], ['meeting', '📅 Meeting'], ['proposal', '📄 Proposal'], ['note', '📝 Note']]
 
 export default function FellowCrm() {
-  const [view, setView] = useState<'day' | 'prospects' | 'pipeline' | 'calls' | 'outreach' | 'performance' | 'materials' | 'report'>('day')
+  const [view, setView] = useState<'day' | 'prospects' | 'pipeline' | 'calls' | 'outreach' | 'academy' | 'performance' | 'materials' | 'report'>('day')
   const [importing, setImporting] = useState(false)
   const [overview, setOverview] = useState<{ scorecard: { counts: Record<string, number>; targets: Record<string, number> }; tasks: Task[]; followups: Followup[]; followups_due: number; orgs_total: number } | null>(null)
   const [orgs, setOrgs] = useState<Org[]>([])
@@ -58,9 +58,9 @@ export default function FellowCrm() {
   return (
     <div className="fc-crm">
       <div className="admin-ov-tabs" role="tablist" style={{ marginBottom: 18 }}>
-        {(['day', 'prospects', 'pipeline', 'calls', 'outreach', 'performance', 'materials', 'report'] as const).map((v) => (
+        {(['day', 'prospects', 'pipeline', 'calls', 'outreach', 'academy', 'performance', 'materials', 'report'] as const).map((v) => (
           <button key={v} type="button" role="tab" aria-selected={view === v} className={`admin-ov-tab${view === v ? ' is-active' : ''}`} onClick={() => setView(v)}>
-            {v === 'day' ? 'My Day' : v === 'prospects' ? `Prospects (${orgs.length})` : v === 'pipeline' ? 'Pipeline' : v === 'calls' ? 'Calls' : v === 'outreach' ? 'Outreach' : v === 'performance' ? 'Performance' : v === 'materials' ? 'Materials' : 'Daily Report'}
+            {v === 'day' ? 'My Day' : v === 'prospects' ? `Prospects (${orgs.length})` : v === 'pipeline' ? 'Pipeline' : v === 'calls' ? 'Calls' : v === 'outreach' ? 'Outreach' : v === 'academy' ? 'Training Academy' : v === 'performance' ? 'Performance' : v === 'materials' ? 'Materials' : 'Daily Report'}
           </button>
         ))}
       </div>
@@ -164,6 +164,7 @@ export default function FellowCrm() {
 
       {view === 'calls' && <CallsView onLogged={refresh} onOpen={setOpenId} />}
       {view === 'outreach' && <OutreachView />}
+      {view === 'academy' && <AcademyView />}
       {view === 'performance' && <PerformanceView />}
       {view === 'materials' && <MaterialsView />}
       {view === 'report' && <ReportView />}
@@ -363,6 +364,41 @@ function CallsView({ onLogged, onOpen }: { onLogged: () => void; onOpen: (id: nu
           </tr>
         ))}</tbody>
       </table>
+    </div>
+  )
+}
+
+function AcademyView() {
+  const [mods, setMods] = useState<any[]>([]); const [done, setDone] = useState<number[]>([])
+  const load = useCallback(() => { api.get<{ modules: any[]; completed: number[] }>('fellow/modules').then((d) => { setMods(d.modules || []); setDone(d.completed || []) }).catch(() => {}) }, [])
+  useEffect(() => { load() }, [load])
+  const toggle = async (id: number, next: boolean) => { setDone((p) => next ? [...p, id] : p.filter((x) => x !== id)); await api.post(`fellow/module/${id}/complete`, { done: next }) }
+  if (mods.length === 0) return <p className="msub">Training modules are being prepared.</p>
+  const trainable = mods.filter((m) => m.category === 'Training & Playbooks' || m.category === 'Certification')
+  const pct = trainable.length ? Math.round((trainable.filter((m) => done.includes(m.id)).length / trainable.length) * 100) : 0
+  const cats = Array.from(new Set(mods.map((m) => m.category)))
+  return (
+    <div>
+      <section className="glass" style={{ padding: 16, borderRadius: 14, marginBottom: 16 }}>
+        <div className="fc-sc__top"><span>Training progress</span><strong>{trainable.filter((m) => done.includes(m.id)).length} / {trainable.length} · {pct}%</strong></div>
+        <div className="fc-sc__bar"><span style={{ width: pct + '%' }} /></div>
+      </section>
+      {cats.map((cat) => (
+        <section key={cat} style={{ marginBottom: 18 }}>
+          <h4 className="gold-text">{cat} <span className="msub">({mods.filter((m) => m.category === cat).length})</span></h4>
+          <div style={{ display: 'grid', gap: 8 }}>
+            {mods.filter((m) => m.category === cat).map((m) => (
+              <div key={m.id} className="glass" style={{ padding: '10px 14px', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', flex: 1, minWidth: 0 }}>
+                  <input type="checkbox" checked={done.includes(m.id)} onChange={(e) => toggle(m.id, e.target.checked)} />
+                  <span style={{ textDecoration: done.includes(m.id) ? 'line-through' : 'none', opacity: done.includes(m.id) ? 0.7 : 1 }}>{m.title}</span>
+                </label>
+                {m.doc_url && <a className="btn btn--sm" href={m.doc_url} target="_blank" rel="noreferrer">Open ↗</a>}
+              </div>
+            ))}
+          </div>
+        </section>
+      ))}
     </div>
   )
 }

@@ -15,7 +15,7 @@ export default function FellowOpsAdminPanel() {
   const [summary, setSummary] = useState<Summary | null>(null)
   const [fellows, setFellows] = useState<FellowRow[]>([])
   const [activity, setActivity] = useState<Activity[]>([])
-  const [tab, setTab] = useState<'today' | 'analytics' | 'activity' | 'proposals' | 'assign' | 'targets' | 'materials' | 'templates'>('today')
+  const [tab, setTab] = useState<'today' | 'analytics' | 'activity' | 'proposals' | 'assign' | 'targets' | 'materials' | 'templates' | 'training'>('today')
 
   const load = useCallback(() => {
     api.get<{ summary: Summary; fellows: FellowRow[] }>('admin/fellow-ops/summary').then((d) => { setSummary(d.summary); setFellows(d.fellows || []) }).catch(() => {})
@@ -38,9 +38,9 @@ export default function FellowOpsAdminPanel() {
       <p style={{ color: 'var(--muted)', fontSize: 13, margin: '4px 0 14px' }}>What the sponsorship team did today, live.</p>
 
       <div className="admin-ov-tabs" role="tablist" style={{ marginBottom: 16 }}>
-        {(['today', 'analytics', 'activity', 'proposals', 'assign', 'targets', 'materials', 'templates'] as const).map((t) => (
+        {(['today', 'analytics', 'activity', 'proposals', 'assign', 'targets', 'materials', 'templates', 'training'] as const).map((t) => (
           <button key={t} role="tab" aria-selected={tab === t} className={`admin-ov-tab${tab === t ? ' is-active' : ''}`} onClick={() => setTab(t)}>
-            {t === 'today' ? 'Today' : t === 'analytics' ? 'Analytics' : t === 'activity' ? 'Activity Feed' : t === 'proposals' ? 'Proposals' : t === 'assign' ? 'Assign Task' : t === 'targets' ? 'Targets' : t === 'materials' ? 'Materials' : 'Templates'}
+            {t === 'today' ? 'Today' : t === 'analytics' ? 'Analytics' : t === 'activity' ? 'Activity Feed' : t === 'proposals' ? 'Proposals' : t === 'assign' ? 'Assign Task' : t === 'targets' ? 'Targets' : t === 'materials' ? 'Materials' : t === 'templates' ? 'Templates' : 'Training'}
           </button>
         ))}
       </div>
@@ -91,6 +91,58 @@ export default function FellowOpsAdminPanel() {
       {tab === 'targets' && <TargetsForm onDone={load} />}
       {tab === 'materials' && <MaterialsAdmin />}
       {tab === 'templates' && <TemplatesAdmin />}
+      {tab === 'training' && <ModulesAdmin />}
+    </div>
+  )
+}
+
+function ModulesAdmin() {
+  const [rows, setRows] = useState<any[]>([]); const [editing, setEditing] = useState<any | null>(null); const [msg, setMsg] = useState('')
+  const load = useCallback(() => { api.get<{ modules: any[] }>('admin/fellow-ops/modules').then((d) => setRows(d.modules || [])).catch(() => {}) }, [])
+  useEffect(() => { load() }, [load])
+  const sync = async () => { const d = await api.post<{ added: number }>('admin/fellow-ops/modules/sync', {}); setMsg(`Synced — ${d.added} new.`); load() }
+  const save = async () => { if (!editing) return; await api.put(`admin/fellow-ops/module/${editing.id}`, editing); setEditing(null); load() }
+  const cats = Array.from(new Set(rows.map((r) => r.category)))
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 10, flexWrap: 'wrap' }}>
+        <p className="msub" style={{ margin: 0 }}>{rows.length} documents. New PDFs dropped in <code>frontend/public/academy</code> appear on Sync.</p>
+        <button className="btn btn--sm btn--solid" onClick={sync}>↻ Sync folder</button>
+      </div>
+      {msg && <p className="msub" style={{ color: '#6be29a' }}>{msg}</p>}
+      {cats.map((cat) => (
+        <section key={cat} style={{ marginBottom: 14 }}>
+          <h4 className="gold-text">{cat} ({rows.filter((r) => r.category === cat).length})</h4>
+          <div className="admin-table-wrap">
+            <table className="admin-table">
+              <thead><tr><th>#</th><th>Title</th><th>Active</th><th></th></tr></thead>
+              <tbody>{rows.filter((r) => r.category === cat).map((r) => (
+                <tr key={r.id} style={{ cursor: 'pointer' }} onClick={() => setEditing({ ...r })}>
+                  <td>{r.sort_order}</td><td><strong>{r.title}</strong></td><td>{r.is_active ? '✓' : '—'}</td>
+                  <td onClick={(e) => e.stopPropagation()}>{r.doc_url && <a className="btn btn--sm" href={r.doc_url} target="_blank" rel="noreferrer">Open</a>}</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+        </section>
+      ))}
+      {editing && (
+        <div className="modal-overlay open" onClick={(e) => e.target === e.currentTarget && setEditing(null)}>
+          <div className="modal" style={{ maxWidth: 480 }}>
+            <button type="button" className="close" onClick={() => setEditing(null)} aria-label="Close">✕</button>
+            <h3 className="gold-text">Edit Module</h3>
+            <div style={{ display: 'grid', gap: 10, marginTop: 12 }}>
+              <label className="fc-fld">Title<input className="fc-input" value={editing.title || ''} onChange={(e) => setEditing({ ...editing, title: e.target.value })} /></label>
+              <label className="fc-fld">Category<input className="fc-input" value={editing.category || ''} onChange={(e) => setEditing({ ...editing, category: e.target.value })} /></label>
+              <label className="fc-fld">Description<input className="fc-input" value={editing.description || ''} onChange={(e) => setEditing({ ...editing, description: e.target.value })} /></label>
+              <label className="fc-fld">Video URL (optional)<input className="fc-input" value={editing.video_url || ''} onChange={(e) => setEditing({ ...editing, video_url: e.target.value })} /></label>
+              <label className="fc-fld">Sort order<input className="fc-input" type="number" value={editing.sort_order ?? 0} onChange={(e) => setEditing({ ...editing, sort_order: Number(e.target.value) })} /></label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#d8d3c6', fontSize: 13 }}><input type="checkbox" checked={!!editing.is_active} onChange={(e) => setEditing({ ...editing, is_active: e.target.checked ? 1 : 0 })} /> Active (visible to Fellows)</label>
+              <button className="btn btn--solid" onClick={save}>Save</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

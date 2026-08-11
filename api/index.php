@@ -2024,6 +2024,46 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             $s->execute([(int) $u['id']]);
             json(['calls' => $s->fetchAll()]);
         }
+        case $key === 'GET fellow/modules': {
+            $u = require_login();
+            if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
+            fellow_ops_ensure_schema();
+            if ((int) db()->query('SELECT COUNT(*) FROM fellow_modules')->fetchColumn() === 0) fellow_modules_sync();
+            $mods = db()->query('SELECT id, category, title, description, doc_url, video_url, sort_order FROM fellow_modules WHERE is_active = 1 ORDER BY category, sort_order, id')->fetchAll();
+            $pr = db()->prepare('SELECT module_id FROM fellow_module_progress WHERE fellow_user_id = ?'); $pr->execute([(int) $u['id']]);
+            $done = array_map(static fn($r) => (int) $r['module_id'], $pr->fetchAll());
+            json(['modules' => $mods, 'completed' => $done]);
+        }
+        case $method === 'POST' && preg_match('#^fellow/module/(\d+)/complete$#', $route, $m) === 1: {
+            $u = require_login();
+            if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
+            fellow_ops_ensure_schema();
+            $done = !empty(body()['done']);
+            if ($done) db()->prepare('INSERT IGNORE INTO fellow_module_progress (fellow_user_id, module_id) VALUES (?,?)')->execute([(int) $u['id'], (int) $m[1]]);
+            else db()->prepare('DELETE FROM fellow_module_progress WHERE fellow_user_id = ? AND module_id = ?')->execute([(int) $u['id'], (int) $m[1]]);
+            json(['message' => 'Saved.']);
+        }
+        case $key === 'GET admin/fellow-ops/modules': {
+            require_admin(); fellow_ops_ensure_schema(); fellow_modules_sync();
+            json(['modules' => db()->query('SELECT * FROM fellow_modules ORDER BY category, sort_order, id')->fetchAll()]);
+        }
+        case $key === 'POST admin/fellow-ops/modules/sync': {
+            require_admin();
+            $n = fellow_modules_sync();
+            json(['message' => "Synced — $n new document(s) added.", 'added' => $n]);
+        }
+        case $method === 'PUT' && preg_match('#^admin/fellow-ops/module/(\d+)$#', $route, $m) === 1: {
+            require_admin(); fellow_ops_ensure_schema();
+            $b = body();
+            $title = mb_substr(trim((string) field($b, 'title')), 0, 240);
+            if ($title === '') json(['error' => 'Title required.'], 422);
+            db()->prepare('UPDATE fellow_modules SET category=?, title=?, description=?, video_url=?, sort_order=?, is_active=? WHERE id=?')
+                ->execute([mb_substr(trim((string) field($b, 'category')) ?: 'Training & Playbooks', 0, 60), $title,
+                    mb_substr(trim((string) field($b, 'description')), 0, 400) ?: null,
+                    mb_substr(trim((string) field($b, 'video_url')), 0, 500) ?: null,
+                    (int) ($b['sort_order'] ?? 0), empty($b['is_active']) ? 0 : 1, (int) $m[1]]);
+            json(['message' => 'Module updated.']);
+        }
         case $key === 'GET fellow/materials': {
             $u = require_login();
             if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
