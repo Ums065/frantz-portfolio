@@ -4,6 +4,7 @@ import { api } from '../lib/api'
 import { useAuth } from '../context/AuthContext'
 import { useSeo } from '../hooks/useSeo'
 import SheetImport from '../components/SheetImport'
+import FellowCrm from '../components/FellowCrm'
 import ProfileSection from '../components/profile/ProfileSection'
 import AnnouncementsFeed, { useAnnouncementBadge } from '../components/AnnouncementsFeed'
 import NotificationBell from '../components/NotificationBell'
@@ -22,7 +23,7 @@ interface Assignment {
   id: number; title: string; detail: string; assign_date: string | null
   status: string; volunteer_note: string; created_ts: number; responded_ts: number
 }
-type TabKey = 'overview' | 'profile' | 'announcements' | 'messages' | ResearchCategory
+type TabKey = 'overview' | 'crm' | 'profile' | 'announcements' | 'messages' | ResearchCategory
 type EntryForm = typeof EMPTY_ENTRY_FORM
 
 export default function Fellow() {
@@ -170,6 +171,7 @@ export default function Fellow() {
           {/* Tabs */}
           <div className="admin-ov-tabs" role="tablist" aria-label="Workspace sections" style={{ margin: '4px 0 8px' }}>
             <button type="button" role="tab" aria-selected={tab === 'overview'} className={`admin-ov-tab${tab === 'overview' ? ' is-active' : ''}`} onClick={() => setTab('overview')}>Overview</button>
+            <button type="button" role="tab" aria-selected={tab === 'crm'} className={`admin-ov-tab${tab === 'crm' ? ' is-active' : ''}`} onClick={() => setTab('crm')}>Sponsorship CRM</button>
             {RESEARCH_CATEGORIES.map((c) => (
               <button key={c.key} type="button" role="tab" aria-selected={tab === c.key} className={`admin-ov-tab${tab === c.key ? ' is-active' : ''}`} onClick={() => setTab(c.key)}>
                 {c.tabLabel}{counts[c.key] ? ` (${counts[c.key]})` : ''}
@@ -180,6 +182,7 @@ export default function Fellow() {
             <button type="button" role="tab" aria-selected={tab === 'profile'} className={`admin-ov-tab${tab === 'profile' ? ' is-active' : ''}`} onClick={() => setTab('profile')}>Profile</button>
           </div>
 
+          {tab === 'crm' && <FellowCrm />}
           {tab === 'profile' && <ProfileSection />}
           {tab === 'messages' && (
             <Section title="Messages with the program team">
