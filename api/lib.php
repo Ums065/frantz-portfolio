@@ -131,7 +131,7 @@ function ensure_session_version_column(): void
  * request after a deploy, db_auto_migrate() notices the stored version is behind
  * and runs every *_ensure_schema() once; afterwards it's a single cheap SELECT.
  */
-const APP_SCHEMA_VERSION = 20260808; // yyyymmdd + seq — raise on each schema change
+const APP_SCHEMA_VERSION = 20260809; // yyyymmdd + seq — raise on each schema change
 
 /**
  * One-shot, version-gated auto-migration. Runs on app bootstrap: if the DB's
@@ -166,7 +166,7 @@ function db_auto_migrate(): void
                     'new_school_parents_ensure_link_columns', 'partners_ensure_schema', 'business_ensure_schema',
                     'ecosystem_ensure_schema', 'ecosystem_shared_ensure_schema', 'referral_ensure_schema',
                     'mail_queue_ensure_schema', 'password_reset_ensure_schema', 'research_ensure_schema',
-                    'sponsor_jobs_ensure_schema', 'events_ensure_schema',
+                    'sponsor_jobs_ensure_schema', 'events_ensure_schema', 'fellow_ops_ensure_schema',
                 ] as $fn) {
                     if (function_exists($fn)) {
                         try { $fn(); } catch (Throwable $e) { if (app_debug()) error_log("db_auto_migrate $fn: " . $e->getMessage()); }
@@ -5921,6 +5921,119 @@ function events_notify_featured(int $eventId, string $title): void
     } catch (Throwable $e) {
         if (app_debug()) error_log('events_notify_featured: ' . $e->getMessage());
     }
+}
+
+/* ==================== Student Fellow Operating Dashboard (CRM) ==================== */
+
+/** Ordered sponsorship-pipeline stages (client brief §6, condensed for Phase 1). */
+const FELLOW_STAGES = [
+    'researching', 'qualified', 'contact_identified', 'outreach_ready', 'first_contact',
+    'follow_up', 'response_received', 'interested', 'meeting_scheduled', 'proposal_sent',
+    'negotiation', 'verbal_commitment', 'confirmed', 'paid', 'not_interested', 'no_response', 'closed_lost',
+];
+const FELLOW_PRIORITIES = ['unreviewed', 'researching', 'qualified', 'high', 'medium', 'low', 'not_fit'];
+const FELLOW_ACTIVITY_TYPES = ['research', 'contact', 'email', 'call', 'linkedin', 'follow_up', 'meeting', 'proposal', 'note', 'stage', 'sponsor'];
+
+/** Self-healing schema for the Fellow CRM (orgs, contacts, activities, tasks, follow-ups, targets). */
+function fellow_ops_ensure_schema(): void
+{
+    static $ready = false;
+    if ($ready) return;
+    try {
+        db()->exec("CREATE TABLE IF NOT EXISTS fellow_orgs (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            fellow_user_id INT DEFAULT NULL,
+            created_by_user_id INT DEFAULT NULL,
+            name VARCHAR(200) NOT NULL,
+            website VARCHAR(255) DEFAULT NULL,
+            industry VARCHAR(120) DEFAULT NULL,
+            category VARCHAR(80) DEFAULT NULL,
+            org_type VARCHAR(80) DEFAULT NULL,
+            location VARCHAR(160) DEFAULT NULL,
+            territory VARCHAR(120) DEFAULT NULL,
+            priority VARCHAR(20) NOT NULL DEFAULT 'unreviewed',
+            stage VARCHAR(30) NOT NULL DEFAULT 'researching',
+            est_value INT NOT NULL DEFAULT 0,
+            fit_notes TEXT DEFAULT NULL,
+            internal_notes TEXT DEFAULT NULL,
+            name_key VARCHAR(200) DEFAULT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_fo_fellow (fellow_user_id), INDEX idx_fo_stage (stage), INDEX idx_fo_key (name_key)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        db()->exec("CREATE TABLE IF NOT EXISTS fellow_contacts (
+            id INT AUTO_INCREMENT PRIMARY KEY, org_id INT NOT NULL,
+            name VARCHAR(160) NOT NULL, title VARCHAR(160) DEFAULT NULL, email VARCHAR(160) DEFAULT NULL,
+            phone VARCHAR(60) DEFAULT NULL, linkedin VARCHAR(255) DEFAULT NULL, is_primary TINYINT(1) NOT NULL DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, INDEX idx_fc_org (org_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        db()->exec("CREATE TABLE IF NOT EXISTS fellow_activities (
+            id INT AUTO_INCREMENT PRIMARY KEY, fellow_user_id INT NOT NULL, org_id INT DEFAULT NULL,
+            type VARCHAR(20) NOT NULL, detail VARCHAR(500) DEFAULT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_fa_fellow (fellow_user_id, created_at), INDEX idx_fa_org (org_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        db()->exec("CREATE TABLE IF NOT EXISTS fellow_tasks (
+            id INT AUTO_INCREMENT PRIMARY KEY, fellow_user_id INT NOT NULL, assigned_by_user_id INT DEFAULT NULL,
+            title VARCHAR(200) NOT NULL, instructions TEXT DEFAULT NULL, org_id INT DEFAULT NULL,
+            due_date DATE DEFAULT NULL, priority VARCHAR(20) NOT NULL DEFAULT 'medium',
+            status VARCHAR(20) NOT NULL DEFAULT 'not_started', notes TEXT DEFAULT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, completed_at TIMESTAMP NULL DEFAULT NULL,
+            INDEX idx_ft_fellow (fellow_user_id, status)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        db()->exec("CREATE TABLE IF NOT EXISTS fellow_followups (
+            id INT AUTO_INCREMENT PRIMARY KEY, org_id INT NOT NULL, fellow_user_id INT NOT NULL,
+            due_date DATE NOT NULL, method VARCHAR(40) DEFAULT NULL, reason VARCHAR(255) DEFAULT NULL,
+            notes TEXT DEFAULT NULL, status VARCHAR(20) NOT NULL DEFAULT 'pending',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, done_at TIMESTAMP NULL DEFAULT NULL,
+            INDEX idx_ffu_fellow (fellow_user_id, status, due_date)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        // Admin-configurable daily targets (single global row id=1; per-fellow later).
+        db()->exec("CREATE TABLE IF NOT EXISTS fellow_targets (
+            id INT PRIMARY KEY, orgs INT NOT NULL DEFAULT 10, emails INT NOT NULL DEFAULT 10,
+            calls INT NOT NULL DEFAULT 5, linkedin INT NOT NULL DEFAULT 5, follow_ups INT NOT NULL DEFAULT 10,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        db()->exec("INSERT IGNORE INTO fellow_targets (id) VALUES (1)");
+    } catch (Throwable $e) { if (app_debug()) error_log('fellow_ops_ensure_schema: ' . $e->getMessage()); }
+    $ready = true;
+}
+
+/** Timestamped activity log entry (the backbone of the scorecard + timeline). */
+function fellow_log(int $fellowId, ?int $orgId, string $type, string $detail = ''): void
+{
+    try {
+        db()->prepare('INSERT INTO fellow_activities (fellow_user_id, org_id, type, detail) VALUES (?,?,?,?)')
+            ->execute([$fellowId, $orgId ?: null, $type, mb_substr($detail, 0, 500) ?: null]);
+    } catch (Throwable $e) { if (app_debug()) error_log('fellow_log: ' . $e->getMessage()); }
+}
+
+/** Normalized key for duplicate detection (lower-cased, alnum only). */
+function fellow_name_key(string $name): string
+{
+    return preg_replace('/[^a-z0-9]/', '', strtolower(trim($name)));
+}
+
+/** Today's activity counts for a Fellow, keyed by type — powers the live scorecard. */
+function fellow_scorecard(int $fellowId): array
+{
+    fellow_ops_ensure_schema();
+    $stmt = db()->prepare(
+        "SELECT type, COUNT(*) AS n FROM fellow_activities
+         WHERE fellow_user_id = ? AND DATE(created_at) = CURDATE() GROUP BY type"
+    );
+    $stmt->execute([$fellowId]);
+    $counts = [];
+    foreach ($stmt->fetchAll() as $r) $counts[(string) $r['type']] = (int) $r['n'];
+    $t = db()->query('SELECT * FROM fellow_targets WHERE id = 1')->fetch() ?: [];
+    return [
+        'counts' => $counts,
+        'targets' => [
+            'orgs' => (int) ($t['orgs'] ?? 10), 'emails' => (int) ($t['emails'] ?? 10),
+            'calls' => (int) ($t['calls'] ?? 5), 'linkedin' => (int) ($t['linkedin'] ?? 5),
+            'follow_ups' => (int) ($t['follow_ups'] ?? 10),
+        ],
+    ];
 }
 
 /* ==================== Press / Featured Media ("As Seen In") ==================== */

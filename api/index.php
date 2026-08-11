@@ -1797,6 +1797,157 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             json(['message' => "Imported $n rows.", 'imported' => $n, 'entries' => research_entries_for_fellow((int) $u['id'], $cat)], 201);
         }
 
+        /* ---------- Fellow CRM / Operating Dashboard (Phase 1a) ---------- */
+        case $key === 'GET fellow/crm/overview': {
+            $u = require_login();
+            if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
+            fellow_ops_ensure_schema();
+            $fid = (int) $u['id'];
+            $sc = fellow_scorecard($fid);
+            $tasks = db()->prepare("SELECT id, title, priority, status, due_date FROM fellow_tasks WHERE fellow_user_id = ? AND status <> 'completed' ORDER BY (due_date IS NULL), due_date ASC, id DESC LIMIT 20");
+            $tasks->execute([$fid]);
+            $fu = db()->prepare("SELECT f.id, f.org_id, f.due_date, f.reason, o.name AS org_name FROM fellow_followups f JOIN fellow_orgs o ON o.id = f.org_id WHERE f.fellow_user_id = ? AND f.status = 'pending' ORDER BY f.due_date ASC LIMIT 30");
+            $fu->execute([$fid]);
+            $fuRows = $fu->fetchAll();
+            $today = date('Y-m-d');
+            json([
+                'scorecard' => $sc,
+                'tasks' => $tasks->fetchAll(),
+                'followups' => $fuRows,
+                'followups_due' => count(array_filter($fuRows, static fn($r) => (string) $r['due_date'] <= $today)),
+                'orgs_total' => (int) db()->query('SELECT COUNT(*) FROM fellow_orgs WHERE fellow_user_id = ' . $fid)->fetchColumn(),
+            ]);
+        }
+        case $key === 'GET fellow/orgs': {
+            $u = require_login();
+            if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
+            fellow_ops_ensure_schema();
+            $stmt = db()->prepare('SELECT * FROM fellow_orgs WHERE fellow_user_id = ? ORDER BY updated_at DESC');
+            $stmt->execute([(int) $u['id']]);
+            json(['orgs' => $stmt->fetchAll(), 'stages' => FELLOW_STAGES, 'priorities' => FELLOW_PRIORITIES]);
+        }
+        case $key === 'GET fellow/orgs/check': {
+            $u = require_login();
+            if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
+            fellow_ops_ensure_schema();
+            $key2 = fellow_name_key((string) ($_GET['name'] ?? ''));
+            if ($key2 === '') json(['match' => null]);
+            $s = db()->prepare('SELECT o.id, o.name, o.fellow_user_id, u.full_name AS fellow_name FROM fellow_orgs o LEFT JOIN users u ON u.id = o.fellow_user_id WHERE o.name_key = ? LIMIT 1');
+            $s->execute([$key2]);
+            json(['match' => $s->fetch() ?: null]);
+        }
+        case $key === 'POST fellow/org': {
+            $u = require_login();
+            if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
+            fellow_ops_ensure_schema();
+            $b = body();
+            $name = mb_substr(trim((string) field($b, 'name')), 0, 200);
+            if ($name === '') json(['error' => 'Organization name is required.'], 422);
+            $fid = (int) $u['id'];
+            $stmt = db()->prepare('INSERT INTO fellow_orgs (fellow_user_id, created_by_user_id, name, website, industry, category, org_type, location, territory, priority, stage, est_value, fit_notes, name_key) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
+            $stmt->execute([
+                $fid, $fid, $name,
+                mb_substr(trim((string) field($b, 'website')), 0, 255) ?: null,
+                mb_substr(trim((string) field($b, 'industry')), 0, 120) ?: null,
+                mb_substr(trim((string) field($b, 'category')), 0, 80) ?: null,
+                mb_substr(trim((string) field($b, 'org_type')), 0, 80) ?: null,
+                mb_substr(trim((string) field($b, 'location')), 0, 160) ?: null,
+                mb_substr(trim((string) field($b, 'territory')), 0, 120) ?: null,
+                in_array((string) field($b, 'priority'), FELLOW_PRIORITIES, true) ? (string) field($b, 'priority') : 'unreviewed',
+                'researching', max(0, (int) ($b['est_value'] ?? 0)),
+                mb_substr(trim((string) field($b, 'fit_notes')), 0, 2000) ?: null,
+                fellow_name_key($name),
+            ]);
+            $id = (int) db()->lastInsertId();
+            fellow_log($fid, $id, 'research', 'Added organization: ' . $name);
+            json(['id' => $id, 'message' => 'Organization added.'], 201);
+        }
+        case $method === 'GET' && preg_match('#^fellow/org/(\d+)$#', $route, $m) === 1: {
+            $u = require_login();
+            if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
+            fellow_ops_ensure_schema();
+            $id = (int) $m[1];
+            $o = db()->prepare('SELECT * FROM fellow_orgs WHERE id = ? AND fellow_user_id = ? LIMIT 1');
+            $o->execute([$id, (int) $u['id']]);
+            $org = $o->fetch();
+            if (!$org) json(['error' => 'Not found.'], 404);
+            $c = db()->prepare('SELECT * FROM fellow_contacts WHERE org_id = ? ORDER BY is_primary DESC, id ASC'); $c->execute([$id]);
+            $a = db()->prepare('SELECT type, detail, created_at FROM fellow_activities WHERE org_id = ? ORDER BY created_at DESC, id DESC LIMIT 100'); $a->execute([$id]);
+            $f = db()->prepare("SELECT * FROM fellow_followups WHERE org_id = ? ORDER BY (status='pending') DESC, due_date ASC"); $f->execute([$id]);
+            json(['org' => $org, 'contacts' => $c->fetchAll(), 'timeline' => $a->fetchAll(), 'followups' => $f->fetchAll(), 'stages' => FELLOW_STAGES, 'priorities' => FELLOW_PRIORITIES]);
+        }
+        case $method === 'PUT' && preg_match('#^fellow/org/(\d+)$#', $route, $m) === 1: {
+            $u = require_login();
+            if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
+            fellow_ops_ensure_schema();
+            $id = (int) $m[1]; $b = body(); $fid = (int) $u['id'];
+            $own = db()->prepare('SELECT id FROM fellow_orgs WHERE id = ? AND fellow_user_id = ?'); $own->execute([$id, $fid]);
+            if (!$own->fetch()) json(['error' => 'Not found.'], 404);
+            $name = mb_substr(trim((string) field($b, 'name')), 0, 200);
+            if ($name === '') json(['error' => 'Name required.'], 422);
+            db()->prepare('UPDATE fellow_orgs SET name=?, website=?, industry=?, category=?, org_type=?, location=?, territory=?, priority=?, est_value=?, fit_notes=?, internal_notes=?, name_key=? WHERE id=?')
+                ->execute([
+                    $name, mb_substr(trim((string) field($b, 'website')), 0, 255) ?: null,
+                    mb_substr(trim((string) field($b, 'industry')), 0, 120) ?: null,
+                    mb_substr(trim((string) field($b, 'category')), 0, 80) ?: null,
+                    mb_substr(trim((string) field($b, 'org_type')), 0, 80) ?: null,
+                    mb_substr(trim((string) field($b, 'location')), 0, 160) ?: null,
+                    mb_substr(trim((string) field($b, 'territory')), 0, 120) ?: null,
+                    in_array((string) field($b, 'priority'), FELLOW_PRIORITIES, true) ? (string) field($b, 'priority') : 'unreviewed',
+                    max(0, (int) ($b['est_value'] ?? 0)),
+                    mb_substr(trim((string) field($b, 'fit_notes')), 0, 2000) ?: null,
+                    mb_substr(trim((string) field($b, 'internal_notes')), 0, 2000) ?: null,
+                    fellow_name_key($name), $id,
+                ]);
+            json(['message' => 'Saved.']);
+        }
+        case $method === 'PUT' && preg_match('#^fellow/org/(\d+)/stage$#', $route, $m) === 1: {
+            $u = require_login();
+            if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
+            fellow_ops_ensure_schema();
+            $id = (int) $m[1]; $fid = (int) $u['id'];
+            $stage = (string) field(body(), 'stage');
+            if (!in_array($stage, FELLOW_STAGES, true)) json(['error' => 'Invalid stage.'], 422);
+            $own = db()->prepare('SELECT name FROM fellow_orgs WHERE id = ? AND fellow_user_id = ?'); $own->execute([$id, $fid]);
+            $row = $own->fetch();
+            if (!$row) json(['error' => 'Not found.'], 404);
+            db()->prepare('UPDATE fellow_orgs SET stage = ? WHERE id = ?')->execute([$stage, $id]);
+            fellow_log($fid, $id, 'stage', 'Moved to ' . str_replace('_', ' ', $stage));
+            json(['message' => 'Stage updated.']);
+        }
+        case $method === 'POST' && preg_match('#^fellow/org/(\d+)/contact$#', $route, $m) === 1: {
+            $u = require_login();
+            if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
+            fellow_ops_ensure_schema();
+            $id = (int) $m[1]; $fid = (int) $u['id']; $b = body();
+            $own = db()->prepare('SELECT id FROM fellow_orgs WHERE id = ? AND fellow_user_id = ?'); $own->execute([$id, $fid]);
+            if (!$own->fetch()) json(['error' => 'Not found.'], 404);
+            $name = mb_substr(trim((string) field($b, 'name')), 0, 160);
+            if ($name === '') json(['error' => 'Contact name required.'], 422);
+            db()->prepare('INSERT INTO fellow_contacts (org_id, name, title, email, phone, linkedin, is_primary) VALUES (?,?,?,?,?,?,?)')
+                ->execute([$id, $name, mb_substr(trim((string) field($b, 'title')), 0, 160) ?: null, mb_substr(trim((string) field($b, 'email')), 0, 160) ?: null, mb_substr(trim((string) field($b, 'phone')), 0, 60) ?: null, mb_substr(trim((string) field($b, 'linkedin')), 0, 255) ?: null, !empty($b['is_primary']) ? 1 : 0]);
+            fellow_log($fid, $id, 'contact', 'Added contact: ' . $name);
+            json(['message' => 'Contact added.'], 201);
+        }
+        case $method === 'POST' && preg_match('#^fellow/org/(\d+)/activity$#', $route, $m) === 1: {
+            $u = require_login();
+            if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
+            fellow_ops_ensure_schema();
+            $id = (int) $m[1]; $fid = (int) $u['id']; $b = body();
+            $own = db()->prepare('SELECT id FROM fellow_orgs WHERE id = ? AND fellow_user_id = ?'); $own->execute([$id, $fid]);
+            if (!$own->fetch()) json(['error' => 'Not found.'], 404);
+            $type = (string) field($b, 'type');
+            if (!in_array($type, FELLOW_ACTIVITY_TYPES, true)) json(['error' => 'Invalid activity type.'], 422);
+            fellow_log($fid, $id, $type, (string) field($b, 'detail'));
+            // Optionally schedule a follow-up in the same step.
+            $fuDate = trim((string) field($b, 'follow_up_date'));
+            if ($fuDate !== '') {
+                db()->prepare('INSERT INTO fellow_followups (org_id, fellow_user_id, due_date, method, reason) VALUES (?,?,?,?,?)')
+                    ->execute([$id, $fid, $fuDate, mb_substr(trim((string) field($b, 'method')), 0, 40) ?: null, mb_substr(trim((string) field($b, 'detail')), 0, 255) ?: null]);
+            }
+            json(['message' => 'Logged.'], 201);
+        }
+
         // Admin side of the Research Workspace.
         case $key === 'POST admin/research/import': {
             require_admin();
