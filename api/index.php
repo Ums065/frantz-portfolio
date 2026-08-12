@@ -1752,6 +1752,135 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             $cat = isset($_GET['category']) ? (string) $_GET['category'] : null;
             json(['entries' => research_entries_for_fellow((int) $u['id'], $cat)]);
         }
+        /* ---- School verification workspace (the master school list) ---- */
+        case $key === 'GET fellow/schools': {
+            $u = require_login();
+            if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
+            $out = school_list_query((int) $u['id'], $_GET);
+            $out['facets'] = school_list_facets((int) $u['id']);
+            json($out);
+        }
+        // Warn before a Fellow hand-adds a school that is already on the list.
+        case $key === 'GET fellow/schools/check': {
+            $u = require_login();
+            if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
+            $dup = school_find_duplicate((int) $u['id'], (string) ($_GET['name'] ?? ''), (string) ($_GET['dbn'] ?? ''), (string) ($_GET['region'] ?? ''), true);
+            json(['match' => $dup]);
+        }
+        case $key === 'POST fellow/schools/import': {
+            $u = require_login();
+            if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
+            rate_limit('school_import', 10, 3600, (string) $u['id']);
+            $rows = is_array(body()['rows'] ?? null) ? body()['rows'] : [];
+            if (!$rows) json(['error' => 'No rows found in that file.'], 422);
+            $res = school_list_import((int) $u['id'], $rows);
+            fellow_log((int) $u['id'], null, 'research', 'Imported ' . $res['imported'] . ' schools (' . $res['skipped'] . ' duplicates skipped)');
+            json($res + ['message' => "Imported {$res['imported']} schools. {$res['skipped']} duplicates were skipped."], 201);
+        }
+        // Save the details a Fellow found, and record HOW they confirmed them.
+        case $method === 'PUT' && preg_match('#^fellow/school/(\d+)$#', $route, $m) === 1: {
+            $u = require_login();
+            if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
+            research_ensure_schema();
+            $id = (int) $m[1]; $fid = (int) $u['id']; $b = body();
+            $own = db()->prepare("SELECT id, title FROM research_entries WHERE id = ? AND fellow_user_id = ? AND category = 'school_contact'");
+            $own->execute([$id, $fid]);
+            $row = $own->fetch();
+            if (!$row) json(['error' => 'Not found.'], 404);
+            $cap = static function (string $k, int $n) use ($b) {
+                $t = mb_substr(trim((string) field($b, $k)), 0, $n);
+                return $t === '' ? null : $t;
+            };
+            $name = mb_substr(trim((string) field($b, 'title')), 0, 200);
+            if ($name === '') json(['error' => 'School name is required.'], 422);
+            db()->prepare('UPDATE research_entries SET title=?, name_key=?, dbn=?, region=?, priority=?, school_type=?, grades=?,
+                    neighborhood=?, address=?, zip=?, phone=?, website=?, contact_name=?, parent_contact=?, email=?,
+                    county=?, district=?, source_url=?, notes=? WHERE id=? AND fellow_user_id=?')
+                ->execute([$name, school_name_key($name), $cap('dbn', 20), $cap('region', 60), $cap('priority', 20),
+                    $cap('school_type', 80), $cap('grades', 40), $cap('neighborhood', 120), $cap('address', 255),
+                    $cap('zip', 20), $cap('phone', 60), $cap('website', 300), $cap('contact_name', 160),
+                    $cap('parent_contact', 255), $cap('email', 200), $cap('county', 60), $cap('district', 120),
+                    $cap('source_url', 500), $cap('notes', 5000), $id, $fid]);
+            json(['message' => 'Saved.']);
+        }
+        /* Verify: the Fellow states how they confirmed it, and the school becomes
+           selectable at registration. Verifying with no method is not allowed —
+           the whole point is that the record can be trusted later. */
+        case $method === 'POST' && preg_match('#^fellow/school/(\d+)/verify$#', $route, $m) === 1: {
+            $u = require_login();
+            if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
+            research_ensure_schema();
+            $id = (int) $m[1]; $fid = (int) $u['id']; $b = body();
+            $method_ = (string) field($b, 'verify_method');
+            if (!in_array($method_, SCHOOL_VERIFY_METHODS, true)) json(['error' => 'Say how you verified this school.'], 422);
+            $s = db()->prepare("SELECT * FROM research_entries WHERE id = ? AND fellow_user_id = ? AND category = 'school_contact'");
+            $s->execute([$id, $fid]);
+            $e = $s->fetch();
+            if (!$e) json(['error' => 'Not found.'], 404);
+            if (trim((string) $e['contact_name']) === '' && trim((string) $e['email']) === '' && trim((string) $e['phone']) === '') {
+                json(['error' => 'Add at least a phone, an email or a contact name before verifying.'], 422);
+            }
+            db()->prepare("UPDATE research_entries SET status = 'verified', verify_method = ?, verified_on = CURDATE(),
+                    source_url = COALESCE(NULLIF(?, ''), source_url) WHERE id = ?")
+                ->execute([$method_, trim((string) field($b, 'source_url')), $id]);
+            /* Make it selectable at registration — the point of the whole exercise.
+               research_push_school() answers failures with json() (which ends the
+               request), so pre-check the two cases it rejects: a school already
+               claimed by a real principal is already in the dropdown, and there is
+               nothing to do but say so. */
+            $note = '';
+            if (!empty($e['pushed_school_id'])) {
+                $note = ' It was already on the registration list.';
+            } else {
+                $claimed = new_school_fetch_school_by_name((string) $e['title']);
+                if ($claimed && ((int) ($claimed['user_id'] ?? 0) > 0 || (string) ($claimed['claim_status'] ?? '') === 'claimed')) {
+                    $note = ' This school already has a principal signed up, so its own record was left untouched.';
+                } else {
+                    research_push_school($id); // exits with its own error only in cases ruled out above
+                    $note = ' It is now selectable at registration.';
+                }
+            }
+            fellow_log($fid, null, 'research', 'Verified school: ' . (string) $e['title'] . ' (' . str_replace('_', ' ', $method_) . ')');
+            json(['message' => 'Verified.' . $note]);
+        }
+        // Invite the school to take part, from an approved template.
+        case $method === 'POST' && preg_match('#^fellow/school/(\d+)/invite$#', $route, $m) === 1: {
+            $u = require_login();
+            if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
+            research_ensure_schema();
+            $id = (int) $m[1]; $fid = (int) $u['id']; $b = body();
+            rate_limit('school_invite', 120, 3600, (string) $fid);
+            $s = db()->prepare("SELECT * FROM research_entries WHERE id = ? AND fellow_user_id = ? AND category = 'school_contact'");
+            $s->execute([$id, $fid]);
+            $e = $s->fetch();
+            if (!$e) json(['error' => 'Not found.'], 404);
+            $to = trim((string) $e['email']);
+            if ($to === '' || !filter_var($to, FILTER_VALIDATE_EMAIL)) json(['error' => 'This school has no valid email address yet. Find one first.'], 422);
+            if ((string) $e['status'] !== 'verified') json(['error' => 'Verify the school before inviting it.'], 422);
+            $subject = mb_substr(trim((string) field($b, 'subject')), 0, 240) ?: 'Invitation: the Student Impact Challenge';
+            $bodyTxt = trim((string) field($b, 'body'));
+            if ($bodyTxt === '') json(['error' => 'The invitation message is empty.'], 422);
+            $sig = "\n\n—\n" . (string) $u['full_name'] . "\nStudent Fellow, Student Impact Challenge\nA program of TrendCatch Gives Back Inc. (501(c)(3))\nFrantzCoutard.com";
+            $ok = function_exists('mail_queue_enqueue')
+                ? mail_queue_enqueue('school_invite', $to, $subject, $bodyTxt . $sig)
+                : send_mail_message($to, $subject, $bodyTxt . $sig);
+            if (!$ok) json(['error' => 'Could not queue the invitation. Try again.'], 500);
+            db()->prepare("UPDATE research_entries SET outreach_status = 'invited', invited_at = NOW() WHERE id = ?")->execute([$id]);
+            fellow_log($fid, null, 'email', 'Invited school: ' . (string) $e['title']);
+            json(['message' => 'Invitation sent to ' . $to . '.'], 201);
+        }
+        // Where the invitation got to (they replied, registered, said no…).
+        case $method === 'PUT' && preg_match('#^fellow/school/(\d+)/outreach$#', $route, $m) === 1: {
+            $u = require_login();
+            if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
+            research_ensure_schema();
+            $st = (string) field(body(), 'outreach_status');
+            if (!in_array($st, SCHOOL_OUTREACH_STATUSES, true)) json(['error' => 'Unknown outreach status.'], 422);
+            $upd = db()->prepare("UPDATE research_entries SET outreach_status = ? WHERE id = ? AND fellow_user_id = ? AND category = 'school_contact'");
+            $upd->execute([$st, (int) $m[1], (int) $u['id']]);
+            if ($upd->rowCount() === 0) json(['error' => 'Not found.'], 404);
+            json(['message' => 'Updated.']);
+        }
         case $key === 'POST fellow/entry': {
             $u = require_login();
             if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
@@ -2423,6 +2552,28 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
                  ORDER BY r.report_date DESC, u.full_name ASC LIMIT 200"
             )->fetchAll();
             json(['reports' => $rows]);
+        }
+        // School verification progress across the team, by region and by Fellow.
+        case $key === 'GET admin/fellow-ops/schools': {
+            require_admin();
+            research_ensure_schema();
+            $base = "FROM research_entries WHERE category = 'school_contact'";
+            $byRegion = db()->query("SELECT COALESCE(NULLIF(region,''),'(no region)') AS region, COUNT(*) AS total,
+                    SUM(status = 'verified') AS verified,
+                    SUM(outreach_status <> 'not_contacted') AS contacted,
+                    SUM(outreach_status = 'registered') AS registered
+                $base GROUP BY region ORDER BY region")->fetchAll();
+            $byFellow = db()->query("SELECT u.full_name AS fellow_name, COUNT(*) AS total,
+                    SUM(r.status = 'verified') AS verified,
+                    SUM(r.outreach_status <> 'not_contacted') AS contacted,
+                    SUM(r.verify_method = 'phone_call') AS by_phone,
+                    SUM(r.verify_method IN ('online_research','official_website')) AS by_research
+                FROM research_entries r JOIN users u ON u.id = r.fellow_user_id
+                WHERE r.category = 'school_contact' GROUP BY r.fellow_user_id, u.full_name ORDER BY verified DESC")->fetchAll();
+            $totals = db()->query("SELECT COUNT(*) AS total, SUM(status = 'verified') AS verified,
+                    SUM(outreach_status <> 'not_contacted') AS contacted, SUM(outreach_status = 'registered') AS registered,
+                    SUM(pushed_school_id IS NOT NULL) AS on_dropdown $base")->fetch();
+            json(['by_region' => $byRegion, 'by_fellow' => $byFellow, 'totals' => $totals]);
         }
         case $key === 'GET admin/fellow-ops/pipeline': {
             require_admin();

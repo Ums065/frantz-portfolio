@@ -16,7 +16,7 @@ export default function FellowOpsAdminPanel() {
   const [summary, setSummary] = useState<Summary | null>(null)
   const [fellows, setFellows] = useState<FellowRow[]>([])
   const [activity, setActivity] = useState<Activity[]>([])
-  const [tab, setTab] = useState<'today' | 'analytics' | 'pipeline' | 'activity' | 'reports' | 'proposals' | 'assign' | 'targets' | 'materials' | 'templates' | 'training' | 'certification'>('today')
+  const [tab, setTab] = useState<'today' | 'analytics' | 'schools' | 'pipeline' | 'activity' | 'reports' | 'proposals' | 'assign' | 'targets' | 'materials' | 'templates' | 'training' | 'certification'>('today')
 
   const load = useCallback(() => {
     api.get<{ summary: Summary; fellows: FellowRow[] }>('admin/fellow-ops/summary').then((d) => { setSummary(d.summary); setFellows(d.fellows || []) }).catch(() => {})
@@ -39,9 +39,9 @@ export default function FellowOpsAdminPanel() {
       <p style={{ color: 'var(--muted)', fontSize: 13, margin: '4px 0 14px' }}>What the sponsorship team did today, live.</p>
 
       <div className="admin-ov-tabs" role="tablist" style={{ marginBottom: 16 }}>
-        {(['today', 'analytics', 'pipeline', 'activity', 'reports', 'proposals', 'assign', 'targets', 'materials', 'templates', 'training', 'certification'] as const).map((t) => (
+        {(['today', 'analytics', 'schools', 'pipeline', 'activity', 'reports', 'proposals', 'assign', 'targets', 'materials', 'templates', 'training', 'certification'] as const).map((t) => (
           <button key={t} role="tab" aria-selected={tab === t} className={`admin-ov-tab${tab === t ? ' is-active' : ''}`} onClick={() => setTab(t)}>
-            {t === 'today' ? 'Today' : t === 'analytics' ? 'Analytics' : t === 'pipeline' ? 'All Prospects' : t === 'activity' ? 'Activity Feed' : t === 'reports' ? 'Daily Reports' : t === 'proposals' ? 'Proposals' : t === 'assign' ? 'Assign Task' : t === 'targets' ? 'Targets' : t === 'materials' ? 'Materials' : t === 'templates' ? 'Templates' : t === 'training' ? 'Training' : 'Certification'}
+            {t === 'today' ? 'Today' : t === 'analytics' ? 'Analytics' : t === 'schools' ? 'School Verification' : t === 'pipeline' ? 'All Prospects' : t === 'activity' ? 'Activity Feed' : t === 'reports' ? 'Daily Reports' : t === 'proposals' ? 'Proposals' : t === 'assign' ? 'Assign Task' : t === 'targets' ? 'Targets' : t === 'materials' ? 'Materials' : t === 'templates' ? 'Templates' : t === 'training' ? 'Training' : 'Certification'}
           </button>
         ))}
       </div>
@@ -89,6 +89,7 @@ export default function FellowOpsAdminPanel() {
       )}
 
       {tab === 'analytics' && <AnalyticsView />}
+      {tab === 'schools' && <SchoolsAdmin />}
       {tab === 'pipeline' && <PipelineAdmin />}
       {tab === 'reports' && <ReportsAdmin />}
       {tab === 'proposals' && <ProposalsAdmin />}
@@ -307,6 +308,72 @@ function AnalyticsView() {
             <strong style={{ fontSize: 13 }}>{money(f.value)}</strong>
           </div>
         ))}
+      </div>
+    </div>
+  )
+}
+
+/* How far the team has got through the master school list, and how each Fellow
+   is confirming records — phone calls versus desk research. */
+function SchoolsAdmin() {
+  const [d, setD] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+  useEffect(() => {
+    api.get<any>('admin/fellow-ops/schools').then(setD).catch(() => {}).finally(() => setLoading(false))
+  }, [])
+  if (loading) return <p style={{ color: 'var(--muted)', fontSize: 13 }}>Loading school progress…</p>
+  const t = d?.totals || {}
+  const n = (v: any) => Number(v) || 0
+  if (n(t.total) === 0) return <p style={{ color: 'var(--muted)', fontSize: 13 }}>No schools imported yet. A Fellow uploads the master list under Verify Schools in their workspace.</p>
+  const pct = (a: any, b: any) => (n(b) ? Math.round((n(a) / n(b)) * 100) : 0)
+  return (
+    <div>
+      <div className="admin-stats" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,150px),1fr))', gap: 10, marginBottom: 18 }}>
+        {[['Schools on the list', n(t.total)], ['Verified', `${n(t.verified)} (${pct(t.verified, t.total)}%)`],
+          ['Invited', n(t.contacted)], ['Registered', n(t.registered)], ['On the registration dropdown', n(t.on_dropdown)]].map(([l, v]) => (
+          <div key={String(l)} className="glass" style={{ padding: '12px 14px', borderRadius: 12 }}>
+            <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '.1em', color: 'var(--muted)' }}>{l}</div>
+            <strong className="gold-text" style={{ fontSize: 21, fontFamily: 'var(--f-serif)' }}>{v}</strong>
+          </div>
+        ))}
+      </div>
+
+      <h4 className="gold-text" style={{ marginBottom: 8 }}>By region</h4>
+      <div className="admin-table-wrap" style={{ marginBottom: 20 }}>
+        <table className="admin-table admin-table--stack">
+          <thead><tr><th>Region</th><th>Schools</th><th>Verified</th><th>Invited</th><th>Registered</th><th>Progress</th></tr></thead>
+          <tbody>{(d.by_region || []).map((r: any) => (
+            <tr key={r.region}>
+              <td data-label="Region"><strong>{r.region}</strong></td>
+              <td data-label="Schools">{n(r.total)}</td>
+              <td data-label="Verified">{n(r.verified)}</td>
+              <td data-label="Invited">{n(r.contacted)}</td>
+              <td data-label="Registered">{n(r.registered)}</td>
+              <td data-label="Progress" style={{ minWidth: 120 }}>
+                <div className="fc-progress__bar"><span style={{ width: pct(r.verified, r.total) + '%' }} /></div>
+                <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>{pct(r.verified, r.total)}% verified</span>
+              </td>
+            </tr>
+          ))}</tbody>
+        </table>
+      </div>
+
+      <h4 className="gold-text" style={{ marginBottom: 2 }}>By Fellow</h4>
+      <p style={{ color: 'var(--muted)', fontSize: 12.5, margin: '0 0 10px' }}>How they confirmed each record. A Fellow verifying hundreds by desk research alone is worth a conversation.</p>
+      <div className="admin-table-wrap">
+        <table className="admin-table admin-table--stack">
+          <thead><tr><th>Fellow</th><th>Assigned</th><th>Verified</th><th>Invited</th><th>By phone</th><th>By research</th></tr></thead>
+          <tbody>{(d.by_fellow || []).map((r: any) => (
+            <tr key={r.fellow_name}>
+              <td data-label="Fellow"><strong>{r.fellow_name}</strong></td>
+              <td data-label="Assigned">{n(r.total)}</td>
+              <td data-label="Verified">{n(r.verified)}</td>
+              <td data-label="Invited">{n(r.contacted)}</td>
+              <td data-label="By phone">{n(r.by_phone)}</td>
+              <td data-label="By research">{n(r.by_research)}</td>
+            </tr>
+          ))}</tbody>
+        </table>
       </div>
     </div>
   )

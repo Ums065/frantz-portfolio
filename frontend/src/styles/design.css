@@ -4022,6 +4022,10 @@ section#challenge .challenge-features .ns-gain p {
   .fc-next .btn { width:100%; }
 }
 
+/* School verification: filter bar + the wide detail form. */
+.sv-filters { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:12px; padding:12px 14px; border-radius:12px; border:1px solid rgba(201,168,76,.18); background:rgba(255,255,255,.02); }
+.sv-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr)); gap:10px; }
+
 /* Loading placeholders: shaped like the content, so nothing jumps on arrival.
    The shimmer is suppressed for anyone who prefers reduced motion. */
 .fc-skel { display:grid; gap:10px; }

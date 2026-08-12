@@ -131,7 +131,7 @@ function ensure_session_version_column(): void
  * request after a deploy, db_auto_migrate() notices the stored version is behind
  * and runs every *_ensure_schema() once; afterwards it's a single cheap SELECT.
  */
-const APP_SCHEMA_VERSION = 20260813; // yyyymmdd + seq — raise on each schema change
+const APP_SCHEMA_VERSION = 20260814; // yyyymmdd + seq — raise on each schema change
 
 /**
  * One-shot, version-gated auto-migration. Runs on app bootstrap: if the DB's
@@ -9729,7 +9729,261 @@ function research_ensure_schema(): void
         INDEX idx_research_cat (category),
         INDEX idx_research_status (status)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    // School-verification columns: the master school list carries far more than a
+    // generic research entry (DBN, borough, grades, outreach state) and records
+    // HOW each record was verified, which is the audit trail the program needs.
+    foreach ([
+        'dbn' => 'VARCHAR(20) DEFAULT NULL',
+        'region' => 'VARCHAR(60) DEFAULT NULL',
+        'priority' => "VARCHAR(20) DEFAULT NULL",
+        'school_type' => 'VARCHAR(80) DEFAULT NULL',
+        'grades' => 'VARCHAR(40) DEFAULT NULL',
+        'neighborhood' => 'VARCHAR(120) DEFAULT NULL',
+        'address' => 'VARCHAR(255) DEFAULT NULL',
+        'zip' => 'VARCHAR(20) DEFAULT NULL',
+        'county' => 'VARCHAR(60) DEFAULT NULL',
+        'district' => 'VARCHAR(120) DEFAULT NULL',
+        'parent_contact' => 'VARCHAR(255) DEFAULT NULL',
+        'verify_method' => 'VARCHAR(30) DEFAULT NULL',
+        'verified_on' => 'DATE DEFAULT NULL',
+        'outreach_status' => "VARCHAR(24) NOT NULL DEFAULT 'not_contacted'",
+        'invited_at' => 'TIMESTAMP NULL DEFAULT NULL',
+        'name_key' => 'VARCHAR(200) DEFAULT NULL',
+        'source_file' => 'VARCHAR(160) DEFAULT NULL',
+    ] as $col => $ddl) {
+        try {
+            $has = $pdo->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'research_entries' AND COLUMN_NAME = " . $pdo->quote($col))->fetchColumn();
+            if ((int) $has === 0) $pdo->exec("ALTER TABLE research_entries ADD COLUMN `$col` $ddl");
+        } catch (Throwable $e) { if (app_debug()) error_log("research_entries $col: " . $e->getMessage()); }
+    }
+    // Duplicate detection reads these two constantly.
+    foreach (['idx_research_namekey' => '(name_key)', 'idx_research_dbn' => '(dbn)'] as $idx => $cols) {
+        try {
+            $has = $pdo->query("SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'research_entries' AND INDEX_NAME = " . $pdo->quote($idx))->fetchColumn();
+            if ((int) $has === 0) $pdo->exec("ALTER TABLE research_entries ADD INDEX $idx $cols");
+        } catch (Throwable $e) { if (app_debug()) error_log("research_entries $idx: " . $e->getMessage()); }
+    }
     $ready = true;
+}
+
+/** How a Fellow confirmed a record — the program has to be able to trust it. */
+const SCHOOL_VERIFY_METHODS = ['phone_call', 'online_research', 'official_website', 'email_reply', 'in_person', 'other'];
+/** Where an invitation to join the challenge has got to. */
+const SCHOOL_OUTREACH_STATUSES = ['not_contacted', 'invited', 'responded', 'registered', 'declined', 'unreachable'];
+
+/** Fold a school name to a comparison key. Only articles and punctuation are
+ *  dropped: level words must survive, because "Baldwin Middle School" and
+ *  "Baldwin Senior High School" are two different schools and merging them
+ *  would silently delete one from the outreach list. Precision over recall —
+ *  a missed loose duplicate is visible and fixable, a wrong merge is not. */
+function school_name_key(string $name): string
+{
+    $s = mb_strtolower(school_fix_text($name));
+    $s = str_replace(['–', '—', '’', '‘', '“', '”'], ['-', '-', "'", "'", '"', '"'], $s);
+    $s = preg_replace('/^\s*(the|a|an)\s+/u', '', $s) ?? $s;
+    $s = preg_replace('/[^a-z0-9]+/u', '', $s) ?? $s;
+    return mb_substr($s, 0, 200);
+}
+
+/** Repair the mojibake the exported sheet is riddled with: UTF-8 punctuation
+ *  read as Windows-1252 turns "9–12" into "9â€“12". strtr matches the longest
+ *  key first, so the three-byte sequences are handled before the stray bytes. */
+function school_fix_text(string $s): string
+{
+    return trim(strtr($s, [
+        "\u{FEFF}" => '',
+        'â€“' => '–', 'â€”' => '—', 'â€˜' => '‘', 'â€™' => '’',
+        'â€œ' => '“', 'â€' => '”', 'â€¦' => '…', 'â€¢' => '•',
+        'Â ' => ' ', 'Â' => '',
+    ]));
+}
+
+/** Does a school already exist for this Fellow? Matches on DBN first (exact,
+ *  authoritative) then on the folded name within the same region. */
+function school_find_duplicate(int $fellowId, string $name, string $dbn = '', string $region = '', bool $fuzzy = false): ?array
+{
+    research_ensure_schema();
+    $dbn = trim($dbn);
+    if ($dbn !== '') {
+        $s = db()->prepare("SELECT id, title, region, status FROM research_entries WHERE category = 'school_contact' AND fellow_user_id = ? AND dbn = ? LIMIT 1");
+        $s->execute([$fellowId, $dbn]);
+        $r = $s->fetch();
+        if ($r) return $r + ['matched_on' => 'DBN ' . $dbn];
+    }
+    $key = school_name_key($name);
+    if ($key === '') return null;
+    $sql = "SELECT id, title, region, status FROM research_entries WHERE category = 'school_contact' AND fellow_user_id = ? AND name_key = ?";
+    $args = [$fellowId, $key];
+    if (trim($region) !== '') { $sql .= ' AND (region = ? OR region IS NULL)'; $args[] = trim($region); }
+    $s = db()->prepare($sql . ' LIMIT 1');
+    $s->execute($args);
+    $r = $s->fetch();
+    if ($r) return $r + ['matched_on' => 'the same name'];
+    /* A human typing a school by hand gets one extra, looser check: names that
+       merely contain each other. Import never does this — it would risk merging
+       two real schools — but a warning a person can overrule is safe. */
+    if ($fuzzy && mb_strlen(trim($name)) >= 6) {
+        $s = db()->prepare("SELECT id, title, region, status FROM research_entries
+            WHERE category = 'school_contact' AND fellow_user_id = ? AND (title LIKE ? OR ? LIKE CONCAT('%', title, '%')) LIMIT 1");
+        $s->execute([$fellowId, '%' . trim($name) . '%', trim($name)]);
+        $r = $s->fetch();
+        if ($r) return $r + ['matched_on' => 'a very similar name'];
+    }
+    return null;
+}
+
+/** Header aliases so the client's export imports without hand-editing it. */
+const SCHOOL_CSV_MAP = [
+    'school name' => 'title', 'dbn / school id' => 'dbn', 'dbn' => 'dbn', 'school id' => 'dbn',
+    'region' => 'region', 'priority' => 'priority', 'school type' => 'school_type', 'grades' => 'grades',
+    'neighborhood / area' => 'neighborhood', 'neighborhood' => 'neighborhood',
+    'address' => 'address', 'zip' => 'zip', 'main phone' => 'phone', 'phone' => 'phone',
+    'official website' => 'website', 'website' => 'website',
+    'school leader / principal' => 'contact_name', 'principal' => 'contact_name',
+    'parent coordinator / contact' => 'parent_contact', 'parent / outreach contact' => 'parent_contact',
+    'general email' => 'email', 'email' => 'email',
+    'best outreach contact' => 'organization',
+    'verification source' => 'source_url', 'date verified' => 'verified_on',
+    'status' => 'status', 'verification status' => 'status', 'outreach status' => 'outreach_status',
+    'notes' => 'notes', 'county' => 'county', 'district' => 'district', 'source file' => 'source_file',
+];
+
+/** Import the master school list. Every row is deduplicated before insert, and
+ *  the caller is told exactly what was skipped and why — a silent skip on a
+ *  650-row import is indistinguishable from a bug. */
+function school_list_import(int $fellowId, array $rows): array
+{
+    research_ensure_schema();
+    if ($fellowId <= 0) json(['error' => 'A Fellow account is required.'], 422);
+    if (count($rows) > 3000) json(['error' => 'Please import at most 3000 rows at a time.'], 422);
+
+    $cap = static function ($v, int $n): ?string {
+        $t = mb_substr(school_fix_text((string) $v), 0, $n);
+        return $t === '' ? null : $t;
+    };
+    $ins = db()->prepare(
+        "INSERT INTO research_entries (fellow_user_id, category, title, name_key, dbn, region, priority, school_type,
+            grades, neighborhood, address, zip, phone, website, contact_name, parent_contact, email, organization,
+            county, district, source_url, notes, source_file, status, outreach_status, verified_on)
+         VALUES (?, 'school_contact', ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+    );
+    $imported = 0; $skipped = []; $seen = [];
+    foreach ($rows as $raw) {
+        if (!is_array($raw)) continue;
+        // Rows may arrive already mapped, or keyed by the sheet's own headers —
+        // translate here so the column names live in exactly one place.
+        $r = $raw;
+        if (!isset($raw['title'])) {
+            $r = [];
+            foreach ($raw as $h => $v) {
+                $key = mb_strtolower(trim(school_fix_text((string) $h)));
+                $target = SCHOOL_CSV_MAP[$key] ?? null;
+                if ($target !== null && ($r[$target] ?? '') === '') $r[$target] = $v;
+            }
+        }
+        $title = mb_substr(school_fix_text((string) ($r['title'] ?? '')), 0, 200);
+        if ($title === '') continue; // blank line in the sheet
+        $dbn = (string) ($cap($r['dbn'] ?? '', 20) ?? '');
+        $region = (string) ($cap($r['region'] ?? '', 60) ?? '');
+        $key = school_name_key($title);
+        // Guard within this batch too — the sheet itself repeats schools.
+        $batchKey = $dbn !== '' ? 'd:' . $dbn : 'n:' . $key . '|' . mb_strtolower($region);
+        if (isset($seen[$batchKey])) { $skipped[] = ['name' => $title, 'why' => 'appears twice in this file']; continue; }
+        $seen[$batchKey] = true;
+        $dup = school_find_duplicate($fellowId, $title, $dbn, $region);
+        if ($dup) { $skipped[] = ['name' => $title, 'why' => 'already in your list (matched on ' . $dup['matched_on'] . ')']; continue; }
+
+        // The sheet uses two different status words; map both onto ours.
+        $rawStatus = mb_strtolower(school_fix_text((string) ($r['status'] ?? '')));
+        $status = str_contains($rawStatus, 'verified') && !str_contains($rawStatus, 'partially') ? 'verified' : 'submitted';
+        $rawOut = mb_strtolower(school_fix_text((string) ($r['outreach_status'] ?? '')));
+        $out = str_contains($rawOut, 'registered') ? 'registered'
+            : (str_contains($rawOut, 'responded') ? 'responded'
+            : (str_contains($rawOut, 'invited') || str_contains($rawOut, 'contacted') && !str_contains($rawOut, 'not ') ? 'invited' : 'not_contacted'));
+        $vOn = trim((string) ($r['verified_on'] ?? ''));
+        $vOn = preg_match('/^\d{4}-\d{2}-\d{2}$/', $vOn) === 1 ? $vOn : null;
+
+        $ins->execute([
+            $fellowId, $title, $key, $dbn ?: null, $region ?: null,
+            $cap($r['priority'] ?? '', 20), $cap($r['school_type'] ?? '', 80), $cap($r['grades'] ?? '', 40),
+            $cap($r['neighborhood'] ?? '', 120), $cap($r['address'] ?? '', 255), $cap($r['zip'] ?? '', 20),
+            $cap($r['phone'] ?? '', 60), $cap($r['website'] ?? '', 300), $cap($r['contact_name'] ?? '', 160),
+            $cap($r['parent_contact'] ?? '', 255), $cap($r['email'] ?? '', 200), $cap($r['organization'] ?? '', 200),
+            $cap($r['county'] ?? '', 60), $cap($r['district'] ?? '', 120), $cap($r['source_url'] ?? '', 500),
+            $cap($r['notes'] ?? '', 5000), $cap($r['source_file'] ?? '', 160), $status, $out, $vOn,
+        ]);
+        $imported++;
+    }
+    return ['imported' => $imported, 'skipped' => count($skipped), 'skipped_rows' => array_slice($skipped, 0, 100)];
+}
+
+/** Server-side filtered, paged school list — 650+ rows must never all be sent
+ *  to the browser just so it can filter them there. */
+function school_list_query(int $fellowId, array $f): array
+{
+    research_ensure_schema();
+    $where = ["category = 'school_contact'", 'fellow_user_id = ?'];
+    $args = [$fellowId];
+    $add = static function (string $col, $val) use (&$where, &$args): void {
+        if (trim((string) $val) !== '') { $where[] = "$col = ?"; $args[] = trim((string) $val); }
+    };
+    $add('region', $f['region'] ?? '');
+    $add('priority', $f['priority'] ?? '');
+    $add('school_type', $f['school_type'] ?? '');
+    $add('outreach_status', $f['outreach_status'] ?? '');
+    if (($f['status'] ?? '') !== '') {
+        if ($f['status'] === 'unverified') $where[] = "status <> 'verified'";
+        else { $where[] = 'status = ?'; $args[] = (string) $f['status']; }
+    }
+    // "Missing contact info" — the actual work queue for a Fellow.
+    if (!empty($f['needs_info'])) $where[] = "(phone IS NULL OR phone = '' OR email IS NULL OR email = '' OR contact_name IS NULL OR contact_name = '')";
+    $q = trim((string) ($f['q'] ?? ''));
+    if ($q !== '') {
+        $where[] = '(title LIKE ? OR neighborhood LIKE ? OR district LIKE ? OR dbn LIKE ?)';
+        $like = '%' . $q . '%';
+        array_push($args, $like, $like, $like, $like);
+    }
+    $w = implode(' AND ', $where);
+    $total = (int) (static function () use ($w, $args) {
+        $s = db()->prepare("SELECT COUNT(*) FROM research_entries WHERE $w");
+        $s->execute($args);
+        return $s->fetchColumn();
+    })();
+    $per = max(10, min(200, (int) ($f['per'] ?? 50)));
+    $page = max(1, (int) ($f['page'] ?? 1));
+    $s = db()->prepare("SELECT id, title, dbn, region, priority, school_type, grades, neighborhood, address, zip,
+            phone, website, contact_name, parent_contact, email, county, district, source_url, notes,
+            status, outreach_status, verify_method, verified_on, pushed_school_id
+        FROM research_entries WHERE $w ORDER BY (status = 'verified'), region, title LIMIT $per OFFSET " . (($page - 1) * $per));
+    $s->execute($args);
+    return ['schools' => $s->fetchAll(), 'total' => $total, 'page' => $page, 'per' => $per];
+}
+
+/** Counts for the Fellow's progress strip and filter chips. */
+function school_list_facets(int $fellowId): array
+{
+    research_ensure_schema();
+    $one = static function (string $sql) use ($fellowId) {
+        $s = db()->prepare($sql);
+        $s->execute([$fellowId]);
+        return $s->fetchAll();
+    };
+    $base = "FROM research_entries WHERE category = 'school_contact' AND fellow_user_id = ?";
+    $tot = $one("SELECT COUNT(*) AS n $base");
+    $ver = $one("SELECT COUNT(*) AS n $base AND status = 'verified'");
+    $inv = $one("SELECT COUNT(*) AS n $base AND outreach_status <> 'not_contacted'");
+    $reg = $one("SELECT COUNT(*) AS n $base AND outreach_status = 'registered'");
+    return [
+        'total' => (int) ($tot[0]['n'] ?? 0),
+        'verified' => (int) ($ver[0]['n'] ?? 0),
+        'contacted' => (int) ($inv[0]['n'] ?? 0),
+        'registered' => (int) ($reg[0]['n'] ?? 0),
+        'regions' => array_column($one("SELECT region, COUNT(*) AS n $base AND region IS NOT NULL AND region <> '' GROUP BY region ORDER BY region"), 'n', 'region'),
+        'types' => array_column($one("SELECT school_type, COUNT(*) AS n $base AND school_type IS NOT NULL AND school_type <> '' GROUP BY school_type ORDER BY school_type"), 'n', 'school_type'),
+        'priorities' => array_column($one("SELECT priority, COUNT(*) AS n $base AND priority IS NOT NULL AND priority <> '' GROUP BY priority ORDER BY priority"), 'n', 'priority'),
+        'methods' => SCHOOL_VERIFY_METHODS,
+        'outreach_statuses' => SCHOOL_OUTREACH_STATUSES,
+    ];
 }
 
 /** Normalize one entry row for the API (ints/strings, unix ts). */

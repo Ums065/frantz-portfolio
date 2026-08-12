@@ -6,6 +6,7 @@ import { useSeo } from '../hooks/useSeo'
 import SheetImport from '../components/SheetImport'
 import FellowCrm, { VIEW_META, type ViewKey } from '../components/FellowCrm'
 import FcIcon, { type IconName } from '../components/FcIcon'
+import SchoolVerification from '../components/SchoolVerification'
 import ProfileSection from '../components/profile/ProfileSection'
 import AnnouncementsFeed, { useAnnouncementBadge } from '../components/AnnouncementsFeed'
 import NotificationBell from '../components/NotificationBell'
@@ -26,7 +27,7 @@ interface Assignment {
 }
 /* One flat navigation instead of tabs-inside-tabs: the CRM's ten sections are
    addressed directly as `crm:<view>` so every destination is one click away. */
-type TabKey = 'overview' | 'profile' | 'announcements' | 'messages' | ResearchCategory | `crm:${ViewKey}`
+type TabKey = 'overview' | 'profile' | 'announcements' | 'messages' | 'school-verify' | ResearchCategory | `crm:${ViewKey}`
 type EntryForm = typeof EMPTY_ENTRY_FORM
 
 interface NavItem { key: TabKey; label: string; icon: IconName; hint?: string; alert?: boolean }
@@ -62,6 +63,9 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
   { label: 'Find sponsors', items: [crmItem('prospects'), crmItem('pipeline'), crmItem('calls'), crmItem('outreach')] },
   { label: 'Learn', items: [crmItem('academy'), crmItem('certification'), crmItem('materials')] },
   { label: 'Track', items: [crmItem('performance'), crmItem('report')] },
+  { label: 'Schools', items: [
+    { key: 'school-verify', label: 'Verify Schools', icon: 'building', hint: 'The master school list — confirm each school and invite it to take part.' },
+  ] },
   { label: 'Research', items: RESEARCH_CATEGORIES.map((c) => ({ key: c.key as TabKey, label: c.tabLabel, icon: RESEARCH_ICON[c.key] ?? 'note', hint: c.blurb })) },
   { label: 'Account', items: [
     { key: 'announcements', label: 'Announcements', icon: 'note', alert: true },
@@ -325,6 +329,7 @@ export default function Fellow() {
           </header>
 
           {crmView && <FellowCrm view={crmView} onView={(v) => setTab(`crm:${v}`)} />}
+          {tab === 'school-verify' && <SchoolVerification />}
           {tab === 'profile' && <ProfileSection />}
           {tab === 'messages' && (
             <Section title="Messages with the program team">
