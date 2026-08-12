@@ -1991,6 +1991,30 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             }
             json(['message' => 'Updated.']);
         }
+        case $method === 'POST' && preg_match('#^fellow/org/(\d+)/send-email$#', $route, $m) === 1: {
+            $u = require_login();
+            if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
+            fellow_ops_ensure_schema();
+            $fid = (int) $u['id']; $id = (int) $m[1]; $b = body();
+            rate_limit('fellow_send_email', 40, 3600, (string) $fid);
+            // The recipient must be a saved contact on THIS fellow's org (anti-abuse).
+            $cq = db()->prepare('SELECT c.name, c.email FROM fellow_contacts c JOIN fellow_orgs o ON o.id = c.org_id WHERE c.id = ? AND o.id = ? AND o.fellow_user_id = ? LIMIT 1');
+            $cq->execute([(int) ($b['contact_id'] ?? 0), $id, $fid]);
+            $contact = $cq->fetch();
+            if (!$contact || trim((string) $contact['email']) === '') json(['error' => 'Pick a contact that has an email address.'], 422);
+            $subject = mb_substr(trim((string) field($b, 'subject')), 0, 240);
+            $bodyTxt = trim((string) field($b, 'body'));
+            if ($subject === '' || $bodyTxt === '') json(['error' => 'Subject and message are required.'], 422);
+            $sig = "\n\n—\nSent via the Student Impact Challenge on behalf of " . (string) $u['full_name'] . "\nFrantzCoutard.com";
+            $ok = function_exists('mail_queue_enqueue')
+                ? mail_queue_enqueue('fellow_outreach', (string) $contact['email'], $subject, $bodyTxt . $sig)
+                : send_mail_message((string) $contact['email'], $subject, $bodyTxt . $sig);
+            if (!$ok) json(['error' => 'Could not queue the email. Try again.'], 500);
+            fellow_log($fid, $id, 'email', 'Sent "' . $subject . '" → ' . $contact['name']);
+            $fu = trim((string) field($b, 'follow_up_date'));
+            if ($fu !== '') db()->prepare('INSERT INTO fellow_followups (org_id, fellow_user_id, due_date, method, reason) VALUES (?,?,?,?,?)')->execute([$id, $fid, $fu, 'email', 'Reply to: ' . $subject]);
+            json(['message' => 'Email sent to ' . $contact['email'] . '.'], 201);
+        }
         case $method === 'POST' && preg_match('#^fellow/org/(\d+)/meeting$#', $route, $m) === 1: {
             $u = require_login();
             if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
@@ -2042,6 +2066,33 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             $done = array_map(static fn($r) => (int) $r['module_id'], $pr->fetchAll());
             json(['modules' => $mods, 'completed' => $done]);
         }
+        case $key === 'GET fellow/quiz': {
+            $u = require_login();
+            if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
+            fellow_ops_ensure_schema();
+            $qs = db()->query('SELECT id, question, options_json FROM fellow_quiz_questions WHERE is_active = 1 ORDER BY sort_order, id')->fetchAll();
+            $questions = array_map(static fn($q) => ['id' => (int) $q['id'], 'question' => $q['question'], 'options' => json_decode((string) $q['options_json'], true) ?: []], $qs);
+            json(['questions' => $questions, 'cert' => fellow_cert_status((int) $u['id'])]);
+        }
+        case $key === 'POST fellow/quiz/submit': {
+            $u = require_login();
+            if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
+            fellow_ops_ensure_schema();
+            $fid = (int) $u['id'];
+            $answers = is_array(body()['answers'] ?? null) ? body()['answers'] : [];
+            $qs = db()->query('SELECT id, correct_index FROM fellow_quiz_questions WHERE is_active = 1')->fetchAll();
+            if (count($qs) === 0) json(['error' => 'No exam questions are set up yet.'], 422);
+            $correct = 0;
+            foreach ($qs as $q) { if ((int) ($answers[(string) $q['id']] ?? -1) === (int) $q['correct_index']) $correct++; }
+            $total = count($qs);
+            $score = (int) round(($correct / $total) * 100);
+            $passed = $score >= FELLOW_QUIZ_PASS ? 1 : 0;
+            db()->prepare('INSERT INTO fellow_quiz_attempts (fellow_user_id, score, passed, total, correct) VALUES (?,?,?,?,?)')
+                ->execute([$fid, $score, $passed, $total, $correct]);
+            fellow_log($fid, null, 'note', 'Certification exam: ' . $score . '% (' . ($passed ? 'passed' : 'not passed') . ')');
+            if ($passed) { try { new_school_add_notification(null, 'admin', 'fellow_certified', 'Fellow certified', (string) $u['full_name'] . ' passed the certification exam (' . $score . '%).', []); } catch (Throwable $e) {} }
+            json(['score' => $score, 'passed' => (bool) $passed, 'correct' => $correct, 'total' => $total, 'cert' => fellow_cert_status($fid)]);
+        }
         case $method === 'POST' && preg_match('#^fellow/module/(\d+)/complete$#', $route, $m) === 1: {
             $u = require_login();
             if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
@@ -2050,6 +2101,58 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             if ($done) db()->prepare('INSERT IGNORE INTO fellow_module_progress (fellow_user_id, module_id) VALUES (?,?)')->execute([(int) $u['id'], (int) $m[1]]);
             else db()->prepare('DELETE FROM fellow_module_progress WHERE fellow_user_id = ? AND module_id = ?')->execute([(int) $u['id'], (int) $m[1]]);
             json(['message' => 'Saved.']);
+        }
+        case $key === 'GET admin/fellow-ops/quiz': {
+            require_admin(); fellow_ops_ensure_schema();
+            $qs = array_map(static function ($q) {
+                $q['options'] = json_decode((string) $q['options_json'], true) ?: []; unset($q['options_json']);
+                $q['correct_index'] = (int) $q['correct_index']; return $q;
+            }, db()->query('SELECT * FROM fellow_quiz_questions ORDER BY sort_order, id')->fetchAll());
+            json(['questions' => $qs, 'pass' => FELLOW_QUIZ_PASS]);
+        }
+        case $key === 'POST admin/fellow-ops/quiz-question': {
+            require_admin(); fellow_ops_ensure_schema();
+            $b = body();
+            $q = mb_substr(trim((string) field($b, 'question')), 0, 600);
+            $opts = is_array($b['options'] ?? null) ? array_values(array_map(static fn($o) => mb_substr(trim((string) $o), 0, 300), $b['options'])) : [];
+            $opts = array_values(array_filter($opts, static fn($o) => $o !== ''));
+            if ($q === '' || count($opts) < 2) json(['error' => 'A question and at least two options are required.'], 422);
+            $ci = max(0, min(count($opts) - 1, (int) ($b['correct_index'] ?? 0)));
+            db()->prepare('INSERT INTO fellow_quiz_questions (question, options_json, correct_index, sort_order, is_active) VALUES (?,?,?,?,?)')
+                ->execute([$q, json_encode($opts, JSON_UNESCAPED_UNICODE), $ci, (int) ($b['sort_order'] ?? 0), empty($b['is_active']) ? 0 : 1]);
+            json(['id' => (int) db()->lastInsertId(), 'message' => 'Question added.'], 201);
+        }
+        case $method === 'PUT' && preg_match('#^admin/fellow-ops/quiz-question/(\d+)$#', $route, $m) === 1: {
+            require_admin(); fellow_ops_ensure_schema();
+            $b = body();
+            $q = mb_substr(trim((string) field($b, 'question')), 0, 600);
+            $opts = is_array($b['options'] ?? null) ? array_values(array_filter(array_map(static fn($o) => mb_substr(trim((string) $o), 0, 300), $b['options']), static fn($o) => $o !== '')) : [];
+            if ($q === '' || count($opts) < 2) json(['error' => 'A question and at least two options are required.'], 422);
+            $ci = max(0, min(count($opts) - 1, (int) ($b['correct_index'] ?? 0)));
+            db()->prepare('UPDATE fellow_quiz_questions SET question=?, options_json=?, correct_index=?, sort_order=?, is_active=? WHERE id=?')
+                ->execute([$q, json_encode($opts, JSON_UNESCAPED_UNICODE), $ci, (int) ($b['sort_order'] ?? 0), empty($b['is_active']) ? 0 : 1, (int) $m[1]]);
+            json(['message' => 'Question updated.']);
+        }
+        case $method === 'DELETE' && preg_match('#^admin/fellow-ops/quiz-question/(\d+)$#', $route, $m) === 1: {
+            require_admin(); fellow_ops_ensure_schema();
+            db()->prepare('DELETE FROM fellow_quiz_questions WHERE id = ?')->execute([(int) $m[1]]);
+            json(['message' => 'Deleted.']);
+        }
+        case $key === 'GET admin/fellow-ops/certifications': {
+            require_admin(); fellow_ops_ensure_schema();
+            $rows = db()->query(
+                "SELECT u.id, u.full_name,
+                        (SELECT COUNT(*) FROM fellow_quiz_attempts a WHERE a.fellow_user_id = u.id) AS attempts,
+                        (SELECT MAX(a.score) FROM fellow_quiz_attempts a WHERE a.fellow_user_id = u.id) AS best,
+                        (SELECT MAX(a.passed) FROM fellow_quiz_attempts a WHERE a.fellow_user_id = u.id) AS passed
+                 FROM users u WHERE u.role = 'fellow' ORDER BY u.full_name"
+            )->fetchAll();
+            $out = array_map(static function ($r) {
+                $att = (int) $r['attempts'];
+                $r['status'] = $att === 0 ? 'Training' : ((int) $r['passed'] === 1 ? 'Certified' : 'Needs Retraining');
+                $r['best'] = (int) $r['best']; $r['attempts'] = $att; return $r;
+            }, $rows);
+            json(['fellows' => $out, 'pass' => FELLOW_QUIZ_PASS]);
         }
         case $key === 'GET admin/fellow-ops/modules': {
             require_admin(); fellow_ops_ensure_schema(); fellow_modules_sync();

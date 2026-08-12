@@ -5936,6 +5936,20 @@ const FELLOW_ACTIVITY_TYPES = ['research', 'contact', 'email', 'call', 'linkedin
 const FELLOW_PROPOSAL_STATUSES = ['draft', 'submitted', 'approved', 'sent', 'under_review', 'accepted', 'declined'];
 const FELLOW_MEETING_TYPES = ['phone', 'zoom', 'meet', 'in_person'];
 const FELLOW_TEMPLATE_KINDS = ['email', 'call', 'linkedin', 'follow_up', 'meeting'];
+const FELLOW_QUIZ_PASS = 80; // % needed to certify
+
+/** A Fellow's certification status from their exam attempts. */
+function fellow_cert_status(int $fellowId): array
+{
+    fellow_ops_ensure_schema();
+    $s = db()->prepare('SELECT MAX(passed) AS ever_passed, MAX(score) AS best, COUNT(*) AS attempts FROM fellow_quiz_attempts WHERE fellow_user_id = ?');
+    $s->execute([$fellowId]);
+    $r = $s->fetch() ?: [];
+    $attempts = (int) ($r['attempts'] ?? 0);
+    $status = 'Training';
+    if ($attempts > 0) $status = ((int) ($r['ever_passed'] ?? 0) === 1) ? 'Certified' : 'Needs Retraining';
+    return ['status' => $status, 'best' => (int) ($r['best'] ?? 0), 'attempts' => $attempts, 'pass' => FELLOW_QUIZ_PASS];
+}
 
 /** Self-healing schema for the Fellow CRM (orgs, contacts, activities, tasks, follow-ups, targets). */
 function fellow_ops_ensure_schema(): void
@@ -6056,6 +6070,17 @@ function fellow_ops_ensure_schema(): void
         db()->exec("CREATE TABLE IF NOT EXISTS fellow_module_progress (
             id INT AUTO_INCREMENT PRIMARY KEY, fellow_user_id INT NOT NULL, module_id INT NOT NULL,
             completed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE KEY uniq_fm (fellow_user_id, module_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        // Certification exam: question bank + attempts.
+        db()->exec("CREATE TABLE IF NOT EXISTS fellow_quiz_questions (
+            id INT AUTO_INCREMENT PRIMARY KEY, question VARCHAR(600) NOT NULL, options_json TEXT NOT NULL,
+            correct_index TINYINT NOT NULL DEFAULT 0, sort_order INT NOT NULL DEFAULT 0, is_active TINYINT(1) NOT NULL DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        db()->exec("CREATE TABLE IF NOT EXISTS fellow_quiz_attempts (
+            id INT AUTO_INCREMENT PRIMARY KEY, fellow_user_id INT NOT NULL, score TINYINT NOT NULL DEFAULT 0,
+            passed TINYINT(1) NOT NULL DEFAULT 0, total INT NOT NULL DEFAULT 0, correct INT NOT NULL DEFAULT 0,
+            taken_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, INDEX idx_fqa (fellow_user_id, taken_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     } catch (Throwable $e) { if (app_debug()) error_log('fellow_ops_ensure_schema: ' . $e->getMessage()); }
     $ready = true;

@@ -16,7 +16,7 @@ const money = (n: number) => n > 0 ? '$' + n.toLocaleString('en-US') : '—'
 const ACTIVITY_QUICK: [string, string][] = [['email', '✉ Email sent'], ['call', '📞 Call'], ['linkedin', 'in LinkedIn'], ['meeting', '📅 Meeting'], ['proposal', '📄 Proposal'], ['note', '📝 Note']]
 
 export default function FellowCrm() {
-  const [view, setView] = useState<'day' | 'prospects' | 'pipeline' | 'calls' | 'outreach' | 'academy' | 'performance' | 'materials' | 'report'>('day')
+  const [view, setView] = useState<'day' | 'prospects' | 'pipeline' | 'calls' | 'outreach' | 'academy' | 'certification' | 'performance' | 'materials' | 'report'>('day')
   const [importing, setImporting] = useState(false)
   const [overview, setOverview] = useState<{ scorecard: { counts: Record<string, number>; targets: Record<string, number> }; tasks: Task[]; followups: Followup[]; followups_due: number; orgs_total: number } | null>(null)
   const [orgs, setOrgs] = useState<Org[]>([])
@@ -58,9 +58,9 @@ export default function FellowCrm() {
   return (
     <div className="fc-crm">
       <div className="admin-ov-tabs" role="tablist" style={{ marginBottom: 18 }}>
-        {(['day', 'prospects', 'pipeline', 'calls', 'outreach', 'academy', 'performance', 'materials', 'report'] as const).map((v) => (
+        {(['day', 'prospects', 'pipeline', 'calls', 'outreach', 'academy', 'certification', 'performance', 'materials', 'report'] as const).map((v) => (
           <button key={v} type="button" role="tab" aria-selected={view === v} className={`admin-ov-tab${view === v ? ' is-active' : ''}`} onClick={() => setView(v)}>
-            {v === 'day' ? 'My Day' : v === 'prospects' ? `Prospects (${orgs.length})` : v === 'pipeline' ? 'Pipeline' : v === 'calls' ? 'Calls' : v === 'outreach' ? 'Outreach' : v === 'academy' ? 'Training Academy' : v === 'performance' ? 'Performance' : v === 'materials' ? 'Materials' : 'Daily Report'}
+            {v === 'day' ? 'My Day' : v === 'prospects' ? `Prospects (${orgs.length})` : v === 'pipeline' ? 'Pipeline' : v === 'calls' ? 'Calls' : v === 'outreach' ? 'Outreach' : v === 'academy' ? 'Training Academy' : v === 'certification' ? 'Certification' : v === 'performance' ? 'Performance' : v === 'materials' ? 'Materials' : 'Daily Report'}
           </button>
         ))}
       </div>
@@ -165,6 +165,7 @@ export default function FellowCrm() {
       {view === 'calls' && <CallsView onLogged={refresh} onOpen={setOpenId} />}
       {view === 'outreach' && <OutreachView />}
       {view === 'academy' && <AcademyView />}
+      {view === 'certification' && <CertificationView />}
       {view === 'performance' && <PerformanceView />}
       {view === 'materials' && <MaterialsView />}
       {view === 'report' && <ReportView />}
@@ -224,6 +225,7 @@ function OrgDrawer({ id, onClose, onChange }: { id: number; onClose: () => void;
   const [data, setData] = useState<{ org: Org; contacts: Contact[]; timeline: Activity[]; followups: Followup[]; stages: string[]; proposals?: any[]; meetings?: any[]; proposal_statuses?: string[]; meeting_types?: string[] } | null>(null)
   const [logType, setLogType] = useState('email'); const [logDetail, setLogDetail] = useState(''); const [logFu, setLogFu] = useState('')
   const [addingContact, setAddingContact] = useState(false)
+  const [showEmail, setShowEmail] = useState(false); const [em, setEm] = useState<Record<string, string>>({ contact_id: '', subject: '', body: '', follow_up_date: '' }); const [emMsg, setEmMsg] = useState(''); const [emBusy, setEmBusy] = useState(false)
   const [showProp, setShowProp] = useState(false); const [prop, setProp] = useState<Record<string, string>>({ amount: '', level: '', notes: '', status: 'submitted' })
   const [showMtg, setShowMtg] = useState(false); const [mtg, setMtg] = useState<Record<string, string>>({ meeting_at: '', type: 'zoom', purpose: '', notes: '', outcome: '', next_steps: '' })
   const load = useCallback(() => { api.get<any>(`fellow/org/${id}`).then(setData).catch(() => {}) }, [id])
@@ -234,6 +236,12 @@ function OrgDrawer({ id, onClose, onChange }: { id: number; onClose: () => void;
   const logActivity = async () => {
     await api.post(`fellow/org/${id}/activity`, { type: logType, detail: logDetail, follow_up_date: logFu })
     setLogDetail(''); setLogFu(''); load(); onChange()
+  }
+  const sendEmail = async () => {
+    if (!em.contact_id || !em.subject.trim() || !em.body.trim()) { setEmMsg('Pick a contact and fill subject + message.'); return }
+    setEmBusy(true); setEmMsg('')
+    try { const r = await api.post<{ message: string }>(`fellow/org/${id}/send-email`, em); setEmMsg(r.message || 'Sent.'); setEm({ contact_id: '', subject: '', body: '', follow_up_date: '' }); setShowEmail(false); load(); onChange() }
+    catch (e) { setEmMsg(e instanceof Error ? e.message : 'Could not send.') } finally { setEmBusy(false) }
   }
   const addProposal = async () => { await api.post(`fellow/org/${id}/proposal`, { ...prop, amount: Number(prop.amount) || 0 }); setShowProp(false); setProp({ amount: '', level: '', notes: '', status: 'submitted' }); load(); onChange() }
   const addMeeting = async () => { await api.post(`fellow/org/${id}/meeting`, mtg); setShowMtg(false); setMtg({ meeting_at: '', type: 'zoom', purpose: '', notes: '', outcome: '', next_steps: '' }); load(); onChange() }
@@ -264,6 +272,25 @@ function OrgDrawer({ id, onClose, onChange }: { id: number; onClose: () => void;
             <label className="msub" style={{ fontSize: 12 }}>Next follow-up: <input className="fc-input" type="date" value={logFu} onChange={(e) => setLogFu(e.target.value)} style={{ width: 'auto' }} /></label>
             <button className="btn btn--sm btn--solid" onClick={logActivity}>Save to timeline</button>
           </div>
+        </section>
+
+        {/* Send email */}
+        <section className="glass" style={{ padding: 14, borderRadius: 12, marginBottom: 14 }}>
+          <h4 className="gold-text" style={{ marginTop: 0, fontSize: 15, display: 'flex', justifyContent: 'space-between' }}>✉ Send Email <button type="button" className="btn btn--sm" onClick={() => setShowEmail((v) => !v)}>{showEmail ? 'Close' : 'Compose'}</button></h4>
+          {showEmail && (
+            <div style={{ display: 'grid', gap: 8 }}>
+              <select className="fc-input" value={em.contact_id} onChange={(e) => setEm({ ...em, contact_id: e.target.value })}>
+                <option value="" style={{ background: '#14120b' }}>To… (contact with an email)</option>
+                {(data.contacts || []).filter((c) => c.email).map((c) => <option key={c.id} value={c.id} style={{ background: '#14120b' }}>{c.name} — {c.email}</option>)}
+              </select>
+              <input className="fc-input" placeholder="Subject" value={em.subject} onChange={(e) => setEm({ ...em, subject: e.target.value })} />
+              <textarea className="fc-input" rows={5} placeholder="Your message (personalize it)…" value={em.body} onChange={(e) => setEm({ ...em, body: e.target.value })} />
+              <label className="msub" style={{ fontSize: 12 }}>Next follow-up: <input className="fc-input" style={{ width: 'auto' }} type="date" value={em.follow_up_date} onChange={(e) => setEm({ ...em, follow_up_date: e.target.value })} /></label>
+              <button className="btn btn--sm btn--solid" onClick={sendEmail} disabled={emBusy}>{emBusy ? 'Sending…' : 'Send Email'}</button>
+              <p className="msub" style={{ fontSize: 11 }}>Sent from the program address on your behalf; logged to the timeline.</p>
+            </div>
+          )}
+          {emMsg && <p className="msub" style={{ color: emMsg.toLowerCase().includes('sent') ? '#6be29a' : '#e08a8a', marginTop: 8 }}>{emMsg}</p>}
         </section>
 
         <div className="fc-drawer-cols">
@@ -364,6 +391,63 @@ function CallsView({ onLogged, onOpen }: { onLogged: () => void; onOpen: (id: nu
           </tr>
         ))}</tbody>
       </table>
+    </div>
+  )
+}
+
+const CERT_COLOR: Record<string, string> = { Certified: '#6be29a', 'Needs Retraining': '#e08a5c', Training: '#a9a396' }
+function CertificationView() {
+  const [data, setData] = useState<{ questions: any[]; cert: any } | null>(null)
+  const [taking, setTaking] = useState(false)
+  const [answers, setAnswers] = useState<Record<number, number>>({})
+  const [result, setResult] = useState<any>(null)
+  const load = useCallback(() => { api.get<any>('fellow/quiz').then(setData).catch(() => {}) }, [])
+  useEffect(() => { load() }, [load])
+  if (!data) return <p className="msub">Loading…</p>
+  const submit = async () => {
+    const r = await api.post<any>('fellow/quiz/submit', { answers })
+    setResult(r); setTaking(false); load()
+  }
+  const cert = data.cert || {}
+  return (
+    <div style={{ maxWidth: 720 }}>
+      <section className="glass" style={{ padding: 18, borderRadius: 14, marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+        <div>
+          <div className="msub" style={{ fontSize: 11, letterSpacing: '.1em', textTransform: 'uppercase' }}>Certification status</div>
+          <strong style={{ fontSize: 22, color: CERT_COLOR[cert.status] || '#f0ead6' }}>{cert.status || 'Training'}</strong>
+          <div className="msub" style={{ fontSize: 12 }}>Best score: {cert.best || 0}% · Pass mark: {cert.pass || 80}% · Attempts: {cert.attempts || 0}</div>
+        </div>
+        {cert.status !== 'Certified' && data.questions.length > 0 && <button className="btn btn--solid" onClick={() => { setTaking(true); setResult(null); setAnswers({}) }}>{cert.attempts > 0 ? 'Retake Exam' : 'Take Exam'}</button>}
+      </section>
+
+      {result && (
+        <div className="glass" style={{ padding: 16, borderRadius: 12, marginBottom: 14, borderColor: result.passed ? '#3fbf7f' : '#e08a5c' }}>
+          <strong style={{ color: result.passed ? '#6be29a' : '#e08a5c', fontSize: 18 }}>{result.passed ? '🎉 Passed!' : 'Not passed yet'}</strong>
+          <p className="msub">You scored {result.score}% ({result.correct}/{result.total}). {result.passed ? 'You are now certified.' : `You need ${data.cert.pass}% — review the Training Academy and retake.`}</p>
+        </div>
+      )}
+
+      {taking ? (
+        data.questions.length === 0 ? <p className="msub">No exam questions are set up yet.</p> : (
+          <div style={{ display: 'grid', gap: 14 }}>
+            {data.questions.map((q, i) => (
+              <div key={q.id} className="glass" style={{ padding: 14, borderRadius: 12 }}>
+                <strong>{i + 1}. {q.question}</strong>
+                <div style={{ display: 'grid', gap: 6, marginTop: 8 }}>
+                  {q.options.map((opt: string, oi: number) => (
+                    <label key={oi} style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer' }}>
+                      <input type="radio" name={`q${q.id}`} checked={answers[q.id] === oi} onChange={() => setAnswers({ ...answers, [q.id]: oi })} /> {opt}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ))}
+            <button className="btn btn--solid" onClick={submit} disabled={Object.keys(answers).length < data.questions.length} style={{ justifySelf: 'start' }}>Submit Exam ({Object.keys(answers).length}/{data.questions.length})</button>
+          </div>
+        )
+      ) : !result && (
+        <p className="msub">Complete the Training Academy, then take the certification exam. You need {cert.pass || 80}% to certify.</p>
+      )}
     </div>
   )
 }
