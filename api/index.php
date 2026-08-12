@@ -2228,6 +2228,7 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
         case $key === 'DELETE fellow/demo-data': {
             $u = require_login();
             if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
+            rate_limit('fellow_demo', 10, 3600, (string) $u['id']);
             $n = fellow_demo_clear((int) $u['id']);
             json(['message' => "Removed $n sample prospects.", 'removed' => $n]);
         }

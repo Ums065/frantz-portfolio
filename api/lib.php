@@ -6137,21 +6137,33 @@ function fellow_ops_ensure_schema(): void
 }
 
 /** Ship the CRM with real content so no Fellow ever opens an empty screen.
- *  Only fills a table that is completely empty — admin edits are never touched. */
+ *  Each set is seeded exactly once, recorded in app_meta: an admin who deletes
+ *  every starter template or question keeps it deleted rather than having the
+ *  defaults silently reinstated on the next request. */
 function fellow_seed_defaults(): void
 {
     try {
-        if ((int) db()->query('SELECT COUNT(*) FROM fellow_templates')->fetchColumn() === 0) {
+        $done = static function (string $k): bool {
+            $s = db()->prepare("SELECT meta_value FROM app_meta WHERE meta_key = ? LIMIT 1");
+            $s->execute([$k]);
+            return (string) $s->fetchColumn() !== '';
+        };
+        $mark = static function (string $k): void {
+            db()->prepare("INSERT INTO app_meta (meta_key, meta_value) VALUES (?, '1') ON DUPLICATE KEY UPDATE meta_value = '1'")->execute([$k]);
+        };
+        if (!$done('fellow_templates_seeded') && (int) db()->query('SELECT COUNT(*) FROM fellow_templates')->fetchColumn() === 0) {
             $t = db()->prepare('INSERT INTO fellow_templates (kind, category, name, subject, body, sort_order) VALUES (?,?,?,?,?,?)');
             foreach (FELLOW_DEFAULT_TEMPLATES as $i => $row) {
                 $t->execute([$row[0], $row[1], $row[2], $row[3], $row[4], ($i + 1) * 10]);
             }
+            $mark('fellow_templates_seeded');
         }
-        if ((int) db()->query('SELECT COUNT(*) FROM fellow_quiz_questions')->fetchColumn() === 0) {
+        if (!$done('fellow_quiz_seeded') && (int) db()->query('SELECT COUNT(*) FROM fellow_quiz_questions')->fetchColumn() === 0) {
             $q = db()->prepare('INSERT INTO fellow_quiz_questions (question, options_json, correct_index, sort_order) VALUES (?,?,?,?)');
             foreach (FELLOW_DEFAULT_QUIZ as $i => $row) {
                 $q->execute([$row[0], json_encode($row[1], JSON_UNESCAPED_UNICODE), $row[2], ($i + 1) * 10]);
             }
+            $mark('fellow_quiz_seeded');
         }
     } catch (Throwable $e) { if (app_debug()) error_log('fellow_seed_defaults: ' . $e->getMessage()); }
 }
@@ -6178,8 +6190,10 @@ function fellow_demo_seed(int $fellowId): int
     foreach ($rows as $i => $r) {
         [$name, $industry, $cat, $loc, $prio, $stage, $val, $cName, $cTitle, $cPhone, $fit] = $r;
         $key = fellow_name_key($name);
-        $dup = db()->prepare('SELECT id FROM fellow_orgs WHERE name_key = ? LIMIT 1');
-        $dup->execute([$key]);
+        // Scoped to this Fellow: sample data is per-person, so one Fellow loading
+        // it must not block every other Fellow from ever loading their own.
+        $dup = db()->prepare('SELECT id FROM fellow_orgs WHERE name_key = ? AND fellow_user_id = ? LIMIT 1');
+        $dup->execute([$key, $fellowId]);
         if ($dup->fetch()) continue;
         $ins->execute([$fellowId, $fellowId, $name, $industry, $cat, $loc, $prio, $stage, $val, $fit, $key]);
         $orgId = (int) db()->lastInsertId();

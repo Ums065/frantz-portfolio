@@ -489,6 +489,7 @@ function EmailComposer({ presetTpl, onClose, onSent, onProspects }: { presetTpl?
   const [subject, setSubject] = useState('')
   const [bodyTxt, setBodyTxt] = useState('')
   const [fu, setFu] = useState('')
+  const [edited, setEdited] = useState(false) // has the Fellow typed into the draft?
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const [sent, setSent] = useState('')
@@ -516,14 +517,16 @@ function EmailComposer({ presetTpl, onClose, onSent, onProspects }: { presetTpl?
   const applyTemplate = (id: string, c = chosen) => {
     setTpl(id)
     const t = templates.find((x) => String(x.id) === id)
-    if (!t) { setSubject(''); setBodyTxt(''); return }
+    if (!t) { setSubject(''); setBodyTxt(''); setEdited(false); return }
     setSubject(personalize(t.subject || '', c))
     setBodyTxt(personalize(t.body || '', c))
+    setEdited(false)
   }
   const pickContact = (id: string) => {
     setTo(id)
-    // Re-personalize the loaded script for whoever they just chose.
-    if (tpl) applyTemplate(tpl, contacts.find((c) => String(c.id) === id))
+    // Re-personalize the script for whoever they chose — but never clobber a
+    // message the Fellow has already typed into.
+    if (tpl && !edited) applyTemplate(tpl, contacts.find((c) => String(c.id) === id))
   }
   // Warn before sending something that still says "[Your name]".
   const leftover = Array.from(new Set(`${subject}\n${bodyTxt}`.match(/\[[^\]\n]{2,30}\]/g) || []))
@@ -567,14 +570,15 @@ function EmailComposer({ presetTpl, onClose, onSent, onProspects }: { presetTpl?
             {chosen && <p className="msub" style={{ margin: '-6px 0 0', fontSize: 12 }}>Sending to <strong style={{ color: '#f0ead6' }}>{chosen.email}</strong> · stage: {STAGE_LABEL(chosen.stage)}</p>}
 
             <label className="fc-fld">Start from an approved script <span style={{ textTransform: 'none', fontWeight: 400 }}>(recommended)</span>
-              <select className="fc-input" value={tpl} onChange={(e) => applyTemplate(e.target.value)} disabled={!chosen}>
+              <select className="fc-input" value={tpl} disabled={!chosen}
+                onChange={(e) => { if (edited && !window.confirm('Loading a script will replace what you have written. Continue?')) return; applyTemplate(e.target.value) }}>
                 <option value="" style={{ background: '#14120b' }}>{chosen ? 'Write from scratch' : 'Choose a contact first…'}</option>
                 {templates.map((t) => <option key={t.id} value={t.id} style={{ background: '#14120b' }}>{t.category ? `${t.category} — ` : ''}{t.name}</option>)}
               </select>
             </label>
 
-            <label className="fc-fld">Subject<input className="fc-input" value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Keep it short and specific" /></label>
-            <label className="fc-fld">Message<textarea className="fc-input" rows={12} value={bodyTxt} onChange={(e) => setBodyTxt(e.target.value)} placeholder="Your message — personalize every placeholder before sending." /></label>
+            <label className="fc-fld">Subject<input className="fc-input" value={subject} onChange={(e) => { setSubject(e.target.value); setEdited(true) }} placeholder="Keep it short and specific" /></label>
+            <label className="fc-fld">Message<textarea className="fc-input" rows={12} value={bodyTxt} onChange={(e) => { setBodyTxt(e.target.value); setEdited(true) }} placeholder="Your message — personalize every placeholder before sending." /></label>
 
             {leftover.length > 0 && (
               <div className="fc-dup">⚠ Still to fill in: {leftover.join('  ')}</div>
