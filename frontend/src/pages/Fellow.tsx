@@ -31,6 +31,21 @@ type EntryForm = typeof EMPTY_ENTRY_FORM
 
 interface NavItem { key: TabKey; label: string; icon: IconName; hint?: string; alert?: boolean }
 
+/* Group accent colours + glyphs, mirroring the admin Command Center sidebar. */
+const GROUP_META: Record<string, { color: string; path: string }> = {
+  'Start here':    { color: '#d4af37', path: 'M3 3h8v8H3zM13 3h8v8h-8zM3 13h8v8H3zM13 13h8v8h-8z' },
+  'Find sponsors': { color: '#3fbf7f', path: 'M9 15l6-6M10 6l1-1a4 4 0 0 1 6 6l-1 1M14 18l-1 1a4 4 0 0 1-6-6l1-1' },
+  'Learn':         { color: '#4a90e2', path: 'M22 9L12 5 2 9l10 4 10-4zM6 11v5c0 1 2.7 2.5 6 2.5s6-1.5 6-2.5v-5' },
+  'Track':         { color: '#2fb3c0', path: 'M3 20V4M3 20h18M7 15l3.5-4 3 2.5L20 7' },
+  'Research':      { color: '#a06cd5', path: 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z' },
+  'Account':       { color: '#e0785c', path: 'M3 5h18v14H3zM3 6l9 7 9-7' },
+}
+function GroupGlyph({ group }: { group: string }) {
+  const m = GROUP_META[group]
+  if (!m) return null
+  return <svg viewBox="0 0 24 24" width={15} height={15} fill="none" stroke={m.color} strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round"><path d={m.path} /></svg>
+}
+
 const RESEARCH_ICON: Partial<Record<ResearchCategory, IconName>> = {
   school_contact: 'building', partner_prospect: 'contact', funder: 'award',
   content_creator: 'sparkles', research_note: 'file',
@@ -66,6 +81,16 @@ export default function Fellow() {
   const [tab, setTab] = useState<TabKey>('overview')
   const [navOpen, setNavOpen] = useState(false)
   const [crmDue, setCrmDue] = useState(0)
+  // Collapsible sidebar groups, same as the admin Command Center. Every group
+  // starts open so nothing is hidden; the Fellow's choices then persist.
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => {
+    try { const s = JSON.parse(localStorage.getItem('fc_fellow_nav_open') || 'null'); if (s && typeof s === 'object') return s } catch { /* ignore */ }
+    return Object.fromEntries(NAV_GROUPS.map((g) => [g.label, true]))
+  })
+  useEffect(() => { try { localStorage.setItem('fc_fellow_nav_open', JSON.stringify(openGroups)) } catch { /* ignore */ } }, [openGroups])
+  const toggleGroup = (name: string) => setOpenGroups((p) => ({ ...p, [name]: !p[name] }))
+  // Quick "jump to a section" search over the nav, always visible.
+  const [navQuery, setNavQuery] = useState('')
   const { items: annItems, unseen: annUnseen, markSeen: markAnnSeen } = useAnnouncementBadge()
   const [counts, setCounts] = useState<Record<string, number>>({})
   const [assignments, setAssignments] = useState<Assignment[]>([])
@@ -211,26 +236,64 @@ export default function Fellow() {
             <span className="admin-kicker">Student Fellow</span>
             <strong className="gold-text">{user?.full_name || 'My Workspace'}</strong>
           </div>
+          <div className="admin-nav__search">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth={1.8}><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg>
+            <input type="search" value={navQuery} onChange={(e) => setNavQuery(e.target.value)} placeholder="Jump to a section…" aria-label="Search workspace sections" />
+          </div>
           <nav className="admin-nav" onClick={() => setNavOpen(false)}>
-            {NAV_GROUPS.map((group) => (
-              <div className="admin-nav__group is-open" key={group.label}>
-                <span className="admin-nav__group-label">{group.label}</span>
-                <div className="admin-nav__items">
-                  {group.items.map((item) => (
-                    <button key={item.key} type="button"
-                      className={`admin-nav__item${tab === item.key ? ' is-active' : ''}`}
-                      title={item.hint}
-                      onClick={() => { setTab(item.key); if (item.key === 'announcements') markAnnSeen() }}>
-                      <span className="admin-nav__icon"><FcIcon name={item.icon} size={16} /></span>
-                      <span className="admin-nav__label">{item.label}</span>
-                      {badges[item.key] ? <span className={`admin-nav__badge${item.alert ? ' admin-nav__badge--notify' : ''}`}>{badges[item.key]}</span> : null}
-                    </button>
-                  ))}
+            {navQuery.trim() ? (
+              // Flat search results — jump straight to any section.
+              (() => {
+                const q = navQuery.trim().toLowerCase()
+                const matches = NAV_ITEMS.filter((i) => i.label.toLowerCase().includes(q))
+                if (matches.length === 0) return <p className="admin-nav__empty">No section matches “{navQuery}”.</p>
+                return (
+                  <div className="admin-nav__items admin-nav__items--flat">
+                    {matches.map((item) => (
+                      <button key={item.key} type="button" className={`admin-nav__item${tab === item.key ? ' is-active' : ''}`}
+                        onClick={() => { setTab(item.key); setNavQuery(''); if (item.key === 'announcements') markAnnSeen() }}>
+                        <span className="admin-nav__icon"><FcIcon name={item.icon} size={16} /></span>
+                        <span className="admin-nav__label">{item.label}</span>
+                        {badges[item.key] ? <span className={`admin-nav__badge${item.alert ? ' admin-nav__badge--notify' : ''}`}>{badges[item.key]}</span> : null}
+                      </button>
+                    ))}
+                  </div>
+                )
+              })()
+            ) : NAV_GROUPS.map((group) => {
+              const open = !!openGroups[group.label]
+              const groupCount = group.items.reduce((n, it) => n + (Number(badges[it.key]) || 0), 0)
+              const color = GROUP_META[group.label]?.color || '#d4af37'
+              return (
+                <div key={group.label} className={`admin-nav__group${open ? ' is-open' : ' is-collapsed'}`} style={{ ['--grp' as string]: color }}>
+                  <button type="button" className="admin-nav__group-label admin-nav__group-toggle" aria-expanded={open}
+                    onClick={(e) => { e.stopPropagation(); toggleGroup(group.label) }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', background: 'none', border: 0, borderBottom: '1px solid rgba(201,168,76,0.14)', cursor: 'pointer' }}>
+                    <span className="admin-nav__chevron" aria-hidden="true" style={{ display: 'inline-block', transition: 'transform .2s', transform: open ? 'rotate(90deg)' : 'none' }}>›</span>
+                    <span className="admin-nav__glyph" aria-hidden="true"><GroupGlyph group={group.label} /></span>
+                    <span style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>{group.label}</span>
+                    {!open && groupCount > 0 && <span className="admin-nav__badge admin-nav__badge--notify" title={`${groupCount} need attention`}>{groupCount}</span>}
+                  </button>
+                  {open && (
+                    <div className="admin-nav__items">
+                      {group.items.map((item) => (
+                        <button key={item.key} type="button"
+                          className={`admin-nav__item${tab === item.key ? ' is-active' : ''}`}
+                          title={item.hint}
+                          onClick={() => { setTab(item.key); if (item.key === 'announcements') markAnnSeen() }}>
+                          <span className="admin-nav__icon"><FcIcon name={item.icon} size={16} /></span>
+                          <span className="admin-nav__label">{item.label}</span>
+                          {badges[item.key] ? <span className={`admin-nav__badge${item.alert ? ' admin-nav__badge--notify' : ''}`}>{badges[item.key]}</span> : null}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </nav>
           <div className="admin-sidebar__foot">
+            <button type="button" className="btn btn--sm" onClick={() => setTab('profile')}>My Profile</button>
             <a className="btn btn--sm" href="/">View Site</a>
             <button className="btn btn--sm" onClick={() => void logout()}>Log out</button>
           </div>
