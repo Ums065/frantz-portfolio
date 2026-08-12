@@ -16,7 +16,7 @@ export default function FellowOpsAdminPanel() {
   const [summary, setSummary] = useState<Summary | null>(null)
   const [fellows, setFellows] = useState<FellowRow[]>([])
   const [activity, setActivity] = useState<Activity[]>([])
-  const [tab, setTab] = useState<'today' | 'analytics' | 'activity' | 'proposals' | 'assign' | 'targets' | 'materials' | 'templates' | 'training' | 'certification'>('today')
+  const [tab, setTab] = useState<'today' | 'analytics' | 'activity' | 'reports' | 'proposals' | 'assign' | 'targets' | 'materials' | 'templates' | 'training' | 'certification'>('today')
 
   const load = useCallback(() => {
     api.get<{ summary: Summary; fellows: FellowRow[] }>('admin/fellow-ops/summary').then((d) => { setSummary(d.summary); setFellows(d.fellows || []) }).catch(() => {})
@@ -39,9 +39,9 @@ export default function FellowOpsAdminPanel() {
       <p style={{ color: 'var(--muted)', fontSize: 13, margin: '4px 0 14px' }}>What the sponsorship team did today, live.</p>
 
       <div className="admin-ov-tabs" role="tablist" style={{ marginBottom: 16 }}>
-        {(['today', 'analytics', 'activity', 'proposals', 'assign', 'targets', 'materials', 'templates', 'training', 'certification'] as const).map((t) => (
+        {(['today', 'analytics', 'activity', 'reports', 'proposals', 'assign', 'targets', 'materials', 'templates', 'training', 'certification'] as const).map((t) => (
           <button key={t} role="tab" aria-selected={tab === t} className={`admin-ov-tab${tab === t ? ' is-active' : ''}`} onClick={() => setTab(t)}>
-            {t === 'today' ? 'Today' : t === 'analytics' ? 'Analytics' : t === 'activity' ? 'Activity Feed' : t === 'proposals' ? 'Proposals' : t === 'assign' ? 'Assign Task' : t === 'targets' ? 'Targets' : t === 'materials' ? 'Materials' : t === 'templates' ? 'Templates' : t === 'training' ? 'Training' : 'Certification'}
+            {t === 'today' ? 'Today' : t === 'analytics' ? 'Analytics' : t === 'activity' ? 'Activity Feed' : t === 'reports' ? 'Daily Reports' : t === 'proposals' ? 'Proposals' : t === 'assign' ? 'Assign Task' : t === 'targets' ? 'Targets' : t === 'materials' ? 'Materials' : t === 'templates' ? 'Templates' : t === 'training' ? 'Training' : 'Certification'}
           </button>
         ))}
       </div>
@@ -87,6 +87,7 @@ export default function FellowOpsAdminPanel() {
       )}
 
       {tab === 'analytics' && <AnalyticsView />}
+      {tab === 'reports' && <ReportsAdmin />}
       {tab === 'proposals' && <ProposalsAdmin />}
       {tab === 'assign' && <AssignTask fellows={fellows} onDone={load} />}
       {tab === 'targets' && <TargetsForm fellows={fellows} onDone={load} />}
@@ -303,6 +304,58 @@ function AnalyticsView() {
             <strong style={{ fontSize: 13 }}>{money(f.value)}</strong>
           </div>
         ))}
+      </div>
+    </div>
+  )
+}
+
+/* Fellows are told "your manager can see it now" when they submit an end-of-day
+   report, so their manager has to actually be able to read them. */
+function ReportsAdmin() {
+  const [rows, setRows] = useState<any[]>([])
+  const [who, setWho] = useState('')
+  const [loading, setLoading] = useState(true)
+  useEffect(() => {
+    api.get<{ reports: any[] }>('admin/fellow-ops/reports')
+      .then((d) => setRows(d.reports || [])).catch(() => {}).finally(() => setLoading(false))
+  }, [])
+  const names = Array.from(new Set(rows.map((r) => r.fellow_name))).sort()
+  const shown = who ? rows.filter((r) => r.fellow_name === who) : rows
+  const nums = (j: string) => { try { return JSON.parse(j || '{}') as Record<string, number> } catch { return {} } }
+  if (loading) return <p style={{ color: 'var(--muted)', fontSize: 13 }}>Loading reports…</p>
+  if (rows.length === 0) return <p style={{ color: 'var(--muted)', fontSize: 13 }}>No reports yet. Fellows write these at the end of each working day — check back this evening.</p>
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 14 }}>
+        <label style={{ fontSize: 12, color: 'var(--muted)' }}>Fellow:&nbsp;
+          <select className="fc-input" style={{ width: 'auto' }} value={who} onChange={(e) => setWho(e.target.value)}>
+            <option value="" style={{ background: '#14120b' }}>Everyone ({rows.length})</option>
+            {names.map((n) => <option key={n} value={n} style={{ background: '#14120b' }}>{n}</option>)}
+          </select>
+        </label>
+        <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>Newest first. Read the blockers — that is where a Fellow needs you.</span>
+      </div>
+      <div style={{ display: 'grid', gap: 12 }}>
+        {shown.map((r) => {
+          const n = nums(r.numbers_json)
+          return (
+            <div key={r.id} className="glass" style={{ padding: 14, borderRadius: 12 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', alignItems: 'baseline' }}>
+                <strong className="gold-text">{r.fellow_name}</strong>
+                <span style={{ fontSize: 12, color: 'var(--muted)' }}>{String(r.report_date).slice(0, 10)}</span>
+              </div>
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', margin: '8px 0 10px', fontSize: 12, color: 'var(--muted)' }}>
+                {[['research', 'orgs'], ['email', 'emails'], ['call', 'calls'], ['linkedin', 'LinkedIn'], ['follow_up', 'follow-ups'], ['meeting', 'meetings'], ['proposal', 'proposals']].map(([k, lbl]) => (
+                  <span key={k}><strong style={{ color: '#f0ead6' }}>{n[k] || 0}</strong> {lbl}</span>
+                ))}
+              </div>
+              {r.wins && <p style={{ fontSize: 13, margin: '0 0 6px' }}><strong style={{ color: 'var(--gold-light)' }}>Went well:</strong> {r.wins}</p>}
+              {r.challenges && <p style={{ fontSize: 13, margin: '0 0 6px' }}><strong style={{ color: 'var(--gold-light)' }}>Got stuck:</strong> {r.challenges}</p>}
+              {r.help_needed && <p style={{ fontSize: 13, margin: '0 0 6px', padding: '8px 10px', borderRadius: 8, background: 'rgba(224,120,92,.1)', border: '1px solid rgba(224,120,92,.35)' }}><strong style={{ color: '#f0b8a8' }}>Needs help:</strong> {r.help_needed}</p>}
+              {r.plan && <p style={{ fontSize: 13, margin: 0, color: 'var(--muted)' }}><strong style={{ color: 'var(--gold-light)' }}>Tomorrow:</strong> {r.plan}</p>}
+            </div>
+          )
+        })}
       </div>
     </div>
   )

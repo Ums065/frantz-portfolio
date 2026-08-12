@@ -226,10 +226,20 @@ export default function FellowCrm({ view: viewProp, onView }: { view?: ViewKey; 
   useEffect(() => { loadOverview(); loadOrgs() }, [loadOverview, loadOrgs])
   const refresh = () => { loadOverview(); loadOrgs() }
   const [doneFu, setDoneFu] = useState<Followup | null>(null)
+  const [moveFu, setMoveFu] = useState<Followup | null>(null)
   const followupDone = async (id: number, nextDate: string) => {
     await api.post(`fellow/followup/${id}/done`, { next_date: nextDate })
     setDoneFu(null)
     refresh()
+  }
+  const followupMove = async (id: number, due: string) => {
+    await api.put(`fellow/followup/${id}`, { due_date: due })
+    setMoveFu(null)
+    refresh()
+  }
+  const cancelFollowup = async (f: Followup) => {
+    if (!window.confirm(`Cancel the follow-up for ${f.org_name}? It will not count as done.`)) return
+    try { await api.del(`fellow/followup/${f.id}`); refresh() } catch { /* ignore */ }
   }
   const setTaskStatus = async (id: number, status: string) => { await api.put(`fellow/task/${id}`, { status }); loadOverview() }
   // Sample prospects: lets a new Fellow see the Pipeline / Calls / Performance
@@ -349,9 +359,13 @@ export default function FellowCrm({ view: viewProp, onView }: { view?: ViewKey; 
                   {(overview?.followups || []).map((f) => (
                     <li key={f.id} className={f.due_date <= today ? 'is-due' : ''}>
                       <button type="button" onClick={() => setOpenId(f.org_id)}>{f.org_name}</button>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                         <span className="msub">{f.due_date}{f.reason ? ` · ${f.reason}` : ''}</span>
                         <button type="button" className="btn btn--sm btn--solid" onClick={() => setDoneFu(f)}>Done</button>
+                        {/* Rescheduling and cancelling deliberately do NOT log an
+                            activity — neither is work done, so the scorecard stays honest. */}
+                        <button type="button" className="btn btn--sm" title="Move this to another day" onClick={() => setMoveFu(f)}>Reschedule</button>
+                        <button type="button" className="btn btn--sm" title="Cancel this follow-up" onClick={() => cancelFollowup(f)} style={{ borderColor: '#7a3b3b', color: '#e08a8a' }}>✕</button>
                       </span>
                     </li>
                   ))}
@@ -456,17 +470,19 @@ export default function FellowCrm({ view: viewProp, onView }: { view?: ViewKey; 
       {view === 'report' && <ReportView />}
 
       {doneFu && <FollowupDone fu={doneFu} onClose={() => setDoneFu(null)} onDone={followupDone} />}
+      {moveFu && <FollowupDone fu={moveFu} mode="move" onClose={() => setMoveFu(null)} onDone={followupMove} />}
       {composing && <EmailComposer presetTpl={composing.tpl} onClose={() => setComposing(null)} onSent={() => { setComposing(null); refresh() }} onProspects={() => { setComposing(null); setView('prospects') }} />}
       {adding && <AddProspect priorities={priorities} onClose={() => setAdding(false)} onSaved={() => { setAdding(false); refresh() }} />}
       {importing && <ImportModal onClose={() => setImporting(false)} onSaved={() => { setImporting(false); refresh() }} />}
-      {openId && <OrgDrawer id={openId} onClose={() => setOpenId(null)} onChange={refresh} />}
+      {openId && <OrgDrawer id={openId} priorities={priorities} onClose={() => setOpenId(null)} onChange={refresh} onDeleted={() => { setOpenId(null); refresh() }} />}
     </div>
   )
 }
 
 /* Marking a follow-up done always asks the one question that matters next:
    when do you chase them again? Quick picks beat typing a date by hand. */
-function FollowupDone({ fu, onClose, onDone }: { fu: Followup; onClose: () => void; onDone: (id: number, next: string) => void }) {
+function FollowupDone({ fu, mode = 'done', onClose, onDone }: { fu: Followup; mode?: 'done' | 'move'; onClose: () => void; onDone: (id: number, next: string) => void }) {
+  const moving = mode === 'move'
   const plus = (days: number) => { const d = new Date(); d.setDate(d.getDate() + days); return d.toISOString().slice(0, 10) }
   const QUICK: [string, number][] = [['Tomorrow', 1], ['In 3 days', 3], ['Next week', 7], ['In 2 weeks', 14], ['In a month', 30]]
   const [custom, setCustom] = useState('')
@@ -476,9 +492,11 @@ function FollowupDone({ fu, onClose, onDone }: { fu: Followup; onClose: () => vo
     <div className="modal-overlay open" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal" style={{ maxWidth: 460 }}>
         <button type="button" className="close" onClick={onClose} aria-label="Close">✕</button>
-        <h3 className="gold-text" style={{ marginBottom: 2 }}>Follow-up done</h3>
+        <h3 className="gold-text" style={{ marginBottom: 2 }}>{moving ? 'Reschedule follow-up' : 'Follow-up done'}</h3>
         <p className="msub" style={{ marginTop: 0, fontSize: 13 }}>
-          Nice work on <strong style={{ color: '#f0ead6' }}>{fu.org_name}</strong>. When should you contact them again?
+          {moving
+            ? <>Move the follow-up for <strong style={{ color: '#f0ead6' }}>{fu.org_name}</strong> to another day. This does not count as done.</>
+            : <>Nice work on <strong style={{ color: '#f0ead6' }}>{fu.org_name}</strong>. When should you contact them again?</>}
         </p>
         <p className="msub" style={{ fontSize: 12, margin: '10px 0 6px' }}>Most sponsors say yes on the second or third contact — pick a date, do not leave it to memory.</p>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
@@ -492,10 +510,14 @@ function FollowupDone({ fu, onClose, onDone }: { fu: Followup; onClose: () => vo
             <button className="btn btn--sm" disabled={busy || !custom} onClick={() => go(custom)}>Set</button>
           </div>
         </label>
-        <hr style={{ border: 0, borderTop: '1px solid rgba(201,168,76,.16)', margin: '14px 0' }} />
-        <button className="btn btn--sm" disabled={busy} onClick={() => go('')} style={{ width: '100%' }}>
-          No follow-up needed — close this one
-        </button>
+        {!moving && (
+          <>
+            <hr style={{ border: 0, borderTop: '1px solid rgba(201,168,76,.16)', margin: '14px 0' }} />
+            <button className="btn btn--sm" disabled={busy} onClick={() => go('')} style={{ width: '100%' }}>
+              No follow-up needed — close this one
+            </button>
+          </>
+        )}
       </div>
     </div>
   )
@@ -624,27 +646,38 @@ function EmailComposer({ presetTpl, onClose, onSent, onProspects }: { presetTpl?
   )
 }
 
-function AddProspect({ priorities, onClose, onSaved }: { priorities: string[]; onClose: () => void; onSaved: () => void }) {
-  const [f, setF] = useState<Record<string, string>>({ name: '', website: '', industry: '', category: '', location: '', priority: 'unreviewed', est_value: '', fit_notes: '' })
+/* Add or correct a prospect. Editing matters as much as adding: a typo'd name
+   or a wrong estimated value would otherwise be permanent, and the value feeds
+   the pipeline totals. Pass `org` to edit it. */
+function AddProspect({ priorities, org, onClose, onSaved }: { priorities: string[]; org?: Org; onClose: () => void; onSaved: () => void }) {
+  const isEdit = !!org
+  const [f, setF] = useState<Record<string, string>>({
+    name: org?.name || '', website: org?.website || '', industry: org?.industry || '', category: org?.category || '',
+    location: org?.location || '', priority: org?.priority || 'unreviewed',
+    est_value: org?.est_value ? String(org.est_value) : '', fit_notes: org?.fit_notes || '',
+  })
   const [dup, setDup] = useState<{ name: string; fellow_name?: string } | null>(null)
   const [busy, setBusy] = useState(false); const [err, setErr] = useState('')
   const set = (k: string, v: string) => setF((p) => ({ ...p, [k]: v }))
   const checkDup = async () => {
-    if (!f.name.trim()) return
+    if (isEdit || !f.name.trim()) return
     try { const d = await api.get<{ match: any }>(`fellow/orgs/check?name=${encodeURIComponent(f.name)}`); setDup(d.match) } catch { /* ignore */ }
   }
   const save = async () => {
     if (!f.name.trim()) { setErr('Organization name is required.'); return }
     setBusy(true); setErr('')
-    try { await api.post('fellow/org', { ...f, est_value: Number(f.est_value) || 0 }); onSaved() }
-    catch (e) { setErr(e instanceof Error ? e.message : 'Could not save.') } finally { setBusy(false) }
+    try {
+      const payload = { ...f, est_value: Number(f.est_value) || 0 }
+      isEdit ? await api.put(`fellow/org/${org!.id}`, payload) : await api.post('fellow/org', payload)
+      onSaved()
+    } catch (e) { setErr(e instanceof Error ? e.message : 'Could not save.') } finally { setBusy(false) }
   }
   return (
     <div className="modal-overlay open" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal" style={{ maxWidth: 480, maxHeight: '90vh', overflowY: 'auto' }}>
         <button type="button" className="close" onClick={onClose} aria-label="Close">✕</button>
-        <h3 className="gold-text" style={{ marginBottom: 4 }}>Add Prospect</h3>
-        <p className="msub" style={{ fontSize: 12.5, margin: 0 }}>Only the name is required — you can fill in the rest later as you learn about them.</p>
+        <h3 className="gold-text" style={{ marginBottom: 4 }}>{isEdit ? 'Edit Prospect' : 'Add Prospect'}</h3>
+        <p className="msub" style={{ fontSize: 12.5, margin: 0 }}>{isEdit ? 'Fix anything that changed or was typed wrong. The estimated value feeds your pipeline total.' : 'Only the name is required — you can fill in the rest later as you learn about them.'}</p>
         <div style={{ display: 'grid', gap: 10, marginTop: 12 }}>
           <label className="fc-fld">Organization name<input className="fc-input" value={f.name} onChange={(e) => { set('name', e.target.value); setDup(null) }} onBlur={checkDup} /></label>
           {dup && <div className="fc-dup">⚠ Already in the system{dup.fellow_name ? ` (assigned to ${dup.fellow_name})` : ''} — check before duplicating.</div>}
@@ -662,20 +695,24 @@ function AddProspect({ priorities, onClose, onSaved }: { priorities: string[]; o
           </div>
           <label className="fc-fld">Why a good fit?<textarea className="fc-input" rows={2} value={f.fit_notes} onChange={(e) => set('fit_notes', e.target.value)} /></label>
           {err && <p className="msub" style={{ color: '#e08a8a' }}>{err}</p>}
-          <button className="btn btn--solid" onClick={save} disabled={busy}>{busy ? 'Saving…' : 'Add Prospect'}</button>
+          <button className="btn btn--solid" onClick={save} disabled={busy}>{busy ? 'Saving…' : isEdit ? 'Save changes' : 'Add Prospect'}</button>
         </div>
       </div>
     </div>
   )
 }
 
-function OrgDrawer({ id, onClose, onChange }: { id: number; onClose: () => void; onChange: () => void }) {
+function OrgDrawer({ id, priorities, onClose, onChange, onDeleted }: { id: number; priorities: string[]; onClose: () => void; onChange: () => void; onDeleted: () => void }) {
   const [data, setData] = useState<{ org: Org; contacts: Contact[]; timeline: Activity[]; followups: Followup[]; stages: string[]; proposals?: any[]; meetings?: any[]; proposal_statuses?: string[]; meeting_types?: string[] } | null>(null)
   const [logType, setLogType] = useState('email'); const [logDetail, setLogDetail] = useState(''); const [logFu, setLogFu] = useState('')
   const [addingContact, setAddingContact] = useState(false)
   const [showEmail, setShowEmail] = useState(false); const [em, setEm] = useState<Record<string, string>>({ contact_id: '', subject: '', body: '', follow_up_date: '' }); const [emMsg, setEmMsg] = useState(''); const [emBusy, setEmBusy] = useState(false)
   const [showProp, setShowProp] = useState(false); const [prop, setProp] = useState<Record<string, string>>({ amount: '', level: '', notes: '', status: 'submitted' })
   const [showMtg, setShowMtg] = useState(false); const [mtg, setMtg] = useState<Record<string, string>>({ meeting_at: '', type: 'zoom', purpose: '', notes: '', outcome: '', next_steps: '' })
+  const [editing, setEditing] = useState(false)
+  const [editC, setEditC] = useState<Contact | null>(null)
+  const [editMtg, setEditMtg] = useState<any | null>(null)
+  const [busyMsg, setBusyMsg] = useState('')
   const load = useCallback(() => { api.get<any>(`fellow/org/${id}`).then(setData).catch(() => {}) }, [id])
   useEffect(() => { load() }, [load])
   if (!data) return <div className="modal-overlay open" onClick={onClose}><div className="modal" style={{ maxWidth: 720 }}><FcSkeleton rows={5} height={52} /></div></div>
@@ -693,12 +730,37 @@ function OrgDrawer({ id, onClose, onChange }: { id: number; onClose: () => void;
   }
   const addProposal = async () => { await api.post(`fellow/org/${id}/proposal`, { ...prop, amount: Number(prop.amount) || 0 }); setShowProp(false); setProp({ amount: '', level: '', notes: '', status: 'submitted' }); load(); onChange() }
   const addMeeting = async () => { await api.post(`fellow/org/${id}/meeting`, mtg); setShowMtg(false); setMtg({ meeting_at: '', type: 'zoom', purpose: '', notes: '', outcome: '', next_steps: '' }); load(); onChange() }
+  const setProposalStatus = async (pid: number, status: string) => {
+    setBusyMsg('')
+    try { await api.put(`fellow/proposal/${pid}`, { status }); load(); onChange() }
+    catch (e) { setBusyMsg(e instanceof Error ? e.message : 'Could not update the proposal.') }
+  }
+  const removeContact = async (cid: number, name: string) => {
+    if (!window.confirm(`Remove ${name} from this company's contacts?`)) return
+    try { await api.del(`fellow/contact/${cid}`); load(); onChange() }
+    catch (e) { setBusyMsg(e instanceof Error ? e.message : 'Could not remove the contact.') }
+  }
+  const deleteOrg = async () => {
+    if (!window.confirm(`Delete ${o.name} and everything logged against it (contacts, calls, emails, proposals, meetings)?\n\nThis cannot be undone.`)) return
+    try { await api.del(`fellow/org/${id}`); onDeleted() }
+    catch (e) { setBusyMsg(e instanceof Error ? e.message : 'Could not delete this prospect.') }
+  }
+  if (editing) return <AddProspect priorities={priorities} org={o} onClose={() => setEditing(false)} onSaved={() => { setEditing(false); load(); onChange() }} />
   return (
     <div className="modal-overlay open" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal" style={{ maxWidth: 720, maxHeight: '92vh', overflowY: 'auto' }}>
         <button type="button" className="close" onClick={onClose} aria-label="Close">✕</button>
-        <h3 className="gold-text" style={{ marginBottom: 2 }}>{o.name}</h3>
-        <p className="msub" style={{ marginTop: 0 }}>{[o.category, o.industry, o.location].filter(Boolean).join(' · ') || '—'}{o.website ? <> · <a href={o.website} target="_blank" rel="noreferrer" style={{ color: 'var(--gold)' }}>website ↗</a></> : null}</p>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', flexWrap: 'wrap', paddingRight: 28 }}>
+          <div style={{ flex: '1 1 240px', minWidth: 0 }}>
+            <h3 className="gold-text" style={{ margin: '0 0 2px' }}>{o.name}</h3>
+            <p className="msub" style={{ margin: 0 }}>{[o.category, o.industry, o.location].filter(Boolean).join(' · ') || '—'}{o.website ? <> · <a href={o.website} target="_blank" rel="noreferrer" style={{ color: 'var(--gold)' }}>website ↗</a></> : null}</p>
+          </div>
+          <span style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            <button className="btn btn--sm" onClick={() => setEditing(true)}>Edit details</button>
+            <button className="btn btn--sm" onClick={deleteOrg} style={{ borderColor: '#7a3b3b', color: '#e08a8a' }}>Delete</button>
+          </span>
+        </div>
+        {busyMsg && <p className="msub" style={{ color: '#e08a8a', marginTop: 8 }}>{busyMsg}</p>}
 
         {/* How far along this company is, and the one control that moves it. */}
         <div className="fc-progress">
@@ -756,10 +818,23 @@ function OrgDrawer({ id, onClose, onChange }: { id: number; onClose: () => void;
             <h4 className="gold-text" style={{ fontSize: 15 }}>Contacts <button type="button" className="btn btn--sm" onClick={() => setAddingContact((v) => !v)} aria-label="Add contact"><FcIcon name="plus" size={14} /></button></h4>
             {addingContact && <ContactForm orgId={id} onSaved={() => { setAddingContact(false); load(); onChange() }} />}
             {data.contacts.length === 0 ? <p className="msub">No contacts yet.</p> : data.contacts.map((c) => (
-              <div key={c.id} className="fc-contact">
-                <strong>{c.name}</strong>{c.title ? <span className="msub"> · {c.title}</span> : null}
-                <div className="msub" style={{ fontSize: 12 }}>{[c.email, c.phone].filter(Boolean).join(' · ')}</div>
-              </div>
+              editC?.id === c.id ? (
+                <ContactForm key={c.id} orgId={id} initial={c} onSaved={() => { setEditC(null); load(); onChange() }} onCancel={() => setEditC(null)} />
+              ) : (
+                <div key={c.id} className="fc-contact">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'flex-start' }}>
+                    <span style={{ minWidth: 0 }}>
+                      <strong>{c.name}</strong>{c.is_primary ? <span className="fc-stage-pill" style={{ marginLeft: 6, fontSize: 10 }}>primary</span> : null}
+                      {c.title ? <span className="msub"> · {c.title}</span> : null}
+                      <div className="msub" style={{ fontSize: 12 }}>{[c.email, c.phone].filter(Boolean).join(' · ') || 'No email or phone yet'}</div>
+                    </span>
+                    <span style={{ display: 'flex', gap: 5 }}>
+                      <button className="btn btn--sm" onClick={() => setEditC(c)}>Edit</button>
+                      <button className="btn btn--sm" onClick={() => removeContact(c.id, c.name)} style={{ borderColor: '#7a3b3b', color: '#e08a8a' }}>✕</button>
+                    </span>
+                  </div>
+                </div>
+              )
             ))}
           </section>
           {/* Timeline */}
@@ -788,7 +863,22 @@ function OrgDrawer({ id, onClose, onChange }: { id: number; onClose: () => void;
               </div>
             )}
             {(data.proposals || []).length === 0 ? <p className="msub">None yet.</p> : (data.proposals || []).map((p: any) => (
-              <div key={p.id} className="fc-contact"><strong>{money(p.amount)}</strong> {p.level ? <span className="msub">· {p.level}</span> : null}<div><span className="fc-stage-pill">{STAGE_LABEL(p.status)}</span>{p.admin_note ? <span className="msub" style={{ fontSize: 12 }}> — {p.admin_note}</span> : null}</div></div>
+              <div key={p.id} className="fc-contact">
+                <strong>{money(p.amount)}</strong> {p.level ? <span className="msub">· {p.level}</span> : null}
+                {p.admin_note ? <div className="msub" style={{ fontSize: 12 }}>{p.admin_note}</div> : null}
+                {/* The sponsor's answer has to be recordable — otherwise the
+                    status is frozen at whatever was picked when it was created.
+                    "Approved" stays admin-only and is shown, not offered. */}
+                {p.status === 'approved' ? (
+                  <div style={{ marginTop: 4 }}><span className="fc-stage-pill">Approved by admin</span></div>
+                ) : (
+                  <label className="fc-fld" style={{ marginTop: 5 }}>Status
+                    <select className="fc-input" value={p.status} onChange={(e) => setProposalStatus(p.id, e.target.value)}>
+                      {(data.proposal_statuses || ['draft', 'submitted', 'sent', 'under_review', 'accepted', 'declined']).filter((s) => s !== 'approved').map((s) => <option key={s} value={s} style={{ background: '#14120b' }}>{STAGE_LABEL(s)}</option>)}
+                    </select>
+                  </label>
+                )}
+              </div>
             ))}
           </section>
           {/* Meetings */}
@@ -804,7 +894,24 @@ function OrgDrawer({ id, onClose, onChange }: { id: number; onClose: () => void;
               </div>
             )}
             {(data.meetings || []).length === 0 ? <p className="msub">None yet.</p> : (data.meetings || []).map((mt: any) => (
-              <div key={mt.id} className="fc-contact"><strong>{STAGE_LABEL(mt.type)}</strong> {mt.meeting_at ? <span className="msub">· {String(mt.meeting_at).slice(0, 16).replace('T', ' ')}</span> : null}{mt.purpose ? <div className="msub" style={{ fontSize: 12 }}>{mt.purpose}</div> : null}</div>
+              editMtg?.id === mt.id ? (
+                <MeetingForm key={mt.id} meeting={mt} types={data.meeting_types || ['phone', 'zoom', 'meet', 'in_person']}
+                  onSaved={() => { setEditMtg(null); load(); onChange() }} onCancel={() => setEditMtg(null)} />
+              ) : (
+                <div key={mt.id} className="fc-contact">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'flex-start' }}>
+                    <span style={{ minWidth: 0 }}>
+                      <strong>{STAGE_LABEL(mt.type)}</strong>{mt.meeting_at ? <span className="msub"> · {String(mt.meeting_at).slice(0, 16).replace('T', ' ')}</span> : null}
+                      {mt.purpose ? <div className="msub" style={{ fontSize: 12 }}>{mt.purpose}</div> : null}
+                      {mt.outcome
+                        ? <div style={{ fontSize: 12.5, marginTop: 3 }}><strong style={{ color: '#f0ead6' }}>Outcome:</strong> {mt.outcome}</div>
+                        : <div className="msub" style={{ fontSize: 12, marginTop: 3, color: '#e0a86c' }}>No outcome recorded yet</div>}
+                      {mt.next_steps ? <div className="msub" style={{ fontSize: 12 }}>Next: {mt.next_steps}</div> : null}
+                    </span>
+                    <button className="btn btn--sm" onClick={() => setEditMtg(mt)}>{mt.outcome ? 'Edit' : 'Add outcome'}</button>
+                  </div>
+                </div>
+              )
             ))}
           </section>
         </div>
@@ -1143,16 +1250,71 @@ function ImportModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
   )
 }
 
-function ContactForm({ orgId, onSaved }: { orgId: number; onSaved: () => void }) {
-  const [f, setF] = useState<Record<string, string>>({ name: '', title: '', email: '', phone: '', linkedin: '' })
+/* Doubles as add and edit: pass `initial` to correct an existing contact, which
+   matters because a mistyped email makes that contact unreachable otherwise. */
+function ContactForm({ orgId, initial, onSaved, onCancel }: { orgId: number; initial?: Contact; onSaved: () => void; onCancel?: () => void }) {
+  const [f, setF] = useState<Record<string, string>>({
+    name: initial?.name || '', title: initial?.title || '', email: initial?.email || '',
+    phone: initial?.phone || '', linkedin: initial?.linkedin || '',
+  })
+  const [primary, setPrimary] = useState(!!initial?.is_primary)
+  const [busy, setBusy] = useState(false); const [err, setErr] = useState('')
   const set = (k: string, v: string) => setF((p) => ({ ...p, [k]: v }))
+  const save = async () => {
+    if (!f.name.trim()) { setErr('Name is required.'); return }
+    setBusy(true); setErr('')
+    try {
+      const payload = { ...f, is_primary: primary ? 1 : 0 }
+      initial ? await api.put(`fellow/contact/${initial.id}`, payload) : await api.post(`fellow/org/${orgId}/contact`, payload)
+      onSaved()
+    } catch (e) { setErr(e instanceof Error ? e.message : 'Could not save.') } finally { setBusy(false) }
+  }
   return (
     <div style={{ display: 'grid', gap: 6, margin: '6px 0 10px' }}>
       <input className="fc-input" placeholder="Name" value={f.name} onChange={(e) => set('name', e.target.value)} />
       <input className="fc-input" placeholder="Title" value={f.title} onChange={(e) => set('title', e.target.value)} />
       <input className="fc-input" placeholder="Email" value={f.email} onChange={(e) => set('email', e.target.value)} />
       <input className="fc-input" placeholder="Phone" value={f.phone} onChange={(e) => set('phone', e.target.value)} />
-      <button className="btn btn--sm btn--solid" onClick={async () => { if (!f.name.trim()) return; await api.post(`fellow/org/${orgId}/contact`, f); onSaved() }}>Save contact</button>
+      <label className="msub" style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 7 }}>
+        <input type="checkbox" checked={primary} onChange={(e) => setPrimary(e.target.checked)} />
+        Main person to contact at this company
+      </label>
+      {err && <p className="msub" style={{ color: '#e08a8a', margin: 0 }}>{err}</p>}
+      <div style={{ display: 'flex', gap: 6 }}>
+        <button className="btn btn--sm btn--solid" onClick={save} disabled={busy}>{busy ? 'Saving…' : initial ? 'Save changes' : 'Save contact'}</button>
+        {onCancel && <button className="btn btn--sm" onClick={onCancel}>Cancel</button>}
+      </div>
+    </div>
+  )
+}
+
+/* Recording what happened after a meeting — the whole point of logging one. */
+function MeetingForm({ meeting, types, onSaved, onCancel }: { meeting: any; types: string[]; onSaved: () => void; onCancel: () => void }) {
+  const [f, setF] = useState<Record<string, string>>({
+    meeting_at: meeting.meeting_at ? String(meeting.meeting_at).slice(0, 16).replace(' ', 'T') : '',
+    type: meeting.type || 'zoom', purpose: meeting.purpose || '', notes: meeting.notes || '',
+    outcome: meeting.outcome || '', next_steps: meeting.next_steps || '', follow_up_date: '',
+  })
+  const [busy, setBusy] = useState(false); const [err, setErr] = useState('')
+  const set = (k: string, v: string) => setF((p) => ({ ...p, [k]: v }))
+  const save = async () => {
+    setBusy(true); setErr('')
+    try { await api.put(`fellow/meeting/${meeting.id}`, f); onSaved() }
+    catch (e) { setErr(e instanceof Error ? e.message : 'Could not save.') } finally { setBusy(false) }
+  }
+  return (
+    <div style={{ display: 'grid', gap: 6, margin: '6px 0 10px' }}>
+      <input className="fc-input" type="datetime-local" value={f.meeting_at} onChange={(e) => set('meeting_at', e.target.value)} />
+      <select className="fc-input" value={f.type} onChange={(e) => set('type', e.target.value)}>{types.map((t) => <option key={t} value={t} style={{ background: '#14120b' }}>{STAGE_LABEL(t)}</option>)}</select>
+      <input className="fc-input" placeholder="Purpose" value={f.purpose} onChange={(e) => set('purpose', e.target.value)} />
+      <label className="fc-fld">What happened?<input className="fc-input" placeholder="e.g. Interested — wants the proposal by Friday" value={f.outcome} onChange={(e) => set('outcome', e.target.value)} /></label>
+      <label className="fc-fld">Agreed next step<input className="fc-input" placeholder="e.g. Send the Gold package" value={f.next_steps} onChange={(e) => set('next_steps', e.target.value)} /></label>
+      <label className="fc-fld">Chase it on<input className="fc-input" type="date" value={f.follow_up_date} onChange={(e) => set('follow_up_date', e.target.value)} /></label>
+      {err && <p className="msub" style={{ color: '#e08a8a', margin: 0 }}>{err}</p>}
+      <div style={{ display: 'flex', gap: 6 }}>
+        <button className="btn btn--sm btn--solid" onClick={save} disabled={busy}>{busy ? 'Saving…' : 'Save meeting'}</button>
+        <button className="btn btn--sm" onClick={onCancel}>Cancel</button>
+      </div>
     </div>
   )
 }

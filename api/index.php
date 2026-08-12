@@ -1904,6 +1904,107 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
                 ]);
             json(['message' => 'Saved.']);
         }
+        // Remove a prospect added by mistake, with its whole history, so it stops
+        // inflating the pipeline totals. Scoped to the Fellow who owns it.
+        case $method === 'DELETE' && preg_match('#^fellow/org/(\d+)$#', $route, $m) === 1: {
+            $u = require_login();
+            if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
+            fellow_ops_ensure_schema();
+            $id = (int) $m[1]; $fid = (int) $u['id'];
+            rate_limit('fellow_org_delete', 40, 3600, (string) $fid);
+            $own = db()->prepare('SELECT id FROM fellow_orgs WHERE id = ? AND fellow_user_id = ?'); $own->execute([$id, $fid]);
+            if (!$own->fetch()) json(['error' => 'Not found.'], 404);
+            foreach (['fellow_contacts', 'fellow_activities', 'fellow_followups', 'fellow_proposals', 'fellow_meetings'] as $tbl) {
+                try { db()->prepare("DELETE FROM $tbl WHERE org_id = ?")->execute([$id]); } catch (Throwable $e) { /* table may lag */ }
+            }
+            db()->prepare('DELETE FROM fellow_orgs WHERE id = ?')->execute([$id]);
+            json(['message' => 'Prospect deleted.']);
+        }
+        // Fix a mistyped contact — a wrong email otherwise makes that contact
+        // permanently unreachable, since sending resolves from this row.
+        case $method === 'PUT' && preg_match('#^fellow/contact/(\d+)$#', $route, $m) === 1: {
+            $u = require_login();
+            if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
+            fellow_ops_ensure_schema();
+            $id = (int) $m[1]; $fid = (int) $u['id']; $b = body();
+            $own = db()->prepare('SELECT c.id, c.org_id FROM fellow_contacts c JOIN fellow_orgs o ON o.id = c.org_id WHERE c.id = ? AND o.fellow_user_id = ?');
+            $own->execute([$id, $fid]);
+            $row = $own->fetch();
+            if (!$row) json(['error' => 'Not found.'], 404);
+            $name = mb_substr(trim((string) field($b, 'name')), 0, 160);
+            if ($name === '') json(['error' => 'Contact name required.'], 422);
+            $primary = !empty($b['is_primary']) ? 1 : 0;
+            // Only one primary contact per organization.
+            if ($primary === 1) db()->prepare('UPDATE fellow_contacts SET is_primary = 0 WHERE org_id = ?')->execute([(int) $row['org_id']]);
+            db()->prepare('UPDATE fellow_contacts SET name=?, title=?, email=?, phone=?, linkedin=?, is_primary=? WHERE id=?')
+                ->execute([$name, mb_substr(trim((string) field($b, 'title')), 0, 160) ?: null, mb_substr(trim((string) field($b, 'email')), 0, 160) ?: null,
+                    mb_substr(trim((string) field($b, 'phone')), 0, 60) ?: null, mb_substr(trim((string) field($b, 'linkedin')), 0, 255) ?: null, $primary, $id]);
+            json(['message' => 'Contact saved.']);
+        }
+        case $method === 'DELETE' && preg_match('#^fellow/contact/(\d+)$#', $route, $m) === 1: {
+            $u = require_login();
+            if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
+            fellow_ops_ensure_schema();
+            $id = (int) $m[1]; $fid = (int) $u['id'];
+            $own = db()->prepare('SELECT c.id FROM fellow_contacts c JOIN fellow_orgs o ON o.id = c.org_id WHERE c.id = ? AND o.fellow_user_id = ?');
+            $own->execute([$id, $fid]);
+            if (!$own->fetch()) json(['error' => 'Not found.'], 404);
+            db()->prepare('DELETE FROM fellow_contacts WHERE id = ?')->execute([$id]);
+            json(['message' => 'Contact removed.']);
+        }
+        // Record what actually happened after a meeting takes place.
+        case $method === 'PUT' && preg_match('#^fellow/meeting/(\d+)$#', $route, $m) === 1: {
+            $u = require_login();
+            if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
+            fellow_ops_ensure_schema();
+            $id = (int) $m[1]; $fid = (int) $u['id']; $b = body();
+            $own = db()->prepare('SELECT id, org_id FROM fellow_meetings WHERE id = ? AND fellow_user_id = ?');
+            $own->execute([$id, $fid]);
+            $row = $own->fetch();
+            if (!$row) json(['error' => 'Not found.'], 404);
+            $when = trim((string) field($b, 'meeting_at'));
+            $type = in_array((string) field($b, 'type'), FELLOW_MEETING_TYPES, true) ? (string) field($b, 'type') : 'zoom';
+            db()->prepare('UPDATE fellow_meetings SET meeting_at=?, type=?, purpose=?, notes=?, outcome=?, next_steps=? WHERE id=?')
+                ->execute([$when !== '' ? str_replace('T', ' ', $when) : null, $type,
+                    mb_substr(trim((string) field($b, 'purpose')), 0, 255) ?: null,
+                    mb_substr(trim((string) field($b, 'notes')), 0, 2000) ?: null,
+                    mb_substr(trim((string) field($b, 'outcome')), 0, 255) ?: null,
+                    mb_substr(trim((string) field($b, 'next_steps')), 0, 2000) ?: null, $id]);
+            $outcome = trim((string) field($b, 'outcome'));
+            if ($outcome !== '') fellow_log($fid, (int) $row['org_id'], 'meeting', 'Meeting outcome: ' . $outcome);
+            // Chase the agreed next step rather than trusting memory.
+            $fu = trim((string) field($b, 'follow_up_date'));
+            if ($fu !== '') db()->prepare('INSERT INTO fellow_followups (org_id, fellow_user_id, due_date, method, reason) VALUES (?,?,?,?,?)')
+                ->execute([(int) $row['org_id'], $fid, $fu, 'meeting', mb_substr('Next step: ' . trim((string) field($b, 'next_steps')), 0, 255)]);
+            json(['message' => 'Meeting updated.']);
+        }
+        // Reschedule or cancel a follow-up. Neither counts as work done, so
+        // neither writes an activity row — the scorecard stays honest.
+        case $method === 'PUT' && preg_match('#^fellow/followup/(\d+)$#', $route, $m) === 1: {
+            $u = require_login();
+            if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
+            fellow_ops_ensure_schema();
+            $id = (int) $m[1]; $fid = (int) $u['id']; $b = body();
+            $own = db()->prepare("SELECT id FROM fellow_followups WHERE id = ? AND fellow_user_id = ? AND status = 'pending'");
+            $own->execute([$id, $fid]);
+            if (!$own->fetch()) json(['error' => 'Not found.'], 404);
+            $due = trim((string) field($b, 'due_date'));
+            if ($due === '') json(['error' => 'Pick a date.'], 422);
+            db()->prepare('UPDATE fellow_followups SET due_date = ?, reason = ? WHERE id = ?')
+                ->execute([$due, mb_substr(trim((string) field($b, 'reason')), 0, 255) ?: null, $id]);
+            json(['message' => 'Follow-up rescheduled.']);
+        }
+        case $method === 'DELETE' && preg_match('#^fellow/followup/(\d+)$#', $route, $m) === 1: {
+            $u = require_login();
+            if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
+            fellow_ops_ensure_schema();
+            $id = (int) $m[1]; $fid = (int) $u['id'];
+            $own = db()->prepare("SELECT id FROM fellow_followups WHERE id = ? AND fellow_user_id = ? AND status = 'pending'");
+            $own->execute([$id, $fid]);
+            if (!$own->fetch()) json(['error' => 'Not found.'], 404);
+            db()->prepare("UPDATE fellow_followups SET status = 'cancelled', done_at = NOW() WHERE id = ?")->execute([$id]);
+            json(['message' => 'Follow-up cancelled.']);
+        }
         case $method === 'PUT' && preg_match('#^fellow/org/(\d+)/stage$#', $route, $m) === 1: {
             $u = require_login();
             if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
@@ -2299,6 +2400,19 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
                  LEFT JOIN fellow_orgs o ON o.id = a.org_id ORDER BY a.created_at DESC, a.id DESC LIMIT 60"
             )->fetchAll();
             json(['activity' => $rows]);
+        }
+        // The Fellows' end-of-day reports. Without this the whole daily-report
+        // feature was write-only — Fellows are told their manager can read it.
+        case $key === 'GET admin/fellow-ops/reports': {
+            require_admin();
+            fellow_ops_ensure_schema();
+            $rows = db()->query(
+                "SELECT r.id, r.report_date, r.numbers_json, r.wins, r.challenges, r.help_needed, r.plan,
+                        r.fellow_user_id, u.full_name AS fellow_name
+                 FROM fellow_reports r JOIN users u ON u.id = r.fellow_user_id
+                 ORDER BY r.report_date DESC, u.full_name ASC LIMIT 200"
+            )->fetchAll();
+            json(['reports' => $rows]);
         }
         case $key === 'GET admin/fellow-ops/pipeline': {
             require_admin();
