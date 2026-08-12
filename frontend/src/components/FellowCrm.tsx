@@ -147,6 +147,43 @@ const JOURNEY: [string, string][] = [
   ['4', 'Reach out & follow up'], ['5', 'Send the proposal'], ['6', 'Sponsorship confirmed'],
 ]
 
+/* The workflow rail shown on every tab: which step of the job this screen is
+   for, so a Fellow can always see where they are and what comes next. */
+const WORKFLOW: { step: string; view: ViewKey; hint: string }[] = [
+  { step: 'Build your list', view: 'prospects', hint: 'Add the companies you will approach.' },
+  { step: 'Learn the pitch', view: 'academy', hint: 'Know the program before you contact anyone.' },
+  { step: 'Reach out', view: 'outreach', hint: 'Use an approved script — email, phone or LinkedIn.' },
+  { step: 'Follow up', view: 'day', hint: 'Most sponsors say yes on the second or third contact.' },
+  { step: 'Close the deal', view: 'pipeline', hint: 'Move them forward: meeting, proposal, confirmed.' },
+  { step: 'Report your day', view: 'report', hint: 'Two minutes so your manager can help you.' },
+]
+/* How far through the pipeline a stage is, for the drawer progress bar. */
+const STAGE_ORDER = ['researching', 'qualified', 'contact_identified', 'outreach_ready', 'first_contact', 'follow_up', 'response_received', 'interested', 'meeting_scheduled', 'proposal_sent', 'negotiation', 'verbal_commitment', 'confirmed', 'paid']
+const stagePct = (s: string) => {
+  if (['not_interested', 'no_response', 'closed_lost'].includes(s)) return 0
+  const i = STAGE_ORDER.indexOf(s)
+  return i < 0 ? 0 : Math.round(((i + 1) / STAGE_ORDER.length) * 100)
+}
+
+const WORKFLOW_OF: Partial<Record<ViewKey, number>> = { prospects: 0, academy: 1, certification: 1, materials: 1, outreach: 2, calls: 2, day: 3, pipeline: 4, performance: 4, report: 5 }
+
+/* Horizontal workflow rail — the current screen's step is highlighted and
+   every step is a shortcut to the tab that does it. */
+function FcWorkflow({ view, onGo }: { view: ViewKey; onGo: (v: ViewKey) => void }) {
+  const here = WORKFLOW_OF[view] ?? -1
+  return (
+    <div className="fc-rail" aria-label="Where this screen fits in your work">
+      {WORKFLOW.map((w, i) => (
+        <button key={w.step} type="button" title={w.hint} onClick={() => onGo(w.view)}
+          className={`fc-rail__step${i === here ? ' is-here' : ''}${i < here ? ' is-done' : ''}`}>
+          <span className="fc-rail__n">{i + 1}</span>
+          <span className="fc-rail__t">{w.step}</span>
+        </button>
+      ))}
+    </div>
+  )
+}
+
 /* Per-view explainer: tagline always visible, the 3 steps collapsible (and the
    open/closed choice is remembered per Fellow). */
 function FcGuide({ view }: { view: ViewKey }) {
@@ -191,6 +228,7 @@ export default function FellowCrm() {
   const [priorities, setPriorities] = useState<string[]>([])
   const [q, setQ] = useState('')
   const [adding, setAdding] = useState(false)
+  const [composing, setComposing] = useState<{ tpl?: number } | null>(null)
   const [openId, setOpenId] = useState<number | null>(null)
 
   const loadOverview = useCallback(() => { api.get<any>('fellow/crm/overview').then(setOverview).catch(() => {}) }, [])
@@ -237,8 +275,31 @@ export default function FellowCrm() {
   }
   const today = new Date().toISOString().slice(0, 10)
 
+  const pipelineValue = orgs.reduce((n, o) => n + (['not_interested', 'no_response', 'closed_lost'].includes(o.stage) ? 0 : (o.est_value || 0)), 0)
+  const wonCount = orgs.filter((o) => o.stage === 'confirmed' || o.stage === 'paid').length
+
   return (
     <div className="fc-crm">
+      <header className="fc-head">
+        <div className="fc-head__title">
+          <span className="fc-head__eyebrow">Student Fellow</span>
+          <h2>Sponsorship CRM</h2>
+          <p className="msub">Find local sponsors, track every conversation, and close the deal.</p>
+        </div>
+        <div className="fc-head__actions">
+          <button className="btn btn--sm btn--solid" onClick={() => setComposing({})}>✉️ Send Email</button>
+          <button className="btn btn--sm" onClick={() => setAdding(true)}>＋ Add Prospect</button>
+        </div>
+        <dl className="fc-kpis">
+          <div><dt>Prospects</dt><dd>{orgs.length}</dd></div>
+          <div><dt>Pipeline value</dt><dd>{money(pipelineValue)}</dd></div>
+          <div><dt>Sponsors won</dt><dd>{wonCount}</dd></div>
+          <div className={(overview?.followups_due || 0) > 0 ? 'is-alert' : ''}><dt>Follow-ups due</dt><dd>{overview?.followups_due || 0}</dd></div>
+        </dl>
+      </header>
+
+      <FcWorkflow view={view} onGo={setView} />
+
       <nav className="fc-nav" aria-label="Sponsorship CRM sections">
         {TAB_GROUPS.map((g) => (
           <div className="fc-nav__group" key={g.label}>
@@ -398,16 +459,136 @@ export default function FellowCrm() {
       ))}
 
       {view === 'calls' && <CallsView onLogged={refresh} onOpen={setOpenId} onProspects={() => setView('prospects')} demoBtn={demoBtn} />}
-      {view === 'outreach' && <OutreachView />}
+      {view === 'outreach' && <OutreachView onUse={(id) => setComposing({ tpl: id })} />}
       {view === 'academy' && <AcademyView />}
       {view === 'certification' && <CertificationView />}
       {view === 'performance' && <PerformanceView />}
       {view === 'materials' && <MaterialsView />}
       {view === 'report' && <ReportView />}
 
+      {composing && <EmailComposer presetTpl={composing.tpl} onClose={() => setComposing(null)} onSent={() => { setComposing(null); refresh() }} onProspects={() => { setComposing(null); setView('prospects') }} />}
       {adding && <AddProspect priorities={priorities} onClose={() => setAdding(false)} onSaved={() => { setAdding(false); refresh() }} />}
       {importing && <ImportModal onClose={() => setImporting(false)} onSaved={() => { setImporting(false); refresh() }} />}
       {openId && <OrgDrawer id={openId} onClose={() => setOpenId(null)} onChange={refresh} />}
+    </div>
+  )
+}
+
+interface CrmContact { id: number; name: string; title?: string; email: string; org_id: number; org_name: string; stage: string }
+
+/* Standalone email composer: pick a saved contact from any of your prospects,
+   drop in an approved template, personalize it, send, and set the follow-up —
+   all without hunting for the company first. */
+function EmailComposer({ presetTpl, onClose, onSent, onProspects }: { presetTpl?: number; onClose: () => void; onSent: () => void; onProspects: () => void }) {
+  const [contacts, setContacts] = useState<CrmContact[]>([])
+  const [templates, setTemplates] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [to, setTo] = useState('')
+  const [tpl, setTpl] = useState('')
+  const [subject, setSubject] = useState('')
+  const [bodyTxt, setBodyTxt] = useState('')
+  const [fu, setFu] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const [sent, setSent] = useState('')
+
+  useEffect(() => {
+    Promise.all([
+      api.get<{ contacts: CrmContact[] }>('fellow/contacts').then((d) => d.contacts || []).catch(() => []),
+      api.get<{ templates: any[] }>('fellow/templates').then((d) => d.templates || []).catch(() => []),
+    ]).then(([c, t]) => {
+      setContacts(c)
+      const usable = t.filter((x) => x.kind === 'email' || x.kind === 'follow_up' || x.kind === 'meeting')
+      setTemplates(usable)
+      // Arrived from "Use & send" on a script: load it now, personalize on pick.
+      const pre = presetTpl && usable.find((x) => x.id === presetTpl)
+      if (pre) { setTpl(String(pre.id)); setSubject(pre.subject || ''); setBodyTxt(pre.body || '') }
+      setLoading(false)
+    })
+  }, [presetTpl])
+
+  const chosen = contacts.find((c) => String(c.id) === to)
+  // Fill in the name and company we already know so there is less to hand-edit.
+  const personalize = (s: string, c?: CrmContact) => (s || '')
+    .replace(/\[First name\]/g, (c?.name || '').split(' ')[0] || '[First name]')
+    .replace(/\[Company\]/g, c?.org_name || '[Company]')
+  const applyTemplate = (id: string, c = chosen) => {
+    setTpl(id)
+    const t = templates.find((x) => String(x.id) === id)
+    if (!t) { setSubject(''); setBodyTxt(''); return }
+    setSubject(personalize(t.subject || '', c))
+    setBodyTxt(personalize(t.body || '', c))
+  }
+  const pickContact = (id: string) => {
+    setTo(id)
+    // Re-personalize the loaded script for whoever they just chose.
+    if (tpl) applyTemplate(tpl, contacts.find((c) => String(c.id) === id))
+  }
+  // Warn before sending something that still says "[Your name]".
+  const leftover = Array.from(new Set(`${subject}\n${bodyTxt}`.match(/\[[^\]\n]{2,30}\]/g) || []))
+
+  const send = async () => {
+    if (!chosen) { setErr('Choose who you are writing to.'); return }
+    if (!subject.trim() || !bodyTxt.trim()) { setErr('Add a subject and a message.'); return }
+    if (leftover.length > 0 && !window.confirm(`These placeholders are still in your email:\n\n${leftover.join('  ')}\n\nSend anyway?`)) return
+    setBusy(true); setErr('')
+    try {
+      const r = await api.post<{ message: string }>(`fellow/org/${chosen.org_id}/send-email`, { contact_id: chosen.id, subject, body: bodyTxt, follow_up_date: fu })
+      setSent(r.message || 'Email sent.')
+      setTimeout(onSent, 1200)
+    } catch (e) { setErr(e instanceof Error ? e.message : 'Could not send.') } finally { setBusy(false) }
+  }
+
+  return (
+    <div className="modal-overlay open" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal" style={{ maxWidth: 660, maxHeight: '92vh', overflowY: 'auto' }}>
+        <button type="button" className="close" onClick={onClose} aria-label="Close">✕</button>
+        <h3 className="gold-text" style={{ marginBottom: 2 }}>✉️ Send an Email</h3>
+        <p className="msub" style={{ marginTop: 0, fontSize: 12.5 }}>Sent from the program address on your behalf and logged to the company's timeline automatically.</p>
+
+        {loading ? <p className="msub">Loading your contacts…</p> : contacts.length === 0 ? (
+          <div className="fc-empty" style={{ marginTop: 14 }}>
+            <span aria-hidden="true">📇</span>
+            <h4>No contact has an email address yet</h4>
+            <p className="msub">You can only email a saved contact — that keeps everything logged and protects the program. Open a prospect, add a contact person with their email, then come back.</p>
+            <button className="btn btn--solid" onClick={onProspects}>Go to Prospects →</button>
+          </div>
+        ) : sent ? (
+          <p style={{ color: '#6be29a', fontWeight: 700 }}>✓ {sent}</p>
+        ) : (
+          <div style={{ display: 'grid', gap: 12, marginTop: 14 }}>
+            <label className="fc-fld">To
+              <select className="fc-input" value={to} onChange={(e) => pickContact(e.target.value)}>
+                <option value="" style={{ background: '#14120b' }}>Choose a contact…</option>
+                {contacts.map((c) => <option key={c.id} value={c.id} style={{ background: '#14120b' }}>{c.org_name} — {c.name}{c.title ? ` (${c.title})` : ''}</option>)}
+              </select>
+            </label>
+            {chosen && <p className="msub" style={{ margin: '-6px 0 0', fontSize: 12 }}>Sending to <strong style={{ color: '#f0ead6' }}>{chosen.email}</strong> · stage: {STAGE_LABEL(chosen.stage)}</p>}
+
+            <label className="fc-fld">Start from an approved script <span style={{ textTransform: 'none', fontWeight: 400 }}>(recommended)</span>
+              <select className="fc-input" value={tpl} onChange={(e) => applyTemplate(e.target.value)} disabled={!chosen}>
+                <option value="" style={{ background: '#14120b' }}>{chosen ? 'Write from scratch' : 'Choose a contact first…'}</option>
+                {templates.map((t) => <option key={t.id} value={t.id} style={{ background: '#14120b' }}>{t.category ? `${t.category} — ` : ''}{t.name}</option>)}
+              </select>
+            </label>
+
+            <label className="fc-fld">Subject<input className="fc-input" value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Keep it short and specific" /></label>
+            <label className="fc-fld">Message<textarea className="fc-input" rows={12} value={bodyTxt} onChange={(e) => setBodyTxt(e.target.value)} placeholder="Your message — personalize every placeholder before sending." /></label>
+
+            {leftover.length > 0 && (
+              <div className="fc-dup">⚠ Still to fill in: {leftover.join('  ')}</div>
+            )}
+            <label className="fc-fld">Set your next follow-up <span style={{ textTransform: 'none', fontWeight: 400 }}>(strongly recommended)</span>
+              <input className="fc-input" type="date" value={fu} onChange={(e) => setFu(e.target.value)} />
+            </label>
+            {err && <p className="msub" style={{ color: '#e08a8a', margin: 0 }}>{err}</p>}
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              <button className="btn btn--solid" onClick={send} disabled={busy}>{busy ? 'Sending…' : 'Send Email'}</button>
+              <button className="btn" onClick={onClose}>Cancel</button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -488,11 +669,20 @@ function OrgDrawer({ id, onClose, onChange }: { id: number; onClose: () => void;
         <h3 className="gold-text" style={{ marginBottom: 2 }}>{o.name}</h3>
         <p className="msub" style={{ marginTop: 0 }}>{[o.category, o.industry, o.location].filter(Boolean).join(' · ') || '—'}{o.website ? <> · <a href={o.website} target="_blank" rel="noreferrer" style={{ color: 'var(--gold)' }}>website ↗</a></> : null}</p>
 
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', margin: '12px 0' }}>
-          <label className="fc-fld" style={{ minWidth: 200 }}>Pipeline stage
+        {/* How far along this company is, and the one control that moves it. */}
+        <div className="fc-progress">
+          <div className="fc-progress__bar"><span style={{ width: stagePct(o.stage) + '%' }} /></div>
+          <div className="fc-progress__meta">
+            <span>{stagePct(o.stage)}% of the way — <strong>{STAGE_LABEL(o.stage)}</strong></span>
+            <span className="msub">{STAGE_HELP[o.stage] || ''}</span>
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap', margin: '12px 0' }}>
+          <label className="fc-fld" style={{ flex: '1 1 210px' }}>Move to stage
             <select className="fc-input" value={o.stage} onChange={(e) => changeStage(e.target.value)}>{data.stages.map((s) => <option key={s} value={s} style={{ background: '#14120b' }}>{STAGE_LABEL(s)}</option>)}</select>
           </label>
-          <span className="fc-stage-pill" style={{ alignSelf: 'flex-end' }}>{money(o.est_value)}</span>
+          <span className="fc-stage-pill">{money(o.est_value)}</span>
+          <button className="btn btn--sm btn--solid" onClick={() => setShowEmail(true)}>✉️ Send Email</button>
         </div>
 
         {/* Quick log */}
@@ -733,7 +923,7 @@ function AcademyView() {
   )
 }
 
-function OutreachView() {
+function OutreachView({ onUse }: { onUse: (templateId: number) => void }) {
   const [templates, setTemplates] = useState<any[]>([])
   const [copied, setCopied] = useState<number | null>(null)
   useEffect(() => { api.get<{ templates: any[] }>('fellow/templates').then((d) => setTemplates(d.templates || [])).catch(() => {}) }, [])
@@ -755,9 +945,14 @@ function OutreachView() {
           <div style={{ display: 'grid', gap: 10 }}>
             {templates.filter((t) => t.kind === k).map((t) => (
               <div key={t.id} className="glass" style={{ padding: 14, borderRadius: 12 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
                   <strong>{t.name}</strong>
-                  <button className="btn btn--sm" onClick={() => copy(t)}>{copied === t.id ? 'Copied ✓' : 'Copy'}</button>
+                  <span style={{ display: 'flex', gap: 6 }}>
+                    {(t.kind === 'email' || t.kind === 'follow_up' || t.kind === 'meeting') && (
+                      <button className="btn btn--sm btn--solid" onClick={() => onUse(t.id)}>✉️ Use &amp; send</button>
+                    )}
+                    <button className="btn btn--sm" onClick={() => copy(t)}>{copied === t.id ? 'Copied ✓' : 'Copy'}</button>
+                  </span>
                 </div>
                 {t.subject && <div className="msub" style={{ fontSize: 12, margin: '4px 0' }}>Subject: {t.subject}</div>}
                 {t.body && <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', fontSize: 13, color: '#cfc9ba', margin: '6px 0 0', maxHeight: 160, overflow: 'auto' }}>{t.body}</pre>}

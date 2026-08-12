@@ -1992,6 +1992,18 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             }
             json(['message' => 'Updated.']);
         }
+        // Every contact this Fellow can email — powers the standalone composer.
+        case $key === 'GET fellow/contacts': {
+            $u = require_login();
+            if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
+            fellow_ops_ensure_schema();
+            $s = db()->prepare("SELECT c.id, c.name, c.title, c.email, c.phone, o.id AS org_id, o.name AS org_name, o.stage
+                FROM fellow_contacts c JOIN fellow_orgs o ON o.id = c.org_id
+                WHERE o.fellow_user_id = ? AND c.email IS NOT NULL AND c.email <> ''
+                ORDER BY o.name, c.is_primary DESC, c.name");
+            $s->execute([(int) $u['id']]);
+            json(['contacts' => $s->fetchAll()]);
+        }
         case $method === 'POST' && preg_match('#^fellow/org/(\d+)/send-email$#', $route, $m) === 1: {
             $u = require_login();
             if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
