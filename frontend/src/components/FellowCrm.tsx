@@ -148,41 +148,12 @@ const JOURNEY: [string, string][] = [
   ['4', 'Reach out & follow up'], ['5', 'Send the proposal'], ['6', 'Sponsorship confirmed'],
 ]
 
-/* The workflow rail shown on every tab: which step of the job this screen is
-   for, so a Fellow can always see where they are and what comes next. */
-const WORKFLOW: { step: string; view: ViewKey; hint: string }[] = [
-  { step: 'Build your list', view: 'prospects', hint: 'Add the companies you will approach.' },
-  { step: 'Learn the pitch', view: 'academy', hint: 'Know the program before you contact anyone.' },
-  { step: 'Reach out', view: 'outreach', hint: 'Use an approved script — email, phone or LinkedIn.' },
-  { step: 'Follow up', view: 'day', hint: 'Most sponsors say yes on the second or third contact.' },
-  { step: 'Close the deal', view: 'pipeline', hint: 'Move them forward: meeting, proposal, confirmed.' },
-  { step: 'Report your day', view: 'report', hint: 'Two minutes so your manager can help you.' },
-]
 /* How far through the pipeline a stage is, for the drawer progress bar. */
 const STAGE_ORDER = ['researching', 'qualified', 'contact_identified', 'outreach_ready', 'first_contact', 'follow_up', 'response_received', 'interested', 'meeting_scheduled', 'proposal_sent', 'negotiation', 'verbal_commitment', 'confirmed', 'paid']
 const stagePct = (s: string) => {
   if (['not_interested', 'no_response', 'closed_lost'].includes(s)) return 0
   const i = STAGE_ORDER.indexOf(s)
   return i < 0 ? 0 : Math.round(((i + 1) / STAGE_ORDER.length) * 100)
-}
-
-const WORKFLOW_OF: Partial<Record<ViewKey, number>> = { prospects: 0, academy: 1, certification: 1, materials: 1, outreach: 2, calls: 2, day: 3, pipeline: 4, performance: 4, report: 5 }
-
-/* Horizontal workflow rail — the current screen's step is highlighted and
-   every step is a shortcut to the tab that does it. */
-function FcWorkflow({ view, onGo }: { view: ViewKey; onGo: (v: ViewKey) => void }) {
-  const here = WORKFLOW_OF[view] ?? -1
-  return (
-    <div className="fc-rail" aria-label="Where this screen fits in your work">
-      {WORKFLOW.map((w, i) => (
-        <button key={w.step} type="button" title={w.hint} onClick={() => onGo(w.view)}
-          className={`fc-rail__step${i === here ? ' is-here' : ''}${i < here ? ' is-done' : ''}`}>
-          <span className="fc-rail__n">{i + 1}</span>
-          <span className="fc-rail__t">{w.step}</span>
-        </button>
-      ))}
-    </div>
-  )
 }
 
 /* Loading placeholder shaped like the content it replaces, so the layout does
@@ -317,8 +288,6 @@ export default function FellowCrm({ view: viewProp, onView }: { view?: ViewKey; 
           <div className={(overview?.followups_due || 0) > 0 ? 'is-alert' : ''}><dt>Follow-ups due</dt><dd>{overview?.followups_due || 0}</dd></div>
         </dl>
       </header>
-
-      <FcWorkflow view={view} onGo={setView} />
 
       {!controlled && <nav className="fc-nav" aria-label="Sponsorship CRM sections">
         {TAB_GROUPS.map((g) => (
