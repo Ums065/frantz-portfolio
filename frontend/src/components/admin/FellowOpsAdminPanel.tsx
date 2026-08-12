@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { api } from '../../lib/api'
+import FcIcon from '../FcIcon'
 
 /* Admin "Fellow Command Center": today's team activity, per-Fellow rollup, live
    activity feed, master pipeline, task assignment, and daily-target settings. */
@@ -132,7 +133,7 @@ function CertAdmin() {
         </div>
       ) : (
         <div>
-          <button className="btn btn--sm btn--solid" style={{ marginBottom: 12 }} onClick={() => setEditing({ question: '', options: ['', '', '', ''], correct_index: 0, is_active: 1 })}>＋ Add Question</button>
+          <button className="btn btn--sm btn--solid" style={{ marginBottom: 12 }} onClick={() => setEditing({ question: '', options: ['', '', '', ''], correct_index: 0, is_active: 1 })}><FcIcon name="plus" size={15} />Add Question</button>
           <div style={{ display: 'grid', gap: 8 }}>
             {qs.length === 0 ? <p className="msub">No questions yet — add some so Fellows can certify.</p> : qs.map((q) => (
               <div key={q.id} className="glass" style={{ padding: 12, borderRadius: 10, display: 'flex', justifyContent: 'space-between', gap: 10 }}>
@@ -235,7 +236,7 @@ function TemplatesAdmin() {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
         <p className="msub" style={{ margin: 0 }}>Approved email / call / LinkedIn scripts Fellows can copy.</p>
-        <button className="btn btn--sm btn--solid" onClick={() => setEditing({ kind: 'email', is_active: 1 })}>＋ Add Template</button>
+        <button className="btn btn--sm btn--solid" onClick={() => setEditing({ kind: 'email', is_active: 1 })}><FcIcon name="plus" size={15} />Add Template</button>
       </div>
       <div className="admin-table-wrap">
         <table className="admin-table">
@@ -358,7 +359,7 @@ function MaterialsAdmin() {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
         <p className="msub" style={{ margin: 0 }}>Approved documents & templates Fellows can use.</p>
-        <button className="btn btn--sm btn--solid" onClick={() => setEditing({ category: 'Sponsor Materials', is_active: 1 })}>＋ Add Material</button>
+        <button className="btn btn--sm btn--solid" onClick={() => setEditing({ category: 'Sponsor Materials', is_active: 1 })}><FcIcon name="plus" size={15} />Add Material</button>
       </div>
       <div className="admin-table-wrap">
         <table className="admin-table">

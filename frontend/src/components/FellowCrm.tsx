@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { api } from '../lib/api'
+import FcIcon, { type IconName } from './FcIcon'
 
 /* Student Fellow sponsorship CRM (Phase 1a): My Day scorecard + tasks + follow-ups,
    a Prospects list with duplicate check, a Pipeline board, and an organization
@@ -13,15 +14,15 @@ interface Task { id: number; title: string; priority: string; status: string; du
 
 const STAGE_LABEL = (s: string) => s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 const money = (n: number) => n > 0 ? '$' + n.toLocaleString('en-US') : '—'
-const ACTIVITY_QUICK: [string, string][] = [['email', '✉ Email sent'], ['call', '📞 Call'], ['linkedin', 'in LinkedIn'], ['meeting', '📅 Meeting'], ['proposal', '📄 Proposal'], ['note', '📝 Note']]
+const ACTIVITY_QUICK: [string, string, IconName][] = [['email', 'Email sent', 'mail'], ['call', 'Call', 'phone'], ['linkedin', 'LinkedIn', 'linkedin'], ['meeting', 'Meeting', 'calendar'], ['proposal', 'Proposal', 'file'], ['note', 'Note', 'note']]
 
 type ViewKey = 'day' | 'prospects' | 'pipeline' | 'calls' | 'outreach' | 'academy' | 'certification' | 'performance' | 'materials' | 'report'
 
 /* Every tab explains itself: an icon, a plain-language tagline, and the 3 steps
    to actually do the work. New Fellows should never have to guess. */
-const VIEW_META: Record<ViewKey, { icon: string; label: string; tagline: string; steps: string[] }> = {
+const VIEW_META: Record<ViewKey, { icon: IconName; label: string; tagline: string; steps: string[] }> = {
   day: {
-    icon: '🌅', label: 'My Day',
+    icon: 'sunrise', label: 'My Day',
     tagline: 'Start here every morning. Your goals for today, follow-ups that are due, and tasks from your manager.',
     steps: [
       'Check the scorecard — those bars are today\'s goals (research, emails, calls).',
@@ -30,16 +31,16 @@ const VIEW_META: Record<ViewKey, { icon: string; label: string; tagline: string;
     ],
   },
   prospects: {
-    icon: '🏢', label: 'Prospects',
+    icon: 'building', label: 'Prospects',
     tagline: 'Your list of companies that could sponsor the challenge. Everything starts by adding them here.',
     steps: [
-      'Press "＋ Add Prospect" for one company, or "⇪ Import list" to paste many at once.',
+      'Press "Add Prospect" for one company, or "Import list" to paste many at once.',
       'If another Fellow already owns that company, you get a warning — never double-contact.',
       'Click any row to open the company: log a call, send an email, add a contact person.',
     ],
   },
   pipeline: {
-    icon: '📊', label: 'Pipeline',
+    icon: 'funnel', label: 'Pipeline',
     tagline: 'The same companies, sorted by how close they are to saying yes. Scroll sideways to see all stages.',
     steps: [
       'Each column is a stage. Companies move left → right as they warm up.',
@@ -48,7 +49,7 @@ const VIEW_META: Record<ViewKey, { icon: string; label: string; tagline: string;
     ],
   },
   calls: {
-    icon: '📞', label: 'Call List',
+    icon: 'phone', label: 'Call List',
     tagline: 'Everyone with a phone number, ready to dial — with the date you last spoke to them.',
     steps: [
       'Work down the list, oldest "last call" first.',
@@ -57,7 +58,7 @@ const VIEW_META: Record<ViewKey, { icon: string; label: string; tagline: string;
     ],
   },
   outreach: {
-    icon: '✉️', label: 'Outreach',
+    icon: 'mail', label: 'Outreach',
     tagline: 'Approved email and phone scripts, written for you. Never start a message from a blank page.',
     steps: [
       'Pick the template that matches your situation (first contact, follow-up, thank you…).',
@@ -66,7 +67,7 @@ const VIEW_META: Record<ViewKey, { icon: string; label: string; tagline: string;
     ],
   },
   academy: {
-    icon: '🎓', label: 'Training Academy',
+    icon: 'cap', label: 'Training Academy',
     tagline: 'Your training course. Read each module, then mark it complete to unlock the exam.',
     steps: [
       'Work through the modules in order — they build on each other.',
@@ -75,7 +76,7 @@ const VIEW_META: Record<ViewKey, { icon: string; label: string; tagline: string;
     ],
   },
   certification: {
-    icon: '🏅', label: 'Certification',
+    icon: 'award', label: 'Certification',
     tagline: 'Pass the exam to become a Certified Student Fellow.',
     steps: [
       'Finish the Training Academy modules first.',
@@ -84,7 +85,7 @@ const VIEW_META: Record<ViewKey, { icon: string; label: string; tagline: string;
     ],
   },
   performance: {
-    icon: '📈', label: 'Performance',
+    icon: 'trending', label: 'Performance',
     tagline: 'Your own numbers — today, this week, this month, and all time.',
     steps: [
       'The three cards show total prospects, pipeline value, and sponsorships won.',
@@ -93,7 +94,7 @@ const VIEW_META: Record<ViewKey, { icon: string; label: string; tagline: string;
     ],
   },
   materials: {
-    icon: '📁', label: 'Materials',
+    icon: 'folder', label: 'Materials',
     tagline: 'Approved decks, one-pagers and links you are allowed to send to sponsors.',
     steps: [
       'Only send materials from this list — they are approved by the team.',
@@ -102,7 +103,7 @@ const VIEW_META: Record<ViewKey, { icon: string; label: string; tagline: string;
     ],
   },
   report: {
-    icon: '📝', label: 'Daily Report',
+    icon: 'clipboard', label: 'Daily Report',
     tagline: 'Finish your day here. A two-minute summary so your manager can help you.',
     steps: [
       'Fill this in at the end of every working day.',
@@ -133,7 +134,7 @@ const STAGE_HELP: Record<string, string> = {
   proposal_sent: 'They have your sponsorship proposal.',
   negotiation: 'Discussing the amount or the details.',
   verbal_commitment: 'They said yes — not signed yet.',
-  confirmed: 'Signed and confirmed. 🎉',
+  confirmed: 'Signed and confirmed.',
   paid: 'Money received. Fully done.',
   not_interested: 'They said no.',
   no_response: 'Never replied after several tries.',
@@ -200,7 +201,7 @@ function FcGuide({ view }: { view: ViewKey }) {
   return (
     <div className="fc-guide">
       <div className="fc-guide__head">
-        <span className="fc-guide__icon" aria-hidden="true">{m.icon}</span>
+        <span className="fc-guide__icon"><FcIcon name={m.icon} size={24} /></span>
         <div className="fc-guide__txt">
           <h3>{m.label}</h3>
           <p>{m.tagline}</p>
@@ -254,9 +255,9 @@ export default function FellowCrm() {
     catch { /* ignore */ } finally { setDemoBusy(false) }
   }
   const demoBtn = (
-    <button className={`btn btn--sm${demoLoaded ? '' : ' btn--solid'}`} onClick={toggleDemo} disabled={demoBusy}
+    <button className={`btn btn--sm fc-btn-i${demoLoaded ? '' : ' btn--solid'}`} onClick={toggleDemo} disabled={demoBusy}
       title={demoLoaded ? 'Delete the sample prospects' : 'Fill the CRM with 7 example companies so you can see how every screen works'}>
-      {demoBusy ? 'Working…' : demoLoaded ? '🧹 Remove sample data' : '✨ Load sample data'}
+      <FcIcon name={demoLoaded ? 'trash' : 'sparkles'} size={15} />{demoBusy ? 'Working…' : demoLoaded ? 'Remove sample data' : 'Load sample data'}
     </button>
   )
 
@@ -287,8 +288,8 @@ export default function FellowCrm() {
           <p className="msub">Find local sponsors, track every conversation, and close the deal.</p>
         </div>
         <div className="fc-head__actions">
-          <button className="btn btn--sm btn--solid" onClick={() => setComposing({})}>✉️ Send Email</button>
-          <button className="btn btn--sm" onClick={() => setAdding(true)}>＋ Add Prospect</button>
+          <button className="btn btn--sm btn--solid fc-btn-i" onClick={() => setComposing({})}><FcIcon name="send" size={15} />Send Email</button>
+          <button className="btn btn--sm fc-btn-i" onClick={() => setAdding(true)}><FcIcon name="plus" size={15} />Add Prospect</button>
         </div>
         <dl className="fc-kpis">
           <div><dt>Prospects</dt><dd>{orgs.length}</dd></div>
@@ -308,7 +309,7 @@ export default function FellowCrm() {
               {g.views.map((v) => (
                 <button key={v} type="button" role="tab" aria-selected={view === v} title={VIEW_META[v].tagline}
                   className={`fc-tab${view === v ? ' is-active' : ''}`} onClick={() => setView(v)}>
-                  <span aria-hidden="true">{VIEW_META[v].icon}</span>
+                  <FcIcon name={VIEW_META[v].icon} size={15} />
                   {VIEW_META[v].label}
                   {v === 'prospects' && orgs.length > 0 ? <em>{orgs.length}</em> : null}
                   {v === 'day' && (overview?.followups_due || 0) > 0 ? <em className="is-alert">{overview?.followups_due}</em> : null}
@@ -355,7 +356,7 @@ export default function FellowCrm() {
           <div className="fc-day-cols">
             <section className="glass" style={{ padding: 18, borderRadius: 14 }}>
               <h4 className="gold-text" style={{ marginTop: 0 }}>Follow-ups Due <span className="msub">({overview?.followups_due || 0} due / overdue)</span></h4>
-              {(overview?.followups || []).length === 0 ? <p className="msub">Nothing due. 🎉</p> : (
+              {(overview?.followups || []).length === 0 ? <p className="msub">Nothing due — you are all caught up.</p> : (
                 <ul className="fc-list">
                   {(overview?.followups || []).map((f) => (
                     <li key={f.id} className={f.due_date <= today ? 'is-due' : ''}>
@@ -392,17 +393,17 @@ export default function FellowCrm() {
         <div>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 14 }}>
             <input className="fc-input" style={{ flex: '1 1 220px' }} type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search prospects…" />
-            <button className="btn btn--sm" onClick={() => setImporting(true)}>⇪ Import list</button>
-            <button className="btn btn--sm btn--solid" onClick={() => setAdding(true)}>＋ Add Prospect</button>
+            <button className="btn btn--sm fc-btn-i" onClick={() => setImporting(true)}><FcIcon name="upload" size={15} />Import list</button>
+            <button className="btn btn--sm btn--solid fc-btn-i" onClick={() => setAdding(true)}><FcIcon name="plus" size={15} />Add Prospect</button>
           </div>
           {filtered.length === 0 ? (
             <div className="fc-empty">
-              <span aria-hidden="true">🏢</span>
+              <span><FcIcon name={q.trim() ? 'search' : 'building'} size={34} /></span>
               <h4>{q.trim() ? 'No prospect matches that search' : 'No prospects yet — this is where you begin'}</h4>
               <p className="msub">{q.trim() ? 'Try a shorter word, or clear the search box.' : 'A "prospect" is any company that might sponsor the challenge — a local shop, a bank, a hospital, a restaurant chain. Add one and you can start tracking every call and email with it.'}</p>
               {!q.trim() && (
                 <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
-                  <button className="btn btn--solid" onClick={() => setAdding(true)}>＋ Add your first prospect</button>
+                  <button className="btn btn--solid fc-btn-i" onClick={() => setAdding(true)}><FcIcon name="plus" size={16} />Add your first prospect</button>
                   {demoBtn}
                 </div>
               )}
@@ -428,7 +429,7 @@ export default function FellowCrm() {
 
       {view === 'pipeline' && (orgs.length === 0 ? (
         <div className="fc-empty">
-          <span aria-hidden="true">📊</span>
+          <span><FcIcon name="funnel" size={34} /></span>
           <h4>Your pipeline is empty</h4>
           <p className="msub">You do not fill this in yourself — the pipeline builds itself from your prospects. Add a company under Prospects and a card appears in the stage it is in.</p>
           <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
@@ -543,12 +544,12 @@ function EmailComposer({ presetTpl, onClose, onSent, onProspects }: { presetTpl?
     <div className="modal-overlay open" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal" style={{ maxWidth: 660, maxHeight: '92vh', overflowY: 'auto' }}>
         <button type="button" className="close" onClick={onClose} aria-label="Close">✕</button>
-        <h3 className="gold-text" style={{ marginBottom: 2 }}>✉️ Send an Email</h3>
+        <h3 className="gold-text fc-btn-i" style={{ marginBottom: 2 }}><FcIcon name="send" size={19} />Send an Email</h3>
         <p className="msub" style={{ marginTop: 0, fontSize: 12.5 }}>Sent from the program address on your behalf and logged to the company's timeline automatically.</p>
 
         {loading ? <p className="msub">Loading your contacts…</p> : contacts.length === 0 ? (
           <div className="fc-empty" style={{ marginTop: 14 }}>
-            <span aria-hidden="true">📇</span>
+            <span><FcIcon name="contact" size={34} /></span>
             <h4>No contact has an email address yet</h4>
             <p className="msub">You can only email a saved contact — that keeps everything logged and protects the program. Open a prospect, add a contact person with their email, then come back.</p>
             <button className="btn btn--solid" onClick={onProspects}>Go to Prospects →</button>
@@ -682,15 +683,15 @@ function OrgDrawer({ id, onClose, onChange }: { id: number; onClose: () => void;
             <select className="fc-input" value={o.stage} onChange={(e) => changeStage(e.target.value)}>{data.stages.map((s) => <option key={s} value={s} style={{ background: '#14120b' }}>{STAGE_LABEL(s)}</option>)}</select>
           </label>
           <span className="fc-stage-pill">{money(o.est_value)}</span>
-          <button className="btn btn--sm btn--solid" onClick={() => setShowEmail(true)}>✉️ Send Email</button>
+          <button className="btn btn--sm btn--solid fc-btn-i" onClick={() => setShowEmail(true)}><FcIcon name="send" size={15} />Send Email</button>
         </div>
 
         {/* Quick log */}
         <section className="glass" style={{ padding: 14, borderRadius: 12, marginBottom: 14 }}>
           <h4 className="gold-text" style={{ marginTop: 0, fontSize: 15 }}>Log activity</h4>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
-            {ACTIVITY_QUICK.map(([t, label]) => (
-              <button key={t} type="button" className={`btn btn--sm${logType === t ? ' btn--solid' : ''}`} onClick={() => setLogType(t)}>{label}</button>
+            {ACTIVITY_QUICK.map(([t, label, ic]) => (
+              <button key={t} type="button" className={`btn btn--sm fc-btn-i${logType === t ? ' btn--solid' : ''}`} onClick={() => setLogType(t)}><FcIcon name={ic} size={15} />{label}</button>
             ))}
           </div>
           <input className="fc-input" value={logDetail} onChange={(e) => setLogDetail(e.target.value)} placeholder="Note / detail (optional)" style={{ marginBottom: 8 }} />
@@ -702,7 +703,7 @@ function OrgDrawer({ id, onClose, onChange }: { id: number; onClose: () => void;
 
         {/* Send email */}
         <section className="glass" style={{ padding: 14, borderRadius: 12, marginBottom: 14 }}>
-          <h4 className="gold-text" style={{ marginTop: 0, fontSize: 15, display: 'flex', justifyContent: 'space-between' }}>✉ Send Email <button type="button" className="btn btn--sm" onClick={() => setShowEmail((v) => !v)}>{showEmail ? 'Close' : 'Compose'}</button></h4>
+          <h4 className="gold-text" style={{ marginTop: 0, fontSize: 15, display: 'flex', justifyContent: 'space-between' }}><span className="fc-btn-i"><FcIcon name="mail" size={16} />Send Email</span> <button type="button" className="btn btn--sm" onClick={() => setShowEmail((v) => !v)}>{showEmail ? 'Close' : 'Compose'}</button></h4>
           {showEmail && (
             <div style={{ display: 'grid', gap: 8 }}>
               <select className="fc-input" value={em.contact_id} onChange={(e) => setEm({ ...em, contact_id: e.target.value })}>
@@ -722,7 +723,7 @@ function OrgDrawer({ id, onClose, onChange }: { id: number; onClose: () => void;
         <div className="fc-drawer-cols">
           {/* Contacts */}
           <section>
-            <h4 className="gold-text" style={{ fontSize: 15 }}>Contacts <button type="button" className="btn btn--sm" onClick={() => setAddingContact((v) => !v)}>＋</button></h4>
+            <h4 className="gold-text" style={{ fontSize: 15 }}>Contacts <button type="button" className="btn btn--sm" onClick={() => setAddingContact((v) => !v)} aria-label="Add contact"><FcIcon name="plus" size={14} /></button></h4>
             {addingContact && <ContactForm orgId={id} onSaved={() => { setAddingContact(false); load(); onChange() }} />}
             {data.contacts.length === 0 ? <p className="msub">No contacts yet.</p> : data.contacts.map((c) => (
               <div key={c.id} className="fc-contact">
@@ -747,7 +748,7 @@ function OrgDrawer({ id, onClose, onChange }: { id: number; onClose: () => void;
         <div className="fc-drawer-cols" style={{ marginTop: 14 }}>
           {/* Proposals */}
           <section>
-            <h4 className="gold-text" style={{ fontSize: 15 }}>Proposals <button type="button" className="btn btn--sm" onClick={() => setShowProp((v) => !v)}>＋</button></h4>
+            <h4 className="gold-text" style={{ fontSize: 15 }}>Proposals <button type="button" className="btn btn--sm" onClick={() => setShowProp((v) => !v)} aria-label="Add proposal"><FcIcon name="plus" size={14} /></button></h4>
             {showProp && (
               <div style={{ display: 'grid', gap: 6, margin: '6px 0 10px' }}>
                 <input className="fc-input" type="number" placeholder="Amount ($)" value={prop.amount} onChange={(e) => setProp({ ...prop, amount: e.target.value })} />
@@ -762,7 +763,7 @@ function OrgDrawer({ id, onClose, onChange }: { id: number; onClose: () => void;
           </section>
           {/* Meetings */}
           <section>
-            <h4 className="gold-text" style={{ fontSize: 15 }}>Meetings <button type="button" className="btn btn--sm" onClick={() => setShowMtg((v) => !v)}>＋</button></h4>
+            <h4 className="gold-text" style={{ fontSize: 15 }}>Meetings <button type="button" className="btn btn--sm" onClick={() => setShowMtg((v) => !v)} aria-label="Add meeting"><FcIcon name="plus" size={14} /></button></h4>
             {showMtg && (
               <div style={{ display: 'grid', gap: 6, margin: '6px 0 10px' }}>
                 <input className="fc-input" type="datetime-local" value={mtg.meeting_at} onChange={(e) => setMtg({ ...mtg, meeting_at: e.target.value })} />
@@ -796,7 +797,7 @@ function CallsView({ onLogged, onOpen, onProspects, demoBtn }: { onLogged: () =>
   }
   if (calls.length === 0) return (
     <div className="fc-empty">
-      <span aria-hidden="true">📞</span>
+      <span><FcIcon name="phone" size={34} /></span>
       <h4>Nobody to call yet</h4>
       <p className="msub">This list is built automatically: open any prospect, add a contact person <strong>with a phone number</strong>, and they appear here with the date you last spoke to them.</p>
       <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
@@ -858,7 +859,7 @@ function CertificationView() {
 
       {result && (
         <div className="glass" style={{ padding: 16, borderRadius: 12, marginBottom: 14, borderColor: result.passed ? '#3fbf7f' : '#e08a5c' }}>
-          <strong style={{ color: result.passed ? '#6be29a' : '#e08a5c', fontSize: 18 }}>{result.passed ? '🎉 Passed!' : 'Not passed yet'}</strong>
+          <strong style={{ color: result.passed ? '#6be29a' : '#e08a5c', fontSize: 18 }}>{result.passed ? 'Passed!' : 'Not passed yet'}</strong>
           <p className="msub">You scored {result.score}% ({result.correct}/{result.total}). {result.passed ? 'You are now certified.' : `You need ${data.cert.pass}% — review the Training Academy and retake.`}</p>
         </div>
       )}
@@ -929,7 +930,7 @@ function OutreachView({ onUse }: { onUse: (templateId: number) => void }) {
   useEffect(() => { api.get<{ templates: any[] }>('fellow/templates').then((d) => setTemplates(d.templates || [])).catch(() => {}) }, [])
   if (templates.length === 0) return (
     <div className="fc-empty">
-      <span aria-hidden="true">✉️</span>
+      <span><FcIcon name="mail" size={34} /></span>
       <h4>No scripts loaded yet</h4>
       <p className="msub">The program ships with ready-made email, phone and LinkedIn scripts. If this list is empty, an admin has removed them — ask your manager to restore the outreach templates.</p>
     </div>
@@ -949,7 +950,7 @@ function OutreachView({ onUse }: { onUse: (templateId: number) => void }) {
                   <strong>{t.name}</strong>
                   <span style={{ display: 'flex', gap: 6 }}>
                     {(t.kind === 'email' || t.kind === 'follow_up' || t.kind === 'meeting') && (
-                      <button className="btn btn--sm btn--solid" onClick={() => onUse(t.id)}>✉️ Use &amp; send</button>
+                      <button className="btn btn--sm btn--solid fc-btn-i" onClick={() => onUse(t.id)}><FcIcon name="send" size={14} />Use &amp; send</button>
                     )}
                     <button className="btn btn--sm" onClick={() => copy(t)}>{copied === t.id ? 'Copied ✓' : 'Copy'}</button>
                   </span>
@@ -994,7 +995,7 @@ function MaterialsView() {
   useEffect(() => { api.get<{ materials: any[] }>('fellow/materials').then((d) => setItems(d.materials || [])).catch(() => {}) }, [])
   if (items.length === 0) return (
     <div className="fc-empty">
-      <span aria-hidden="true">📁</span>
+      <span><FcIcon name="folder" size={34} /></span>
       <h4>No materials added yet</h4>
       <p className="msub">Your manager uploads the approved sponsor deck, one-pager and prospectus here. Until they appear, do not create your own — ask an admin to add them.</p>
       <p className="msub" style={{ fontSize: 12.5 }}>Meanwhile, the <strong>Training Academy</strong> tab has all the program documents you can read.</p>

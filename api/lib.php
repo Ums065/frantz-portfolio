@@ -6168,7 +6168,7 @@ function fellow_demo_seed(int $fellowId): int
         ['Beacon Logistics', 'Transportation', 'Corporate Sponsor', 'Newark, NJ', 'medium', 'follow_up', 5000, 'Marcus Webb', 'HR Lead', '(973) 555-0121', 'Looking for an apprenticeship pipeline.'],
         ['Sunrise Grocers', 'Food & Beverage', 'Local Business', 'Staten Island, NY', 'medium', 'qualified', 1000, '', '', '', 'Six neighbourhood stores; owner is a school alum.'],
         ['Harborview Realty', 'Real Estate', 'Corporate Sponsor', 'Jersey City, NJ', 'low', 'researching', 2500, '', '', '', 'Newly opened community-giving fund — needs research.'],
-        ['Kingsley Law Partners', 'Legal', 'Corporate Sponsor', 'Manhattan, NY', 'high', 'confirmed', 10000, 'Grace Kingsley', 'Managing Partner', '(212) 555-0155', 'Signed as a Gold sponsor for this season. 🎉'],
+        ['Kingsley Law Partners', 'Legal', 'Corporate Sponsor', 'Manhattan, NY', 'high', 'confirmed', 10000, 'Grace Kingsley', 'Managing Partner', '(212) 555-0155', 'Signed as a Gold sponsor for this season.'],
     ];
     $made = 0;
     $ins = db()->prepare('INSERT INTO fellow_orgs (fellow_user_id, created_by_user_id, name, industry, category, location, priority, stage, est_value, fit_notes, name_key, is_demo) VALUES (?,?,?,?,?,?,?,?,?,?,?,1)');
