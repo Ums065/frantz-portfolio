@@ -184,7 +184,8 @@ function FcGuide({ view }: { view: ViewKey }) {
 export default function FellowCrm() {
   const [view, setView] = useState<ViewKey>('day')
   const [importing, setImporting] = useState(false)
-  const [overview, setOverview] = useState<{ scorecard: { counts: Record<string, number>; targets: Record<string, number> }; tasks: Task[]; followups: Followup[]; followups_due: number; orgs_total: number } | null>(null)
+  const [overview, setOverview] = useState<{ scorecard: { counts: Record<string, number>; targets: Record<string, number> }; tasks: Task[]; followups: Followup[]; followups_due: number; orgs_total: number; demo_orgs?: number } | null>(null)
+  const [demoBusy, setDemoBusy] = useState(false)
   const [orgs, setOrgs] = useState<Org[]>([])
   const [stages, setStages] = useState<string[]>([])
   const [priorities, setPriorities] = useState<string[]>([])
@@ -205,6 +206,21 @@ export default function FellowCrm() {
     refresh()
   }
   const setTaskStatus = async (id: number, status: string) => { await api.put(`fellow/task/${id}`, { status }); loadOverview() }
+  // Sample prospects: lets a new Fellow see the Pipeline / Calls / Performance
+  // screens working before they have real prospects of their own.
+  const demoLoaded = (overview?.demo_orgs || 0) > 0
+  const toggleDemo = async () => {
+    if (demoLoaded && !window.confirm('Remove the sample prospects? Your real prospects are not touched.')) return
+    setDemoBusy(true)
+    try { demoLoaded ? await api.del('fellow/demo-data') : await api.post('fellow/demo-data', {}); refresh() }
+    catch { /* ignore */ } finally { setDemoBusy(false) }
+  }
+  const demoBtn = (
+    <button className={`btn btn--sm${demoLoaded ? '' : ' btn--solid'}`} onClick={toggleDemo} disabled={demoBusy}
+      title={demoLoaded ? 'Delete the sample prospects' : 'Fill the CRM with 7 example companies so you can see how every screen works'}>
+      {demoBusy ? 'Working…' : demoLoaded ? '🧹 Remove sample data' : '✨ Load sample data'}
+    </button>
+  )
 
   const filtered = orgs.filter((o) => !q.trim() || `${o.name} ${o.category || ''} ${o.industry || ''} ${o.location || ''}`.toLowerCase().includes(q.trim().toLowerCase()))
 
@@ -252,6 +268,14 @@ export default function FellowCrm() {
             <ol className="fc-journey">
               {JOURNEY.map(([n, t]) => <li key={n}><span>{n}</span>{t}</li>)}
             </ol>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginTop: 14, paddingTop: 14, borderTop: '1px solid rgba(201,168,76,.16)' }}>
+              <p className="msub" style={{ margin: 0, fontSize: 12.5, flex: '1 1 240px' }}>
+                {demoLoaded
+                  ? 'Sample prospects are loaded — explore Pipeline, Call List and Performance, then remove them when you are ready for real work.'
+                  : 'New here? Load 7 example companies to see how every screen works. You can delete them with one click.'}
+              </p>
+              {demoBtn}
+            </div>
           </section>
 
           <section className="glass" style={{ padding: 18, borderRadius: 14 }}>
@@ -315,7 +339,12 @@ export default function FellowCrm() {
               <span aria-hidden="true">🏢</span>
               <h4>{q.trim() ? 'No prospect matches that search' : 'No prospects yet — this is where you begin'}</h4>
               <p className="msub">{q.trim() ? 'Try a shorter word, or clear the search box.' : 'A "prospect" is any company that might sponsor the challenge — a local shop, a bank, a hospital, a restaurant chain. Add one and you can start tracking every call and email with it.'}</p>
-              {!q.trim() && <button className="btn btn--solid" onClick={() => setAdding(true)}>＋ Add your first prospect</button>}
+              {!q.trim() && (
+                <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+                  <button className="btn btn--solid" onClick={() => setAdding(true)}>＋ Add your first prospect</button>
+                  {demoBtn}
+                </div>
+              )}
             </div>
           ) : (
             <div className="admin-table-wrap">
@@ -340,8 +369,11 @@ export default function FellowCrm() {
         <div className="fc-empty">
           <span aria-hidden="true">📊</span>
           <h4>Your pipeline is empty</h4>
-          <p className="msub">The pipeline fills up on its own once you add companies. Add your first prospect and it will appear here.</p>
-          <button className="btn btn--solid" onClick={() => setView('prospects')}>Go to Prospects →</button>
+          <p className="msub">You do not fill this in yourself — the pipeline builds itself from your prospects. Add a company under Prospects and a card appears in the stage it is in.</p>
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+            <button className="btn btn--solid" onClick={() => setView('prospects')}>Go to Prospects →</button>
+            {demoBtn}
+          </div>
         </div>
       ) : (
         <div className="fc-pipeline">
@@ -365,7 +397,7 @@ export default function FellowCrm() {
         </div>
       ))}
 
-      {view === 'calls' && <CallsView onLogged={refresh} onOpen={setOpenId} />}
+      {view === 'calls' && <CallsView onLogged={refresh} onOpen={setOpenId} onProspects={() => setView('prospects')} demoBtn={demoBtn} />}
       {view === 'outreach' && <OutreachView />}
       {view === 'academy' && <AcademyView />}
       {view === 'certification' && <CertificationView />}
@@ -562,7 +594,7 @@ function OrgDrawer({ id, onClose, onChange }: { id: number; onClose: () => void;
 
 const PERF_ROWS: [string, string][] = [['research', 'Organizations'], ['contact', 'Contacts'], ['email', 'Emails'], ['call', 'Calls'], ['linkedin', 'LinkedIn'], ['follow_up', 'Follow-ups'], ['meeting', 'Meetings'], ['proposal', 'Proposals']]
 const CALL_OUTCOMES = ['no_answer', 'voicemail', 'receptionist', 'reached', 'interested', 'callback', 'meeting', 'not_interested', 'wrong_contact']
-function CallsView({ onLogged, onOpen }: { onLogged: () => void; onOpen: (id: number) => void }) {
+function CallsView({ onLogged, onOpen, onProspects, demoBtn }: { onLogged: () => void; onOpen: (id: number) => void; onProspects: () => void; demoBtn: React.ReactNode }) {
   const [calls, setCalls] = useState<any[]>([])
   const [active, setActive] = useState<number | null>(null)
   const [oc, setOc] = useState('reached'); const [note, setNote] = useState(''); const [fu, setFu] = useState('')
@@ -572,7 +604,17 @@ function CallsView({ onLogged, onOpen }: { onLogged: () => void; onOpen: (id: nu
     await api.post(`fellow/org/${orgId}/activity`, { type: 'call', detail: oc.replace('_', ' ') + (note ? ` — ${note}` : ''), follow_up_date: fu })
     setActive(null); setNote(''); setFu(''); setOc('reached'); load(); onLogged()
   }
-  if (calls.length === 0) return <p className="msub">No call list yet — add prospects with a phone contact.</p>
+  if (calls.length === 0) return (
+    <div className="fc-empty">
+      <span aria-hidden="true">📞</span>
+      <h4>Nobody to call yet</h4>
+      <p className="msub">This list is built automatically: open any prospect, add a contact person <strong>with a phone number</strong>, and they appear here with the date you last spoke to them.</p>
+      <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+        <button className="btn btn--solid" onClick={onProspects}>Go to Prospects →</button>
+        {demoBtn}
+      </div>
+    </div>
+  )
   return (
     <div className="admin-table-wrap">
       <table className="admin-table admin-table--stack">
@@ -695,7 +737,13 @@ function OutreachView() {
   const [templates, setTemplates] = useState<any[]>([])
   const [copied, setCopied] = useState<number | null>(null)
   useEffect(() => { api.get<{ templates: any[] }>('fellow/templates').then((d) => setTemplates(d.templates || [])).catch(() => {}) }, [])
-  if (templates.length === 0) return <p className="msub">No approved templates yet. Ask an admin to add email/call/LinkedIn scripts.</p>
+  if (templates.length === 0) return (
+    <div className="fc-empty">
+      <span aria-hidden="true">✉️</span>
+      <h4>No scripts loaded yet</h4>
+      <p className="msub">The program ships with ready-made email, phone and LinkedIn scripts. If this list is empty, an admin has removed them — ask your manager to restore the outreach templates.</p>
+    </div>
+  )
   const kinds = Array.from(new Set(templates.map((t) => t.kind)))
   const copy = (t: any) => { navigator.clipboard?.writeText(`${t.subject ? `Subject: ${t.subject}\n\n` : ''}${t.body || ''}`).then(() => { setCopied(t.id); setTimeout(() => setCopied(null), 1500) }).catch(() => {}) }
   return (
@@ -749,7 +797,14 @@ function PerformanceView() {
 function MaterialsView() {
   const [items, setItems] = useState<{ id: number; category: string; title: string; description?: string; url?: string }[]>([])
   useEffect(() => { api.get<{ materials: any[] }>('fellow/materials').then((d) => setItems(d.materials || [])).catch(() => {}) }, [])
-  if (items.length === 0) return <p className="msub">No approved materials yet. Ask an admin to add them.</p>
+  if (items.length === 0) return (
+    <div className="fc-empty">
+      <span aria-hidden="true">📁</span>
+      <h4>No materials added yet</h4>
+      <p className="msub">Your manager uploads the approved sponsor deck, one-pager and prospectus here. Until they appear, do not create your own — ask an admin to add them.</p>
+      <p className="msub" style={{ fontSize: 12.5 }}>Meanwhile, the <strong>Training Academy</strong> tab has all the program documents you can read.</p>
+    </div>
+  )
   const cats = Array.from(new Set(items.map((m) => m.category)))
   return (
     <div style={{ display: 'grid', gap: 18 }}>
@@ -771,28 +826,69 @@ function MaterialsView() {
   )
 }
 
+const REPORT_FIELDS: [string, string, string][] = [
+  ['wins', 'What went well today?', 'e.g. Riverside Bank agreed to a call on Thursday.'],
+  ['challenges', 'What was difficult or got stuck?', 'e.g. Three companies had no contact name on their website.'],
+  ['help_needed', 'What help do you need from management?', 'e.g. Can someone approve my proposal for Northside Medical?'],
+  ['plan', 'What is your plan for tomorrow?', 'e.g. Call the five stores on my list and send two follow-ups.'],
+]
+
 function ReportView() {
   const [f, setF] = useState<Record<string, string>>({ wins: '', challenges: '', help_needed: '', plan: '' })
   const [nums, setNums] = useState<Record<string, number>>({})
+  const [past, setPast] = useState<any[]>([])
   const [msg, setMsg] = useState('')
-  const load = useCallback(() => { api.get<{ today_numbers: Record<string, number> }>('fellow/reports').then((d) => setNums(d.today_numbers || {})).catch(() => {}) }, [])
+  const load = useCallback(() => {
+    api.get<{ today_numbers: Record<string, number>; reports: any[] }>('fellow/reports').then((d) => {
+      setNums(d.today_numbers || {})
+      const rows = d.reports || []
+      setPast(rows)
+      // Already reported today? Load it so the Fellow edits instead of retyping.
+      const today = new Date().toISOString().slice(0, 10)
+      const mine = rows.find((r) => String(r.report_date).slice(0, 10) === today)
+      if (mine) setF({ wins: mine.wins || '', challenges: mine.challenges || '', help_needed: mine.help_needed || '', plan: mine.plan || '' })
+    }).catch(() => {})
+  }, [])
   useEffect(() => { load() }, [load])
   const set = (k: string, v: string) => setF((p) => ({ ...p, [k]: v }))
-  const submit = async () => { await api.post('fellow/report', f); setMsg('Report submitted for today. ✓'); load() }
+  const submit = async () => { await api.post('fellow/report', f); setMsg('Saved. Your manager can see it now. ✓'); load() }
+  const today = new Date().toISOString().slice(0, 10)
+  const sentToday = past.some((r) => String(r.report_date).slice(0, 10) === today)
   return (
-    <div style={{ maxWidth: 620 }}>
-      <section className="glass" style={{ padding: 16, borderRadius: 12, marginBottom: 14 }}>
-        <h4 className="gold-text" style={{ marginTop: 0 }}>Today's numbers (auto)</h4>
-        <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
-          {PERF_ROWS.map(([k, lbl]) => <span key={k} className="msub"><strong style={{ color: '#f0ead6' }}>{nums[k] || 0}</strong> {lbl}</span>)}
-        </div>
+    <div className="fc-day-cols">
+      <div>
+        <section className="glass" style={{ padding: 16, borderRadius: 12, marginBottom: 14 }}>
+          <h4 className="gold-text" style={{ marginTop: 0, marginBottom: 4 }}>Today's numbers</h4>
+          <p className="msub" style={{ fontSize: 12.5, margin: '0 0 10px' }}>Counted automatically from what you logged — you never type these.</p>
+          <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+            {PERF_ROWS.map(([k, lbl]) => <span key={k} className="msub"><strong style={{ color: '#f0ead6' }}>{nums[k] || 0}</strong> {lbl}</span>)}
+          </div>
+        </section>
+        {sentToday && <p className="msub" style={{ color: '#6be29a', marginTop: 0 }}>✓ You already reported today — edit below and save again if anything changed.</p>}
+        {REPORT_FIELDS.map(([k, label, hint]) => (
+          <label key={k} className="fc-fld" style={{ marginBottom: 12, display: 'block' }}>{label}
+            <textarea className="fc-input" rows={2} value={f[k]} onChange={(e) => set(k, e.target.value)} placeholder={hint} /></label>
+        ))}
+        {msg && <p className="msub" style={{ color: '#6be29a' }}>{msg}</p>}
+        <button className="btn btn--solid" onClick={submit}>{sentToday ? 'Update today\'s report' : 'Submit End-of-Day Report'}</button>
+      </div>
+      <section className="glass" style={{ padding: 16, borderRadius: 12, alignSelf: 'start' }}>
+        <h4 className="gold-text" style={{ marginTop: 0, marginBottom: 4 }}>Your recent reports</h4>
+        {past.length === 0 ? (
+          <p className="msub" style={{ fontSize: 13 }}>Nothing here yet. Once you submit your first report it is kept so you and your manager can look back at the week.</p>
+        ) : (
+          <ul className="fc-timeline" style={{ maxHeight: 460, overflowY: 'auto' }}>
+            {past.map((r) => (
+              <li key={r.report_date}>
+                <span className="fc-timeline__t">{String(r.report_date).slice(0, 10)}</span>
+                {r.wins ? <span><strong>Went well:</strong> {r.wins}</span> : null}
+                {r.challenges ? <span className="msub">Stuck: {r.challenges}</span> : null}
+                {r.plan ? <span className="msub">Next: {r.plan}</span> : null}
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
-      {(['wins', 'challenges', 'help_needed', 'plan'] as const).map((k) => (
-        <label key={k} className="fc-fld" style={{ marginBottom: 10, display: 'block' }}>{k === 'help_needed' ? 'Help needed from management' : k === 'plan' ? 'Plan for tomorrow' : k}
-          <textarea className="fc-input" rows={2} value={f[k]} onChange={(e) => set(k, e.target.value)} /></label>
-      ))}
-      {msg && <p className="msub" style={{ color: '#6be29a' }}>{msg}</p>}
-      <button className="btn btn--solid" onClick={submit}>Submit End-of-Day Report</button>
     </div>
   )
 }

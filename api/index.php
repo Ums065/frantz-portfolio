@@ -1816,6 +1816,7 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
                 'followups' => $fuRows,
                 'followups_due' => count(array_filter($fuRows, static fn($r) => (string) $r['due_date'] <= $today)),
                 'orgs_total' => (int) db()->query('SELECT COUNT(*) FROM fellow_orgs WHERE fellow_user_id = ' . $fid)->fetchColumn(),
+                'demo_orgs' => (int) db()->query('SELECT COUNT(*) FROM fellow_orgs WHERE is_demo = 1 AND fellow_user_id = ' . $fid)->fetchColumn(),
             ]);
         }
         case $key === 'GET fellow/orgs': {
@@ -2203,6 +2204,20 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
                     mb_substr(trim((string) field($b, 'help_needed')), 0, 2000) ?: null,
                     mb_substr(trim((string) field($b, 'plan')), 0, 2000) ?: null]);
             json(['message' => 'Daily report submitted.'], 201);
+        }
+        // Load / clear sample prospects so a new Fellow can learn the tool with data in it.
+        case $key === 'POST fellow/demo-data': {
+            $u = require_login();
+            if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
+            rate_limit('fellow_demo', 10, 3600, (string) $u['id']);
+            $n = fellow_demo_seed((int) $u['id']);
+            json(['message' => $n > 0 ? "Loaded $n sample prospects. Clear them any time." : 'Sample prospects are already loaded.', 'added' => $n]);
+        }
+        case $key === 'DELETE fellow/demo-data': {
+            $u = require_login();
+            if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
+            $n = fellow_demo_clear((int) $u['id']);
+            json(['message' => "Removed $n sample prospects.", 'removed' => $n]);
         }
         case $key === 'POST fellow/orgs/import': {
             $u = require_login();

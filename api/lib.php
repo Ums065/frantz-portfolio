@@ -131,7 +131,7 @@ function ensure_session_version_column(): void
  * request after a deploy, db_auto_migrate() notices the stored version is behind
  * and runs every *_ensure_schema() once; afterwards it's a single cheap SELECT.
  */
-const APP_SCHEMA_VERSION = 20260809; // yyyymmdd + seq — raise on each schema change
+const APP_SCHEMA_VERSION = 20260812; // yyyymmdd + seq — raise on each schema change
 
 /**
  * One-shot, version-gated auto-migration. Runs on app bootstrap: if the DB's
@@ -5938,6 +5938,50 @@ const FELLOW_MEETING_TYPES = ['phone', 'zoom', 'meet', 'in_person'];
 const FELLOW_TEMPLATE_KINDS = ['email', 'call', 'linkedin', 'follow_up', 'meeting'];
 const FELLOW_QUIZ_PASS = 80; // % needed to certify
 
+/** Starter outreach scripts, seeded once so the Outreach tab is never empty.
+ *  [kind, category, name, subject, body] — admin can edit or delete any of them. */
+const FELLOW_DEFAULT_TEMPLATES = [
+    ['email', 'First contact', 'First contact — local business', 'A local student challenge worth 2 minutes of your time',
+        "Hi [First name],\n\nMy name is [Your name] and I am a Student Fellow with the Student Impact Challenge, a program of TrendCatch Gives Back Inc. (a registered 501(c)(3) nonprofit).\n\nStudents in [City] interview local business owners, find a real problem in their community, and build a solution for it. Last season students produced [number] solutions across [number] schools.\n\nWe are looking for local sponsors to fund the whole challenge — the scholarships, the school-impact grant, and the showcase night. Sponsorship starts at \$1,000.\n\nWould you have 15 minutes this week or next for a short call? I can send our one-page overview first if that is easier.\n\nThank you for your time,\n[Your name]\nStudent Fellow, Student Impact Challenge\n[Your phone] | [Your email]"],
+    ['email', 'First contact', 'First contact — corporate / CSR contact', 'Sponsorship opportunity: Student Impact Challenge ([City])',
+        "Dear [First name],\n\nI am [Your name], a Student Fellow with the Student Impact Challenge — a 501(c)(3) program that puts students in front of real local businesses to solve real community problems.\n\nI am reaching out because [Company] already supports [their cause / youth / education] in [City], and our sponsors fund the entire program rather than a single student: scholarships for winning students, a school-impact grant, educator recognition, and the infrastructure to run the challenge across the region.\n\nSponsorship levels run from Community (\$1,000) to Presenting (\$25,000), each with a defined package of recognition.\n\nMay I send our sponsor prospectus, or would a 20-minute call be easier?\n\nWith appreciation,\n[Your name]\nStudent Fellow, Student Impact Challenge\n[Your phone] | [Your email]"],
+    ['follow_up', 'Follow-up', 'Follow-up 1 — gentle nudge (4-5 days later)', 'Following up: Student Impact Challenge',
+        "Hi [First name],\n\nJust floating my note back to the top of your inbox in case it got buried — completely understand how busy things get.\n\nThe short version: local students solve real problems for local businesses, and sponsors fund the whole challenge. I would love 15 minutes to show you what the students produced last season.\n\nIs there a better day or time to reach you?\n\nThank you,\n[Your name]"],
+    ['follow_up', 'Follow-up', 'Follow-up 2 — add value (10 days later)', 'One student project I thought you would like',
+        "Hi [First name],\n\nRather than chase you, I thought I would just show you the work.\n\n[One or two sentences about a real student solution relevant to their industry.]\n\nThat is what sponsorship funds — not one student, but every student who gets to do this.\n\nIf the timing is not right this season, tell me and I will follow up later in the year. No hard feelings at all.\n\nBest,\n[Your name]"],
+    ['follow_up', 'Follow-up', 'Follow-up 3 — polite close-out', 'Closing the loop',
+        "Hi [First name],\n\nI do not want to keep filling your inbox, so this is my last note for now.\n\nIf sponsoring the Student Impact Challenge is something you would like to revisit, just reply to this email any time and I will pick it straight up.\n\nThank you for reading — and for everything [Company] already does in [City].\n\nWarm regards,\n[Your name]"],
+    ['email', 'Meeting', 'Thank you after a meeting', 'Thank you — and the next step',
+        "Hi [First name],\n\nThank you for your time today — I really enjoyed hearing about [something specific they said].\n\nAs discussed, I am attaching [the prospectus / the sponsorship levels]. To recap the next step: [what you agreed, with a date].\n\nIf anything else comes up before then, my number is [Your phone].\n\nThank you again,\n[Your name]"],
+    ['call', 'Phone script', 'Cold call script — first call', null,
+        "OPEN (10 seconds)\n\"Hi, my name is [Your name], I am a Student Fellow with the Student Impact Challenge here in [City]. Is [contact name] available? … Is now an okay moment, or should I call back?\"\n\nWHY YOU ARE CALLING (20 seconds)\n\"We are a 501(c)(3) program where local students interview business owners, find a real community problem, and build a solution for it. We are looking for local sponsors to fund the whole challenge this season.\"\n\nTHE ASK\n\"Could I send you a one-page overview and book 15 minutes with you next week?\"\n\nIF THEY SAY \"send me an email\"\n\"Of course — what is the best address? I will send it today and follow up on [day].\"\n\nIF THEY SAY \"not interested\"\n\"Completely understood. May I ask — is it the timing, or is community sponsorship just not a fit right now?\" (Then thank them and log it.)\n\nALWAYS: log the call and set your next follow-up date before you dial the next one."],
+    ['call', 'Phone script', 'Getting past the front desk', null,
+        "\"Hi, I hope you are well. I am [Your name] with the Student Impact Challenge, a local student nonprofit program. I am trying to reach whoever handles community sponsorships or donations — would that be you, or could you point me to the right person?\"\n\nIf they ask what it is about:\n\"Local students solve real problems for local businesses, and we are inviting sponsors for this season. It is a 15-minute conversation, not a long pitch.\"\n\nIf the person is unavailable:\n\"No problem — what is the best time of day to reach them? And is there an email I can send a one-page overview to in the meantime?\"\n\nAlways say thank you and use their name if they give it."],
+    ['linkedin', 'LinkedIn', 'LinkedIn connection request (short)', null,
+        "Hi [First name] — I am a Student Fellow with the Student Impact Challenge, a 501(c)(3) program in [City] where students solve real problems for local businesses. I would love to connect and share what our students built this season."],
+    ['linkedin', 'LinkedIn', 'LinkedIn message after connecting', null,
+        "Thank you for connecting, [First name]!\n\nQuick context: our students interview local business owners, find a real community problem and build a solution for it. Sponsors fund the whole challenge — scholarships, the school-impact grant and the showcase night — starting at \$1,000.\n\nWould you be open to a 15-minute call, or should I send the one-page overview first?\n\n— [Your name]"],
+    ['meeting', 'Meeting', 'Meeting request — 15 minutes', 'Would 15 minutes work?',
+        "Hi [First name],\n\nWould [day] at [time] or [day] at [time] work for a 15-minute call? If neither fits, send me any two slots that do and I will make them work.\n\nI will keep it to three things: what the students actually build, what sponsorship funds, and what recognition [Company] receives.\n\nThank you,\n[Your name]\n[Your phone]"],
+];
+
+/** Starter certification questions on the process every Fellow must know.
+ *  [question, options, correct index] — admin can edit, delete or add more. */
+const FELLOW_DEFAULT_QUIZ = [
+    ['What do sponsors of the Student Impact Challenge actually fund?', ['One individual student they choose', 'The entire challenge — scholarships, the school-impact grant, recognition and the events', 'Only the showcase night', 'Nothing — sponsorship is symbolic'], 1],
+    ['You find a company in the system that is already assigned to another Fellow. What do you do?', ['Contact them anyway — first to call wins', 'Add it again under a slightly different name', 'Do not contact them; pick a different prospect and tell your manager', 'Delete the other Fellow\'s record'], 2],
+    ['When should you log a call or an email in the CRM?', ['At the end of the week from memory', 'Straight away, right after it happens', 'Only if the answer was positive', 'Never — your manager can see your inbox'], 1],
+    ['A prospect does not reply to your first email. What is the correct next step?', ['Give up and remove them', 'Call their personal mobile repeatedly', 'Set a follow-up for a few days later and send a polite nudge', 'Send the same email every day until they answer'], 2],
+    ['Which materials may you send to a prospective sponsor?', ['Anything you design yourself', 'Only the approved items in the Materials tab', 'Screenshots of internal student records', 'Another sponsor\'s signed agreement'], 1],
+    ['What does the pipeline stage "Verbal Commitment" mean?', ['Money has been received', 'They said yes but nothing is signed yet', 'They said no', 'You have not contacted them yet'], 1],
+    ['Can you approve your own sponsorship proposal in the system?', ['Yes, if you are confident about it', 'No — you submit it and an admin approves it', 'Yes, if the amount is under $1,000', 'Only on the last day of the month'], 1],
+    ['A business owner asks for a student\'s personal contact details. What do you do?', ['Share them — it helps the student', 'Never share them; route the request through the program\'s consent process', 'Share only the phone number', 'Ask the student privately and then share'], 1],
+    ['What is the purpose of the end-of-day report?', ['To justify your hours', 'To tell your manager what you did, what got stuck and your plan — so you get help', 'It is optional paperwork nobody reads', 'To rank Fellows against each other'], 1],
+    ['A prospect says the timing is wrong this season. The best response is to:', ['Argue that they should reconsider now', 'Mark them not interested and forget them', 'Thank them, ask when to check back, and set a follow-up for that date', 'Contact their competitor and mention their refusal'], 2],
+    ['Which of these is the correct order of the sponsorship journey?', ['Proposal → research → first contact → confirmed', 'Research → find the right person → outreach and follow-up → proposal → confirmed', 'First contact → research → confirmed → proposal', 'Confirmed → proposal → research'], 1],
+    ['When you write to a prospect using an approved template, you should:', ['Send it word-for-word with the placeholders still in it', 'Personalize the name, company and details before sending', 'Rewrite the whole thing in your own style each time', 'Send it to many companies at once as one group email'], 1],
+];
+
 /** A Fellow's certification status from their exam attempts. */
 function fellow_cert_status(int $fellowId): array
 {
@@ -6082,8 +6126,94 @@ function fellow_ops_ensure_schema(): void
             passed TINYINT(1) NOT NULL DEFAULT 0, total INT NOT NULL DEFAULT 0, correct INT NOT NULL DEFAULT 0,
             taken_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, INDEX idx_fqa (fellow_user_id, taken_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        // Demo rows a Fellow can load to learn the tool, then clear.
+        try {
+            $has = db()->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'fellow_orgs' AND COLUMN_NAME = 'is_demo'")->fetchColumn();
+            if ((int) $has === 0) db()->exec("ALTER TABLE fellow_orgs ADD COLUMN is_demo TINYINT(1) NOT NULL DEFAULT 0");
+        } catch (Throwable $e) { if (app_debug()) error_log('fellow_orgs is_demo: ' . $e->getMessage()); }
+        fellow_seed_defaults();
     } catch (Throwable $e) { if (app_debug()) error_log('fellow_ops_ensure_schema: ' . $e->getMessage()); }
     $ready = true;
+}
+
+/** Ship the CRM with real content so no Fellow ever opens an empty screen.
+ *  Only fills a table that is completely empty — admin edits are never touched. */
+function fellow_seed_defaults(): void
+{
+    try {
+        if ((int) db()->query('SELECT COUNT(*) FROM fellow_templates')->fetchColumn() === 0) {
+            $t = db()->prepare('INSERT INTO fellow_templates (kind, category, name, subject, body, sort_order) VALUES (?,?,?,?,?,?)');
+            foreach (FELLOW_DEFAULT_TEMPLATES as $i => $row) {
+                $t->execute([$row[0], $row[1], $row[2], $row[3], $row[4], ($i + 1) * 10]);
+            }
+        }
+        if ((int) db()->query('SELECT COUNT(*) FROM fellow_quiz_questions')->fetchColumn() === 0) {
+            $q = db()->prepare('INSERT INTO fellow_quiz_questions (question, options_json, correct_index, sort_order) VALUES (?,?,?,?)');
+            foreach (FELLOW_DEFAULT_QUIZ as $i => $row) {
+                $q->execute([$row[0], json_encode($row[1], JSON_UNESCAPED_UNICODE), $row[2], ($i + 1) * 10]);
+            }
+        }
+    } catch (Throwable $e) { if (app_debug()) error_log('fellow_seed_defaults: ' . $e->getMessage()); }
+}
+
+/** Sample prospects a Fellow can load to see the Pipeline, Call List and
+ *  Performance screens working with data. Cleared with fellow_demo_clear(). */
+function fellow_demo_seed(int $fellowId): int
+{
+    fellow_ops_ensure_schema();
+    $rows = [
+        ['Riverside Community Bank', 'Financial Services', 'Corporate Sponsor', 'Brooklyn, NY', 'high', 'proposal_sent', 10000, 'Anita Rios', 'Community Relations Manager', '(718) 555-0142', 'They fund youth financial-literacy programs every year.'],
+        ['Delgado Family Hardware', 'Retail', 'Local Business', 'Queens, NY', 'medium', 'first_contact', 1000, 'Tony Delgado', 'Owner', '(718) 555-0198', 'Owner hires local students every summer.'],
+        ['Northside Medical Group', 'Healthcare', 'Corporate Sponsor', 'Bronx, NY', 'high', 'meeting_scheduled', 5000, 'Dr. Lena Park', 'Director of Outreach', '(718) 555-0176', 'Sponsors school health fairs — strong fit for student projects.'],
+        ['Beacon Logistics', 'Transportation', 'Corporate Sponsor', 'Newark, NJ', 'medium', 'follow_up', 5000, 'Marcus Webb', 'HR Lead', '(973) 555-0121', 'Looking for an apprenticeship pipeline.'],
+        ['Sunrise Grocers', 'Food & Beverage', 'Local Business', 'Staten Island, NY', 'medium', 'qualified', 1000, '', '', '', 'Six neighbourhood stores; owner is a school alum.'],
+        ['Harborview Realty', 'Real Estate', 'Corporate Sponsor', 'Jersey City, NJ', 'low', 'researching', 2500, '', '', '', 'Newly opened community-giving fund — needs research.'],
+        ['Kingsley Law Partners', 'Legal', 'Corporate Sponsor', 'Manhattan, NY', 'high', 'confirmed', 10000, 'Grace Kingsley', 'Managing Partner', '(212) 555-0155', 'Signed as a Gold sponsor for this season. 🎉'],
+    ];
+    $made = 0;
+    $ins = db()->prepare('INSERT INTO fellow_orgs (fellow_user_id, created_by_user_id, name, industry, category, location, priority, stage, est_value, fit_notes, name_key, is_demo) VALUES (?,?,?,?,?,?,?,?,?,?,?,1)');
+    $insC = db()->prepare('INSERT INTO fellow_contacts (org_id, name, title, phone, is_primary) VALUES (?,?,?,?,1)');
+    $insA = db()->prepare('INSERT INTO fellow_activities (fellow_user_id, org_id, type, detail, created_at) VALUES (?,?,?,?, DATE_SUB(NOW(), INTERVAL ? DAY))');
+    $insF = db()->prepare('INSERT INTO fellow_followups (org_id, fellow_user_id, due_date, method, reason) VALUES (?,?,?,?,?)');
+    foreach ($rows as $i => $r) {
+        [$name, $industry, $cat, $loc, $prio, $stage, $val, $cName, $cTitle, $cPhone, $fit] = $r;
+        $key = fellow_name_key($name);
+        $dup = db()->prepare('SELECT id FROM fellow_orgs WHERE name_key = ? LIMIT 1');
+        $dup->execute([$key]);
+        if ($dup->fetch()) continue;
+        $ins->execute([$fellowId, $fellowId, $name, $industry, $cat, $loc, $prio, $stage, $val, $fit, $key]);
+        $orgId = (int) db()->lastInsertId();
+        $made++;
+        if ($cName !== '') $insC->execute([$orgId, $cName, $cTitle, $cPhone]);
+        // A believable little history so the timeline and Performance are not blank.
+        $insA->execute([$fellowId, $orgId, 'research', 'Researched the company and confirmed the fit.', $i + 6]);
+        if ($stage !== 'researching' && $stage !== 'qualified') {
+            $insA->execute([$fellowId, $orgId, 'email', 'Sent the first-contact email.', $i + 4]);
+            $insA->execute([$fellowId, $orgId, 'call', 'Called the main line — spoke with the contact.', $i + 2]);
+        }
+        if ($stage === 'follow_up' || $stage === 'first_contact') {
+            $insF->execute([$orgId, $fellowId, date('Y-m-d'), 'email', 'No reply yet — send a polite nudge.']);
+        }
+        if ($stage === 'proposal_sent') $insA->execute([$fellowId, $orgId, 'proposal', 'Sent the sponsorship proposal.', 1]);
+        if ($stage === 'meeting_scheduled') $insA->execute([$fellowId, $orgId, 'meeting', 'Booked a Zoom meeting with the contact.', 1]);
+    }
+    return $made;
+}
+
+/** Remove every demo row this Fellow loaded (and only those). */
+function fellow_demo_clear(int $fellowId): int
+{
+    fellow_ops_ensure_schema();
+    $s = db()->prepare('SELECT id FROM fellow_orgs WHERE is_demo = 1 AND fellow_user_id = ?');
+    $s->execute([$fellowId]);
+    $ids = array_map('intval', $s->fetchAll(PDO::FETCH_COLUMN) ?: []);
+    if (!$ids) return 0;
+    $in = implode(',', array_fill(0, count($ids), '?'));
+    foreach (['fellow_contacts' => 'org_id', 'fellow_activities' => 'org_id', 'fellow_followups' => 'org_id', 'fellow_proposals' => 'org_id', 'fellow_meetings' => 'org_id'] as $tbl => $col) {
+        try { db()->prepare("DELETE FROM $tbl WHERE $col IN ($in)")->execute($ids); } catch (Throwable $e) { /* table may lag */ }
+    }
+    db()->prepare("DELETE FROM fellow_orgs WHERE id IN ($in)")->execute($ids);
+    return count($ids);
 }
 
 /** Scan the Academy folder and register any new document as a training module.
