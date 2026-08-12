@@ -1912,12 +1912,19 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             fellow_ops_ensure_schema();
             $id = (int) $m[1]; $fid = (int) $u['id'];
             rate_limit('fellow_org_delete', 40, 3600, (string) $fid);
-            $own = db()->prepare('SELECT id FROM fellow_orgs WHERE id = ? AND fellow_user_id = ?'); $own->execute([$id, $fid]);
-            if (!$own->fetch()) json(['error' => 'Not found.'], 404);
-            foreach (['fellow_contacts', 'fellow_activities', 'fellow_followups', 'fellow_proposals', 'fellow_meetings'] as $tbl) {
+            $own = db()->prepare('SELECT name FROM fellow_orgs WHERE id = ? AND fellow_user_id = ?'); $own->execute([$id, $fid]);
+            $row = $own->fetch();
+            if (!$row) json(['error' => 'Not found.'], 404);
+            foreach (['fellow_contacts', 'fellow_followups', 'fellow_proposals', 'fellow_meetings'] as $tbl) {
                 try { db()->prepare("DELETE FROM $tbl WHERE org_id = ?")->execute([$id]); } catch (Throwable $e) { /* table may lag */ }
             }
+            // Keep the logged work: deleting activities would retroactively shrink
+            // counts an admin already saw, and contradict a submitted daily report.
+            try { db()->prepare('UPDATE fellow_activities SET org_id = NULL WHERE org_id = ?')->execute([$id]); } catch (Throwable $e) { /* best effort */ }
+            // An admin-assigned task must not point at a row that no longer exists.
+            try { db()->prepare('UPDATE fellow_tasks SET org_id = NULL WHERE org_id = ?')->execute([$id]); } catch (Throwable $e) { /* best effort */ }
             db()->prepare('DELETE FROM fellow_orgs WHERE id = ?')->execute([$id]);
+            fellow_log($fid, null, 'note', 'Deleted prospect: ' . (string) $row['name']);
             json(['message' => 'Prospect deleted.']);
         }
         // Fix a mistyped contact — a wrong email otherwise makes that contact
@@ -2395,9 +2402,12 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             require_admin();
             fellow_ops_ensure_schema();
             $rows = db()->query(
+                // Sample-data activity belongs to the Fellow learning the tool, not the team feed.
                 "SELECT a.type, a.detail, a.created_at, u.full_name AS fellow_name, o.name AS org_name
                  FROM fellow_activities a JOIN users u ON u.id = a.fellow_user_id
-                 LEFT JOIN fellow_orgs o ON o.id = a.org_id ORDER BY a.created_at DESC, a.id DESC LIMIT 60"
+                 LEFT JOIN fellow_orgs o ON o.id = a.org_id
+                 WHERE o.id IS NULL OR o.is_demo = 0
+                 ORDER BY a.created_at DESC, a.id DESC LIMIT 60"
             )->fetchAll();
             json(['activity' => $rows]);
         }
@@ -2419,7 +2429,7 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             fellow_ops_ensure_schema();
             $rows = db()->query(
                 "SELECT o.*, u.full_name AS fellow_name FROM fellow_orgs o LEFT JOIN users u ON u.id = o.fellow_user_id
-                 ORDER BY o.est_value DESC, o.updated_at DESC LIMIT 500"
+                 WHERE o.is_demo = 0 ORDER BY o.est_value DESC, o.updated_at DESC LIMIT 500"
             )->fetchAll();
             json(['orgs' => $rows, 'stages' => FELLOW_STAGES]);
         }
@@ -2439,22 +2449,23 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
         }
         case $key === 'GET admin/fellow-ops/analytics': {
             require_admin(); fellow_ops_ensure_schema();
-            $byStage = db()->query("SELECT stage, COUNT(*) AS n, COALESCE(SUM(est_value),0) AS value FROM fellow_orgs GROUP BY stage")->fetchAll();
+            // Every aggregate here excludes sample data — see FELLOW_REAL_ORG.
+            $byStage = db()->query("SELECT stage, COUNT(*) AS n, COALESCE(SUM(est_value),0) AS value FROM fellow_orgs WHERE is_demo = 0 GROUP BY stage")->fetchAll();
             $stageMap = [];
             foreach ($byStage as $r) $stageMap[(string) $r['stage']] = ['n' => (int) $r['n'], 'value' => (int) $r['value']];
             $ordered = [];
             foreach (FELLOW_STAGES as $s) if (isset($stageMap[$s])) $ordered[] = ['stage' => $s] + $stageMap[$s];
             $totalFellows = (int) db()->query("SELECT COUNT(*) FROM users WHERE role = 'fellow'")->fetchColumn();
-            $activeToday = (int) db()->query("SELECT COUNT(DISTINCT fellow_user_id) FROM fellow_activities WHERE DATE(created_at) = CURDATE()")->fetchColumn();
+            $activeToday = (int) db()->query("SELECT COUNT(DISTINCT a.fellow_user_id) FROM fellow_activities a " . FELLOW_REAL_ACT . " AND DATE(a.created_at) = CURDATE()")->fetchColumn();
             $alerts = [
-                'overdue_followups' => (int) db()->query("SELECT COUNT(*) FROM fellow_followups WHERE status = 'pending' AND due_date < CURDATE()")->fetchColumn(),
+                'overdue_followups' => (int) db()->query("SELECT COUNT(*) FROM fellow_followups f JOIN fellow_orgs o ON o.id = f.org_id WHERE o.is_demo = 0 AND f.status = 'pending' AND f.due_date < CURDATE()")->fetchColumn(),
                 'proposals_pending' => (int) db()->query("SELECT COUNT(*) FROM fellow_proposals WHERE status = 'submitted'")->fetchColumn(),
                 'inactive_fellows' => max(0, $totalFellows - $activeToday),
-                'verbal_commitments' => (int) db()->query("SELECT COUNT(*) FROM fellow_orgs WHERE stage = 'verbal_commitment'")->fetchColumn(),
-                'confirmed' => (int) db()->query("SELECT COUNT(*) FROM fellow_orgs WHERE stage IN ('confirmed','paid')")->fetchColumn(),
+                'verbal_commitments' => (int) db()->query("SELECT COUNT(*) FROM fellow_orgs WHERE is_demo = 0 AND stage = 'verbal_commitment'")->fetchColumn(),
+                'confirmed' => (int) db()->query("SELECT COUNT(*) FROM fellow_orgs WHERE is_demo = 0 AND stage IN ('confirmed','paid')")->fetchColumn(),
             ];
-            $week = (int) db()->query("SELECT COUNT(*) FROM fellow_activities WHERE created_at >= CURDATE() - INTERVAL 6 DAY")->fetchColumn();
-            $month = (int) db()->query("SELECT COUNT(*) FROM fellow_activities WHERE created_at >= CURDATE() - INTERVAL 29 DAY")->fetchColumn();
+            $week = (int) db()->query("SELECT COUNT(*) FROM fellow_activities a " . FELLOW_REAL_ACT . " AND a.created_at >= CURDATE() - INTERVAL 6 DAY")->fetchColumn();
+            $month = (int) db()->query("SELECT COUNT(*) FROM fellow_activities a " . FELLOW_REAL_ACT . " AND a.created_at >= CURDATE() - INTERVAL 29 DAY")->fetchColumn();
             json(['funnel' => $ordered, 'alerts' => $alerts, 'activity_week' => $week, 'activity_month' => $month]);
         }
         case $key === 'GET admin/fellow-ops/proposals': {
@@ -2919,6 +2930,9 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
                     'sponsor_jobs_pending' => $countWhere("SELECT COUNT(*) FROM sponsor_jobs WHERE status = 'pending'"),
                     // Approved partner/sponsor accounts with an uploaded logo awaiting publication.
                     'partner_logos_pending' => $countWhere("SELECT COUNT(*) FROM ecosystem_accounts e JOIN users u ON u.id = e.user_id WHERE e.role IN ('partner','sponsor') AND u.approval_status = 'approved' AND e.public_listed = 0 AND e.details LIKE '%\"logo_url\":\"%' AND e.details NOT LIKE '%\"logo_url\":\"\"%'"),
+                    // Sponsorship proposals a Fellow submitted for approval — the
+                    // Fellow is blocked until an admin answers, so surface it.
+                    'fellow_proposals_pending' => $countWhere("SELECT COUNT(*) FROM fellow_proposals WHERE status = 'submitted'"),
                     // Fully-consented internships — a headline achievement for the program.
                     'internships_confirmed' => $countWhere("SELECT COUNT(*) FROM business_requests br LEFT JOIN new_school_students s ON s.id = br.student_id WHERE br.request_type = 'internship' AND (br.parent_consent = 'accepted' OR (s.age >= 18 AND br.student_consent = 'accepted'))"),
                 ],

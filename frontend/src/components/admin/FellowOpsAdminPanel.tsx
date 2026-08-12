@@ -6,7 +6,7 @@ import FcIcon from '../FcIcon'
    activity feed, master pipeline, task assignment, and daily-target settings. */
 
 interface Summary { active_fellows: number; prospects_added: number; emails: number; calls: number; linkedin: number; follow_ups: number; meetings: number; proposals: number; sponsors: number; pipeline_total: number; pipeline_new: number; pipeline_proposal: number; pipeline_confirmed: number }
-interface FellowRow { id: number; full_name: string; email: string; orgs: number; pipeline: number; today_activity: number; won: number }
+interface FellowRow { id: number; full_name: string; email: string; orgs: number; pipeline: number; today_activity: number; won: number; modules_done?: number }
 interface Activity { type: string; detail?: string; created_at: string; fellow_name: string; org_name?: string }
 
 const money = (n: number) => '$' + (n || 0).toLocaleString('en-US')
@@ -16,7 +16,7 @@ export default function FellowOpsAdminPanel() {
   const [summary, setSummary] = useState<Summary | null>(null)
   const [fellows, setFellows] = useState<FellowRow[]>([])
   const [activity, setActivity] = useState<Activity[]>([])
-  const [tab, setTab] = useState<'today' | 'analytics' | 'activity' | 'reports' | 'proposals' | 'assign' | 'targets' | 'materials' | 'templates' | 'training' | 'certification'>('today')
+  const [tab, setTab] = useState<'today' | 'analytics' | 'pipeline' | 'activity' | 'reports' | 'proposals' | 'assign' | 'targets' | 'materials' | 'templates' | 'training' | 'certification'>('today')
 
   const load = useCallback(() => {
     api.get<{ summary: Summary; fellows: FellowRow[] }>('admin/fellow-ops/summary').then((d) => { setSummary(d.summary); setFellows(d.fellows || []) }).catch(() => {})
@@ -39,9 +39,9 @@ export default function FellowOpsAdminPanel() {
       <p style={{ color: 'var(--muted)', fontSize: 13, margin: '4px 0 14px' }}>What the sponsorship team did today, live.</p>
 
       <div className="admin-ov-tabs" role="tablist" style={{ marginBottom: 16 }}>
-        {(['today', 'analytics', 'activity', 'reports', 'proposals', 'assign', 'targets', 'materials', 'templates', 'training', 'certification'] as const).map((t) => (
+        {(['today', 'analytics', 'pipeline', 'activity', 'reports', 'proposals', 'assign', 'targets', 'materials', 'templates', 'training', 'certification'] as const).map((t) => (
           <button key={t} role="tab" aria-selected={tab === t} className={`admin-ov-tab${tab === t ? ' is-active' : ''}`} onClick={() => setTab(t)}>
-            {t === 'today' ? 'Today' : t === 'analytics' ? 'Analytics' : t === 'activity' ? 'Activity Feed' : t === 'reports' ? 'Daily Reports' : t === 'proposals' ? 'Proposals' : t === 'assign' ? 'Assign Task' : t === 'targets' ? 'Targets' : t === 'materials' ? 'Materials' : t === 'templates' ? 'Templates' : t === 'training' ? 'Training' : 'Certification'}
+            {t === 'today' ? 'Today' : t === 'analytics' ? 'Analytics' : t === 'pipeline' ? 'All Prospects' : t === 'activity' ? 'Activity Feed' : t === 'reports' ? 'Daily Reports' : t === 'proposals' ? 'Proposals' : t === 'assign' ? 'Assign Task' : t === 'targets' ? 'Targets' : t === 'materials' ? 'Materials' : t === 'templates' ? 'Templates' : t === 'training' ? 'Training' : 'Certification'}
           </button>
         ))}
       </div>
@@ -61,13 +61,15 @@ export default function FellowOpsAdminPanel() {
               </div>
             ))}
           </div>
-          <h4 className="gold-text">Fellows ({fellows.length})</h4>
+          <h4 className="gold-text" style={{ marginBottom: 2 }}>Fellows ({fellows.length})</h4>
+          <p style={{ color: 'var(--muted)', fontSize: 12.5, margin: '0 0 10px' }}>Real work only — sample data a Fellow loads to learn the tool is never counted here.</p>
           <div className="admin-table-wrap">
-            <table className="admin-table">
-              <thead><tr><th>Fellow</th><th>Today</th><th>Prospects</th><th>Pipeline</th><th>Won</th></tr></thead>
-              <tbody>{fellows.length === 0 ? <tr><td colSpan={5} className="msub" style={{ padding: 16 }}>No Fellows yet.</td></tr> : fellows.map((f) => (
-                <tr key={f.id}><td><strong>{f.full_name}</strong><div className="msub" style={{ fontSize: 12 }}>{f.email}</div></td>
-                  <td>{f.today_activity}</td><td>{f.orgs}</td><td>{money(f.pipeline)}</td><td>{f.won}</td></tr>
+            <table className="admin-table admin-table--stack">
+              <thead><tr><th>Fellow</th><th>Today</th><th>Prospects</th><th>Pipeline</th><th>Won</th><th>Training</th></tr></thead>
+              <tbody>{fellows.length === 0 ? <tr><td colSpan={6} className="msub" style={{ padding: 16 }}>No Fellows yet.</td></tr> : fellows.map((f) => (
+                <tr key={f.id}><td data-label="Fellow"><strong>{f.full_name}</strong><div className="msub" style={{ fontSize: 12 }}>{f.email}</div></td>
+                  <td data-label="Today">{f.today_activity}</td><td data-label="Prospects">{f.orgs}</td><td data-label="Pipeline">{money(f.pipeline)}</td><td data-label="Won">{f.won}</td>
+                  <td data-label="Training">{f.modules_done ?? 0} module{(f.modules_done ?? 0) === 1 ? '' : 's'}</td></tr>
               ))}</tbody>
             </table>
           </div>
@@ -87,6 +89,7 @@ export default function FellowOpsAdminPanel() {
       )}
 
       {tab === 'analytics' && <AnalyticsView />}
+      {tab === 'pipeline' && <PipelineAdmin />}
       {tab === 'reports' && <ReportsAdmin />}
       {tab === 'proposals' && <ProposalsAdmin />}
       {tab === 'assign' && <AssignTask fellows={fellows} onDone={load} />}
@@ -304,6 +307,58 @@ function AnalyticsView() {
             <strong style={{ fontSize: 13 }}>{money(f.value)}</strong>
           </div>
         ))}
+      </div>
+    </div>
+  )
+}
+
+/* The master prospect list across the whole team — who owns which company and
+   what it is worth. The route existed but nothing called it. */
+function PipelineAdmin() {
+  const [orgs, setOrgs] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [who, setWho] = useState('')
+  const [stage, setStage] = useState('')
+  useEffect(() => {
+    api.get<{ orgs: any[] }>('admin/fellow-ops/pipeline')
+      .then((d) => setOrgs(d.orgs || [])).catch(() => {}).finally(() => setLoading(false))
+  }, [])
+  const names = Array.from(new Set(orgs.map((o) => o.fellow_name).filter(Boolean))).sort()
+  const stages = Array.from(new Set(orgs.map((o) => o.stage))).sort()
+  const shown = orgs.filter((o) => (!who || o.fellow_name === who) && (!stage || o.stage === stage))
+  const total = shown.reduce((n, o) => n + (Number(o.est_value) || 0), 0)
+  if (loading) return <p style={{ color: 'var(--muted)', fontSize: 13 }}>Loading prospects…</p>
+  if (orgs.length === 0) return <p style={{ color: 'var(--muted)', fontSize: 13 }}>No prospects yet. They appear here as soon as a Fellow adds one. (Sample data a Fellow loads to learn the tool is never shown here.)</p>
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
+        <label style={{ fontSize: 12, color: 'var(--muted)' }}>Fellow:&nbsp;
+          <select className="fc-input" style={{ width: 'auto' }} value={who} onChange={(e) => setWho(e.target.value)}>
+            <option value="" style={{ background: '#14120b' }}>Everyone</option>
+            {names.map((n) => <option key={n} value={n} style={{ background: '#14120b' }}>{n}</option>)}
+          </select>
+        </label>
+        <label style={{ fontSize: 12, color: 'var(--muted)' }}>Stage:&nbsp;
+          <select className="fc-input" style={{ width: 'auto' }} value={stage} onChange={(e) => setStage(e.target.value)}>
+            <option value="" style={{ background: '#14120b' }}>All stages</option>
+            {stages.map((s) => <option key={s} value={s} style={{ background: '#14120b' }}>{label(s)}</option>)}
+          </select>
+        </label>
+        <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>{shown.length} prospects · <strong style={{ color: 'var(--gold-light)' }}>{money(total)}</strong></span>
+      </div>
+      <div className="admin-table-wrap">
+        <table className="admin-table admin-table--stack">
+          <thead><tr><th>Organization</th><th>Fellow</th><th>Stage</th><th>Value</th><th>Location</th></tr></thead>
+          <tbody>{shown.map((o) => (
+            <tr key={o.id}>
+              <td data-label="Organization"><strong>{o.name}</strong>{o.category ? <div style={{ fontSize: 12, color: 'var(--muted)' }}>{o.category}</div> : null}</td>
+              <td data-label="Fellow">{o.fellow_name || <span style={{ color: '#e0a86c' }}>unassigned</span>}</td>
+              <td data-label="Stage">{label(o.stage)}</td>
+              <td data-label="Value">{money(Number(o.est_value) || 0)}</td>
+              <td data-label="Location">{o.location || '—'}</td>
+            </tr>
+          ))}</tbody>
+        </table>
       </div>
     </div>
   )

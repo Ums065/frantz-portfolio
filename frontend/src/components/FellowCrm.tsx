@@ -297,6 +297,13 @@ export default function FellowCrm({ view: viewProp, onView }: { view?: ViewKey; 
           <div><dt>Sponsors won</dt><dd>{wonCount}</dd></div>
           <div className={(overview?.followups_due || 0) > 0 ? 'is-alert' : ''}><dt>Follow-ups due</dt><dd>{overview?.followups_due || 0}</dd></div>
         </dl>
+        {/* Be explicit about the gap rather than letting a Fellow believe their
+            manager is looking at the same totals. */}
+        {(overview?.demo_orgs || 0) > 0 && (
+          <p className="msub" style={{ gridColumn: '1 / -1', margin: 0, fontSize: 12 }}>
+            Includes {overview?.demo_orgs} sample compan{(overview?.demo_orgs || 0) === 1 ? 'y' : 'ies'} — your manager does not see these.
+          </p>
+        )}
       </header>
 
       {!controlled && <nav className="fc-nav" aria-label="Sponsorship CRM sections">
@@ -331,8 +338,8 @@ export default function FellowCrm({ view: viewProp, onView }: { view?: ViewKey; 
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginTop: 14, paddingTop: 14, borderTop: '1px solid rgba(201,168,76,.16)' }}>
               <p className="msub" style={{ margin: 0, fontSize: 12.5, flex: '1 1 240px' }}>
                 {demoLoaded
-                  ? 'Sample prospects are loaded — explore Pipeline, Call List and Performance, then remove them when you are ready for real work.'
-                  : 'New here? Load 7 example companies to see how every screen works. You can delete them with one click.'}
+                  ? 'Sample prospects are loaded — explore Pipeline, Call List and Performance, then remove them when you are ready for real work. Your manager never sees them, so your numbers here will read higher than theirs.'
+                  : 'New here? Load 7 example companies to see how every screen works. Your manager will not see them, and you can delete them with one click.'}
               </p>
               {demoBtn}
             </div>

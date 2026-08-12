@@ -131,7 +131,7 @@ function ensure_session_version_column(): void
  * request after a deploy, db_auto_migrate() notices the stored version is behind
  * and runs every *_ensure_schema() once; afterwards it's a single cheap SELECT.
  */
-const APP_SCHEMA_VERSION = 20260812; // yyyymmdd + seq — raise on each schema change
+const APP_SCHEMA_VERSION = 20260813; // yyyymmdd + seq — raise on each schema change
 
 /**
  * One-shot, version-gated auto-migration. Runs on app bootstrap: if the DB's
@@ -6049,9 +6049,12 @@ function fellow_ops_ensure_schema(): void
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, done_at TIMESTAMP NULL DEFAULT NULL,
             INDEX idx_ffu_fellow (fellow_user_id, status, due_date)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-        // Admin-configurable daily targets (single global row id=1; per-fellow later).
+        // Daily targets: row with fellow_user_id = 0 is the global default, any
+        // other row overrides it for that Fellow. `id` must auto-increment —
+        // without it the per-Fellow upsert has no id to supply and every save
+        // either errors under strict mode or collides on id = 0.
         db()->exec("CREATE TABLE IF NOT EXISTS fellow_targets (
-            id INT PRIMARY KEY, orgs INT NOT NULL DEFAULT 10, emails INT NOT NULL DEFAULT 10,
+            id INT AUTO_INCREMENT PRIMARY KEY, orgs INT NOT NULL DEFAULT 10, emails INT NOT NULL DEFAULT 10,
             calls INT NOT NULL DEFAULT 5, linkedin INT NOT NULL DEFAULT 5, follow_ups INT NOT NULL DEFAULT 10,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
@@ -6065,6 +6068,16 @@ function fellow_ops_ensure_schema(): void
                 db()->exec("ALTER TABLE fellow_targets ADD UNIQUE KEY uniq_target_fellow (fellow_user_id)");
             }
         } catch (Throwable $e) { if (app_debug()) error_log('fellow_targets fellow_user_id: ' . $e->getMessage()); }
+        // Existing installs were created before `id` auto-incremented; retrofit it
+        // or per-Fellow targets silently overwrite each other on id = 0.
+        try {
+            $auto = db()->query("SELECT EXTRA FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'fellow_targets' AND COLUMN_NAME = 'id'")->fetchColumn();
+            if (stripos((string) $auto, 'auto_increment') === false) {
+                // Any row that landed on id = 0 has to move before AUTO_INCREMENT.
+                db()->exec("UPDATE fellow_targets SET id = (SELECT COALESCE(MAX(t.id),1) + 1 FROM (SELECT id FROM fellow_targets) t) WHERE id = 0");
+                db()->exec("ALTER TABLE fellow_targets MODIFY id INT NOT NULL AUTO_INCREMENT");
+            }
+        } catch (Throwable $e) { if (app_debug()) error_log('fellow_targets id auto_increment: ' . $e->getMessage()); }
         // Admin-approved outreach templates (email / call scripts / LinkedIn / follow-up).
         db()->exec("CREATE TABLE IF NOT EXISTS fellow_templates (
             id INT AUTO_INCREMENT PRIMARY KEY, kind VARCHAR(20) NOT NULL DEFAULT 'email',
@@ -6330,20 +6343,27 @@ function fellow_scorecard(int $fellowId): array
     ];
 }
 
+/** Sample prospects a Fellow loaded to learn the tool are theirs alone — they
+ *  must never reach a management number. Every admin-side aggregate filters on
+ *  these fragments; activities join through the org so an org-less real
+ *  activity is still counted. */
+const FELLOW_REAL_ORG = 'is_demo = 0';
+const FELLOW_REAL_ACT = 'LEFT JOIN fellow_orgs dorg ON dorg.id = a.org_id WHERE (dorg.id IS NULL OR dorg.is_demo = 0)';
+
 /** Admin Command Center aggregates: today's team activity + pipeline value. */
 function fellow_admin_summary(): array
 {
     fellow_ops_ensure_schema();
     $today = static function (string $type): int {
-        $s = db()->prepare("SELECT COUNT(*) FROM fellow_activities WHERE type = ? AND DATE(created_at) = CURDATE()");
+        $s = db()->prepare("SELECT COUNT(*) FROM fellow_activities a " . FELLOW_REAL_ACT . " AND a.type = ? AND DATE(a.created_at) = CURDATE()");
         $s->execute([$type]);
         return (int) $s->fetchColumn();
     };
-    $activeFellows = (int) db()->query("SELECT COUNT(DISTINCT fellow_user_id) FROM fellow_activities WHERE DATE(created_at) = CURDATE()")->fetchColumn();
-    $totalPipeline = (int) db()->query("SELECT COALESCE(SUM(est_value),0) FROM fellow_orgs WHERE stage NOT IN ('closed_lost','not_interested','no_response')")->fetchColumn();
-    $newPipeline = (int) db()->query("SELECT COALESCE(SUM(est_value),0) FROM fellow_orgs WHERE DATE(created_at) = CURDATE()")->fetchColumn();
-    $proposalVal = (int) db()->query("SELECT COALESCE(SUM(est_value),0) FROM fellow_orgs WHERE stage IN ('proposal_sent','negotiation')")->fetchColumn();
-    $confirmedVal = (int) db()->query("SELECT COALESCE(SUM(est_value),0) FROM fellow_orgs WHERE stage IN ('confirmed','paid')")->fetchColumn();
+    $activeFellows = (int) db()->query("SELECT COUNT(DISTINCT a.fellow_user_id) FROM fellow_activities a " . FELLOW_REAL_ACT . " AND DATE(a.created_at) = CURDATE()")->fetchColumn();
+    $totalPipeline = (int) db()->query("SELECT COALESCE(SUM(est_value),0) FROM fellow_orgs WHERE " . FELLOW_REAL_ORG . " AND stage NOT IN ('closed_lost','not_interested','no_response')")->fetchColumn();
+    $newPipeline = (int) db()->query("SELECT COALESCE(SUM(est_value),0) FROM fellow_orgs WHERE " . FELLOW_REAL_ORG . " AND DATE(created_at) = CURDATE()")->fetchColumn();
+    $proposalVal = (int) db()->query("SELECT COALESCE(SUM(est_value),0) FROM fellow_orgs WHERE " . FELLOW_REAL_ORG . " AND stage IN ('proposal_sent','negotiation')")->fetchColumn();
+    $confirmedVal = (int) db()->query("SELECT COALESCE(SUM(est_value),0) FROM fellow_orgs WHERE " . FELLOW_REAL_ORG . " AND stage IN ('confirmed','paid')")->fetchColumn();
     return [
         'active_fellows' => $activeFellows,
         'prospects_added' => $today('research'),
@@ -6361,10 +6381,12 @@ function fellow_admin_fellows(): array
     fellow_ops_ensure_schema();
     $rows = db()->query(
         "SELECT u.id, u.full_name, u.email,
-                (SELECT COUNT(*) FROM fellow_orgs o WHERE o.fellow_user_id = u.id) AS orgs,
-                (SELECT COALESCE(SUM(o.est_value),0) FROM fellow_orgs o WHERE o.fellow_user_id = u.id AND o.stage NOT IN ('closed_lost','not_interested','no_response')) AS pipeline,
-                (SELECT COUNT(*) FROM fellow_activities a WHERE a.fellow_user_id = u.id AND DATE(a.created_at) = CURDATE()) AS today_activity,
-                (SELECT COUNT(*) FROM fellow_orgs o WHERE o.fellow_user_id = u.id AND o.stage IN ('confirmed','paid')) AS won
+                (SELECT COUNT(*) FROM fellow_orgs o WHERE o.fellow_user_id = u.id AND o.is_demo = 0) AS orgs,
+                (SELECT COALESCE(SUM(o.est_value),0) FROM fellow_orgs o WHERE o.fellow_user_id = u.id AND o.is_demo = 0 AND o.stage NOT IN ('closed_lost','not_interested','no_response')) AS pipeline,
+                (SELECT COUNT(*) FROM fellow_activities a LEFT JOIN fellow_orgs dorg ON dorg.id = a.org_id
+                   WHERE a.fellow_user_id = u.id AND (dorg.id IS NULL OR dorg.is_demo = 0) AND DATE(a.created_at) = CURDATE()) AS today_activity,
+                (SELECT COUNT(*) FROM fellow_orgs o WHERE o.fellow_user_id = u.id AND o.is_demo = 0 AND o.stage IN ('confirmed','paid')) AS won,
+                (SELECT COUNT(*) FROM fellow_module_progress p WHERE p.fellow_user_id = u.id) AS modules_done
          FROM users u WHERE u.role = 'fellow' ORDER BY today_activity DESC, u.full_name ASC"
     )->fetchAll() ?: [];
     return $rows;
