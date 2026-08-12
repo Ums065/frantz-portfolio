@@ -296,7 +296,7 @@ function AnalyticsView() {
       <h4 className="gold-text">Pipeline Funnel</h4>
       <div style={{ display: 'grid', gap: 8 }}>
         {(d.funnel || []).map((f: any) => (
-          <div key={f.stage} style={{ display: 'grid', gridTemplateColumns: '170px 1fr auto', gap: 10, alignItems: 'center' }}>
+          <div key={f.stage} style={{ display: 'grid', gridTemplateColumns: 'minmax(90px, 170px) 1fr auto', gap: 10, alignItems: 'center' }}>
             <span style={{ fontSize: 13, textTransform: 'capitalize' }}>{f.stage.replace(/_/g, ' ')} <span className="msub">({f.n})</span></span>
             <div style={{ height: 18, borderRadius: 6, background: 'rgba(255,255,255,.05)', overflow: 'hidden' }}><span style={{ display: 'block', height: '100%', width: `${Math.max(3, Math.round((f.value / maxV) * 100))}%`, background: 'linear-gradient(90deg,#c9a84c,#f6e2a8)' }} /></div>
             <strong style={{ fontSize: 13 }}>{money(f.value)}</strong>

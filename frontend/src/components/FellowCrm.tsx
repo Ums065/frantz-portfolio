@@ -15,8 +15,174 @@ const STAGE_LABEL = (s: string) => s.replace(/_/g, ' ').replace(/\b\w/g, (c) => 
 const money = (n: number) => n > 0 ? '$' + n.toLocaleString('en-US') : '—'
 const ACTIVITY_QUICK: [string, string][] = [['email', '✉ Email sent'], ['call', '📞 Call'], ['linkedin', 'in LinkedIn'], ['meeting', '📅 Meeting'], ['proposal', '📄 Proposal'], ['note', '📝 Note']]
 
+type ViewKey = 'day' | 'prospects' | 'pipeline' | 'calls' | 'outreach' | 'academy' | 'certification' | 'performance' | 'materials' | 'report'
+
+/* Every tab explains itself: an icon, a plain-language tagline, and the 3 steps
+   to actually do the work. New Fellows should never have to guess. */
+const VIEW_META: Record<ViewKey, { icon: string; label: string; tagline: string; steps: string[] }> = {
+  day: {
+    icon: '🌅', label: 'My Day',
+    tagline: 'Start here every morning. Your goals for today, follow-ups that are due, and tasks from your manager.',
+    steps: [
+      'Check the scorecard — those bars are today\'s goals (research, emails, calls).',
+      'Clear every follow-up that is due: click the company name to open it, then press "Done".',
+      'Work your tasks and change each status so your manager can see your progress.',
+    ],
+  },
+  prospects: {
+    icon: '🏢', label: 'Prospects',
+    tagline: 'Your list of companies that could sponsor the challenge. Everything starts by adding them here.',
+    steps: [
+      'Press "＋ Add Prospect" for one company, or "⇪ Import list" to paste many at once.',
+      'If another Fellow already owns that company, you get a warning — never double-contact.',
+      'Click any row to open the company: log a call, send an email, add a contact person.',
+    ],
+  },
+  pipeline: {
+    icon: '📊', label: 'Pipeline',
+    tagline: 'The same companies, sorted by how close they are to saying yes. Scroll sideways to see all stages.',
+    steps: [
+      'Each column is a stage. Companies move left → right as they warm up.',
+      'Click a card to open the company and move it to the next stage.',
+      'The number beside each column is how much sponsorship value is sitting in that stage.',
+    ],
+  },
+  calls: {
+    icon: '📞', label: 'Call List',
+    tagline: 'Everyone with a phone number, ready to dial — with the date you last spoke to them.',
+    steps: [
+      'Work down the list, oldest "last call" first.',
+      'Press "Log call", choose what happened, and set the next follow-up date.',
+      'It counts towards your daily call goal automatically — no extra typing.',
+    ],
+  },
+  outreach: {
+    icon: '✉️', label: 'Outreach',
+    tagline: 'Approved email and phone scripts, written for you. Never start a message from a blank page.',
+    steps: [
+      'Pick the template that matches your situation (first contact, follow-up, thank you…).',
+      'Copy it and change the name and details so it feels personal.',
+      'Send it from the company\'s page ("Send Email") so it is logged for you.',
+    ],
+  },
+  academy: {
+    icon: '🎓', label: 'Training Academy',
+    tagline: 'Your training course. Read each module, then mark it complete to unlock the exam.',
+    steps: [
+      'Work through the modules in order — they build on each other.',
+      'Open the document, read it, then press "Mark complete".',
+      'Finish all modules to unlock the Certification exam.',
+    ],
+  },
+  certification: {
+    icon: '🏅', label: 'Certification',
+    tagline: 'Pass the exam to become a Certified Student Fellow.',
+    steps: [
+      'Finish the Training Academy modules first.',
+      'Take the quiz — you need 80% to pass.',
+      'Did not pass? You can study and retake it.',
+    ],
+  },
+  performance: {
+    icon: '📈', label: 'Performance',
+    tagline: 'Your own numbers — today, this week, this month, and all time.',
+    steps: [
+      'The three cards show total prospects, pipeline value, and sponsorships won.',
+      'The table counts each activity you logged, per time period.',
+      'Your manager sees this too — steady effort every day beats one big day.',
+    ],
+  },
+  materials: {
+    icon: '📁', label: 'Materials',
+    tagline: 'Approved decks, one-pagers and links you are allowed to send to sponsors.',
+    steps: [
+      'Only send materials from this list — they are approved by the team.',
+      'Open or download the file, then attach it to your outreach.',
+      'Something missing? Ask an admin to add it.',
+    ],
+  },
+  report: {
+    icon: '📝', label: 'Daily Report',
+    tagline: 'Finish your day here. A two-minute summary so your manager can help you.',
+    steps: [
+      'Fill this in at the end of every working day.',
+      'Write what you did, what got stuck, and your plan for tomorrow.',
+      'Be honest about blockers — that is how you get help fast.',
+    ],
+  },
+}
+
+const TAB_GROUPS: { label: string; views: ViewKey[] }[] = [
+  { label: 'Start here', views: ['day'] },
+  { label: 'Find sponsors', views: ['prospects', 'pipeline', 'calls', 'outreach'] },
+  { label: 'Learn', views: ['academy', 'certification', 'materials'] },
+  { label: 'Track', views: ['performance', 'report'] },
+]
+
+/* Plain-English meaning of each pipeline stage, shown on the board and drawer. */
+const STAGE_HELP: Record<string, string> = {
+  researching: 'You are still learning about this company.',
+  qualified: 'A good fit — worth contacting.',
+  contact_identified: 'You found the right person to talk to.',
+  outreach_ready: 'Email or script ready to send.',
+  first_contact: 'You reached out. Waiting for a reply.',
+  follow_up: 'No reply yet — time to nudge them again.',
+  response_received: 'They replied. Read it and respond.',
+  interested: 'They want to know more.',
+  meeting_scheduled: 'A meeting is booked.',
+  proposal_sent: 'They have your sponsorship proposal.',
+  negotiation: 'Discussing the amount or the details.',
+  verbal_commitment: 'They said yes — not signed yet.',
+  confirmed: 'Signed and confirmed. 🎉',
+  paid: 'Money received. Fully done.',
+  not_interested: 'They said no.',
+  no_response: 'Never replied after several tries.',
+  closed_lost: 'Closed without a sponsorship.',
+}
+
+/* The 6-step journey a sponsor goes through, shown on My Day so a Fellow
+   always knows where the work is heading. */
+const JOURNEY: [string, string][] = [
+  ['1', 'Add the company'], ['2', 'Research the fit'], ['3', 'Find the right person'],
+  ['4', 'Reach out & follow up'], ['5', 'Send the proposal'], ['6', 'Sponsorship confirmed'],
+]
+
+/* Per-view explainer: tagline always visible, the 3 steps collapsible (and the
+   open/closed choice is remembered per Fellow). */
+function FcGuide({ view }: { view: ViewKey }) {
+  const m = VIEW_META[view]
+  const [open, setOpen] = useState(() => {
+    try { return localStorage.getItem('fcGuide.' + view) !== 'closed' } catch { return true }
+  })
+  const toggle = () => {
+    setOpen((o) => {
+      try { localStorage.setItem('fcGuide.' + view, o ? 'closed' : 'open') } catch { /* ignore */ }
+      return !o
+    })
+  }
+  return (
+    <div className="fc-guide">
+      <div className="fc-guide__head">
+        <span className="fc-guide__icon" aria-hidden="true">{m.icon}</span>
+        <div className="fc-guide__txt">
+          <h3>{m.label}</h3>
+          <p>{m.tagline}</p>
+        </div>
+        <button type="button" className="fc-guide__btn" onClick={toggle} aria-expanded={open}>
+          {open ? 'Hide steps' : 'How does this work?'}
+        </button>
+      </div>
+      {open && (
+        <ol className="fc-guide__steps">
+          {m.steps.map((s, i) => <li key={i}><span>{i + 1}</span>{s}</li>)}
+        </ol>
+      )}
+    </div>
+  )
+}
+
 export default function FellowCrm() {
-  const [view, setView] = useState<'day' | 'prospects' | 'pipeline' | 'calls' | 'outreach' | 'academy' | 'certification' | 'performance' | 'materials' | 'report'>('day')
+  const [view, setView] = useState<ViewKey>('day')
   const [importing, setImporting] = useState(false)
   const [overview, setOverview] = useState<{ scorecard: { counts: Record<string, number>; targets: Record<string, number> }; tasks: Task[]; followups: Followup[]; followups_due: number; orgs_total: number } | null>(null)
   const [orgs, setOrgs] = useState<Org[]>([])
@@ -57,18 +223,40 @@ export default function FellowCrm() {
 
   return (
     <div className="fc-crm">
-      <div className="admin-ov-tabs" role="tablist" style={{ marginBottom: 18 }}>
-        {(['day', 'prospects', 'pipeline', 'calls', 'outreach', 'academy', 'certification', 'performance', 'materials', 'report'] as const).map((v) => (
-          <button key={v} type="button" role="tab" aria-selected={view === v} className={`admin-ov-tab${view === v ? ' is-active' : ''}`} onClick={() => setView(v)}>
-            {v === 'day' ? 'My Day' : v === 'prospects' ? `Prospects (${orgs.length})` : v === 'pipeline' ? 'Pipeline' : v === 'calls' ? 'Calls' : v === 'outreach' ? 'Outreach' : v === 'academy' ? 'Training Academy' : v === 'certification' ? 'Certification' : v === 'performance' ? 'Performance' : v === 'materials' ? 'Materials' : 'Daily Report'}
-          </button>
+      <nav className="fc-nav" aria-label="Sponsorship CRM sections">
+        {TAB_GROUPS.map((g) => (
+          <div className="fc-nav__group" key={g.label}>
+            <span className="fc-nav__label">{g.label}</span>
+            <div className="fc-nav__tabs" role="tablist">
+              {g.views.map((v) => (
+                <button key={v} type="button" role="tab" aria-selected={view === v} title={VIEW_META[v].tagline}
+                  className={`fc-tab${view === v ? ' is-active' : ''}`} onClick={() => setView(v)}>
+                  <span aria-hidden="true">{VIEW_META[v].icon}</span>
+                  {VIEW_META[v].label}
+                  {v === 'prospects' && orgs.length > 0 ? <em>{orgs.length}</em> : null}
+                  {v === 'day' && (overview?.followups_due || 0) > 0 ? <em className="is-alert">{overview?.followups_due}</em> : null}
+                </button>
+              ))}
+            </div>
+          </div>
         ))}
-      </div>
+      </nav>
+
+      <FcGuide view={view} />
 
       {view === 'day' && (
         <div className="fc-day">
           <section className="glass" style={{ padding: 18, borderRadius: 14 }}>
-            <h3 className="gold-text" style={{ marginTop: 0 }}>Today's Scorecard</h3>
+            <h4 className="gold-text" style={{ marginTop: 0, marginBottom: 4 }}>How a sponsorship happens</h4>
+            <p className="msub" style={{ margin: '0 0 12px', fontSize: 12.5 }}>Every company you add travels these six steps. Your job is to move them one step forward each day.</p>
+            <ol className="fc-journey">
+              {JOURNEY.map(([n, t]) => <li key={n}><span>{n}</span>{t}</li>)}
+            </ol>
+          </section>
+
+          <section className="glass" style={{ padding: 18, borderRadius: 14 }}>
+            <h3 className="gold-text" style={{ marginTop: 0, marginBottom: 4 }}>Today's Scorecard</h3>
+            <p className="msub" style={{ margin: '0 0 14px', fontSize: 12.5 }}>Each bar fills up as you log work. Reaching the target number is a good day.</p>
             <div className="fc-sc-grid">
               {scRow('Organizations researched', 'research', sc?.targets?.orgs || 0)}
               {scRow('Emails sent', 'email', sc?.targets?.emails || 0)}
@@ -122,17 +310,24 @@ export default function FellowCrm() {
             <button className="btn btn--sm" onClick={() => setImporting(true)}>⇪ Import list</button>
             <button className="btn btn--sm btn--solid" onClick={() => setAdding(true)}>＋ Add Prospect</button>
           </div>
-          {filtered.length === 0 ? <p className="msub">No prospects yet. Add your first organization.</p> : (
+          {filtered.length === 0 ? (
+            <div className="fc-empty">
+              <span aria-hidden="true">🏢</span>
+              <h4>{q.trim() ? 'No prospect matches that search' : 'No prospects yet — this is where you begin'}</h4>
+              <p className="msub">{q.trim() ? 'Try a shorter word, or clear the search box.' : 'A "prospect" is any company that might sponsor the challenge — a local shop, a bank, a hospital, a restaurant chain. Add one and you can start tracking every call and email with it.'}</p>
+              {!q.trim() && <button className="btn btn--solid" onClick={() => setAdding(true)}>＋ Add your first prospect</button>}
+            </div>
+          ) : (
             <div className="admin-table-wrap">
-              <table className="admin-table">
+              <table className="admin-table admin-table--stack">
                 <thead><tr><th>Organization</th><th>Category</th><th>Priority</th><th>Stage</th><th>Value</th></tr></thead>
                 <tbody>{filtered.map((o) => (
                   <tr key={o.id} style={{ cursor: 'pointer' }} onClick={() => setOpenId(o.id)}>
-                    <td><strong>{o.name}</strong>{o.location ? <div className="msub" style={{ fontSize: 12 }}>{o.location}</div> : null}</td>
-                    <td>{o.category || '—'}</td>
-                    <td style={{ textTransform: 'capitalize' }}>{o.priority.replace('_', ' ')}</td>
-                    <td><span className="fc-stage-pill">{STAGE_LABEL(o.stage)}</span></td>
-                    <td>{money(o.est_value)}</td>
+                    <td data-label="Organization"><strong>{o.name}</strong>{o.location ? <div className="msub" style={{ fontSize: 12 }}>{o.location}</div> : null}</td>
+                    <td data-label="Category">{o.category || '—'}</td>
+                    <td data-label="Priority" style={{ textTransform: 'capitalize' }}>{o.priority.replace('_', ' ')}</td>
+                    <td data-label="Stage"><span className="fc-stage-pill" title={STAGE_HELP[o.stage] || ''}>{STAGE_LABEL(o.stage)}</span></td>
+                    <td data-label="Value">{money(o.est_value)}</td>
                   </tr>
                 ))}</tbody>
               </table>
@@ -141,7 +336,14 @@ export default function FellowCrm() {
         </div>
       )}
 
-      {view === 'pipeline' && (
+      {view === 'pipeline' && (orgs.length === 0 ? (
+        <div className="fc-empty">
+          <span aria-hidden="true">📊</span>
+          <h4>Your pipeline is empty</h4>
+          <p className="msub">The pipeline fills up on its own once you add companies. Add your first prospect and it will appear here.</p>
+          <button className="btn btn--solid" onClick={() => setView('prospects')}>Go to Prospects →</button>
+        </div>
+      ) : (
         <div className="fc-pipeline">
           {stages.filter((s) => !['not_interested', 'no_response', 'closed_lost'].includes(s)).map((s) => {
             const col = orgs.filter((o) => o.stage === s)
@@ -150,6 +352,7 @@ export default function FellowCrm() {
             return (
               <div className="fc-col" key={s}>
                 <div className="fc-col__head">{STAGE_LABEL(s)} <span className="msub">({col.length}{total ? ` · ${money(total)}` : ''})</span></div>
+                {STAGE_HELP[s] ? <p className="fc-col__help">{STAGE_HELP[s]}</p> : null}
                 {col.map((o) => (
                   <button key={o.id} type="button" className="fc-card" onClick={() => setOpenId(o.id)}>
                     <strong>{o.name}</strong>
@@ -160,7 +363,7 @@ export default function FellowCrm() {
             )
           })}
         </div>
-      )}
+      ))}
 
       {view === 'calls' && <CallsView onLogged={refresh} onOpen={setOpenId} />}
       {view === 'outreach' && <OutreachView />}
@@ -196,21 +399,22 @@ function AddProspect({ priorities, onClose, onSaved }: { priorities: string[]; o
     <div className="modal-overlay open" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal" style={{ maxWidth: 480, maxHeight: '90vh', overflowY: 'auto' }}>
         <button type="button" className="close" onClick={onClose} aria-label="Close">✕</button>
-        <h3 className="gold-text">Add Prospect</h3>
+        <h3 className="gold-text" style={{ marginBottom: 4 }}>Add Prospect</h3>
+        <p className="msub" style={{ fontSize: 12.5, margin: 0 }}>Only the name is required — you can fill in the rest later as you learn about them.</p>
         <div style={{ display: 'grid', gap: 10, marginTop: 12 }}>
           <label className="fc-fld">Organization name<input className="fc-input" value={f.name} onChange={(e) => { set('name', e.target.value); setDup(null) }} onBlur={checkDup} /></label>
           {dup && <div className="fc-dup">⚠ Already in the system{dup.fellow_name ? ` (assigned to ${dup.fellow_name})` : ''} — check before duplicating.</div>}
-          <div style={{ display: 'flex', gap: 10 }}>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             <label className="fc-fld" style={{ flex: 1 }}>Website<input className="fc-input" value={f.website} onChange={(e) => set('website', e.target.value)} placeholder="https://…" /></label>
             <label className="fc-fld" style={{ flex: 1 }}>Category<input className="fc-input" value={f.category} onChange={(e) => set('category', e.target.value)} placeholder="Corporate Sponsor…" /></label>
           </div>
-          <div style={{ display: 'flex', gap: 10 }}>
-            <label className="fc-fld" style={{ flex: 1 }}>Industry<input className="fc-input" value={f.industry} onChange={(e) => set('industry', e.target.value)} /></label>
-            <label className="fc-fld" style={{ flex: 1 }}>Location<input className="fc-input" value={f.location} onChange={(e) => set('location', e.target.value)} /></label>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <label className="fc-fld" style={{ flex: '1 1 170px' }}>Industry<input className="fc-input" value={f.industry} onChange={(e) => set('industry', e.target.value)} /></label>
+            <label className="fc-fld" style={{ flex: '1 1 170px' }}>Location<input className="fc-input" value={f.location} onChange={(e) => set('location', e.target.value)} /></label>
           </div>
-          <div style={{ display: 'flex', gap: 10 }}>
-            <label className="fc-fld" style={{ flex: 1 }}>Priority<select className="fc-input" value={f.priority} onChange={(e) => set('priority', e.target.value)}>{priorities.map((p) => <option key={p} value={p} style={{ background: '#14120b' }}>{p.replace('_', ' ')}</option>)}</select></label>
-            <label className="fc-fld" style={{ flex: 1 }}>Est. value ($)<input className="fc-input" type="number" value={f.est_value} onChange={(e) => set('est_value', e.target.value)} /></label>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <label className="fc-fld" style={{ flex: '1 1 170px' }}>Priority<select className="fc-input" value={f.priority} onChange={(e) => set('priority', e.target.value)}>{priorities.map((p) => <option key={p} value={p} style={{ background: '#14120b' }}>{p.replace('_', ' ')}</option>)}</select></label>
+            <label className="fc-fld" style={{ flex: '1 1 170px' }}>Est. value ($)<input className="fc-input" type="number" value={f.est_value} onChange={(e) => set('est_value', e.target.value)} placeholder="e.g. 5000" /></label>
           </div>
           <label className="fc-fld">Why a good fit?<textarea className="fc-input" rows={2} value={f.fit_notes} onChange={(e) => set('fit_notes', e.target.value)} /></label>
           {err && <p className="msub" style={{ color: '#e08a8a' }}>{err}</p>}
@@ -371,13 +575,13 @@ function CallsView({ onLogged, onOpen }: { onLogged: () => void; onOpen: (id: nu
   if (calls.length === 0) return <p className="msub">No call list yet — add prospects with a phone contact.</p>
   return (
     <div className="admin-table-wrap">
-      <table className="admin-table">
+      <table className="admin-table admin-table--stack">
         <thead><tr><th>Organization</th><th>Contact</th><th>Phone</th><th>Last call</th><th></th></tr></thead>
         <tbody>{calls.map((c) => (
           <tr key={c.id}>
-            <td><button type="button" className="fc-link" onClick={() => onOpen(c.id)}>{c.name}</button></td>
-            <td>{c.contact_name || '—'}</td><td>{c.phone || '—'}</td>
-            <td className="msub">{c.last_call ? String(c.last_call).slice(0, 10) : 'never'}</td>
+            <td data-label="Organization"><button type="button" className="fc-link" onClick={() => onOpen(c.id)}>{c.name}</button></td>
+            <td data-label="Contact">{c.contact_name || '—'}</td><td data-label="Phone">{c.phone || '—'}</td>
+            <td data-label="Last call" className="msub">{c.last_call ? String(c.last_call).slice(0, 10) : 'never'}</td>
             <td onClick={(e) => e.stopPropagation()}>
               {active === c.id ? (
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -531,10 +735,10 @@ function PerformanceView() {
         <div className="glass" style={{ padding: '14px 16px', borderRadius: 12 }}><div className="msub" style={{ fontSize: 11, textTransform: 'uppercase' }}>Sponsorships Won</div><strong className="gold-text" style={{ fontSize: 24, fontFamily: 'var(--f-serif)' }}>{p.won}</strong></div>
       </div>
       <div className="admin-table-wrap">
-        <table className="admin-table">
+        <table className="admin-table admin-table--stack">
           <thead><tr><th>Activity</th>{cols.map(([, l]) => <th key={l}>{l}</th>)}</tr></thead>
           <tbody>{PERF_ROWS.map(([k, lbl]) => (
-            <tr key={k}><td>{lbl}</td>{cols.map(([c]) => <td key={c}>{p[c]?.[k] || 0}</td>)}</tr>
+            <tr key={k}><td data-label="Activity">{lbl}</td>{cols.map(([c, l]) => <td key={c} data-label={l}>{p[c]?.[k] || 0}</td>)}</tr>
           ))}</tbody>
         </table>
       </div>

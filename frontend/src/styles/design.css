@@ -3988,3 +3988,56 @@ section#challenge .challenge-features .ns-gain p {
 .fc-dup { padding:8px 10px; border-radius:8px; background:rgba(224,120,92,.12); border:1px solid rgba(224,120,92,.4); color:#f0b8a8; font-size:12.5px; }
 .fc-link { background:none; border:0; padding:0; font:inherit; color:var(--gold-light,#f6e2a8); font-weight:700; cursor:pointer; }
 .fc-link:hover { text-decoration:underline; }
+
+/* --- Fellow CRM: self-explaining navigation + guidance ------------------- */
+/* Tabs are grouped under plain-language headings so a new Fellow can see the
+   shape of the work ("Start here" → "Find sponsors" → "Learn" → "Track"). */
+.fc-nav { display:flex; flex-wrap:wrap; gap:10px 22px; align-items:flex-start; margin-bottom:18px; padding-bottom:14px; border-bottom:1px solid rgba(201,168,76,.16); }
+.fc-nav__group { display:grid; gap:6px; }
+.fc-nav__group + .fc-nav__group { position:relative; }
+.fc-nav__label { font-size:10px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; color:rgba(201,168,76,.62); }
+.fc-nav__tabs { display:flex; flex-wrap:wrap; gap:6px; }
+.fc-tab { display:inline-flex; align-items:center; gap:6px; padding:7px 13px; border-radius:999px; border:1px solid rgba(201,168,76,.24); background:rgba(255,255,255,.02); color:var(--muted); font-family:inherit; font-size:13px; font-weight:600; cursor:pointer; transition:border-color .18s ease, color .18s ease, background .18s ease; }
+.fc-tab span { font-size:14px; line-height:1; }
+.fc-tab em { font-style:normal; font-size:10.5px; font-weight:800; padding:1px 6px; border-radius:999px; background:rgba(201,168,76,.2); color:#f4d774; }
+.fc-tab em.is-alert { background:rgba(224,120,92,.28); color:#f5c3b3; }
+.fc-tab:hover { color:var(--gold-light,#f6e2a8); border-color:rgba(201,168,76,.5); background:rgba(201,168,76,.06); }
+.fc-tab.is-active { background:var(--gold-grad); border-color:transparent; color:#1a1308; }
+.fc-tab.is-active em { background:rgba(0,0,0,.22); color:#1a1308; }
+.fc-tab:focus-visible { outline:2px solid var(--gold); outline-offset:2px; }
+
+/* Explainer strip: what this screen is, and the 3 steps to work it. */
+.fc-guide { margin-bottom:18px; padding:14px 16px; border-radius:13px; border:1px solid rgba(201,168,76,.22); background:linear-gradient(135deg,rgba(201,168,76,.09),rgba(13,12,9,.5)); }
+.fc-guide__head { display:flex; gap:13px; align-items:flex-start; }
+.fc-guide__icon { font-size:26px; line-height:1.1; flex:0 0 auto; }
+.fc-guide__txt { flex:1 1 220px; min-width:0; }
+.fc-guide__txt h3 { margin:0 0 3px; font-family:var(--f-serif); font-size:19px; color:var(--gold-light,#f6e2a8); }
+.fc-guide__txt p { margin:0; font-size:13.5px; line-height:1.55; color:var(--muted); }
+.fc-guide__btn { flex:0 0 auto; padding:6px 12px; border-radius:999px; border:1px solid rgba(201,168,76,.35); background:transparent; color:var(--gold-light,#f6e2a8); font:inherit; font-size:12px; font-weight:700; cursor:pointer; white-space:nowrap; }
+.fc-guide__btn:hover { background:rgba(201,168,76,.14); }
+.fc-guide__steps { list-style:none; margin:14px 0 0; padding:12px 0 0; border-top:1px solid rgba(201,168,76,.16); display:grid; gap:9px; counter-reset:none; }
+.fc-guide__steps li { display:flex; gap:10px; align-items:flex-start; font-size:13px; line-height:1.55; color:#ded8c8; }
+.fc-guide__steps li > span { flex:0 0 20px; height:20px; border-radius:50%; display:grid; place-items:center; font-size:11px; font-weight:800; background:rgba(201,168,76,.2); color:#f4d774; margin-top:1px; }
+
+/* The six-step sponsor journey (My Day). */
+.fc-journey { list-style:none; margin:0; padding:0; display:flex; flex-wrap:wrap; gap:8px; }
+.fc-journey li { flex:1 1 150px; display:flex; align-items:center; gap:8px; padding:9px 11px; border-radius:10px; border:1px solid rgba(201,168,76,.18); background:rgba(255,255,255,.02); font-size:12.5px; color:#ded8c8; }
+.fc-journey li > span { flex:0 0 21px; height:21px; border-radius:50%; display:grid; place-items:center; font-size:11px; font-weight:800; background:var(--gold-grad); color:#1a1308; }
+
+/* Friendly empty states that say what to do next. */
+.fc-empty { text-align:center; padding:38px 20px; border-radius:14px; border:1px dashed rgba(201,168,76,.28); background:rgba(255,255,255,.015); }
+.fc-empty > span { font-size:38px; display:block; margin-bottom:10px; }
+.fc-empty h4 { margin:0 0 8px; font-family:var(--f-serif); font-size:19px; color:var(--gold-light,#f6e2a8); }
+.fc-empty p { max-width:56ch; margin:0 auto 16px; font-size:13.5px; line-height:1.6; }
+.fc-col__help { margin:-4px 0 10px; font-size:11.5px; line-height:1.45; color:var(--muted); }
+
+@media (max-width: 640px) {
+  .fc-nav { gap:12px; }
+  .fc-nav__group { width:100%; }
+  .fc-guide__head { flex-wrap:wrap; }
+  .fc-guide__btn { width:100%; text-align:center; }
+  .fc-guide__icon { font-size:22px; }
+  .fc-guide__txt h3 { font-size:17px; }
+  .fc-journey li { flex:1 1 100%; }
+  .fc-empty { padding:28px 16px; }
+}

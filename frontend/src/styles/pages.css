@@ -439,6 +439,7 @@
 }
 @media (max-width: 460px) {
   .featured-grid, .gallery-grid { grid-template-columns: 1fr; }
+  .impact-grid, .leaders-row { grid-template-columns: 1fr; }
   .awards-hero__stats { grid-template-columns: 1fr; }
   .ah-stat::after { display: none !important; }
 }
