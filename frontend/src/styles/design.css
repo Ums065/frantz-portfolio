@@ -4012,6 +4012,23 @@ section#challenge .challenge-features .ns-gain p {
 .fc-kpis > div.is-alert { border-color:rgba(224,120,92,.45); background:rgba(224,120,92,.09); }
 .fc-kpis > div.is-alert dd { color:#f0b8a8; }
 
+/* "What to do next" rows on the Fellow Overview. */
+.fc-next { display:flex; align-items:center; gap:12px; padding:12px 14px; border-radius:12px; border:1px solid var(--line); background:rgba(255,255,255,.02); }
+.fc-next__icon { flex:0 0 34px; height:34px; border-radius:10px; display:grid; place-items:center; background:rgba(201,168,76,.14); color:var(--gold-light,#f6e2a8); }
+.fc-next[data-urgent] { border-color:rgba(224,120,92,.45); background:rgba(224,120,92,.08); }
+.fc-next[data-urgent] .fc-next__icon { background:rgba(224,120,92,.2); color:#f5c3b3; }
+@media (max-width: 560px) {
+  .fc-next { flex-wrap:wrap; }
+  .fc-next .btn { width:100%; }
+}
+
+/* Loading placeholders: shaped like the content, so nothing jumps on arrival.
+   The shimmer is suppressed for anyone who prefers reduced motion. */
+.fc-skel { display:grid; gap:10px; }
+.fc-skel span { display:block; border-radius:11px; background:linear-gradient(90deg,rgba(255,255,255,.035) 25%,rgba(201,168,76,.10) 50%,rgba(255,255,255,.035) 75%); background-size:200% 100%; animation:fc-shimmer 1.4s ease-in-out infinite; }
+@keyframes fc-shimmer { 0% { background-position:200% 0 } 100% { background-position:-200% 0 } }
+@media (prefers-reduced-motion: reduce) { .fc-skel span { animation:none; } }
+
 /* Drawer: how far a single prospect has travelled. */
 .fc-progress { margin-top:14px; }
 .fc-progress__bar { height:7px; border-radius:999px; background:rgba(255,255,255,.06); overflow:hidden; }

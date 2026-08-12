@@ -81,6 +81,7 @@ export default function Fellow() {
   const [tab, setTab] = useState<TabKey>('overview')
   const [navOpen, setNavOpen] = useState(false)
   const [crmDue, setCrmDue] = useState(0)
+  const [crmOrgs, setCrmOrgs] = useState(0)
   // Collapsible sidebar groups, same as the admin Command Center. Every group
   // starts open so nothing is hidden; the Fellow's choices then persist.
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => {
@@ -119,8 +120,8 @@ export default function Fellow() {
       .catch(() => {})
     // Overdue follow-ups drive the sidebar badge on My Day.
     if (role === 'fellow') {
-      api.get<{ followups_due: number }>('fellow/crm/overview')
-        .then((d) => setCrmDue(d.followups_due || 0))
+      api.get<{ followups_due: number; orgs_total: number }>('fellow/crm/overview')
+        .then((d) => { setCrmDue(d.followups_due || 0); setCrmOrgs(d.orgs_total || 0) })
         .catch(() => {})
     }
   }, [allowed, role])
@@ -223,6 +224,19 @@ export default function Fellow() {
 
   const openAssignments = assignments.filter((a) => a.status === 'active' || a.status === 'accepted')
 
+  const hour = new Date().getHours()
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
+  // Ranked suggestions from the Fellow's real state — most urgent first, and
+  // never an empty list, so the Overview always answers "what now?".
+  const nextActions: { label: string; why: string; cta: string; go: TabKey; icon: IconName; urgent?: boolean }[] = []
+  if (crmDue > 0) nextActions.push({ label: `Clear ${crmDue} follow-up${crmDue > 1 ? 's' : ''} that ${crmDue > 1 ? 'are' : 'is'} due`, why: 'Most sponsors say yes on the second or third contact — chasing on time is the whole job.', cta: 'Open My Day', go: 'crm:day', icon: 'sunrise', urgent: true })
+  if (crmOrgs === 0) nextActions.push({ label: 'Add your first prospect', why: 'A prospect is any company that might sponsor — a shop, a bank, a clinic. Everything else starts here.', cta: 'Add one', go: 'crm:prospects', icon: 'building' })
+  else if (crmOrgs < 10) nextActions.push({ label: `Grow your list — you have ${crmOrgs}`, why: 'Aim for a list you can work every day. More prospects, more chances.', cta: 'Add prospects', go: 'crm:prospects', icon: 'building' })
+  if (openAssignments.length > 0) nextActions.push({ label: `${openAssignments.length} assignment${openAssignments.length > 1 ? 's' : ''} from your admin`, why: 'Accept it or mark it complete so your manager knows where you are.', cta: 'See assignments', go: 'overview', icon: 'clipboard' })
+  if (nextActions.length < 3) nextActions.push({ label: 'Move someone forward in the pipeline', why: 'Pick one company and take it one stage further today — a call, an email, a meeting.', cta: 'Open Pipeline', go: 'crm:pipeline', icon: 'funnel' })
+  if (nextActions.length < 3) nextActions.push({ label: 'Finish your training', why: 'Read the modules, then take the exam to become a Certified Student Fellow.', cta: 'Open Academy', go: 'crm:academy', icon: 'cap' })
+  nextActions.push({ label: 'End your day with a report', why: 'Two minutes so your manager can unblock you tomorrow.', cta: 'Write it', go: 'crm:report', icon: 'clipboard' })
+
   return (
     <div className="admin-page" style={WRAP_S}>
       <div className={`admin-layout${navOpen ? '' : ' is-nav-collapsed'}`}>
@@ -321,6 +335,25 @@ export default function Fellow() {
 
           {tab === 'overview' && (
             <div style={{ display: 'grid', gap: 16, minWidth: 0 }}>
+              {/* A real starting point: what to do next, ranked, with the button
+                  that does it — rather than making the Fellow guess. */}
+              <section style={cardS}>
+                <h2 style={{ fontSize: 13, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--gold)', margin: '0 0 4px' }}>What to do next</h2>
+                <p style={{ color: 'var(--muted)', fontSize: 13, margin: '0 0 14px' }}>{greeting}, {(user?.full_name || '').split(' ')[0]}. Work down this list — the top one matters most today.</p>
+                <div style={{ display: 'grid', gap: 10 }}>
+                  {nextActions.map((a) => (
+                    <div key={a.label} className="fc-next" data-urgent={a.urgent ? '1' : undefined}>
+                      <span className="fc-next__icon"><FcIcon name={a.icon} size={18} /></span>
+                      <span style={{ flex: 1, minWidth: 0 }}>
+                        <strong style={{ display: 'block', color: 'var(--ivory)', fontSize: 14 }}>{a.label}</strong>
+                        <span style={{ color: 'var(--muted)', fontSize: 12.5 }}>{a.why}</span>
+                      </span>
+                      <button className="btn btn--sm btn--solid" onClick={() => setTab(a.go)}>{a.cta}</button>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
               <section style={cardS}>
                 <h2 style={{ fontSize: 13, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--gold)', margin: '0 0 12px' }}>My progress</h2>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(130px,100%),1fr))', gap: 12, minWidth: 0 }}>

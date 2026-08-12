@@ -185,6 +185,16 @@ function FcWorkflow({ view, onGo }: { view: ViewKey; onGo: (v: ViewKey) => void 
   )
 }
 
+/* Loading placeholder shaped like the content it replaces, so the layout does
+   not jump when data lands (and it never reads as an error). */
+function FcSkeleton({ rows = 3, height = 56 }: { rows?: number; height?: number }) {
+  return (
+    <div className="fc-skel" aria-hidden="true">
+      {Array.from({ length: rows }, (_, i) => <span key={i} style={{ height }} />)}
+    </div>
+  )
+}
+
 /* Per-view explainer: tagline always visible, the 3 steps collapsible (and the
    open/closed choice is remembered per Fellow). */
 function FcGuide({ view }: { view: ViewKey }) {
@@ -244,10 +254,10 @@ export default function FellowCrm({ view: viewProp, onView }: { view?: ViewKey; 
   }, [])
   useEffect(() => { loadOverview(); loadOrgs() }, [loadOverview, loadOrgs])
   const refresh = () => { loadOverview(); loadOrgs() }
-  const followupDone = async (id: number) => {
-    const next = window.prompt('Follow-up done! Schedule the next follow-up date (YYYY-MM-DD) or leave blank:', '')
-    if (next === null) return
-    await api.post(`fellow/followup/${id}/done`, { next_date: next.trim() })
+  const [doneFu, setDoneFu] = useState<Followup | null>(null)
+  const followupDone = async (id: number, nextDate: string) => {
+    await api.post(`fellow/followup/${id}/done`, { next_date: nextDate })
+    setDoneFu(null)
     refresh()
   }
   const setTaskStatus = async (id: number, status: string) => { await api.put(`fellow/task/${id}`, { status }); loadOverview() }
@@ -352,14 +362,14 @@ export default function FellowCrm({ view: viewProp, onView }: { view?: ViewKey; 
           <section className="glass" style={{ padding: 18, borderRadius: 14 }}>
             <h3 className="gold-text" style={{ marginTop: 0, marginBottom: 4 }}>Today's Scorecard</h3>
             <p className="msub" style={{ margin: '0 0 14px', fontSize: 12.5 }}>Each bar fills up as you log work. Reaching the target number is a good day.</p>
-            <div className="fc-sc-grid">
+            {!overview ? <FcSkeleton rows={3} height={40} /> : <div className="fc-sc-grid">
               {scRow('Organizations researched', 'research', sc?.targets?.orgs || 0)}
               {scRow('Emails sent', 'email', sc?.targets?.emails || 0)}
               {scRow('Calls made', 'call', sc?.targets?.calls || 0)}
               {scRow('LinkedIn outreach', 'linkedin', sc?.targets?.linkedin || 0)}
               {scRow('Follow-ups done', 'follow_up', sc?.targets?.follow_ups || 0)}
               {scRow('Meetings booked', 'meeting', 0)}
-            </div>
+            </div>}
           </section>
 
           <div className="fc-day-cols">
@@ -372,7 +382,7 @@ export default function FellowCrm({ view: viewProp, onView }: { view?: ViewKey; 
                       <button type="button" onClick={() => setOpenId(f.org_id)}>{f.org_name}</button>
                       <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <span className="msub">{f.due_date}{f.reason ? ` · ${f.reason}` : ''}</span>
-                        <button type="button" className="btn btn--sm btn--solid" onClick={() => followupDone(f.id)}>Done</button>
+                        <button type="button" className="btn btn--sm btn--solid" onClick={() => setDoneFu(f)}>Done</button>
                       </span>
                     </li>
                   ))}
@@ -476,10 +486,48 @@ export default function FellowCrm({ view: viewProp, onView }: { view?: ViewKey; 
       {view === 'materials' && <MaterialsView />}
       {view === 'report' && <ReportView />}
 
+      {doneFu && <FollowupDone fu={doneFu} onClose={() => setDoneFu(null)} onDone={followupDone} />}
       {composing && <EmailComposer presetTpl={composing.tpl} onClose={() => setComposing(null)} onSent={() => { setComposing(null); refresh() }} onProspects={() => { setComposing(null); setView('prospects') }} />}
       {adding && <AddProspect priorities={priorities} onClose={() => setAdding(false)} onSaved={() => { setAdding(false); refresh() }} />}
       {importing && <ImportModal onClose={() => setImporting(false)} onSaved={() => { setImporting(false); refresh() }} />}
       {openId && <OrgDrawer id={openId} onClose={() => setOpenId(null)} onChange={refresh} />}
+    </div>
+  )
+}
+
+/* Marking a follow-up done always asks the one question that matters next:
+   when do you chase them again? Quick picks beat typing a date by hand. */
+function FollowupDone({ fu, onClose, onDone }: { fu: Followup; onClose: () => void; onDone: (id: number, next: string) => void }) {
+  const plus = (days: number) => { const d = new Date(); d.setDate(d.getDate() + days); return d.toISOString().slice(0, 10) }
+  const QUICK: [string, number][] = [['Tomorrow', 1], ['In 3 days', 3], ['Next week', 7], ['In 2 weeks', 14], ['In a month', 30]]
+  const [custom, setCustom] = useState('')
+  const [busy, setBusy] = useState(false)
+  const go = (next: string) => { setBusy(true); onDone(fu.id, next) }
+  return (
+    <div className="modal-overlay open" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal" style={{ maxWidth: 460 }}>
+        <button type="button" className="close" onClick={onClose} aria-label="Close">✕</button>
+        <h3 className="gold-text" style={{ marginBottom: 2 }}>Follow-up done</h3>
+        <p className="msub" style={{ marginTop: 0, fontSize: 13 }}>
+          Nice work on <strong style={{ color: '#f0ead6' }}>{fu.org_name}</strong>. When should you contact them again?
+        </p>
+        <p className="msub" style={{ fontSize: 12, margin: '10px 0 6px' }}>Most sponsors say yes on the second or third contact — pick a date, do not leave it to memory.</p>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+          {QUICK.map(([label, d]) => (
+            <button key={label} className="btn btn--sm btn--solid" disabled={busy} onClick={() => go(plus(d))}>{label}</button>
+          ))}
+        </div>
+        <label className="fc-fld">Or pick a date
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input className="fc-input" type="date" value={custom} min={plus(0)} onChange={(e) => setCustom(e.target.value)} />
+            <button className="btn btn--sm" disabled={busy || !custom} onClick={() => go(custom)}>Set</button>
+          </div>
+        </label>
+        <hr style={{ border: 0, borderTop: '1px solid rgba(201,168,76,.16)', margin: '14px 0' }} />
+        <button className="btn btn--sm" disabled={busy} onClick={() => go('')} style={{ width: '100%' }}>
+          No follow-up needed — close this one
+        </button>
+      </div>
     </div>
   )
 }
@@ -559,7 +607,7 @@ function EmailComposer({ presetTpl, onClose, onSent, onProspects }: { presetTpl?
         <h3 className="gold-text fc-btn-i" style={{ marginBottom: 2 }}><FcIcon name="send" size={19} />Send an Email</h3>
         <p className="msub" style={{ marginTop: 0, fontSize: 12.5 }}>Sent from the program address on your behalf and logged to the company's timeline automatically.</p>
 
-        {loading ? <p className="msub">Loading your contacts…</p> : contacts.length === 0 ? (
+        {loading ? <FcSkeleton rows={4} height={44} /> : contacts.length === 0 ? (
           <div className="fc-empty" style={{ marginTop: 14 }}>
             <span><FcIcon name="contact" size={34} /></span>
             <h4>No contact has an email address yet</h4>
@@ -661,7 +709,7 @@ function OrgDrawer({ id, onClose, onChange }: { id: number; onClose: () => void;
   const [showMtg, setShowMtg] = useState(false); const [mtg, setMtg] = useState<Record<string, string>>({ meeting_at: '', type: 'zoom', purpose: '', notes: '', outcome: '', next_steps: '' })
   const load = useCallback(() => { api.get<any>(`fellow/org/${id}`).then(setData).catch(() => {}) }, [id])
   useEffect(() => { load() }, [load])
-  if (!data) return <div className="modal-overlay open" onClick={onClose}><div className="modal" style={{ maxWidth: 640 }}><p className="msub">Loading…</p></div></div>
+  if (!data) return <div className="modal-overlay open" onClick={onClose}><div className="modal" style={{ maxWidth: 720 }}><FcSkeleton rows={5} height={52} /></div></div>
   const o = data.org
   const changeStage = async (stage: string) => { await api.put(`fellow/org/${id}/stage`, { stage }); load(); onChange() }
   const logActivity = async () => {
@@ -853,7 +901,7 @@ function CertificationView() {
   const [result, setResult] = useState<any>(null)
   const load = useCallback(() => { api.get<any>('fellow/quiz').then(setData).catch(() => {}) }, [])
   useEffect(() => { load() }, [load])
-  if (!data) return <p className="msub">Loading…</p>
+  if (!data) return <FcSkeleton rows={4} height={60} />
   const submit = async () => {
     const r = await api.post<any>('fellow/quiz/submit', { answers })
     setResult(r); setTaking(false); load()
@@ -982,7 +1030,7 @@ function OutreachView({ onUse }: { onUse: (templateId: number) => void }) {
 function PerformanceView() {
   const [p, setP] = useState<any>(null)
   useEffect(() => { api.get<{ performance: any }>('fellow/crm/performance').then((d) => setP(d.performance)).catch(() => {}) }, [])
-  if (!p) return <p className="msub">Loading…</p>
+  if (!p) return <FcSkeleton rows={4} height={60} />
   const cols: [string, string][] = [['today', 'Today'], ['week', 'This Week'], ['month', 'This Month'], ['all', 'All Time']]
   return (
     <div>
