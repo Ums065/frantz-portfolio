@@ -16,11 +16,11 @@ const STAGE_LABEL = (s: string) => s.replace(/_/g, ' ').replace(/\b\w/g, (c) => 
 const money = (n: number) => n > 0 ? '$' + n.toLocaleString('en-US') : '—'
 const ACTIVITY_QUICK: [string, string, IconName][] = [['email', 'Email sent', 'mail'], ['call', 'Call', 'phone'], ['linkedin', 'LinkedIn', 'linkedin'], ['meeting', 'Meeting', 'calendar'], ['proposal', 'Proposal', 'file'], ['note', 'Note', 'note']]
 
-type ViewKey = 'day' | 'prospects' | 'pipeline' | 'calls' | 'outreach' | 'academy' | 'certification' | 'performance' | 'materials' | 'report'
+export type ViewKey = 'day' | 'prospects' | 'pipeline' | 'calls' | 'outreach' | 'academy' | 'certification' | 'performance' | 'materials' | 'report'
 
 /* Every tab explains itself: an icon, a plain-language tagline, and the 3 steps
    to actually do the work. New Fellows should never have to guess. */
-const VIEW_META: Record<ViewKey, { icon: IconName; label: string; tagline: string; steps: string[] }> = {
+export const VIEW_META: Record<ViewKey, { icon: IconName; label: string; tagline: string; steps: string[] }> = {
   day: {
     icon: 'sunrise', label: 'My Day',
     tagline: 'Start here every morning. Your goals for today, follow-ups that are due, and tasks from your manager.',
@@ -113,7 +113,7 @@ const VIEW_META: Record<ViewKey, { icon: IconName; label: string; tagline: strin
   },
 }
 
-const TAB_GROUPS: { label: string; views: ViewKey[] }[] = [
+export const TAB_GROUPS: { label: string; views: ViewKey[] }[] = [
   { label: 'Start here', views: ['day'] },
   { label: 'Find sponsors', views: ['prospects', 'pipeline', 'calls', 'outreach'] },
   { label: 'Learn', views: ['academy', 'certification', 'materials'] },
@@ -219,8 +219,14 @@ function FcGuide({ view }: { view: ViewKey }) {
   )
 }
 
-export default function FellowCrm() {
-  const [view, setView] = useState<ViewKey>('day')
+/* `view`/`onView` let a host page (the Fellow sidebar) drive the section, so the
+   CRM's ten sections sit in one flat navigation instead of tabs-inside-tabs.
+   Left uncontrolled, the component keeps its own tab bar and works standalone. */
+export default function FellowCrm({ view: viewProp, onView }: { view?: ViewKey; onView?: (v: ViewKey) => void } = {}) {
+  const [ownView, setOwnView] = useState<ViewKey>('day')
+  const view = viewProp ?? ownView
+  const controlled = viewProp !== undefined
+  const setView = (v: ViewKey) => { controlled ? onView?.(v) : setOwnView(v) }
   const [importing, setImporting] = useState(false)
   const [overview, setOverview] = useState<{ scorecard: { counts: Record<string, number>; targets: Record<string, number> }; tasks: Task[]; followups: Followup[]; followups_due: number; orgs_total: number; demo_orgs?: number } | null>(null)
   const [demoBusy, setDemoBusy] = useState(false)
@@ -281,12 +287,15 @@ export default function FellowCrm() {
 
   return (
     <div className="fc-crm">
-      <header className="fc-head">
-        <div className="fc-head__title">
-          <span className="fc-head__eyebrow">Student Fellow</span>
-          <h2>Sponsorship CRM</h2>
-          <p className="msub">Find local sponsors, track every conversation, and close the deal.</p>
-        </div>
+      <header className={`fc-head${controlled ? ' fc-head--bare' : ''}`}>
+        {/* The host page already shows the section title when it drives the nav. */}
+        {!controlled && (
+          <div className="fc-head__title">
+            <span className="fc-head__eyebrow">Student Fellow</span>
+            <h2>Sponsorship CRM</h2>
+            <p className="msub">Find local sponsors, track every conversation, and close the deal.</p>
+          </div>
+        )}
         <div className="fc-head__actions">
           <button className="btn btn--sm btn--solid fc-btn-i" onClick={() => setComposing({})}><FcIcon name="send" size={15} />Send Email</button>
           <button className="btn btn--sm fc-btn-i" onClick={() => setAdding(true)}><FcIcon name="plus" size={15} />Add Prospect</button>
@@ -301,7 +310,7 @@ export default function FellowCrm() {
 
       <FcWorkflow view={view} onGo={setView} />
 
-      <nav className="fc-nav" aria-label="Sponsorship CRM sections">
+      {!controlled && <nav className="fc-nav" aria-label="Sponsorship CRM sections">
         {TAB_GROUPS.map((g) => (
           <div className="fc-nav__group" key={g.label}>
             <span className="fc-nav__label">{g.label}</span>
@@ -318,7 +327,7 @@ export default function FellowCrm() {
             </div>
           </div>
         ))}
-      </nav>
+      </nav>}
 
       <FcGuide view={view} />
 

@@ -3996,6 +3996,11 @@ section#challenge .challenge-features .ns-gain p {
 .fc-guide__icon { color:var(--gold-light,#f6e2a8); display:inline-flex; }
 
 .fc-head { display:grid; grid-template-columns:1fr auto; gap:14px 20px; align-items:start; padding:20px 22px; margin-bottom:16px; border-radius:16px; border:1px solid rgba(201,168,76,.22); background:linear-gradient(135deg,rgba(30,25,13,.72),rgba(13,12,9,.86)); }
+/* Hosted inside the Fellow sidebar shell: no title block, so actions and KPIs
+   sit on one tighter row. */
+.fc-head--bare { grid-template-columns:1fr; padding:15px 18px; }
+.fc-head--bare .fc-head__actions { justify-content:flex-start; }
+.fc-head--bare .fc-kpis { padding-top:14px; }
 .fc-head__eyebrow { display:block; font-size:10px; font-weight:800; letter-spacing:.16em; text-transform:uppercase; color:rgba(201,168,76,.7); margin-bottom:5px; }
 .fc-head__title h2 { margin:0; font-family:var(--f-serif); font-size:27px; line-height:1.15; color:var(--gold-light,#f6e2a8); }
 .fc-head__title p { margin:5px 0 0; font-size:13.5px; }

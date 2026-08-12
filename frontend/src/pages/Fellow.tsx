@@ -4,7 +4,8 @@ import { api } from '../lib/api'
 import { useAuth } from '../context/AuthContext'
 import { useSeo } from '../hooks/useSeo'
 import SheetImport from '../components/SheetImport'
-import FellowCrm from '../components/FellowCrm'
+import FellowCrm, { VIEW_META, type ViewKey } from '../components/FellowCrm'
+import FcIcon, { type IconName } from '../components/FcIcon'
 import ProfileSection from '../components/profile/ProfileSection'
 import AnnouncementsFeed, { useAnnouncementBadge } from '../components/AnnouncementsFeed'
 import NotificationBell from '../components/NotificationBell'
@@ -23,8 +24,37 @@ interface Assignment {
   id: number; title: string; detail: string; assign_date: string | null
   status: string; volunteer_note: string; created_ts: number; responded_ts: number
 }
-type TabKey = 'overview' | 'crm' | 'profile' | 'announcements' | 'messages' | ResearchCategory
+/* One flat navigation instead of tabs-inside-tabs: the CRM's ten sections are
+   addressed directly as `crm:<view>` so every destination is one click away. */
+type TabKey = 'overview' | 'profile' | 'announcements' | 'messages' | ResearchCategory | `crm:${ViewKey}`
 type EntryForm = typeof EMPTY_ENTRY_FORM
+
+interface NavItem { key: TabKey; label: string; icon: IconName; hint?: string; alert?: boolean }
+
+const RESEARCH_ICON: Partial<Record<ResearchCategory, IconName>> = {
+  school_contact: 'building', partner_prospect: 'contact', funder: 'award',
+  content_creator: 'sparkles', research_note: 'file',
+}
+
+const crmItem = (v: ViewKey, alert = false): NavItem =>
+  ({ key: `crm:${v}`, label: VIEW_META[v].label, icon: VIEW_META[v].icon, hint: VIEW_META[v].tagline, alert })
+
+const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
+  { label: 'Start here', items: [
+    { key: 'overview', label: 'Overview', icon: 'trending', hint: 'Your research progress and the tasks your admin assigned.' },
+    crmItem('day', true),
+  ] },
+  { label: 'Find sponsors', items: [crmItem('prospects'), crmItem('pipeline'), crmItem('calls'), crmItem('outreach')] },
+  { label: 'Learn', items: [crmItem('academy'), crmItem('certification'), crmItem('materials')] },
+  { label: 'Track', items: [crmItem('performance'), crmItem('report')] },
+  { label: 'Research', items: RESEARCH_CATEGORIES.map((c) => ({ key: c.key as TabKey, label: c.tabLabel, icon: RESEARCH_ICON[c.key] ?? 'note', hint: c.blurb })) },
+  { label: 'Account', items: [
+    { key: 'announcements', label: 'Announcements', icon: 'note', alert: true },
+    { key: 'messages', label: 'Messages', icon: 'mail', hint: 'Talk to the program team.' },
+    { key: 'profile', label: 'Profile', icon: 'contact' },
+  ] },
+]
+const NAV_ITEMS = NAV_GROUPS.flatMap((g) => g.items)
 
 export default function Fellow() {
   useSeo({ title: 'Fellow Research Workspace', noindex: true })
@@ -34,6 +64,8 @@ export default function Fellow() {
   const allowed = !!user && ['fellow', 'admin', 'super_admin'].includes(role)
 
   const [tab, setTab] = useState<TabKey>('overview')
+  const [navOpen, setNavOpen] = useState(false)
+  const [crmDue, setCrmDue] = useState(0)
   const { items: annItems, unseen: annUnseen, markSeen: markAnnSeen } = useAnnouncementBadge()
   const [counts, setCounts] = useState<Record<string, number>>({})
   const [assignments, setAssignments] = useState<Assignment[]>([])
@@ -47,13 +79,26 @@ export default function Fellow() {
     () => RESEARCH_CATEGORIES.find((c) => c.key === tab) ?? null,
     [tab],
   )
+  const crmView = tab.startsWith('crm:') ? (tab.slice(4) as ViewKey) : null
+  const activeLabel = NAV_ITEMS.find((i) => i.key === tab)?.label ?? 'Overview'
+  const badges: Partial<Record<TabKey, number>> = {
+    'crm:day': crmDue,
+    announcements: annUnseen,
+    ...Object.fromEntries(RESEARCH_CATEGORIES.map((c) => [c.key, counts[c.key] || 0])),
+  }
 
   const loadOverview = useCallback(() => {
     if (!allowed) return
     api.get<{ counts: Record<string, number>; assignments: Assignment[] }>('fellow/overview')
       .then((d) => { setCounts(d.counts || {}); setAssignments(d.assignments || []) })
       .catch(() => {})
-  }, [allowed])
+    // Overdue follow-ups drive the sidebar badge on My Day.
+    if (role === 'fellow') {
+      api.get<{ followups_due: number }>('fellow/crm/overview')
+        .then((d) => setCrmDue(d.followups_due || 0))
+        .catch(() => {})
+    }
+  }, [allowed, role])
 
   const loadEntries = useCallback((cat: ResearchCategory) => {
     api.get<{ entries: ResearchEntry[] }>(`fellow/entries?category=${cat}`)
@@ -155,34 +200,54 @@ export default function Fellow() {
 
   return (
     <div className="admin-page" style={WRAP_S}>
-      <div style={{ maxWidth: 1040, margin: '0 auto', minWidth: 0, display: 'grid', gap: 12, paddingTop: 18 }}>
+      <div className={`admin-layout${navOpen ? '' : ' is-nav-collapsed'}`}>
+        <button type="button" className="admin-mobilebar" onClick={() => setNavOpen((o) => !o)} aria-expanded={navOpen}>
+          <span>☰&nbsp; Menu</span>
+          <span className="admin-mobilebar__hint">{navOpen ? 'Tap to close' : activeLabel}</span>
+        </button>
+
+        <aside className="admin-sidebar glass">
+          <div className="admin-sidebar__brand">
+            <span className="admin-kicker">Student Fellow</span>
+            <strong className="gold-text">{user?.full_name || 'My Workspace'}</strong>
+          </div>
+          <nav className="admin-nav" onClick={() => setNavOpen(false)}>
+            {NAV_GROUPS.map((group) => (
+              <div className="admin-nav__group is-open" key={group.label}>
+                <span className="admin-nav__group-label">{group.label}</span>
+                <div className="admin-nav__items">
+                  {group.items.map((item) => (
+                    <button key={item.key} type="button"
+                      className={`admin-nav__item${tab === item.key ? ' is-active' : ''}`}
+                      title={item.hint}
+                      onClick={() => { setTab(item.key); if (item.key === 'announcements') markAnnSeen() }}>
+                      <span className="admin-nav__icon"><FcIcon name={item.icon} size={16} /></span>
+                      <span className="admin-nav__label">{item.label}</span>
+                      {badges[item.key] ? <span className={`admin-nav__badge${item.alert ? ' admin-nav__badge--notify' : ''}`}>{badges[item.key]}</span> : null}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </nav>
+          <div className="admin-sidebar__foot">
+            <a className="btn btn--sm" href="/">View Site</a>
+            <button className="btn btn--sm" onClick={() => void logout()}>Log out</button>
+          </div>
+        </aside>
+
+        <div style={{ minWidth: 0, display: 'grid', gap: 12 }}>
           <header className="glass" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', padding: 'clamp(14px,3vw,20px)', borderRadius: 16 }}>
             <div style={{ minWidth: 0 }}>
               <span className="admin-kicker">Youth Community Impact Fellow</span>
-              <h1 className="gold-text" style={{ fontFamily: 'var(--f-serif)', fontSize: 'clamp(20px,4vw,26px)', margin: '2px 0 0' }}>Research Workspace</h1>
-              <p style={{ color: 'var(--muted)', fontSize: 13, margin: 0, overflowWrap: 'anywhere' }}>Signed in as {user?.full_name}</p>
+              <h1 className="gold-text" style={{ fontFamily: 'var(--f-serif)', fontSize: 'clamp(20px,4vw,26px)', margin: '2px 0 0' }}>{activeLabel}</h1>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <NotificationBell />
-              <button className="btn btn--sm" onClick={() => void logout()}>Log out</button>
             </div>
           </header>
 
-          {/* Tabs */}
-          <div className="admin-ov-tabs" role="tablist" aria-label="Workspace sections" style={{ margin: '4px 0 8px' }}>
-            <button type="button" role="tab" aria-selected={tab === 'overview'} className={`admin-ov-tab${tab === 'overview' ? ' is-active' : ''}`} onClick={() => setTab('overview')}>Overview</button>
-            <button type="button" role="tab" aria-selected={tab === 'crm'} className={`admin-ov-tab${tab === 'crm' ? ' is-active' : ''}`} onClick={() => setTab('crm')}>Sponsorship CRM</button>
-            {RESEARCH_CATEGORIES.map((c) => (
-              <button key={c.key} type="button" role="tab" aria-selected={tab === c.key} className={`admin-ov-tab${tab === c.key ? ' is-active' : ''}`} onClick={() => setTab(c.key)}>
-                {c.tabLabel}{counts[c.key] ? ` (${counts[c.key]})` : ''}
-              </button>
-            ))}
-            <button type="button" role="tab" aria-selected={tab === 'announcements'} className={`admin-ov-tab${tab === 'announcements' ? ' is-active' : ''}`} onClick={() => { setTab('announcements'); markAnnSeen() }}>Announcements{annUnseen > 0 && <span style={{ marginLeft: 6, background: '#e5484d', color: '#fff', fontSize: 11, fontWeight: 700, lineHeight: 1, padding: '2px 6px', borderRadius: 999 }}>{annUnseen}</span>}</button>
-            <button type="button" role="tab" aria-selected={tab === 'messages'} className={`admin-ov-tab${tab === 'messages' ? ' is-active' : ''}`} onClick={() => setTab('messages')}>Messages</button>
-            <button type="button" role="tab" aria-selected={tab === 'profile'} className={`admin-ov-tab${tab === 'profile' ? ' is-active' : ''}`} onClick={() => setTab('profile')}>Profile</button>
-          </div>
-
-          {tab === 'crm' && <FellowCrm />}
+          {crmView && <FellowCrm view={crmView} onView={(v) => setTab(`crm:${v}`)} />}
           {tab === 'profile' && <ProfileSection />}
           {tab === 'messages' && (
             <Section title="Messages with the program team">
@@ -293,6 +358,7 @@ export default function Fellow() {
               </section>
             </div>
           )}
+        </div>
       </div>
     </div>
   )
