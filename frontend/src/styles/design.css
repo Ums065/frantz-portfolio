@@ -4022,6 +4022,9 @@ section#challenge .challenge-features .ns-gain p {
   .fc-next .btn { width:100%; }
 }
 
+/* Shared pager under every paged table. */
+.fc-pager { display:flex; gap:10px; align-items:center; justify-content:center; flex-wrap:wrap; margin-top:14px; padding-top:12px; border-top:1px solid rgba(201,168,76,.14); }
+
 /* Admin workspace switch: the whole site, or the Fellow team. */
 .admin-modebar { grid-column: 1 / -1; display:flex; justify-content:center; margin-bottom:4px; }
 .admin-mode { display:inline-flex; gap:4px; padding:4px; border-radius:999px; border:1px solid rgba(201,168,76,.28); background:rgba(0,0,0,.28); }

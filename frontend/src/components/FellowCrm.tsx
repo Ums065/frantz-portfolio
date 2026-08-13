@@ -11,6 +11,8 @@ interface Contact { id: number; name: string; title?: string; email?: string; ph
 interface Activity { type: string; detail?: string; created_at: string }
 interface Followup { id: number; org_id: number; due_date: string; reason?: string; org_name?: string; status?: string; method?: string }
 interface Task { id: number; title: string; priority: string; status: string; due_date?: string }
+/** Headline numbers, computed in SQL rather than from the loaded page. */
+interface OrgTotals { orgs: number; pipeline: number; won: number; demo: number }
 
 const STAGE_LABEL = (s: string) => s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 const money = (n: number) => n > 0 ? '$' + n.toLocaleString('en-US') : '—'
@@ -156,6 +158,20 @@ const stagePct = (s: string) => {
   return i < 0 ? 0 : Math.round(((i + 1) / STAGE_ORDER.length) * 100)
 }
 
+/* One pager for every paged table in the workspace. Renders nothing when
+   everything already fits, so short lists stay uncluttered. */
+export function Pager({ page, pages, total, unit = 'rows', onPage }:
+  { page: number; pages: number; total: number; unit?: string; onPage: (p: number) => void }) {
+  if (pages <= 1) return null
+  return (
+    <div className="fc-pager">
+      <button className="btn btn--sm" disabled={page <= 1} onClick={() => onPage(page - 1)}>← Previous</button>
+      <span className="msub" style={{ fontSize: 12.5 }}>Page {page} of {pages} · {total} {unit}</span>
+      <button className="btn btn--sm" disabled={page >= pages} onClick={() => onPage(page + 1)}>Next →</button>
+    </div>
+  )
+}
+
 /* Loading placeholder shaped like the content it replaces, so the layout does
    not jump when data lands (and it never reads as an error). */
 function FcSkeleton({ rows = 3, height = 56 }: { rows?: number; height?: number }) {
@@ -215,15 +231,43 @@ export default function FellowCrm({ view: viewProp, onView }: { view?: ViewKey; 
   const [stages, setStages] = useState<string[]>([])
   const [priorities, setPriorities] = useState<string[]>([])
   const [q, setQ] = useState('')
+  const [stageFilter, setStageFilter] = useState('')
+  const [prioFilter, setPrioFilter] = useState('')
+  const [orgPage, setOrgPage] = useState(1)
+  const [orgTotal, setOrgTotal] = useState(0)
+  const [totals, setTotals] = useState<OrgTotals | null>(null)
   const [adding, setAdding] = useState(false)
   const [composing, setComposing] = useState<{ tpl?: number } | null>(null)
   const [openId, setOpenId] = useState<number | null>(null)
 
   const loadOverview = useCallback(() => { api.get<any>('fellow/crm/overview').then(setOverview).catch(() => {}) }, [])
+  /* Prospects are filtered and paged on the server — the list can run to
+     thousands of rows after a bulk import, and the headline totals come back
+     with it so they no longer depend on the browser holding every row. */
   const loadOrgs = useCallback(() => {
-    api.get<{ orgs: Org[]; stages: string[]; priorities: string[] }>('fellow/orgs').then((d) => { setOrgs(d.orgs || []); setStages(d.stages || []); setPriorities(d.priorities || []) }).catch(() => {})
-  }, [])
-  useEffect(() => { loadOverview(); loadOrgs() }, [loadOverview, loadOrgs])
+    /* The pipeline board is a whole-picture view, so it asks for the live
+       (non-dead-end) prospects in one larger page rather than the table's page. */
+    const board = view === 'pipeline'
+    const qs = new URLSearchParams(board
+      ? { page: '1', per: '200', view: 'open' }
+      : { page: String(orgPage), per: '50' })
+    if (!board) {
+      if (q.trim()) qs.set('q', q.trim())
+      if (stageFilter) qs.set('stage', stageFilter)
+      if (prioFilter) qs.set('priority', prioFilter)
+    }
+    api.get<{ orgs: Org[]; total: number; stages: string[]; priorities: string[]; totals: OrgTotals }>(`fellow/orgs?${qs}`)
+      .then((d) => {
+        setOrgs(d.orgs || []); setOrgTotal(d.total || 0); setTotals(d.totals || null)
+        setStages(d.stages || []); setPriorities(d.priorities || [])
+      }).catch(() => {})
+  }, [orgPage, q, stageFilter, prioFilter, view])
+  useEffect(() => { loadOverview() }, [loadOverview])
+  // Typing in the search box should not fire a request per keystroke.
+  useEffect(() => {
+    const t = setTimeout(loadOrgs, q.trim() ? 300 : 0)
+    return () => clearTimeout(t)
+  }, [loadOrgs, q])
   const refresh = () => { loadOverview(); loadOrgs() }
   const [doneFu, setDoneFu] = useState<Followup | null>(null)
   const [moveFu, setMoveFu] = useState<Followup | null>(null)
@@ -258,7 +302,8 @@ export default function FellowCrm({ view: viewProp, onView }: { view?: ViewKey; 
     </button>
   )
 
-  const filtered = orgs.filter((o) => !q.trim() || `${o.name} ${o.category || ''} ${o.industry || ''} ${o.location || ''}`.toLowerCase().includes(q.trim().toLowerCase()))
+  // The server already applied the search and filters; this page is the result.
+  const filtered = orgs
 
   const sc = overview?.scorecard
   const scRow = (label: string, key: string, target: number) => {
@@ -273,8 +318,11 @@ export default function FellowCrm({ view: viewProp, onView }: { view?: ViewKey; 
   }
   const today = new Date().toISOString().slice(0, 10)
 
-  const pipelineValue = orgs.reduce((n, o) => n + (['not_interested', 'no_response', 'closed_lost'].includes(o.stage) ? 0 : (o.est_value || 0)), 0)
-  const wonCount = orgs.filter((o) => o.stage === 'confirmed' || o.stage === 'paid').length
+  const pipelineValue = totals?.pipeline ?? 0
+  const wonCount = totals?.won ?? 0
+  const orgsTotal = totals?.orgs ?? 0
+  const orgPages = Math.max(1, Math.ceil(orgTotal / 50))
+  const filtersOn = !!(q.trim() || stageFilter || prioFilter)
 
   return (
     <div className="fc-crm">
@@ -401,16 +449,31 @@ export default function FellowCrm({ view: viewProp, onView }: { view?: ViewKey; 
       {view === 'prospects' && (
         <div>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 14 }}>
-            <input className="fc-input" style={{ flex: '1 1 220px' }} type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search prospects…" />
+            <input className="fc-input" style={{ flex: '1 1 200px' }} type="search" value={q}
+              onChange={(e) => { setQ(e.target.value); setOrgPage(1) }} placeholder="Search name, category, industry, location…" />
+            <select className="fc-input" style={{ width: 'auto' }} value={stageFilter} onChange={(e) => { setStageFilter(e.target.value); setOrgPage(1) }}>
+              <option value="" style={{ background: '#14120b' }}>All stages</option>
+              {stages.map((s) => <option key={s} value={s} style={{ background: '#14120b' }}>{STAGE_LABEL(s)}</option>)}
+            </select>
+            <select className="fc-input" style={{ width: 'auto' }} value={prioFilter} onChange={(e) => { setPrioFilter(e.target.value); setOrgPage(1) }}>
+              <option value="" style={{ background: '#14120b' }}>Any priority</option>
+              {priorities.map((p) => <option key={p} value={p} style={{ background: '#14120b' }}>{STAGE_LABEL(p)}</option>)}
+            </select>
+            {filtersOn && <button className="btn btn--sm" onClick={() => { setQ(''); setStageFilter(''); setPrioFilter(''); setOrgPage(1) }}>Clear</button>}
             <button className="btn btn--sm fc-btn-i" onClick={() => setImporting(true)}><FcIcon name="upload" size={15} />Import list</button>
             <button className="btn btn--sm btn--solid fc-btn-i" onClick={() => setAdding(true)}><FcIcon name="plus" size={15} />Add Prospect</button>
           </div>
+          {orgTotal > 0 && (
+            <p className="msub" style={{ fontSize: 12.5, margin: '0 0 10px' }}>
+              {orgTotal} prospect{orgTotal === 1 ? '' : 's'}{filtersOn ? ` match your filters (of ${orgsTotal})` : ''} · showing {filtered.length}
+            </p>
+          )}
           {filtered.length === 0 ? (
             <div className="fc-empty">
-              <span><FcIcon name={q.trim() ? 'search' : 'building'} size={34} /></span>
-              <h4>{q.trim() ? 'No prospect matches that search' : 'No prospects yet — this is where you begin'}</h4>
-              <p className="msub">{q.trim() ? 'Try a shorter word, or clear the search box.' : 'A "prospect" is any company that might sponsor the challenge — a local shop, a bank, a hospital, a restaurant chain. Add one and you can start tracking every call and email with it.'}</p>
-              {!q.trim() && (
+              <span><FcIcon name={filtersOn ? 'search' : 'building'} size={34} /></span>
+              <h4>{filtersOn ? 'No prospect matches those filters' : 'No prospects yet — this is where you begin'}</h4>
+              <p className="msub">{filtersOn ? 'Try a shorter word, or clear the filters.' : 'A "prospect" is any company that might sponsor the challenge — a local shop, a bank, a hospital, a restaurant chain. Add one and you can start tracking every call and email with it.'}</p>
+              {!filtersOn && (
                 <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
                   <button className="btn btn--solid fc-btn-i" onClick={() => setAdding(true)}><FcIcon name="plus" size={16} />Add your first prospect</button>
                   {demoBtn}
@@ -433,6 +496,7 @@ export default function FellowCrm({ view: viewProp, onView }: { view?: ViewKey; 
               </table>
             </div>
           )}
+          <Pager page={orgPage} pages={orgPages} total={orgTotal} unit="prospects" onPage={setOrgPage} />
         </div>
       )}
 
@@ -931,27 +995,66 @@ const PERF_ROWS: [string, string][] = [['research', 'Organizations'], ['contact'
 const CALL_OUTCOMES = ['no_answer', 'voicemail', 'receptionist', 'reached', 'interested', 'callback', 'meeting', 'not_interested', 'wrong_contact']
 function CallsView({ onLogged, onOpen, onProspects, demoBtn }: { onLogged: () => void; onOpen: (id: number) => void; onProspects: () => void; demoBtn: React.ReactNode }) {
   const [calls, setCalls] = useState<any[]>([])
+  const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(1)
+  const [cq, setCq] = useState('')
+  const [neverCalled, setNeverCalled] = useState(false)
   const [active, setActive] = useState<number | null>(null)
   const [oc, setOc] = useState('reached'); const [note, setNote] = useState(''); const [fu, setFu] = useState('')
-  const load = useCallback(() => { api.get<{ calls: any[] }>('fellow/call-list').then((d) => setCalls(d.calls || [])).catch(() => {}) }, [])
-  useEffect(() => { load() }, [load])
+  const per = 50
+  // Paged and filtered on the server — this list was silently cut at 100 before,
+  // with nothing on screen to say the rest existed.
+  const load = useCallback(() => {
+    const qs = new URLSearchParams({ page: String(page), per: String(per) })
+    if (cq.trim()) qs.set('q', cq.trim())
+    if (neverCalled) qs.set('never_called', '1')
+    api.get<{ calls: any[]; total: number }>(`fellow/call-list?${qs}`)
+      .then((d) => { setCalls(d.calls || []); setTotal(d.total || 0) }).catch(() => {})
+  }, [page, cq, neverCalled])
+  useEffect(() => {
+    const t = setTimeout(load, cq.trim() ? 300 : 0)
+    return () => clearTimeout(t)
+  }, [load, cq])
+  const pages = Math.max(1, Math.ceil(total / per))
+  const filtersOn = !!(cq.trim() || neverCalled)
   const logCall = async (orgId: number) => {
     await api.post(`fellow/org/${orgId}/activity`, { type: 'call', detail: oc.replace('_', ' ') + (note ? ` — ${note}` : ''), follow_up_date: fu })
     setActive(null); setNote(''); setFu(''); setOc('reached'); load(); onLogged()
   }
+  const filters = (
+    <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
+      <input className="fc-input" style={{ flex: '1 1 200px' }} type="search" value={cq}
+        onChange={(e) => { setCq(e.target.value); setPage(1) }} placeholder="Search company, contact or number…" />
+      <label className="msub" style={{ fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6 }}>
+        <input type="checkbox" checked={neverCalled} onChange={(e) => { setNeverCalled(e.target.checked); setPage(1) }} />
+        Never called
+      </label>
+      {filtersOn && <button className="btn btn--sm" onClick={() => { setCq(''); setNeverCalled(false); setPage(1) }}>Clear</button>}
+      {total > 0 && <span className="msub" style={{ fontSize: 12.5 }}>{total} to call · showing {calls.length}</span>}
+    </div>
+  )
   if (calls.length === 0) return (
-    <div className="fc-empty">
-      <span><FcIcon name="phone" size={34} /></span>
-      <h4>Nobody to call yet</h4>
-      <p className="msub">This list is built automatically: open any prospect, add a contact person <strong>with a phone number</strong>, and they appear here with the date you last spoke to them.</p>
-      <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
-        <button className="btn btn--solid" onClick={onProspects}>Go to Prospects →</button>
-        {demoBtn}
+    <div>
+      {filtersOn && filters}
+      <div className="fc-empty">
+        <span><FcIcon name={filtersOn ? 'search' : 'phone'} size={34} /></span>
+        <h4>{filtersOn ? 'Nobody matches those filters' : 'Nobody to call yet'}</h4>
+        <p className="msub">{filtersOn
+          ? 'Try a shorter word, or clear the filters.'
+          : <>This list is built automatically: open any prospect, add a contact person <strong>with a phone number</strong>, and they appear here with the date you last spoke to them.</>}</p>
+        {!filtersOn && (
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+            <button className="btn btn--solid" onClick={onProspects}>Go to Prospects →</button>
+            {demoBtn}
+          </div>
+        )}
       </div>
     </div>
   )
   return (
-    <div className="admin-table-wrap">
+    <div>
+      {filters}
+      <div className="admin-table-wrap">
       <table className="admin-table admin-table--stack">
         <thead><tr><th>Organization</th><th>Contact</th><th>Phone</th><th>Last call</th><th></th></tr></thead>
         <tbody>{calls.map((c) => (
@@ -972,6 +1075,8 @@ function CallsView({ onLogged, onOpen, onProspects, demoBtn }: { onLogged: () =>
           </tr>
         ))}</tbody>
       </table>
+      </div>
+      <Pager page={page} pages={pages} total={total} unit="to call" onPage={setPage} />
     </div>
   )
 }

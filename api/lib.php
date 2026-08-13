@@ -6276,6 +6276,93 @@ function fellow_task_post(int $taskId, int $userId, string $role, string $body, 
     } catch (Throwable $e) { /* best effort */ }
 }
 
+/** Clamp the page/per-page pair once, everywhere. A caller can ask for a big
+ *  page but never an unbounded one — the whole point of paging these lists. */
+function page_window(array $q, int $default = 50, int $max = 200): array
+{
+    $per = (int) ($q['per'] ?? $default);
+    $per = max(10, min($max, $per > 0 ? $per : $default));
+    $page = max(1, (int) ($q['page'] ?? 1));
+    return ['per' => $per, 'page' => $page, 'offset' => ($page - 1) * $per];
+}
+
+/** The Fellow's prospects, filtered and paged on the server. This used to hand
+ *  the browser every row so it could filter there, which falls over as soon as
+ *  a Fellow bulk-imports a real list. */
+function fellow_orgs_query(int $fellowId, array $q): array
+{
+    fellow_ops_ensure_schema();
+    $where = ['fellow_user_id = ?'];
+    $args = [$fellowId];
+    foreach (['stage' => 'stage', 'priority' => 'priority', 'category' => 'category'] as $k => $col) {
+        if (trim((string) ($q[$k] ?? '')) !== '') { $where[] = "$col = ?"; $args[] = trim((string) $q[$k]); }
+    }
+    // "Open" hides the dead ends; that is the list a Fellow actually works.
+    if (($q['view'] ?? '') === 'open') $where[] = "stage NOT IN ('not_interested','no_response','closed_lost')";
+    elseif (($q['view'] ?? '') === 'won') $where[] = "stage IN ('confirmed','paid')";
+    $s = trim((string) ($q['q'] ?? ''));
+    if ($s !== '') {
+        $where[] = '(name LIKE ? OR category LIKE ? OR industry LIKE ? OR location LIKE ?)';
+        $like = '%' . $s . '%';
+        array_push($args, $like, $like, $like, $like);
+    }
+    $w = implode(' AND ', $where);
+    $cnt = db()->prepare("SELECT COUNT(*) FROM fellow_orgs WHERE $w");
+    $cnt->execute($args);
+    $total = (int) $cnt->fetchColumn();
+    ['per' => $per, 'page' => $page, 'offset' => $offset] = page_window($q);
+    // Only the columns the list renders — fit_notes/internal_notes are big and unused here.
+    $rows = db()->prepare("SELECT id, name, website, industry, category, location, priority, stage, est_value, is_demo, updated_at
+        FROM fellow_orgs WHERE $w ORDER BY updated_at DESC LIMIT $per OFFSET $offset");
+    $rows->execute($args);
+    return ['orgs' => $rows->fetchAll(), 'total' => $total, 'page' => $page, 'per' => $per];
+}
+
+/** Headline numbers for the CRM, computed in SQL so they no longer depend on the
+ *  browser holding every row. */
+function fellow_orgs_totals(int $fellowId): array
+{
+    fellow_ops_ensure_schema();
+    $s = db()->prepare("SELECT COUNT(*) AS orgs,
+            COALESCE(SUM(CASE WHEN stage NOT IN ('closed_lost','not_interested','no_response') THEN est_value ELSE 0 END),0) AS pipeline,
+            SUM(stage IN ('confirmed','paid')) AS won,
+            SUM(is_demo = 1) AS demo
+        FROM fellow_orgs WHERE fellow_user_id = ?");
+    $s->execute([$fellowId]);
+    $r = $s->fetch() ?: [];
+    return ['orgs' => (int) ($r['orgs'] ?? 0), 'pipeline' => (int) ($r['pipeline'] ?? 0),
+        'won' => (int) ($r['won'] ?? 0), 'demo' => (int) ($r['demo'] ?? 0)];
+}
+
+/** The call list, paged. Was silently capped at 100 with no way to see past it. */
+function fellow_call_list(int $fellowId, array $q): array
+{
+    fellow_ops_ensure_schema();
+    /* Keep the original rule: any contact holding a phone qualifies the org, with
+       the primary one preferred for display. Narrowing this to is_primary would
+       silently drop orgs whose phone contact was never marked primary. */
+    $contact = "(SELECT c.name FROM fellow_contacts c WHERE c.org_id = o.id AND c.phone <> '' ORDER BY c.is_primary DESC, c.id LIMIT 1)";
+    $phone = "(SELECT c.phone FROM fellow_contacts c WHERE c.org_id = o.id AND c.phone <> '' ORDER BY c.is_primary DESC, c.id LIMIT 1)";
+    $lastCall = "(SELECT MAX(a.created_at) FROM fellow_activities a WHERE a.org_id = o.id AND a.type = 'call')";
+    $where = ['o.fellow_user_id = ?', "EXISTS (SELECT 1 FROM fellow_contacts c WHERE c.org_id = o.id AND c.phone <> '')"];
+    $args = [$fellowId];
+    if (trim((string) ($q['stage'] ?? '')) !== '') { $where[] = 'o.stage = ?'; $args[] = trim((string) $q['stage']); }
+    if (!empty($q['never_called'])) $where[] = "$lastCall IS NULL";
+    $s = trim((string) ($q['q'] ?? ''));
+    if ($s !== '') { $where[] = "(o.name LIKE ? OR $contact LIKE ? OR $phone LIKE ?)"; $like = '%' . $s . '%'; array_push($args, $like, $like, $like); }
+    $w = implode(' AND ', $where);
+    $cnt = db()->prepare("SELECT COUNT(*) FROM fellow_orgs o WHERE $w");
+    $cnt->execute($args);
+    $total = (int) $cnt->fetchColumn();
+    ['per' => $per, 'page' => $page, 'offset' => $offset] = page_window($q);
+    // Never-called first, then longest since the last call — the order to dial in.
+    $rows = db()->prepare("SELECT o.id, o.name, o.stage, o.priority,
+            $contact AS contact_name, $phone AS phone, $lastCall AS last_call
+        FROM fellow_orgs o WHERE $w ORDER BY (last_call IS NULL) DESC, last_call ASC, o.name ASC LIMIT $per OFFSET $offset");
+    $rows->execute($args);
+    return ['calls' => $rows->fetchAll(), 'total' => $total, 'page' => $page, 'per' => $per];
+}
+
 /** Store a file handed in on a task. Wider than media uploads (a Fellow's
  *  deliverable is usually a sheet or a doc, not a picture) but still an
  *  allow-list, checked against the real MIME rather than the filename. */

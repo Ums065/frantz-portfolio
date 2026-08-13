@@ -1951,10 +1951,8 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
         case $key === 'GET fellow/orgs': {
             $u = require_login();
             if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
-            fellow_ops_ensure_schema();
-            $stmt = db()->prepare('SELECT * FROM fellow_orgs WHERE fellow_user_id = ? ORDER BY updated_at DESC');
-            $stmt->execute([(int) $u['id']]);
-            json(['orgs' => $stmt->fetchAll(), 'stages' => FELLOW_STAGES, 'priorities' => FELLOW_PRIORITIES]);
+            $out = fellow_orgs_query((int) $u['id'], $_GET);
+            json($out + ['stages' => FELLOW_STAGES, 'priorities' => FELLOW_PRIORITIES, 'totals' => fellow_orgs_totals((int) $u['id'])]);
         }
         case $key === 'GET fellow/orgs/check': {
             $u = require_login();
@@ -2293,18 +2291,7 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
         case $key === 'GET fellow/call-list': {
             $u = require_login();
             if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
-            fellow_ops_ensure_schema();
-            $s = db()->prepare(
-                "SELECT o.id, o.name, o.stage, o.priority,
-                        (SELECT c.name FROM fellow_contacts c WHERE c.org_id = o.id AND c.phone <> '' ORDER BY c.is_primary DESC LIMIT 1) AS contact_name,
-                        (SELECT c.phone FROM fellow_contacts c WHERE c.org_id = o.id AND c.phone <> '' ORDER BY c.is_primary DESC LIMIT 1) AS phone,
-                        (SELECT MAX(a.created_at) FROM fellow_activities a WHERE a.org_id = o.id AND a.type = 'call') AS last_call
-                 FROM fellow_orgs o
-                 WHERE o.fellow_user_id = ? AND EXISTS (SELECT 1 FROM fellow_contacts c WHERE c.org_id = o.id AND c.phone <> '')
-                 ORDER BY (last_call IS NULL) DESC, last_call ASC LIMIT 100"
-            );
-            $s->execute([(int) $u['id']]);
-            json(['calls' => $s->fetchAll()]);
+            json(fellow_call_list((int) $u['id'], $_GET) + ['stages' => FELLOW_STAGES]);
         }
         case $key === 'GET fellow/modules': {
             $u = require_login();
