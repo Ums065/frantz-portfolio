@@ -2493,15 +2493,69 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             }
             json(['message' => "Imported $n organizations.", 'imported' => $n], 201);
         }
+        /* ---- Shared task workspace: the Fellow's side ---- */
+        case $key === 'GET fellow/tasks': {
+            $u = require_login();
+            if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
+            $filter = in_array((string) ($_GET['filter'] ?? 'open'), ['open', 'done', 'all'], true) ? (string) ($_GET['filter'] ?? 'open') : 'open';
+            json(['tasks' => fellow_tasks_for((int) $u['id'], $filter), 'statuses' => FELLOW_TASK_STATUSES]);
+        }
+        case $method === 'GET' && preg_match('#^fellow/task/(\d+)$#', $route, $m) === 1: {
+            $u = require_login();
+            if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
+            fellow_ops_ensure_schema();
+            $own = db()->prepare('SELECT id FROM fellow_tasks WHERE id = ? AND fellow_user_id = ?');
+            $own->execute([(int) $m[1], (int) $u['id']]);
+            if (!$own->fetch()) json(['error' => 'Not found.'], 404);
+            $t = fellow_task_thread((int) $m[1], 'fellow');
+            json($t + ['statuses' => FELLOW_TASK_STATUSES]);
+        }
+        case $method === 'POST' && preg_match('#^fellow/task/(\d+)/message$#', $route, $m) === 1: {
+            $u = require_login();
+            if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
+            fellow_ops_ensure_schema();
+            rate_limit('fellow_task_msg', 200, 3600, (string) $u['id']);
+            $own = db()->prepare('SELECT id FROM fellow_tasks WHERE id = ? AND fellow_user_id = ?');
+            $own->execute([(int) $m[1], (int) $u['id']]);
+            if (!$own->fetch()) json(['error' => 'Not found.'], 404);
+            fellow_task_post((int) $m[1], (int) $u['id'], 'fellow', (string) field(body(), 'body'), (string) field(body(), 'attachment_url'));
+            json(['message' => 'Sent.'], 201);
+        }
+        /* Status, plus the work itself: a Fellow can accept, decline with a
+           reason, hand in a deliverable, or ask for review. */
         case $method === 'PUT' && preg_match('#^fellow/task/(\d+)$#', $route, $m) === 1: {
             $u = require_login();
             if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
             fellow_ops_ensure_schema();
-            $status = (string) field(body(), 'status');
-            if (!in_array($status, ['not_started', 'in_progress', 'waiting', 'completed', 'needs_review'], true)) json(['error' => 'Invalid status.'], 422);
-            $done = $status === 'completed' ? date('Y-m-d H:i:s') : null;
-            $r = db()->prepare('UPDATE fellow_tasks SET status = ?, completed_at = ? WHERE id = ? AND fellow_user_id = ?');
-            $r->execute([$status, $done, (int) $m[1], (int) $u['id']]);
+            $id = (int) $m[1]; $fid = (int) $u['id']; $b = body();
+            $own = db()->prepare('SELECT status, title FROM fellow_tasks WHERE id = ? AND fellow_user_id = ?');
+            $own->execute([$id, $fid]);
+            $cur = $own->fetch();
+            if (!$cur) json(['error' => 'Not found.'], 404);
+            $status = (string) field($b, 'status');
+            // 'needs_review' is the admin's verdict, not something a Fellow claims.
+            $allowed = ['not_started', 'accepted', 'in_progress', 'waiting', 'submitted', 'completed', 'declined'];
+            if (!in_array($status, $allowed, true)) json(['error' => 'Invalid status.'], 422);
+            $reason = mb_substr(trim((string) field($b, 'declined_reason')), 0, 500);
+            if ($status === 'declined' && $reason === '') json(['error' => 'Say why you cannot take this on.'], 422);
+            db()->prepare('UPDATE fellow_tasks SET status = ?, notes = COALESCE(NULLIF(?, \'\'), notes),
+                    deliverable_url = COALESCE(NULLIF(?, \'\'), deliverable_url),
+                    declined_reason = COALESCE(NULLIF(?, \'\'), declined_reason),
+                    accepted_at = CASE WHEN ? IN (\'accepted\',\'in_progress\') AND accepted_at IS NULL THEN NOW() ELSE accepted_at END,
+                    submitted_at = CASE WHEN ? = \'submitted\' THEN NOW() ELSE submitted_at END,
+                    completed_at = CASE WHEN ? = \'completed\' THEN NOW() ELSE NULL END
+                WHERE id = ? AND fellow_user_id = ?')
+                ->execute([$status, mb_substr(trim((string) field($b, 'notes')), 0, 2000),
+                    mb_substr(trim((string) field($b, 'deliverable_url')), 0, 500), $reason,
+                    $status, $status, $status, $id, $fid]);
+            // Tell the admin about the moments they need to act on.
+            if (in_array($status, ['submitted', 'declined', 'waiting'], true) && $status !== (string) $cur['status']) {
+                try {
+                    new_school_add_notification(null, 'admin', 'fellow_task',
+                        'Task ' . str_replace('_', ' ', $status) . ': ' . (string) $cur['title'],
+                        (string) $u['full_name'] . ($reason !== '' ? ' — ' . $reason : ''), ['task_id' => $id]);
+                } catch (Throwable $e) { /* best effort */ }
+            }
             json(['message' => 'Task updated.']);
         }
         case $method === 'POST' && preg_match('#^fellow/followup/(\d+)/done$#', $route, $m) === 1: {
@@ -2595,8 +2649,89 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
                 ->execute([$fid, (int) $admin['id'], $title, mb_substr(trim((string) field($b, 'instructions')), 0, 2000) ?: null,
                     trim((string) field($b, 'due_date')) ?: null,
                     in_array((string) field($b, 'priority'), ['low', 'medium', 'high'], true) ? (string) field($b, 'priority') : 'medium']);
-            try { new_school_add_notification(null, 'fellow', 'fellow_task', 'New task assigned', $title, ['task' => $title], $fid); } catch (Throwable $e) { /* best effort */ }
-            json(['message' => 'Task assigned.'], 201);
+            $taskId = (int) db()->lastInsertId();
+            // The brief starts the conversation, so the Fellow can reply to it.
+            $kick = trim((string) field($b, 'instructions'));
+            if ($kick !== '') { try { fellow_task_post($taskId, (int) $admin['id'], 'admin', $kick); } catch (Throwable $e) { /* best effort */ } }
+            try { new_school_add_notification(null, 'fellow', 'fellow_task', 'New task assigned', $title, ['task_id' => $taskId], $fid); } catch (Throwable $e) { /* best effort */ }
+            json(['message' => 'Task assigned.', 'id' => $taskId], 201);
+        }
+        /* ---- Shared task workspace: the admin's side ---- */
+        case $key === 'GET admin/fellow-ops/tasks': {
+            require_admin();
+            fellow_ops_ensure_schema();
+            $where = '1=1';
+            $args = [];
+            $fid = (int) ($_GET['fellow_user_id'] ?? 0);
+            if ($fid > 0) { $where .= ' AND t.fellow_user_id = ?'; $args[] = $fid; }
+            $filter = (string) ($_GET['filter'] ?? 'open');
+            if ($filter === 'open') $where .= " AND t.status NOT IN ('completed','declined')";
+            elseif ($filter === 'done') $where .= " AND t.status IN ('completed','declined')";
+            elseif ($filter === 'needs_me') $where .= " AND t.status IN ('submitted','waiting','declined')";
+            $s = db()->prepare("SELECT t.*, u.full_name AS fellow_name, a.full_name AS assigned_by_name,
+                    (SELECT COUNT(*) FROM fellow_task_messages m WHERE m.task_id = t.id) AS msgs,
+                    (SELECT COUNT(*) FROM fellow_task_messages m WHERE m.task_id = t.id AND m.read_by_admin = 0) AS unread
+                FROM fellow_tasks t LEFT JOIN users u ON u.id = t.fellow_user_id
+                LEFT JOIN users a ON a.id = t.assigned_by_user_id
+                WHERE $where
+                ORDER BY FIELD(t.status,'submitted','declined','waiting','not_started','accepted','in_progress','needs_review','completed'),
+                    (t.due_date IS NULL), t.due_date ASC, t.id DESC LIMIT 300");
+            $s->execute($args);
+            $counts = db()->query("SELECT status, COUNT(*) AS n FROM fellow_tasks GROUP BY status")->fetchAll();
+            json(['tasks' => $s->fetchAll(), 'counts' => array_column($counts, 'n', 'status'), 'statuses' => FELLOW_TASK_STATUSES]);
+        }
+        case $method === 'GET' && preg_match('#^admin/fellow-ops/task/(\d+)$#', $route, $m) === 1: {
+            require_admin();
+            $t = fellow_task_thread((int) $m[1], 'admin');
+            if (!$t) json(['error' => 'Not found.'], 404);
+            json($t + ['statuses' => FELLOW_TASK_STATUSES]);
+        }
+        case $method === 'POST' && preg_match('#^admin/fellow-ops/task/(\d+)/message$#', $route, $m) === 1: {
+            $admin = require_admin();
+            fellow_ops_ensure_schema();
+            $chk = db()->prepare('SELECT id FROM fellow_tasks WHERE id = ?');
+            $chk->execute([(int) $m[1]]);
+            if (!$chk->fetch()) json(['error' => 'Not found.'], 404);
+            fellow_task_post((int) $m[1], (int) $admin['id'], 'admin', (string) field(body(), 'body'), (string) field(body(), 'attachment_url'));
+            json(['message' => 'Sent.'], 201);
+        }
+        // Admin can retitle, re-brief, re-date, reassign, and set the verdict.
+        case $method === 'PUT' && preg_match('#^admin/fellow-ops/task/(\d+)$#', $route, $m) === 1: {
+            require_admin();
+            fellow_ops_ensure_schema();
+            $id = (int) $m[1]; $b = body();
+            $chk = db()->prepare('SELECT fellow_user_id, title, status FROM fellow_tasks WHERE id = ?');
+            $chk->execute([$id]);
+            $cur = $chk->fetch();
+            if (!$cur) json(['error' => 'Not found.'], 404);
+            $status = (string) field($b, 'status');
+            if ($status !== '' && !in_array($status, FELLOW_TASK_STATUSES, true)) json(['error' => 'Invalid status.'], 422);
+            $newFid = (int) ($b['fellow_user_id'] ?? 0);
+            db()->prepare('UPDATE fellow_tasks SET
+                    title = COALESCE(NULLIF(?, \'\'), title),
+                    instructions = COALESCE(NULLIF(?, \'\'), instructions),
+                    due_date = COALESCE(NULLIF(?, \'\'), due_date),
+                    priority = COALESCE(NULLIF(?, \'\'), priority),
+                    status = COALESCE(NULLIF(?, \'\'), status),
+                    fellow_user_id = IF(? > 0, ?, fellow_user_id),
+                    completed_at = CASE WHEN ? = \'completed\' THEN NOW() WHEN ? <> \'\' THEN NULL ELSE completed_at END
+                WHERE id = ?')
+                ->execute([mb_substr(trim((string) field($b, 'title')), 0, 200),
+                    mb_substr(trim((string) field($b, 'instructions')), 0, 2000),
+                    trim((string) field($b, 'due_date')),
+                    in_array((string) field($b, 'priority'), ['low', 'medium', 'high'], true) ? (string) field($b, 'priority') : '',
+                    $status, $newFid, $newFid, $status, $status, $id]);
+            // Reassignment and a verdict both matter to the Fellow.
+            $target = $newFid > 0 ? $newFid : (int) $cur['fellow_user_id'];
+            if ($status !== '' && $status !== (string) $cur['status']) {
+                try {
+                    new_school_add_notification(null, 'fellow', 'fellow_task',
+                        'Task ' . str_replace('_', ' ', $status) . ': ' . (string) $cur['title'],
+                        mb_substr(trim((string) field($b, 'admin_note')), 0, 200) ?: 'Your manager updated this task.',
+                        ['task_id' => $id], $target);
+                } catch (Throwable $e) { /* best effort */ }
+            }
+            json(['message' => 'Task updated.']);
         }
         case $key === 'GET admin/fellow-ops/analytics': {
             require_admin(); fellow_ops_ensure_schema();

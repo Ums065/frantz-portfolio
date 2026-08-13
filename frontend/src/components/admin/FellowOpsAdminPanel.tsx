@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { api } from '../../lib/api'
 import FcIcon from '../FcIcon'
+import TaskWorkspace from '../TaskWorkspace'
 
 /* Admin "Fellow Command Center": today's team activity, per-Fellow rollup, live
    activity feed, master pipeline, task assignment, and daily-target settings. */
@@ -41,7 +42,7 @@ export default function FellowOpsAdminPanel() {
       <div className="admin-ov-tabs" role="tablist" style={{ marginBottom: 16 }}>
         {(['today', 'analytics', 'schools', 'pipeline', 'activity', 'reports', 'proposals', 'assign', 'targets', 'materials', 'templates', 'training', 'certification'] as const).map((t) => (
           <button key={t} role="tab" aria-selected={tab === t} className={`admin-ov-tab${tab === t ? ' is-active' : ''}`} onClick={() => setTab(t)}>
-            {t === 'today' ? 'Today' : t === 'analytics' ? 'Analytics' : t === 'schools' ? 'School Verification' : t === 'pipeline' ? 'All Prospects' : t === 'activity' ? 'Activity Feed' : t === 'reports' ? 'Daily Reports' : t === 'proposals' ? 'Proposals' : t === 'assign' ? 'Assign Task' : t === 'targets' ? 'Targets' : t === 'materials' ? 'Materials' : t === 'templates' ? 'Templates' : t === 'training' ? 'Training' : 'Certification'}
+            {t === 'today' ? 'Today' : t === 'analytics' ? 'Analytics' : t === 'schools' ? 'School Verification' : t === 'pipeline' ? 'All Prospects' : t === 'activity' ? 'Activity Feed' : t === 'reports' ? 'Daily Reports' : t === 'proposals' ? 'Proposals' : t === 'assign' ? 'Tasks' : t === 'targets' ? 'Targets' : t === 'materials' ? 'Materials' : t === 'templates' ? 'Templates' : t === 'training' ? 'Training' : 'Certification'}
           </button>
         ))}
       </div>
@@ -93,7 +94,7 @@ export default function FellowOpsAdminPanel() {
       {tab === 'pipeline' && <PipelineAdmin />}
       {tab === 'reports' && <ReportsAdmin />}
       {tab === 'proposals' && <ProposalsAdmin />}
-      {tab === 'assign' && <AssignTask fellows={fellows} onDone={load} />}
+      {tab === 'assign' && <TaskWorkspace side="admin" fellows={fellows} onChanged={load} />}
       {tab === 'targets' && <TargetsForm fellows={fellows} onDone={load} />}
       {tab === 'materials' && <MaterialsAdmin />}
       {tab === 'templates' && <TemplatesAdmin />}
@@ -563,35 +564,6 @@ function MaterialsAdmin() {
           </div>
         </div>
       )}
-    </div>
-  )
-}
-
-function AssignTask({ fellows, onDone }: { fellows: FellowRow[]; onDone: () => void }) {
-  const [f, setF] = useState<Record<string, string>>({ fellow_user_id: '', title: '', instructions: '', due_date: '', priority: 'medium' })
-  const [msg, setMsg] = useState(''); const [err, setErr] = useState('')
-  const set = (k: string, v: string) => setF((p) => ({ ...p, [k]: v }))
-  const save = async () => {
-    if (!f.fellow_user_id || !f.title.trim()) { setErr('Pick a Fellow and enter a title.'); return }
-    setErr(''); setMsg('')
-    try { await api.post('admin/fellow-ops/task', { ...f, fellow_user_id: Number(f.fellow_user_id) }); setMsg('Task assigned.'); setF({ fellow_user_id: '', title: '', instructions: '', due_date: '', priority: 'medium' }); onDone() }
-    catch (e) { setErr(e instanceof Error ? e.message : 'Could not assign.') }
-  }
-  return (
-    <div style={{ display: 'grid', gap: 10, maxWidth: 520 }}>
-      <label className="fc-fld">Fellow<select className="fc-input" value={f.fellow_user_id} onChange={(e) => set('fellow_user_id', e.target.value)}>
-        <option value="" style={{ background: '#14120b' }}>Choose…</option>
-        {fellows.map((x) => <option key={x.id} value={x.id} style={{ background: '#14120b' }}>{x.full_name}</option>)}
-      </select></label>
-      <label className="fc-fld">Task title<input className="fc-input" value={f.title} onChange={(e) => set('title', e.target.value)} placeholder="Research 25 healthcare companies" /></label>
-      <label className="fc-fld">Instructions<textarea className="fc-input" rows={3} value={f.instructions} onChange={(e) => set('instructions', e.target.value)} /></label>
-      <div style={{ display: 'flex', gap: 10 }}>
-        <label className="fc-fld" style={{ flex: 1 }}>Due date<input className="fc-input" type="date" value={f.due_date} onChange={(e) => set('due_date', e.target.value)} /></label>
-        <label className="fc-fld" style={{ flex: 1 }}>Priority<select className="fc-input" value={f.priority} onChange={(e) => set('priority', e.target.value)}>{['low', 'medium', 'high'].map((p) => <option key={p} value={p} style={{ background: '#14120b' }}>{p}</option>)}</select></label>
-      </div>
-      {err && <p className="msub" style={{ color: '#e08a8a' }}>{err}</p>}
-      {msg && <p className="msub" style={{ color: '#6be29a' }}>{msg}</p>}
-      <button className="btn btn--solid" onClick={save} style={{ justifySelf: 'start' }}>Assign Task</button>
     </div>
   )
 }

@@ -6139,6 +6139,33 @@ function fellow_ops_ensure_schema(): void
             passed TINYINT(1) NOT NULL DEFAULT 0, total INT NOT NULL DEFAULT 0, correct INT NOT NULL DEFAULT 0,
             taken_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, INDEX idx_fqa (fellow_user_id, taken_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        /* One shared task workspace between admin and Fellow. Tasks used to live
+           in two places at once - fellow_tasks (My Day) and role='fellow' rows in
+           ecosystem_assignments (Overview) - with different powers in each and no
+           way to discuss either. fellow_tasks is now the only task table, and
+           every task carries a conversation. */
+        db()->exec("CREATE TABLE IF NOT EXISTS fellow_task_messages (
+            id INT AUTO_INCREMENT PRIMARY KEY, task_id INT NOT NULL,
+            sender_user_id INT NOT NULL, sender_role VARCHAR(20) NOT NULL,
+            body TEXT NOT NULL, attachment_url VARCHAR(500) DEFAULT NULL,
+            read_by_admin TINYINT(1) NOT NULL DEFAULT 0, read_by_fellow TINYINT(1) NOT NULL DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_ftm_task (task_id, created_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        foreach ([
+            'accepted_at' => 'TIMESTAMP NULL DEFAULT NULL',
+            'submitted_at' => 'TIMESTAMP NULL DEFAULT NULL',
+            'deliverable_url' => 'VARCHAR(500) DEFAULT NULL',
+            'last_message_at' => 'TIMESTAMP NULL DEFAULT NULL',
+            'declined_reason' => 'VARCHAR(500) DEFAULT NULL',
+            'migrated_from_assignment' => 'INT DEFAULT NULL',
+        ] as $col => $ddl) {
+            try {
+                $has = db()->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'fellow_tasks' AND COLUMN_NAME = " . db()->quote($col))->fetchColumn();
+                if ((int) $has === 0) db()->exec("ALTER TABLE fellow_tasks ADD COLUMN `$col` $ddl");
+            } catch (Throwable $e) { if (app_debug()) error_log("fellow_tasks $col: " . $e->getMessage()); }
+        }
+        fellow_tasks_absorb_assignments();
         // Demo rows a Fellow can load to learn the tool, then clear.
         try {
             $has = db()->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'fellow_orgs' AND COLUMN_NAME = 'is_demo'")->fetchColumn();
@@ -6147,6 +6174,105 @@ function fellow_ops_ensure_schema(): void
         fellow_seed_defaults();
     } catch (Throwable $e) { if (app_debug()) error_log('fellow_ops_ensure_schema: ' . $e->getMessage()); }
     $ready = true;
+}
+
+/** Statuses a task moves through, and who may set them. */
+const FELLOW_TASK_STATUSES = ['not_started', 'accepted', 'in_progress', 'waiting', 'submitted', 'needs_review', 'completed', 'declined'];
+
+/** Fold the old role='fellow' assignments into fellow_tasks so a Fellow has one
+ *  task list instead of two. Idempotent: each source row is stamped on the task
+ *  it became, so a re-run imports nothing. The originals are left in place
+ *  (other roles still use that table) but are no longer read for Fellows. */
+function fellow_tasks_absorb_assignments(): int
+{
+    $moved = 0;
+    try {
+        $rows = db()->query("SELECT a.* FROM ecosystem_assignments a
+            WHERE a.role = 'fellow' AND NOT EXISTS (
+                SELECT 1 FROM fellow_tasks t WHERE t.migrated_from_assignment = a.id)")->fetchAll();
+        if (!$rows) return 0;
+        $ins = db()->prepare('INSERT INTO fellow_tasks (fellow_user_id, assigned_by_user_id, title, instructions,
+                due_date, priority, status, notes, migrated_from_assignment, created_at, accepted_at, completed_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)');
+        foreach ($rows as $a) {
+            $st = (string) ($a['status'] ?? 'active');
+            $status = $st === 'completed' ? 'completed' : ($st === 'declined' ? 'declined' : ($st === 'accepted' ? 'accepted' : 'not_started'));
+            $ins->execute([
+                (int) $a['user_id'], null,
+                mb_substr((string) $a['title'], 0, 200), $a['detail'] ?: null,
+                $a['assign_date'] ?: null, 'medium', $status,
+                $a['volunteer_note'] ?: null, (int) $a['id'], $a['created_at'],
+                in_array($status, ['accepted', 'completed'], true) ? $a['responded_at'] : null,
+                $status === 'completed' ? $a['responded_at'] : null,
+            ]);
+            $moved++;
+        }
+    } catch (Throwable $e) { if (app_debug()) error_log('fellow_tasks_absorb_assignments: ' . $e->getMessage()); }
+    return $moved;
+}
+
+/** One task with its conversation, for whichever side is asking. Marks the
+ *  other side's messages read, so unread badges mean "not yet seen by me". */
+function fellow_task_thread(int $taskId, string $side): array
+{
+    fellow_ops_ensure_schema();
+    $s = db()->prepare("SELECT t.*, u.full_name AS fellow_name, a.full_name AS assigned_by_name
+        FROM fellow_tasks t LEFT JOIN users u ON u.id = t.fellow_user_id
+        LEFT JOIN users a ON a.id = t.assigned_by_user_id WHERE t.id = ? LIMIT 1");
+    $s->execute([$taskId]);
+    $task = $s->fetch();
+    if (!$task) return [];
+    $col = $side === 'admin' ? 'read_by_admin' : 'read_by_fellow';
+    db()->prepare("UPDATE fellow_task_messages SET $col = 1 WHERE task_id = ?")->execute([$taskId]);
+    $m = db()->prepare("SELECT m.id, m.sender_role, m.body, m.attachment_url, m.created_at, u.full_name AS sender_name
+        FROM fellow_task_messages m LEFT JOIN users u ON u.id = m.sender_user_id
+        WHERE m.task_id = ? ORDER BY m.created_at ASC, m.id ASC");
+    $m->execute([$taskId]);
+    return ['task' => $task, 'messages' => $m->fetchAll()];
+}
+
+/** Post to a task's conversation and notify the other side. */
+function fellow_task_post(int $taskId, int $userId, string $role, string $body, string $attachment = ''): void
+{
+    fellow_ops_ensure_schema();
+    $body = mb_substr(trim($body), 0, 4000);
+    if ($body === '') json(['error' => 'Write a message first.'], 422);
+    $fromAdmin = $role !== 'fellow';
+    db()->prepare('INSERT INTO fellow_task_messages (task_id, sender_user_id, sender_role, body, attachment_url, read_by_admin, read_by_fellow)
+        VALUES (?,?,?,?,?,?,?)')
+        ->execute([$taskId, $userId, $fromAdmin ? 'admin' : 'fellow', $body,
+            mb_substr(trim($attachment), 0, 500) ?: null, $fromAdmin ? 1 : 0, $fromAdmin ? 0 : 1]);
+    db()->prepare('UPDATE fellow_tasks SET last_message_at = NOW() WHERE id = ?')->execute([$taskId]);
+    $t = db()->prepare('SELECT fellow_user_id, title FROM fellow_tasks WHERE id = ? LIMIT 1');
+    $t->execute([$taskId]);
+    $task = $t->fetch();
+    if (!$task) return;
+    try {
+        if ($fromAdmin) {
+            new_school_add_notification(null, 'fellow', 'fellow_task', 'Reply on: ' . (string) $task['title'],
+                mb_substr($body, 0, 160), ['task_id' => $taskId], (int) $task['fellow_user_id']);
+        } else {
+            new_school_add_notification(null, 'admin', 'fellow_task', 'Fellow replied on: ' . (string) $task['title'],
+                mb_substr($body, 0, 160), ['task_id' => $taskId]);
+        }
+    } catch (Throwable $e) { /* best effort */ }
+}
+
+/** A Fellow's task list with unread counts, newest activity first. */
+function fellow_tasks_for(int $fellowId, string $filter = 'open'): array
+{
+    fellow_ops_ensure_schema();
+    $where = 'fellow_user_id = ?';
+    if ($filter === 'open') $where .= " AND status NOT IN ('completed','declined')";
+    elseif ($filter === 'done') $where .= " AND status IN ('completed','declined')";
+    $s = db()->prepare("SELECT t.*, a.full_name AS assigned_by_name,
+            (SELECT COUNT(*) FROM fellow_task_messages m WHERE m.task_id = t.id) AS msgs,
+            (SELECT COUNT(*) FROM fellow_task_messages m WHERE m.task_id = t.id AND m.read_by_fellow = 0) AS unread
+        FROM fellow_tasks t LEFT JOIN users a ON a.id = t.assigned_by_user_id
+        WHERE $where
+        ORDER BY (status = 'not_started') DESC, (due_date IS NULL), due_date ASC, t.id DESC LIMIT 200");
+    $s->execute([$fellowId]);
+    return $s->fetchAll();
 }
 
 /** Ship the CRM with real content so no Fellow ever opens an empty screen.

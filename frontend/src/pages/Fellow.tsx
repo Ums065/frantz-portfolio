@@ -7,6 +7,7 @@ import SheetImport from '../components/SheetImport'
 import FellowCrm, { VIEW_META, type ViewKey } from '../components/FellowCrm'
 import FcIcon, { type IconName } from '../components/FcIcon'
 import SchoolVerification from '../components/SchoolVerification'
+import TaskWorkspace from '../components/TaskWorkspace'
 import ProfileSection from '../components/profile/ProfileSection'
 import AnnouncementsFeed, { useAnnouncementBadge } from '../components/AnnouncementsFeed'
 import NotificationBell from '../components/NotificationBell'
@@ -27,7 +28,7 @@ interface Assignment {
 }
 /* One flat navigation instead of tabs-inside-tabs: the CRM's ten sections are
    addressed directly as `crm:<view>` so every destination is one click away. */
-type TabKey = 'overview' | 'profile' | 'announcements' | 'messages' | 'school-verify' | ResearchCategory | `crm:${ViewKey}`
+type TabKey = 'overview' | 'profile' | 'announcements' | 'messages' | 'school-verify' | 'tasks' | ResearchCategory | `crm:${ViewKey}`
 type EntryForm = typeof EMPTY_ENTRY_FORM
 
 interface NavItem { key: TabKey; label: string; icon: IconName; hint?: string; alert?: boolean }
@@ -63,6 +64,9 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
   { label: 'Find sponsors', items: [crmItem('prospects'), crmItem('pipeline'), crmItem('calls'), crmItem('outreach')] },
   { label: 'Learn', items: [crmItem('academy'), crmItem('certification'), crmItem('materials')] },
   { label: 'Track', items: [crmItem('performance'), crmItem('report')] },
+  { label: 'My work', items: [
+    { key: 'tasks', label: 'My Tasks', icon: 'clipboard', hint: 'Work your manager assigned you — accept it, do it, hand it in, and talk to them on each task.', alert: true },
+  ] },
   { label: 'Schools', items: [
     { key: 'school-verify', label: 'Verify Schools', icon: 'building', hint: 'The master school list — confirm each school and invite it to take part.' },
   ] },
@@ -86,6 +90,8 @@ export default function Fellow() {
   const [navOpen, setNavOpen] = useState(false)
   const [crmDue, setCrmDue] = useState(0)
   const [crmOrgs, setCrmOrgs] = useState(0)
+  const [taskOpen, setTaskOpen] = useState(0)
+  const [taskUnread, setTaskUnread] = useState(0)
   // Collapsible sidebar groups, same as the admin Command Center. Every group
   // starts open so nothing is hidden; the Fellow's choices then persist.
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => {
@@ -113,6 +119,7 @@ export default function Fellow() {
   const activeLabel = NAV_ITEMS.find((i) => i.key === tab)?.label ?? 'Overview'
   const badges: Partial<Record<TabKey, number>> = {
     'crm:day': crmDue,
+    tasks: taskUnread || taskOpen,
     announcements: annUnseen,
     ...Object.fromEntries(RESEARCH_CATEGORIES.map((c) => [c.key, counts[c.key] || 0])),
   }
@@ -126,6 +133,14 @@ export default function Fellow() {
     if (role === 'fellow') {
       api.get<{ followups_due: number; orgs_total: number }>('fellow/crm/overview')
         .then((d) => { setCrmDue(d.followups_due || 0); setCrmOrgs(d.orgs_total || 0) })
+        .catch(() => {})
+      // Open tasks and unread replies drive the My Tasks sidebar badge.
+      api.get<{ tasks: { status: string; unread?: number }[] }>('fellow/tasks?filter=open')
+        .then((d) => {
+          const list = d.tasks || []
+          setTaskOpen(list.length)
+          setTaskUnread(list.reduce((n, t) => n + (Number(t.unread) || 0), 0))
+        })
         .catch(() => {})
     }
   }, [allowed, role])
@@ -236,7 +251,8 @@ export default function Fellow() {
   if (crmDue > 0) nextActions.push({ label: `Clear ${crmDue} follow-up${crmDue > 1 ? 's' : ''} that ${crmDue > 1 ? 'are' : 'is'} due`, why: 'Most sponsors say yes on the second or third contact — chasing on time is the whole job.', cta: 'Open My Day', go: 'crm:day', icon: 'sunrise', urgent: true })
   if (crmOrgs === 0) nextActions.push({ label: 'Add your first prospect', why: 'A prospect is any company that might sponsor — a shop, a bank, a clinic. Everything else starts here.', cta: 'Add one', go: 'crm:prospects', icon: 'building' })
   else if (crmOrgs < 10) nextActions.push({ label: `Grow your list — you have ${crmOrgs}`, why: 'Aim for a list you can work every day. More prospects, more chances.', cta: 'Add prospects', go: 'crm:prospects', icon: 'building' })
-  if (openAssignments.length > 0) nextActions.push({ label: `${openAssignments.length} assignment${openAssignments.length > 1 ? 's' : ''} from your admin`, why: 'Accept it or mark it complete so your manager knows where you are.', cta: 'See assignments', go: 'overview', icon: 'clipboard' })
+  if (taskUnread > 0) nextActions.push({ label: `${taskUnread} unread repl${taskUnread > 1 ? 'ies' : 'y'} from your manager`, why: 'They wrote back on a task. Read it before carrying on.', cta: 'Open My Tasks', go: 'tasks', icon: 'clipboard', urgent: true })
+  if (taskOpen > 0) nextActions.push({ label: `${taskOpen} task${taskOpen > 1 ? 's' : ''} assigned to you`, why: 'Accept it, work it, then hand it in so your manager knows where you are.', cta: 'Open My Tasks', go: 'tasks', icon: 'clipboard' })
   if (nextActions.length < 3) nextActions.push({ label: 'Move someone forward in the pipeline', why: 'Pick one company and take it one stage further today — a call, an email, a meeting.', cta: 'Open Pipeline', go: 'crm:pipeline', icon: 'funnel' })
   if (nextActions.length < 3) nextActions.push({ label: 'Finish your training', why: 'Read the modules, then take the exam to become a Certified Student Fellow.', cta: 'Open Academy', go: 'crm:academy', icon: 'cap' })
   nextActions.push({ label: 'End your day with a report', why: 'Two minutes so your manager can unblock you tomorrow.', cta: 'Write it', go: 'crm:report', icon: 'clipboard' })
@@ -330,6 +346,7 @@ export default function Fellow() {
 
           {crmView && <FellowCrm view={crmView} onView={(v) => setTab(`crm:${v}`)} />}
           {tab === 'school-verify' && <SchoolVerification />}
+          {tab === 'tasks' && <TaskWorkspace side="fellow" onChanged={loadOverview} />}
           {tab === 'profile' && <ProfileSection />}
           {tab === 'messages' && (
             <Section title="Messages with the program team">
@@ -371,30 +388,20 @@ export default function Fellow() {
                 </div>
               </section>
 
+              {/* Assigned work lives in one place now — My Tasks. The old
+                  assignments list was the second copy of the same thing. */}
               <section style={cardS}>
-                <h2 style={{ fontSize: 13, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--gold)', margin: '0 0 12px' }}>My assignments</h2>
-                {openAssignments.length === 0 && assignments.length === 0
-                  ? <p style={{ color: 'var(--muted)', fontSize: 13 }}>No assignments yet. Your admin will assign research tasks here.</p>
+                <h2 style={{ fontSize: 13, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--gold)', margin: '0 0 12px' }}>Work assigned to me</h2>
+                {taskOpen === 0
+                  ? <p style={{ color: 'var(--muted)', fontSize: 13 }}>Nothing open. When your manager assigns you work it appears under My Tasks, where you can reply to them on each task.</p>
                   : (
-                    <div style={{ display: 'grid', gap: 10, minWidth: 0 }}>
-                      {assignments.map((a) => (
-                        <div key={a.id} style={{ background: 'rgba(0,0,0,0.18)', border: '1px solid var(--line)', borderRadius: 10, padding: '12px 14px' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
-                            <strong style={{ color: 'var(--ivory)', overflowWrap: 'anywhere' }}>{a.title}</strong>
-                            <span style={{ fontSize: 11, textTransform: 'uppercase', color: 'var(--gold-light)' }}>{a.status}</span>
-                          </div>
-                          {a.detail && <p style={{ color: 'var(--muted)', fontSize: 13, margin: '6px 0 0', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{a.detail}</p>}
-                          {a.assign_date && <p style={{ color: 'var(--muted)', fontSize: 12, margin: '4px 0 0' }}>Due: {a.assign_date}</p>}
-                          {(a.status === 'active' || a.status === 'accepted') && (
-                            <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
-                              {a.status === 'active' && <button className="btn btn--sm btn--solid" onClick={() => void respondAssignment(a.id, 'accept')}>Accept</button>}
-                              {a.status === 'active' && <button className="btn btn--sm" onClick={() => void respondAssignment(a.id, 'decline')}>Decline</button>}
-                              <button className="btn btn--sm" onClick={() => void respondAssignment(a.id, 'complete')}>Mark complete</button>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
+                    <>
+                      <p style={{ color: 'var(--muted)', fontSize: 13, margin: '0 0 12px' }}>
+                        You have <strong style={{ color: 'var(--ivory)' }}>{taskOpen}</strong> open task{taskOpen === 1 ? '' : 's'}
+                        {taskUnread > 0 ? <> and <strong style={{ color: '#f0b8a8' }}>{taskUnread}</strong> unread repl{taskUnread === 1 ? 'y' : 'ies'} from your manager</> : null}.
+                      </p>
+                      <button className="btn btn--solid" onClick={() => setTab('tasks')}>Open My Tasks →</button>
+                    </>
                   )}
               </section>
             </div>
