@@ -2510,6 +2510,40 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             $t = fellow_task_thread((int) $m[1], 'fellow');
             json($t + ['statuses' => FELLOW_TASK_STATUSES]);
         }
+        // A Fellow hands in a real file rather than hosting it somewhere else.
+        case $method === 'POST' && preg_match('#^fellow/task/(\d+)/upload$#', $route, $m) === 1: {
+            $u = require_login();
+            if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
+            fellow_ops_ensure_schema();
+            rate_limit('fellow_task_upload', 60, 3600, (string) $u['id']);
+            $own = db()->prepare('SELECT id FROM fellow_tasks WHERE id = ? AND fellow_user_id = ?');
+            $own->execute([(int) $m[1], (int) $u['id']]);
+            if (!$own->fetch()) json(['error' => 'Not found.'], 404);
+            $f = fellow_task_store_upload();
+            json(['message' => 'Uploaded.', 'url' => $f['url'], 'name' => $f['name']], 201);
+        }
+        // A Fellow raises their own item - a request, a blocker, an idea.
+        case $key === 'POST fellow/task/request': {
+            $u = require_login();
+            if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
+            fellow_ops_ensure_schema();
+            rate_limit('fellow_task_request', 30, 3600, (string) $u['id']);
+            $b = body();
+            $title = mb_substr(trim((string) field($b, 'title')), 0, 200);
+            if ($title === '') json(['error' => 'Give your request a short title.'], 422);
+            $detail = mb_substr(trim((string) field($b, 'instructions')), 0, 2000);
+            db()->prepare("INSERT INTO fellow_tasks (fellow_user_id, assigned_by_user_id, title, instructions, priority, status, requested_by_fellow)
+                VALUES (?, NULL, ?, ?, ?, 'waiting', 1)")
+                ->execute([(int) $u['id'], $title, $detail ?: null,
+                    in_array((string) field($b, 'priority'), ['low', 'medium', 'high'], true) ? (string) field($b, 'priority') : 'medium']);
+            $tid = (int) db()->lastInsertId();
+            if ($detail !== '') { try { fellow_task_post($tid, (int) $u['id'], 'fellow', $detail); } catch (Throwable $e) { /* best effort */ } }
+            try {
+                new_school_add_notification(null, 'admin', 'fellow_task', 'Fellow raised a request: ' . $title,
+                    (string) $u['full_name'] . ($detail !== '' ? ' - ' . mb_substr($detail, 0, 140) : ''), ['task_id' => $tid]);
+            } catch (Throwable $e) { /* best effort */ }
+            json(['message' => 'Sent to your manager.', 'id' => $tid], 201);
+        }
         case $method === 'POST' && preg_match('#^fellow/task/(\d+)/message$#', $route, $m) === 1: {
             $u = require_login();
             if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
@@ -2645,10 +2679,15 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             $fid = (int) ($b['fellow_user_id'] ?? 0);
             $title = mb_substr(trim((string) field($b, 'title')), 0, 200);
             if ($fid <= 0 || $title === '') json(['error' => 'Pick a Fellow and enter a task title.'], 422);
-            db()->prepare('INSERT INTO fellow_tasks (fellow_user_id, assigned_by_user_id, title, instructions, due_date, priority) VALUES (?,?,?,?,?,?)')
+            // Optionally tie the task to a work screen so it counts itself.
+            $target = (string) field($b, 'work_target') === 'schools' ? 'schools' : null;
+            $wf = is_array($b['work_filter'] ?? null) ? array_filter(array_map('strval', $b['work_filter'])) : [];
+            db()->prepare('INSERT INTO fellow_tasks (fellow_user_id, assigned_by_user_id, title, instructions, due_date, priority, work_target, work_filter, target_count) VALUES (?,?,?,?,?,?,?,?,?)')
                 ->execute([$fid, (int) $admin['id'], $title, mb_substr(trim((string) field($b, 'instructions')), 0, 2000) ?: null,
                     trim((string) field($b, 'due_date')) ?: null,
-                    in_array((string) field($b, 'priority'), ['low', 'medium', 'high'], true) ? (string) field($b, 'priority') : 'medium']);
+                    in_array((string) field($b, 'priority'), ['low', 'medium', 'high'], true) ? (string) field($b, 'priority') : 'medium',
+                    $target, $target && $wf ? json_encode($wf) : null,
+                    ($tc = (int) ($b['target_count'] ?? 0)) > 0 ? $tc : null]);
             $taskId = (int) db()->lastInsertId();
             // The brief starts the conversation, so the Fellow can reply to it.
             $kick = trim((string) field($b, 'instructions'));
@@ -2694,6 +2733,87 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             if (!$chk->fetch()) json(['error' => 'Not found.'], 404);
             fellow_task_post((int) $m[1], (int) $admin['id'], 'admin', (string) field(body(), 'body'), (string) field(body(), 'attachment_url'));
             json(['message' => 'Sent.'], 201);
+        }
+        case $method === 'POST' && preg_match('#^admin/fellow-ops/task/(\d+)/upload$#', $route, $m) === 1: {
+            require_admin();
+            fellow_ops_ensure_schema();
+            $chk = db()->prepare('SELECT id FROM fellow_tasks WHERE id = ?');
+            $chk->execute([(int) $m[1]]);
+            if (!$chk->fetch()) json(['error' => 'Not found.'], 404);
+            $f = fellow_task_store_upload();
+            json(['message' => 'Uploaded.', 'url' => $f['url'], 'name' => $f['name']], 201);
+        }
+        // A task assigned by mistake has to be removable, or it clutters the
+        // Fellow's list forever and skews the board counts.
+        case $method === 'DELETE' && preg_match('#^admin/fellow-ops/task/(\d+)$#', $route, $m) === 1: {
+            require_admin();
+            fellow_ops_ensure_schema();
+            $id = (int) $m[1];
+            $chk = db()->prepare('SELECT id FROM fellow_tasks WHERE id = ?');
+            $chk->execute([$id]);
+            if (!$chk->fetch()) json(['error' => 'Not found.'], 404);
+            db()->prepare('DELETE FROM fellow_task_messages WHERE task_id = ?')->execute([$id]);
+            db()->prepare('DELETE FROM fellow_tasks WHERE id = ?')->execute([$id]);
+            json(['message' => 'Task deleted.']);
+        }
+        /* Assign one brief to several Fellows at once, optionally splitting a
+           work target between them (e.g. a borough each). */
+        case $key === 'POST admin/fellow-ops/tasks/bulk': {
+            $admin = require_admin();
+            fellow_ops_ensure_schema();
+            $b = body();
+            $ids = array_values(array_unique(array_filter(array_map('intval', is_array($b['fellow_user_ids'] ?? null) ? $b['fellow_user_ids'] : []))));
+            $title = mb_substr(trim((string) field($b, 'title')), 0, 200);
+            if (!$ids || $title === '') json(['error' => 'Pick at least one Fellow and enter a title.'], 422);
+            if (count($ids) > 50) json(['error' => 'At most 50 Fellows at a time.'], 422);
+            $instructions = mb_substr(trim((string) field($b, 'instructions')), 0, 2000);
+            $due = trim((string) field($b, 'due_date'));
+            $prio = in_array((string) field($b, 'priority'), ['low', 'medium', 'high'], true) ? (string) field($b, 'priority') : 'medium';
+            $target = (string) field($b, 'work_target');
+            $target = $target === 'schools' ? 'schools' : null;
+            // One region per Fellow when splitting; otherwise everyone gets the same filter.
+            $regions = is_array($b['split_regions'] ?? null) ? array_values(array_filter(array_map('strval', $b['split_regions']))) : [];
+            $count = max(0, (int) ($b['target_count'] ?? 0));
+            $ins = db()->prepare('INSERT INTO fellow_tasks (fellow_user_id, assigned_by_user_id, title, instructions, due_date, priority, work_target, work_filter, target_count) VALUES (?,?,?,?,?,?,?,?,?)');
+            $made = 0;
+            foreach ($ids as $i => $fid) {
+                $region = $regions === [] ? '' : (string) ($regions[$i % count($regions)] ?? '');
+                $filter = $target === 'schools' && $region !== '' ? json_encode(['region' => $region]) : null;
+                $ttl = $region !== '' ? mb_substr($title . ' - ' . $region, 0, 200) : $title;
+                $ins->execute([$fid, (int) $admin['id'], $ttl, $instructions ?: null, $due ?: null, $prio, $target, $filter, $count ?: null]);
+                $tid = (int) db()->lastInsertId();
+                if ($instructions !== '') { try { fellow_task_post($tid, (int) $admin['id'], 'admin', $instructions); } catch (Throwable $e) { /* best effort */ } }
+                try { new_school_add_notification(null, 'fellow', 'fellow_task', 'New task assigned', $ttl, ['task_id' => $tid], $fid); } catch (Throwable $e) { /* best effort */ }
+                $made++;
+            }
+            json(['message' => "Assigned to $made Fellow" . ($made === 1 ? '' : 's') . '.', 'created' => $made], 201);
+        }
+        /* Reusable briefs. */
+        case $key === 'GET admin/fellow-ops/task-templates': {
+            require_admin();
+            fellow_ops_ensure_schema();
+            json(['templates' => db()->query('SELECT * FROM fellow_task_templates ORDER BY name')->fetchAll()]);
+        }
+        case $key === 'POST admin/fellow-ops/task-template': {
+            require_admin();
+            fellow_ops_ensure_schema();
+            $b = body();
+            $name = mb_substr(trim((string) field($b, 'name')), 0, 160);
+            $title = mb_substr(trim((string) field($b, 'title')), 0, 200);
+            if ($name === '' || $title === '') json(['error' => 'A template needs a name and a task title.'], 422);
+            $target = (string) field($b, 'work_target') === 'schools' ? 'schools' : null;
+            db()->prepare('INSERT INTO fellow_task_templates (name, title, instructions, priority, due_in_days, work_target, target_count) VALUES (?,?,?,?,?,?,?)')
+                ->execute([$name, $title, mb_substr(trim((string) field($b, 'instructions')), 0, 2000) ?: null,
+                    in_array((string) field($b, 'priority'), ['low', 'medium', 'high'], true) ? (string) field($b, 'priority') : 'medium',
+                    ($d = (int) ($b['due_in_days'] ?? 0)) > 0 ? $d : null, $target,
+                    ($c = (int) ($b['target_count'] ?? 0)) > 0 ? $c : null]);
+            json(['message' => 'Template saved.'], 201);
+        }
+        case $method === 'DELETE' && preg_match('#^admin/fellow-ops/task-template/(\d+)$#', $route, $m) === 1: {
+            require_admin();
+            fellow_ops_ensure_schema();
+            db()->prepare('DELETE FROM fellow_task_templates WHERE id = ?')->execute([(int) $m[1]]);
+            json(['message' => 'Template deleted.']);
         }
         // Admin can retitle, re-brief, re-date, reassign, and set the verdict.
         case $method === 'PUT' && preg_match('#^admin/fellow-ops/task/(\d+)$#', $route, $m) === 1: {

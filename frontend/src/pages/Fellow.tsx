@@ -92,6 +92,8 @@ export default function Fellow() {
   const [crmOrgs, setCrmOrgs] = useState(0)
   const [taskOpen, setTaskOpen] = useState(0)
   const [taskUnread, setTaskUnread] = useState(0)
+  // Set when a task's "Open my work" is used, so the schools list opens already filtered.
+  const [workFilter, setWorkFilter] = useState<Record<string, string> | null>(null)
   // Collapsible sidebar groups, same as the admin Command Center. Every group
   // starts open so nothing is hidden; the Fellow's choices then persist.
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => {
@@ -345,8 +347,11 @@ export default function Fellow() {
           </header>
 
           {crmView && <FellowCrm view={crmView} onView={(v) => setTab(`crm:${v}`)} />}
-          {tab === 'school-verify' && <SchoolVerification />}
-          {tab === 'tasks' && <TaskWorkspace side="fellow" onChanged={loadOverview} />}
+          {tab === 'school-verify' && <SchoolVerification initialFilter={workFilter} />}
+          {tab === 'tasks' && (
+            <TaskWorkspace side="fellow" onChanged={loadOverview}
+              onOpenWork={(target, filter) => { if (target === 'schools') { setWorkFilter(filter); setTab('school-verify') } }} />
+          )}
           {tab === 'profile' && <ProfileSection />}
           {tab === 'messages' && (
             <Section title="Messages with the program team">

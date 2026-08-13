@@ -54,7 +54,7 @@ Could I send you the one-page overview, or arrange a short call with whoever han
 
 Thank you for your time and for everything you already do for your students.`
 
-export default function SchoolVerification() {
+export default function SchoolVerification({ initialFilter }: { initialFilter?: Record<string, string> | null } = {}) {
   const [rows, setRows] = useState<School[]>([])
   const [facets, setFacets] = useState<Facets | null>(null)
   const [total, setTotal] = useState(0)
@@ -65,7 +65,13 @@ export default function SchoolVerification() {
   const per = 50
 
   // Every filter is applied by the server; the browser never holds the full list.
-  const [f, setF] = useState({ q: '', region: '', priority: '', school_type: '', status: '', outreach_status: '', needs_info: false })
+  // Arriving from a task opens the exact slice that task is about, and only the
+  // unverified ones — that is the work, not the whole borough.
+  const [f, setF] = useState({
+    q: '', region: initialFilter?.region || '', priority: initialFilter?.priority || '',
+    school_type: initialFilter?.school_type || '', status: initialFilter ? 'unverified' : '',
+    outreach_status: '', needs_info: false,
+  })
   const set = (k: string, v: string | boolean) => { setF((p) => ({ ...p, [k]: v })); setPage(1) }
 
   const load = useCallback(() => {

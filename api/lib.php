@@ -6152,6 +6152,14 @@ function fellow_ops_ensure_schema(): void
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             INDEX idx_ftm_task (task_id, created_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        // Reusable briefs, so recurring work is not retyped every week.
+        db()->exec("CREATE TABLE IF NOT EXISTS fellow_task_templates (
+            id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(160) NOT NULL,
+            title VARCHAR(200) NOT NULL, instructions TEXT DEFAULT NULL,
+            priority VARCHAR(20) NOT NULL DEFAULT 'medium', due_in_days INT DEFAULT NULL,
+            work_target VARCHAR(24) DEFAULT NULL, work_filter TEXT DEFAULT NULL, target_count INT DEFAULT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
         foreach ([
             'accepted_at' => 'TIMESTAMP NULL DEFAULT NULL',
             'submitted_at' => 'TIMESTAMP NULL DEFAULT NULL',
@@ -6159,6 +6167,13 @@ function fellow_ops_ensure_schema(): void
             'last_message_at' => 'TIMESTAMP NULL DEFAULT NULL',
             'declined_reason' => 'VARCHAR(500) DEFAULT NULL',
             'migrated_from_assignment' => 'INT DEFAULT NULL',
+            // Ties a task to the screen that does the work, so "verify 25 Queens
+            // schools" opens the filtered list and counts itself.
+            'work_target' => 'VARCHAR(24) DEFAULT NULL',
+            'work_filter' => 'TEXT DEFAULT NULL',
+            'target_count' => 'INT DEFAULT NULL',
+            'requested_by_fellow' => 'TINYINT(1) NOT NULL DEFAULT 0',
+            'overdue_notified_on' => 'DATE DEFAULT NULL',
         ] as $col => $ddl) {
             try {
                 $has = db()->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'fellow_tasks' AND COLUMN_NAME = " . db()->quote($col))->fetchColumn();
@@ -6228,6 +6243,9 @@ function fellow_task_thread(int $taskId, string $side): array
         FROM fellow_task_messages m LEFT JOIN users u ON u.id = m.sender_user_id
         WHERE m.task_id = ? ORDER BY m.created_at ASC, m.id ASC");
     $m->execute([$taskId]);
+    $task['is_overdue'] = !empty($task['due_date']) && (string) $task['due_date'] < date('Y-m-d')
+        && !in_array((string) $task['status'], ['completed', 'declined'], true);
+    $task['progress'] = fellow_task_progress($task);
     return ['task' => $task, 'messages' => $m->fetchAll()];
 }
 
@@ -6258,6 +6276,112 @@ function fellow_task_post(int $taskId, int $userId, string $role, string $body, 
     } catch (Throwable $e) { /* best effort */ }
 }
 
+/** Store a file handed in on a task. Wider than media uploads (a Fellow's
+ *  deliverable is usually a sheet or a doc, not a picture) but still an
+ *  allow-list, checked against the real MIME rather than the filename. */
+function fellow_task_store_upload(string $field = 'file'): array
+{
+    if (empty($_FILES[$field]) || ($_FILES[$field]['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+        json(['error' => 'No file uploaded.'], 422);
+    }
+    $f = $_FILES[$field];
+    if ($f['size'] > 12 * 1024 * 1024) json(['error' => 'File must be 12MB or smaller.'], 422);
+    $allowed = [
+        'application/pdf' => 'pdf', 'image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp',
+        'text/plain' => 'txt', 'text/csv' => 'csv', 'application/csv' => 'csv',
+        'application/vnd.ms-excel' => 'xls',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' => 'xlsx',
+        'application/msword' => 'doc',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document' => 'docx',
+        'application/vnd.ms-powerpoint' => 'ppt',
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation' => 'pptx',
+    ];
+    $mime = function_exists('mime_content_type') ? (string) mime_content_type($f['tmp_name']) : (string) ($f['type'] ?? '');
+    // Office files and CSVs are often reported as generic; fall back to the
+    // extension, but only for extensions already on the allow-list.
+    $ext = strtolower((string) pathinfo((string) $f['name'], PATHINFO_EXTENSION));
+    $safe = $allowed[$mime] ?? (in_array($ext, $allowed, true) ? $ext : null);
+    if ($safe === null) json(['error' => 'Allowed files: PDF, Word, Excel, PowerPoint, CSV, TXT or an image.'], 422);
+    $dir = __DIR__ . '/uploads/tasks';
+    if (!is_dir($dir) && !mkdir($dir, 0775, true) && !is_dir($dir)) json(['error' => 'Could not create upload directory.'], 500);
+    $name = 'task-' . bin2hex(random_bytes(8)) . '.' . $safe;
+    if (!move_uploaded_file($f['tmp_name'], $dir . '/' . $name)) json(['error' => 'Failed to save the uploaded file.'], 500);
+    return ['url' => '/api/uploads/tasks/' . $name, 'name' => mb_substr((string) $f['name'], 0, 160)];
+}
+
+/** Live progress for a task tied to a work screen, so nobody counts by hand.
+ *  Today only school verification is wired; unknown targets return null. */
+function fellow_task_progress(array $task): ?array
+{
+    if ((string) ($task['work_target'] ?? '') !== 'schools') return null;
+    $target = (int) ($task['target_count'] ?? 0);
+    $filter = [];
+    if (!empty($task['work_filter'])) {
+        $d = json_decode((string) $task['work_filter'], true);
+        if (is_array($d)) $filter = $d;
+    }
+    $where = ["category = 'school_contact'", 'fellow_user_id = ?'];
+    $args = [(int) $task['fellow_user_id']];
+    foreach (['region', 'priority', 'school_type'] as $col) {
+        if (trim((string) ($filter[$col] ?? '')) !== '') { $where[] = "$col = ?"; $args[] = trim((string) $filter[$col]); }
+    }
+    $w = implode(' AND ', $where);
+    $tot = db()->prepare("SELECT COUNT(*) FROM research_entries WHERE $w");
+    $tot->execute($args);
+    $ver = db()->prepare("SELECT COUNT(*) FROM research_entries WHERE $w AND status = 'verified'");
+    $ver->execute($args);
+    $inScope = (int) $tot->fetchColumn();
+    $done = (int) $ver->fetchColumn();
+    $goal = $target > 0 ? $target : $inScope;
+    return ['done' => $done, 'goal' => $goal, 'in_scope' => $inScope,
+        'pct' => $goal > 0 ? min(100, (int) round(($done / $goal) * 100)) : 0, 'filter' => $filter];
+}
+
+/** Email each Fellow once a day about tasks that have gone past their due date,
+ *  and tell the admins who is behind. Driven by api/task_reminders.php (cron);
+ *  `overdue_notified_on` keeps it to one nudge per task per day. */
+function fellow_task_overdue_digest(): array
+{
+    fellow_ops_ensure_schema();
+    $rows = db()->query("SELECT t.id, t.title, t.due_date, t.fellow_user_id, u.full_name, u.email
+        FROM fellow_tasks t JOIN users u ON u.id = t.fellow_user_id
+        WHERE t.due_date IS NOT NULL AND t.due_date < CURDATE()
+          AND t.status NOT IN ('completed','declined')
+          AND (t.overdue_notified_on IS NULL OR t.overdue_notified_on < CURDATE())
+        ORDER BY u.full_name, t.due_date")->fetchAll();
+    if (!$rows) return ['fellows' => 0, 'tasks' => 0];
+    $byFellow = [];
+    foreach ($rows as $r) $byFellow[(int) $r['fellow_user_id']][] = $r;
+    $sent = 0;
+    foreach ($byFellow as $list) {
+        $to = trim((string) ($list[0]['email'] ?? ''));
+        $name = (string) ($list[0]['full_name'] ?? 'there');
+        $lines = '';
+        foreach ($list as $r) $lines .= '- ' . $r['title'] . ' (was due ' . $r['due_date'] . ")\n";
+        $n = count($list);
+        $body = "Hi " . explode(' ', $name)[0] . ",\n\n"
+            . "You have $n task" . ($n === 1 ? '' : 's') . " past the due date:\n\n" . $lines
+            . "\nIf something is blocking you, open the task and tell your manager there - that is what the conversation is for. "
+            . "If a date is simply no longer realistic, say so and it can be moved.\n\nFrantzCoutard.com";
+        if ($to !== '' && filter_var($to, FILTER_VALIDATE_EMAIL)) {
+            if (function_exists('mail_queue_enqueue')) mail_queue_enqueue('task_overdue', $to, "$n overdue task" . ($n === 1 ? '' : 's'), $body);
+            $sent++;
+        }
+        try {
+            new_school_add_notification(null, 'fellow', 'fellow_task', 'Overdue: ' . $n . ' task' . ($n === 1 ? '' : 's'),
+                'Open My Tasks and either move them on or say what is blocking you.', [], (int) $list[0]['fellow_user_id']);
+        } catch (Throwable $e) { /* best effort */ }
+        foreach ($list as $r) {
+            db()->prepare('UPDATE fellow_tasks SET overdue_notified_on = CURDATE() WHERE id = ?')->execute([(int) $r['id']]);
+        }
+    }
+    try {
+        new_school_add_notification(null, 'admin', 'fellow_task', count($rows) . ' overdue Fellow task' . (count($rows) === 1 ? '' : 's'),
+            'Across ' . count($byFellow) . ' Fellow' . (count($byFellow) === 1 ? '' : 's') . '. See Fellow Command Center -> Tasks.', []);
+    } catch (Throwable $e) { /* best effort */ }
+    return ['fellows' => $sent, 'tasks' => count($rows)];
+}
+
 /** A Fellow's task list with unread counts, newest activity first. */
 function fellow_tasks_for(int $fellowId, string $filter = 'open'): array
 {
@@ -6266,13 +6390,16 @@ function fellow_tasks_for(int $fellowId, string $filter = 'open'): array
     if ($filter === 'open') $where .= " AND status NOT IN ('completed','declined')";
     elseif ($filter === 'done') $where .= " AND status IN ('completed','declined')";
     $s = db()->prepare("SELECT t.*, a.full_name AS assigned_by_name,
+            (t.due_date IS NOT NULL AND t.due_date < CURDATE() AND t.status NOT IN ('completed','declined')) AS is_overdue,
             (SELECT COUNT(*) FROM fellow_task_messages m WHERE m.task_id = t.id) AS msgs,
             (SELECT COUNT(*) FROM fellow_task_messages m WHERE m.task_id = t.id AND m.read_by_fellow = 0) AS unread
         FROM fellow_tasks t LEFT JOIN users a ON a.id = t.assigned_by_user_id
         WHERE $where
-        ORDER BY (status = 'not_started') DESC, (due_date IS NULL), due_date ASC, t.id DESC LIMIT 200");
+        ORDER BY is_overdue DESC, (status = 'not_started') DESC, (due_date IS NULL), due_date ASC, t.id DESC LIMIT 200");
     $s->execute([$fellowId]);
-    return $s->fetchAll();
+    $rows = $s->fetchAll();
+    foreach ($rows as &$r) $r['progress'] = fellow_task_progress($r);
+    return $rows;
 }
 
 /** Ship the CRM with real content so no Fellow ever opens an empty screen.
