@@ -4022,6 +4022,20 @@ section#challenge .challenge-features .ns-gain p {
   .fc-next .btn { width:100%; }
 }
 
+/* Admin workspace switch: the whole site, or the Fellow team. */
+.admin-modebar { grid-column: 1 / -1; display:flex; justify-content:center; margin-bottom:4px; }
+.admin-mode { display:inline-flex; gap:4px; padding:4px; border-radius:999px; border:1px solid rgba(201,168,76,.28); background:rgba(0,0,0,.28); }
+.admin-mode__btn { display:inline-flex; align-items:center; gap:7px; padding:8px 20px; border:0; border-radius:999px; background:none; color:var(--muted); font:inherit; font-size:13.5px; font-weight:700; cursor:pointer; transition:background .18s ease, color .18s ease; }
+.admin-mode__btn:hover { color:var(--gold-light,#f6e2a8); }
+.admin-mode__btn.is-active { background:var(--gold-grad); color:#1a1308; }
+.admin-mode__btn:focus-visible { outline:2px solid var(--gold); outline-offset:2px; }
+.admin-mode__dot { font-style:normal; font-size:10.5px; font-weight:800; padding:1px 6px; border-radius:999px; background:rgba(224,120,92,.3); color:#f5c3b3; }
+.admin-mode__btn.is-active .admin-mode__dot { background:rgba(0,0,0,.22); color:#1a1308; }
+@media (max-width: 560px) {
+  .admin-mode { width:100%; }
+  .admin-mode__btn { flex:1; justify-content:center; padding:8px 10px; font-size:12.5px; }
+}
+
 /* Shared admin/Fellow task workspace: task rows + the conversation. */
 .tw-card { display:flex; align-items:center; gap:12px; width:100%; text-align:left; padding:13px 15px; border-radius:12px; border:1px solid var(--line); background:rgba(255,255,255,.02); color:inherit; font:inherit; cursor:pointer; transition:border-color .18s ease, background .18s ease; }
 .tw-card:hover { border-color:rgba(201,168,76,.45); background:rgba(201,168,76,.05); }

@@ -20,6 +20,8 @@ const JudgesAdminPanel = lazy(() => import('../components/admin/JudgesAdminPanel
 const PartnersAdminPanel = lazy(() => import('../components/admin/PartnersAdminPanel'))
 const PressAdminPanel = lazy(() => import('../components/admin/PressAdminPanel'))
 const FellowOpsAdminPanel = lazy(() => import('../components/admin/FellowOpsAdminPanel'))
+// Section list only — the panel itself stays lazy.
+import { FTAB_GROUPS, FTAB_LABEL, type FTab } from '../lib/fellowAdminTabs'
 const ResearchAdminPanel = lazy(() => import('../components/admin/ResearchAdminPanel'))
 const BusinessRequestsAdminPanel = lazy(() => import('../components/admin/BusinessRequestsAdminPanel'))
 const SponsorJobsAdminPanel = lazy(() => import('../components/admin/SponsorJobsAdminPanel'))
@@ -241,6 +243,13 @@ export default function Admin() {
   const toggleGroup = (name: string) => setOpenGroups((p) => (p[name] ? {} : { [name]: true }))
   // Quick "jump to a section" search over the nav (⌘K-style, but always visible).
   const [navQuery, setNavQuery] = useState('')
+  /* Top-level workspace switch: the whole site, or the Fellow team. Remembered,
+     because whoever manages the Fellows spends their day on that side. */
+  const [mode, setMode] = useState<'admin' | 'fellow'>(() => {
+    try { return localStorage.getItem('fc_admin_mode') === 'fellow' ? 'fellow' : 'admin' } catch { return 'admin' }
+  })
+  useEffect(() => { try { localStorage.setItem('fc_admin_mode', mode) } catch { /* ignore */ } }, [mode])
+  const [fellowTab, setFellowTab] = useState<FTab>('today')
   // First-run getting-started hint on the Overview (dismissible, remembered).
   const [showGettingStarted, setShowGettingStarted] = useState<boolean>(() => {
     try { return localStorage.getItem('fc_admin_intro_done') !== '1' } catch { return true }
@@ -910,25 +919,62 @@ export default function Admin() {
     )
   }
 
-  const activeLabel = NAV_GROUPS.flatMap((g) => g.items).find((i) => i.key === tab)?.label ?? 'Overview'
+  const activeLabel = mode === 'fellow'
+    ? FTAB_LABEL[fellowTab]
+    : NAV_GROUPS.flatMap((g) => g.items).find((i) => i.key === tab)?.label ?? 'Overview'
+
+  /* Two workspaces behind one toggle: the whole site, or the Fellow team. The
+     Fellow side is the same panel as the Fellow Team tab, driven from here. */
+  const modeToggle = (
+    <div className="admin-mode" role="tablist" aria-label="Dashboard mode">
+      {([['admin', 'Main Dashboard'], ['fellow', 'Fellow Team']] as const).map(([m, lbl]) => (
+        <button key={m} type="button" role="tab" aria-selected={mode === m}
+          className={`admin-mode__btn${mode === m ? ' is-active' : ''}`} onClick={() => setMode(m)}>
+          {lbl}
+          {m === 'fellow' && (data?.counts?.fellow_proposals_pending ?? 0) > 0
+            ? <em className="admin-mode__dot">{data?.counts?.fellow_proposals_pending}</em> : null}
+        </button>
+      ))}
+    </div>
+  )
 
   return (
     <div className="admin-page" style={wrapS}>
       <div className={`admin-layout${navOpen ? '' : ' is-nav-collapsed'}`}>
+        <div className="admin-modebar">{modeToggle}</div>
         <button type="button" className="admin-mobilebar" onClick={() => setNavOpen((o) => !o)} aria-expanded={navOpen}>
           <span>☰&nbsp; Menu</span>
           <span className="admin-mobilebar__hint">{navOpen ? 'Tap to close' : activeLabel}</span>
         </button>
         <aside className="admin-sidebar glass">
           <div className="admin-sidebar__brand">
-            <span className="admin-kicker">Admin</span>
-            <strong className="gold-text">Command Center</strong>
+            <span className="admin-kicker">{mode === 'fellow' ? 'Fellow Team' : 'Admin'}</span>
+            <strong className="gold-text">{mode === 'fellow' ? 'Student Fellows' : 'Command Center'}</strong>
           </div>
-          <div className="admin-nav__search">
+
+          {/* Fellow mode: the Fellow Team sections become the sidebar. */}
+          {mode === 'fellow' && (
+            <nav className="admin-nav" onClick={() => setNavOpen(false)}>
+              {FTAB_GROUPS.map((g) => (
+                <div className="admin-nav__group is-open" key={g.label}>
+                  <span className="admin-nav__group-label">{g.label}</span>
+                  <div className="admin-nav__items">
+                    {g.tabs.map((t) => (
+                      <button key={t} type="button" className={`admin-nav__item${fellowTab === t ? ' is-active' : ''}`}
+                        onClick={() => setFellowTab(t)}>
+                        <span className="admin-nav__label">{FTAB_LABEL[t]}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </nav>
+          )}
+          {mode === 'admin' && <div className="admin-nav__search">
             <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth={1.8}><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg>
             <input type="search" value={navQuery} onChange={(e) => setNavQuery(e.target.value)} placeholder="Jump to a section…" aria-label="Search admin sections" />
-          </div>
-          <nav className="admin-nav" onClick={() => setNavOpen(false)}>
+          </div>}
+          {mode === 'admin' && <nav className="admin-nav" onClick={() => setNavOpen(false)}>
             {navQuery.trim() ? (
               // Flat search results — quick jump to any section.
               (() => {
@@ -995,7 +1041,7 @@ export default function Admin() {
                 </div>
               )
             })}
-          </nav>
+          </nav>}
           <div className="admin-sidebar__foot">
             <button type="button" className="btn btn--sm" onClick={() => setProfileOpen(true)}>My Profile</button>
             <a className="btn btn--sm" href="/">View Site</a>
@@ -1006,11 +1052,19 @@ export default function Admin() {
         <main className="admin-main">
           <header className="admin-main__header glass">
             <div>
-              <span className="admin-kicker">Admin Dashboard</span>
+              <span className="admin-kicker">{mode === 'fellow' ? 'Fellow Team' : 'Admin Dashboard'}</span>
               <h1 className="gold-text" style={{ fontFamily: 'var(--f-serif)', fontSize: 26, marginTop: 4 }}>{activeLabel}</h1>
               <p style={{ color: 'var(--muted)', fontSize: 13 }}>Signed in as {user?.full_name} · {user?.role}</p>
             </div>
           </header>
+
+          {/* Fellow mode short-circuits the whole admin tab tree: the sidebar
+              drives the Fellow Team panel and nothing else renders. */}
+          {mode === 'fellow' ? (
+            <Suspense fallback={<p style={{ color: 'var(--muted)', fontSize: 13 }}>Loading…</p>}>
+              <FellowOpsAdminPanel tab={fellowTab} onTab={setFellowTab} />
+            </Suspense>
+          ) : (<>
 
           {(() => {
             // Sub-tab bar for the folded New School sections (only when the active
@@ -1989,6 +2043,7 @@ export default function Admin() {
         {tab === 'rsvps' && <RsvpsAdmin />}
         {tab === 'inventory' && <InventoryAdmin />}
           </Suspense>
+          </>)}
         </main>
       </div>
 

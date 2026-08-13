@@ -3,6 +3,7 @@ import { api } from '../../lib/api'
 import FcIcon from '../FcIcon'
 import TaskWorkspace from '../TaskWorkspace'
 import ResearchAdminPanel from './ResearchAdminPanel'
+import { FTAB_GROUPS, FTAB_LABEL, type FTab } from '../../lib/fellowAdminTabs'
 
 /* Admin "Fellow Command Center": today's team activity, per-Fellow rollup, live
    activity feed, master pipeline, task assignment, and daily-target settings. */
@@ -14,30 +15,18 @@ interface Activity { type: string; detail?: string; created_at: string; fellow_n
 const money = (n: number) => '$' + (n || 0).toLocaleString('en-US')
 const label = (s: string) => s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 
-/* Everything about the Fellow team lives here. Fourteen destinations in one
-   flat row was the same problem the Fellow dashboard had, so they are grouped
-   the way the job divides: watch the team, look at their work, set the rules. */
-type FTab = 'today' | 'analytics' | 'activity' | 'reports' | 'assign' | 'schools' | 'pipeline'
-  | 'proposals' | 'research' | 'targets' | 'materials' | 'templates' | 'training' | 'certification' | 'accounts'
-
-const FTAB_LABEL: Record<FTab, string> = {
-  today: 'Today', analytics: 'Analytics', activity: 'Activity Feed', reports: 'Daily Reports',
-  assign: 'Tasks', schools: 'School Verification', pipeline: 'All Prospects', proposals: 'Proposals',
-  research: 'Research Entries', targets: 'Targets', materials: 'Materials', templates: 'Outreach Templates',
-  training: 'Training', certification: 'Certification', accounts: 'Fellow Accounts',
-}
-const FTAB_GROUPS: { label: string; tabs: FTab[] }[] = [
-  { label: 'The team', tabs: ['today', 'analytics', 'activity', 'reports'] },
-  { label: 'Their work', tabs: ['assign', 'schools', 'pipeline', 'proposals', 'research'] },
-  { label: 'Set the rules', tabs: ['targets', 'materials', 'templates', 'training', 'certification'] },
-  { label: 'People', tabs: ['accounts'] },
-]
-
-export default function FellowOpsAdminPanel({ initialTab }: { initialTab?: FTab } = {}) {
+/* `tab`/`onTab` let the admin shell drive the section from its sidebar when the
+   dashboard is switched into Fellow mode; left uncontrolled the panel keeps its
+   own grouped nav and works as a single admin tab. */
+export default function FellowOpsAdminPanel({ initialTab, tab: tabProp, onTab }:
+  { initialTab?: FTab; tab?: FTab; onTab?: (t: FTab) => void } = {}) {
   const [summary, setSummary] = useState<Summary | null>(null)
   const [fellows, setFellows] = useState<FellowRow[]>([])
   const [activity, setActivity] = useState<Activity[]>([])
-  const [tab, setTab] = useState<FTab>(initialTab ?? 'today')
+  const [ownTab, setOwnTab] = useState<FTab>(initialTab ?? 'today')
+  const controlled = tabProp !== undefined
+  const tab = tabProp ?? ownTab
+  const setTab = (t: FTab) => { controlled ? onTab?.(t) : setOwnTab(t) }
 
   const load = useCallback(() => {
     api.get<{ summary: Summary; fellows: FellowRow[] }>('admin/fellow-ops/summary').then((d) => { setSummary(d.summary); setFellows(d.fellows || []) }).catch(() => {})
@@ -55,13 +44,16 @@ export default function FellowOpsAdminPanel({ initialTab }: { initialTab?: FTab 
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <div>
-          <h3 className="gold-text" style={{ margin: 0 }}>Fellow Team</h3>
-          <p style={{ color: 'var(--muted)', fontSize: 13, margin: '4px 0 0' }}>Everything about the Student Fellows: what they did today, the work itself, and the rules they work to.</p>
+          {/* In Fellow mode the shell already shows the section name. */}
+          <h3 className="gold-text" style={{ margin: 0 }}>{controlled ? FTAB_LABEL[tab] : 'Fellow Team'}</h3>
+          <p style={{ color: 'var(--muted)', fontSize: 13, margin: '4px 0 0' }}>
+            {controlled ? 'Fellow team workspace.' : 'Everything about the Student Fellows: what they did today, the work itself, and the rules they work to.'}
+          </p>
         </div>
         <button className="btn btn--sm" onClick={load}>↻ Refresh</button>
       </div>
 
-      <nav className="fc-nav" aria-label="Fellow team sections" style={{ marginTop: 16 }}>
+      {!controlled && <nav className="fc-nav" aria-label="Fellow team sections" style={{ marginTop: 16 }}>
         {FTAB_GROUPS.map((g) => (
           <div className="fc-nav__group" key={g.label}>
             <span className="fc-nav__label">{g.label}</span>
@@ -75,7 +67,7 @@ export default function FellowOpsAdminPanel({ initialTab }: { initialTab?: FTab 
             </div>
           </div>
         ))}
-      </nav>
+      </nav>}
 
       {tab === 'today' && summary && (
         <>
