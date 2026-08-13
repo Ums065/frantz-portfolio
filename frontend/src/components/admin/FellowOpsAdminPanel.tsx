@@ -3,7 +3,7 @@ import { api } from '../../lib/api'
 import FcIcon from '../FcIcon'
 import TaskWorkspace from '../TaskWorkspace'
 import ResearchAdminPanel from './ResearchAdminPanel'
-import { FTAB_GROUPS, FTAB_LABEL, type FTab } from '../../lib/fellowAdminTabs'
+import { FTAB_GROUPS, FTAB_LABEL, FTAB_HELP, type FTab } from '../../lib/fellowAdminTabs'
 import Pager from '../Pager'
 
 /* Admin "Fellow Command Center": today's team activity, per-Fellow rollup, live
@@ -11,7 +11,6 @@ import Pager from '../Pager'
 
 interface Summary { active_fellows: number; prospects_added: number; emails: number; calls: number; linkedin: number; follow_ups: number; meetings: number; proposals: number; sponsors: number; pipeline_total: number; pipeline_new: number; pipeline_proposal: number; pipeline_confirmed: number }
 interface FellowRow { id: number; full_name: string; email: string; orgs: number; pipeline: number; today_activity: number; won: number; modules_done?: number }
-interface Activity { type: string; detail?: string; created_at: string; fellow_name: string; org_name?: string }
 
 const money = (n: number) => '$' + (n || 0).toLocaleString('en-US')
 const label = (s: string) => s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
@@ -47,8 +46,8 @@ export default function FellowOpsAdminPanel({ initialTab, tab: tabProp, onTab }:
         <div>
           {/* In Fellow mode the shell already shows the section name. */}
           <h3 className="gold-text" style={{ margin: 0 }}>{controlled ? FTAB_LABEL[tab] : 'Fellow Team'}</h3>
-          <p style={{ color: 'var(--muted)', fontSize: 13, margin: '4px 0 0' }}>
-            {controlled ? 'Fellow team workspace.' : 'Everything about the Student Fellows: what they did today, the work itself, and the rules they work to.'}
+          <p style={{ color: 'var(--muted)', fontSize: 13, margin: '4px 0 0', maxWidth: '68ch', lineHeight: 1.55 }}>
+            {controlled ? FTAB_HELP[tab] : 'Everything about the Student Fellows: what they did today, the work itself, and the rules they work to.'}
           </p>
         </div>
         <button className="btn btn--sm" onClick={load}>↻ Refresh</button>
@@ -60,7 +59,7 @@ export default function FellowOpsAdminPanel({ initialTab, tab: tabProp, onTab }:
             <span className="fc-nav__label">{g.label}</span>
             <div className="fc-nav__tabs" role="tablist">
               {g.tabs.map((t) => (
-                <button key={t} type="button" role="tab" aria-selected={tab === t}
+                <button key={t} type="button" role="tab" aria-selected={tab === t} title={FTAB_HELP[t]}
                   className={`fc-tab${tab === t ? ' is-active' : ''}`} onClick={() => setTab(t)}>
                   {FTAB_LABEL[t]}
                 </button>

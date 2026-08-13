@@ -21,7 +21,7 @@ const PartnersAdminPanel = lazy(() => import('../components/admin/PartnersAdminP
 const PressAdminPanel = lazy(() => import('../components/admin/PressAdminPanel'))
 const FellowOpsAdminPanel = lazy(() => import('../components/admin/FellowOpsAdminPanel'))
 // Section list only — the panel itself stays lazy.
-import { FTAB_GROUPS, FTAB_LABEL, type FTab } from '../lib/fellowAdminTabs'
+import { FTAB_GROUPS, FTAB_LABEL, FTAB_HELP, type FTab } from '../lib/fellowAdminTabs'
 const ResearchAdminPanel = lazy(() => import('../components/admin/ResearchAdminPanel'))
 const BusinessRequestsAdminPanel = lazy(() => import('../components/admin/BusinessRequestsAdminPanel'))
 const SponsorJobsAdminPanel = lazy(() => import('../components/admin/SponsorJobsAdminPanel'))
@@ -974,7 +974,8 @@ export default function Admin() {
                   <span className="admin-nav__group-label">{g.label}</span>
                   <div className="admin-nav__items">
                     {g.tabs.map((t) => (
-                      <button key={t} type="button" className={`admin-nav__item${fellowTab === t ? ' is-active' : ''}`}
+                      <button key={t} type="button" title={FTAB_HELP[t]}
+                        className={`admin-nav__item${fellowTab === t ? ' is-active' : ''}`}
                         onClick={() => setFellowTab(t)}>
                         <span className="admin-nav__label">{FTAB_LABEL[t]}</span>
                       </button>
