@@ -60,8 +60,10 @@ const NAV_GROUPS: Array<{ group: string; items: NavItem[] }> = [
     { key: 'business-requests', label: 'Business Requests' },
     { key: 'sponsor-jobs', label: 'Sponsor Jobs' },
     { key: 'ecosystem', label: 'Ecosystem' },
-    { key: 'research', label: 'Research (Fellow)' },
-    { key: 'fellow-ops', label: 'Fellow Command Center' },
+    { key: 'fellow-ops', label: 'Fellow Team' },
+    // Kept as a deep link into the same panel's Research Entries section, so
+    // existing links and the review badge still land somewhere sensible.
+    { key: 'research', label: 'Research Entries' },
     { key: 'sponsors', label: 'Founding Sponsors' },
     { key: 'partners', label: 'Partners' },
   ] },
@@ -1970,7 +1972,7 @@ export default function Admin() {
         {tab === 'sponsors' && <SponsorsAdminPanel />}
 
         {tab === 'partners' && <PartnersAdminPanel />}
-        {tab === 'research' && <ResearchAdminPanel />}
+        {tab === 'research' && <FellowOpsAdminPanel initialTab="research" />}
         {tab === 'business-requests' && <BusinessRequestsAdminPanel />}
         {tab === 'sponsor-jobs' && <SponsorJobsAdminPanel />}
         {tab === 'team-inbox' && <TeamInboxAdminPanel />}
@@ -1982,7 +1984,7 @@ export default function Admin() {
         {tab === 'media' && <MediaAdmin />}
         {tab === 'gallery' && <GalleryAdminPanel />}
         {tab === 'press' && <PressAdminPanel />}
-        {tab === 'fellow-ops' && <FellowOpsAdminPanel />}
+        {tab === 'fellow-ops' && <FellowOpsAdminPanel key="fellow-ops" />}
         {tab === 'community' && <CommunityAdmin />}
         {tab === 'rsvps' && <RsvpsAdmin />}
         {tab === 'inventory' && <InventoryAdmin />}

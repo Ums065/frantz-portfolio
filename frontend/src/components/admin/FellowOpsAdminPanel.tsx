@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { api } from '../../lib/api'
 import FcIcon from '../FcIcon'
 import TaskWorkspace from '../TaskWorkspace'
+import ResearchAdminPanel from './ResearchAdminPanel'
 
 /* Admin "Fellow Command Center": today's team activity, per-Fellow rollup, live
    activity feed, master pipeline, task assignment, and daily-target settings. */
@@ -13,11 +14,30 @@ interface Activity { type: string; detail?: string; created_at: string; fellow_n
 const money = (n: number) => '$' + (n || 0).toLocaleString('en-US')
 const label = (s: string) => s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 
-export default function FellowOpsAdminPanel() {
+/* Everything about the Fellow team lives here. Fourteen destinations in one
+   flat row was the same problem the Fellow dashboard had, so they are grouped
+   the way the job divides: watch the team, look at their work, set the rules. */
+type FTab = 'today' | 'analytics' | 'activity' | 'reports' | 'assign' | 'schools' | 'pipeline'
+  | 'proposals' | 'research' | 'targets' | 'materials' | 'templates' | 'training' | 'certification' | 'accounts'
+
+const FTAB_LABEL: Record<FTab, string> = {
+  today: 'Today', analytics: 'Analytics', activity: 'Activity Feed', reports: 'Daily Reports',
+  assign: 'Tasks', schools: 'School Verification', pipeline: 'All Prospects', proposals: 'Proposals',
+  research: 'Research Entries', targets: 'Targets', materials: 'Materials', templates: 'Outreach Templates',
+  training: 'Training', certification: 'Certification', accounts: 'Fellow Accounts',
+}
+const FTAB_GROUPS: { label: string; tabs: FTab[] }[] = [
+  { label: 'The team', tabs: ['today', 'analytics', 'activity', 'reports'] },
+  { label: 'Their work', tabs: ['assign', 'schools', 'pipeline', 'proposals', 'research'] },
+  { label: 'Set the rules', tabs: ['targets', 'materials', 'templates', 'training', 'certification'] },
+  { label: 'People', tabs: ['accounts'] },
+]
+
+export default function FellowOpsAdminPanel({ initialTab }: { initialTab?: FTab } = {}) {
   const [summary, setSummary] = useState<Summary | null>(null)
   const [fellows, setFellows] = useState<FellowRow[]>([])
   const [activity, setActivity] = useState<Activity[]>([])
-  const [tab, setTab] = useState<'today' | 'analytics' | 'schools' | 'pipeline' | 'activity' | 'reports' | 'proposals' | 'assign' | 'targets' | 'materials' | 'templates' | 'training' | 'certification'>('today')
+  const [tab, setTab] = useState<FTab>(initialTab ?? 'today')
 
   const load = useCallback(() => {
     api.get<{ summary: Summary; fellows: FellowRow[] }>('admin/fellow-ops/summary').then((d) => { setSummary(d.summary); setFellows(d.fellows || []) }).catch(() => {})
@@ -34,18 +54,28 @@ export default function FellowOpsAdminPanel() {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-        <h3 className="gold-text" style={{ margin: 0 }}>Fellow Command Center</h3>
+        <div>
+          <h3 className="gold-text" style={{ margin: 0 }}>Fellow Team</h3>
+          <p style={{ color: 'var(--muted)', fontSize: 13, margin: '4px 0 0' }}>Everything about the Student Fellows: what they did today, the work itself, and the rules they work to.</p>
+        </div>
         <button className="btn btn--sm" onClick={load}>↻ Refresh</button>
       </div>
-      <p style={{ color: 'var(--muted)', fontSize: 13, margin: '4px 0 14px' }}>What the sponsorship team did today, live.</p>
 
-      <div className="admin-ov-tabs" role="tablist" style={{ marginBottom: 16 }}>
-        {(['today', 'analytics', 'schools', 'pipeline', 'activity', 'reports', 'proposals', 'assign', 'targets', 'materials', 'templates', 'training', 'certification'] as const).map((t) => (
-          <button key={t} role="tab" aria-selected={tab === t} className={`admin-ov-tab${tab === t ? ' is-active' : ''}`} onClick={() => setTab(t)}>
-            {t === 'today' ? 'Today' : t === 'analytics' ? 'Analytics' : t === 'schools' ? 'School Verification' : t === 'pipeline' ? 'All Prospects' : t === 'activity' ? 'Activity Feed' : t === 'reports' ? 'Daily Reports' : t === 'proposals' ? 'Proposals' : t === 'assign' ? 'Tasks' : t === 'targets' ? 'Targets' : t === 'materials' ? 'Materials' : t === 'templates' ? 'Templates' : t === 'training' ? 'Training' : 'Certification'}
-          </button>
+      <nav className="fc-nav" aria-label="Fellow team sections" style={{ marginTop: 16 }}>
+        {FTAB_GROUPS.map((g) => (
+          <div className="fc-nav__group" key={g.label}>
+            <span className="fc-nav__label">{g.label}</span>
+            <div className="fc-nav__tabs" role="tablist">
+              {g.tabs.map((t) => (
+                <button key={t} type="button" role="tab" aria-selected={tab === t}
+                  className={`fc-tab${tab === t ? ' is-active' : ''}`} onClick={() => setTab(t)}>
+                  {FTAB_LABEL[t]}
+                </button>
+              ))}
+            </div>
+          </div>
         ))}
-      </div>
+      </nav>
 
       {tab === 'today' && summary && (
         <>
@@ -90,6 +120,10 @@ export default function FellowOpsAdminPanel() {
       )}
 
       {tab === 'analytics' && <AnalyticsView />}
+      {/* Folded in from the old separate "Research (Fellow)" admin tab, so
+          Fellow work is not split across two places in the sidebar. */}
+      {tab === 'research' && <ResearchAdminPanel />}
+      {tab === 'accounts' && <FellowAccounts fellows={fellows} onDone={load} />}
       {tab === 'schools' && <SchoolsAdmin />}
       {tab === 'pipeline' && <PipelineAdmin />}
       {tab === 'reports' && <ReportsAdmin />}
@@ -309,6 +343,62 @@ function AnalyticsView() {
             <strong style={{ fontSize: 13 }}>{money(f.value)}</strong>
           </div>
         ))}
+      </div>
+    </div>
+  )
+}
+
+/* Fellow accounts in one place: who is on the team, what they are carrying, and
+   the form to add another. Fellows are admin-created, never self-registered. */
+function FellowAccounts({ fellows, onDone }: { fellows: FellowRow[]; onDone: () => void }) {
+  const [f, setF] = useState({ full_name: '', email: '', password: '' })
+  const [busy, setBusy] = useState(false)
+  const [note, setNote] = useState('')
+  const set = (k: string, v: string) => setF((p) => ({ ...p, [k]: v }))
+  const create = async () => {
+    setBusy(true); setNote('')
+    try {
+      await api.post('admin/fellow/create', f)
+      setF({ full_name: '', email: '', password: '' })
+      setNote('Fellow account created.')
+      window.fcToast?.('Fellow account created.')
+      onDone()
+    } catch (e) { setNote(e instanceof Error ? e.message : 'Could not create the account.') }
+    finally { setBusy(false) }
+  }
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,300px),1fr))', gap: 16, alignItems: 'start' }}>
+      <div>
+        <h4 className="gold-text" style={{ marginTop: 0, marginBottom: 2 }}>On the team ({fellows.length})</h4>
+        <p style={{ color: 'var(--muted)', fontSize: 12.5, margin: '0 0 10px' }}>To remove someone's access, change their role under Accounts → User Accounts.</p>
+        {fellows.length === 0 ? <p style={{ color: 'var(--muted)', fontSize: 13 }}>No Fellows yet. Create the first account on the right.</p> : (
+          <div className="admin-table-wrap">
+            <table className="admin-table admin-table--stack">
+              <thead><tr><th>Fellow</th><th>Prospects</th><th>Pipeline</th><th>Training</th></tr></thead>
+              <tbody>{fellows.map((x) => (
+                <tr key={x.id}>
+                  <td data-label="Fellow"><strong>{x.full_name}</strong><div className="msub" style={{ fontSize: 12 }}>{x.email}</div></td>
+                  <td data-label="Prospects">{x.orgs}</td>
+                  <td data-label="Pipeline">{money(x.pipeline)}</td>
+                  <td data-label="Training">{x.modules_done ?? 0} module{(x.modules_done ?? 0) === 1 ? '' : 's'}</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+        )}
+      </div>
+      <div className="glass" style={{ padding: 16, borderRadius: 14 }}>
+        <h4 className="gold-text" style={{ marginTop: 0, marginBottom: 2 }}>Add a Fellow</h4>
+        <p style={{ color: 'var(--muted)', fontSize: 12.5, margin: '0 0 12px' }}>They sign in with this email and change the password themselves afterwards.</p>
+        <div style={{ display: 'grid', gap: 10 }}>
+          <label className="fc-fld">Full name<input className="fc-input" value={f.full_name} onChange={(e) => set('full_name', e.target.value)} /></label>
+          <label className="fc-fld">Email<input className="fc-input" type="email" value={f.email} onChange={(e) => set('email', e.target.value)} /></label>
+          <label className="fc-fld">Temporary password<input className="fc-input" value={f.password} onChange={(e) => set('password', e.target.value)} placeholder="8+ characters, a letter and a number" /></label>
+          <button className="btn btn--sm btn--solid" disabled={busy || !f.full_name || !f.email || !f.password} onClick={create}>
+            {busy ? 'Creating…' : 'Create Fellow'}
+          </button>
+          {note && <p style={{ fontSize: 12.5, margin: 0, color: note.includes('created') ? '#8fd6a3' : '#ff9a9a' }}>{note}</p>}
+        </div>
       </div>
     </div>
   )
