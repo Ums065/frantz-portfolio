@@ -62,10 +62,9 @@ const NAV_GROUPS: Array<{ group: string; items: NavItem[] }> = [
     { key: 'business-requests', label: 'Business Requests' },
     { key: 'sponsor-jobs', label: 'Sponsor Jobs' },
     { key: 'ecosystem', label: 'Ecosystem' },
-    { key: 'fellow-ops', label: 'Fellow Team' },
-    // Kept as a deep link into the same panel's Research Entries section, so
-    // existing links and the review badge still land somewhere sensible.
-    { key: 'research', label: 'Research Entries' },
+    // Fellow work is not listed here: it has its own workspace behind the
+    // Main Dashboard / Fellow Team toggle at the top. Action Center entries for
+    // it switch modes rather than opening a sidebar section (FELLOW_ACTION_TAB).
     { key: 'sponsors', label: 'Founding Sponsors' },
     { key: 'partners', label: 'Partners' },
   ] },
@@ -101,7 +100,19 @@ const NAV_GROUPS: Array<{ group: string; items: NavItem[] }> = [
 
 // Flat lookup + label helper (used by search, sub-tabs, breadcrumb).
 const NAV_ITEMS: NavItem[] = NAV_GROUPS.flatMap((g) => g.items)
-const labelFor = (k: TabKey): string => NAV_ITEMS.find((i) => i.key === k)?.label ?? k
+const labelFor = (k: TabKey): string => NAV_ITEMS.find((i) => i.key === k)?.label ?? FELLOW_ACTION_LABEL[k] ?? k
+
+/* Action Center rows that belong to the Fellow workspace: clicking one flips
+   the top toggle and opens that section, since these are no longer sidebar
+   items on the main dashboard. */
+const FELLOW_ACTION_TAB: Partial<Record<TabKey, FTab>> = {
+  research: 'research',
+  'fellow-ops': 'proposals',
+}
+const FELLOW_ACTION_LABEL: Partial<Record<TabKey, string>> = {
+  research: 'Research Entries',
+  'fellow-ops': 'Fellow Proposals',
+}
 
 // Per-group colour + glyph so the long nav reads as distinct sections at a glance.
 const GROUP_META: Record<string, { color: string; path: string }> = {
@@ -138,6 +149,9 @@ const ACTION_LABELS: Partial<Record<TabKey, string>> = {
   'sponsor-jobs': 'sponsor job(s) to review',
   ecosystem: 'ecosystem request(s)',
   research: 'research entr(y/ies) to review',
+  // A Fellow is blocked until their proposal is answered, so surface it here
+  // even though Fellow work has its own workspace now.
+  'fellow-ops': 'Fellow proposal(s) awaiting you',
   sponsors: 'sponsor application(s)',
   'ns-submissions': 'submission(s) to review',
   'ns-chat': 'unread message(s)',
@@ -1123,7 +1137,11 @@ export default function Admin() {
                     {items.length > 0 && (
                       <div className="admin-action-grid">
                         {items.map((a) => (
-                          <button key={a.k} type="button" className="admin-action-card glass" onClick={() => setTab(a.k)} title={`Open ${labelFor(a.k)}`}>
+                          <button key={a.k} type="button" className="admin-action-card glass" title={`Open ${labelFor(a.k)}`}
+                            onClick={() => {
+                              const ft = FELLOW_ACTION_TAB[a.k]
+                              if (ft) { setFellowTab(ft); setMode('fellow') } else setTab(a.k)
+                            }}>
                             <strong className="admin-action-card__n">{a.n}</strong>
                             <span className="admin-action-card__lbl">{a.label}</span>
                             <span className="admin-action-card__go">Open {labelFor(a.k)} →</span>
@@ -2026,7 +2044,6 @@ export default function Admin() {
         {tab === 'sponsors' && <SponsorsAdminPanel />}
 
         {tab === 'partners' && <PartnersAdminPanel />}
-        {tab === 'research' && <FellowOpsAdminPanel initialTab="research" />}
         {tab === 'business-requests' && <BusinessRequestsAdminPanel />}
         {tab === 'sponsor-jobs' && <SponsorJobsAdminPanel />}
         {tab === 'team-inbox' && <TeamInboxAdminPanel />}
@@ -2038,7 +2055,6 @@ export default function Admin() {
         {tab === 'media' && <MediaAdmin />}
         {tab === 'gallery' && <GalleryAdminPanel />}
         {tab === 'press' && <PressAdminPanel />}
-        {tab === 'fellow-ops' && <FellowOpsAdminPanel key="fellow-ops" />}
         {tab === 'community' && <CommunityAdmin />}
         {tab === 'rsvps' && <RsvpsAdmin />}
         {tab === 'inventory' && <InventoryAdmin />}
