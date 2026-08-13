@@ -2615,18 +2615,50 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             )->fetchAll();
             json(['activity' => $rows]);
         }
+        // The same feed, paged and filterable — 60 rows was a peek, not a record.
+        case $key === 'GET admin/fellow-ops/activity-page': {
+            require_admin();
+            fellow_ops_ensure_schema();
+            $where = ['(o.id IS NULL OR o.is_demo = 0)'];
+            $args = [];
+            if (($fid = (int) ($_GET['fellow_user_id'] ?? 0)) > 0) { $where[] = 'a.fellow_user_id = ?'; $args[] = $fid; }
+            if (in_array((string) ($_GET['type'] ?? ''), FELLOW_ACTIVITY_TYPES, true)) { $where[] = 'a.type = ?'; $args[] = (string) $_GET['type']; }
+            if (($s = trim((string) ($_GET['q'] ?? ''))) !== '') {
+                $where[] = '(a.detail LIKE ? OR o.name LIKE ? OR u.full_name LIKE ?)';
+                $like = '%' . $s . '%'; array_push($args, $like, $like, $like);
+            }
+            $from = "FROM fellow_activities a JOIN users u ON u.id = a.fellow_user_id
+                     LEFT JOIN fellow_orgs o ON o.id = a.org_id WHERE " . implode(' AND ', $where);
+            $cnt = db()->prepare("SELECT COUNT(*) $from");
+            $cnt->execute($args);
+            $total = (int) $cnt->fetchColumn();
+            ['per' => $per, 'page' => $page, 'offset' => $off] = page_window($_GET);
+            $s2 = db()->prepare("SELECT a.id, a.type, a.detail, a.created_at, u.full_name AS fellow_name, o.name AS org_name
+                $from ORDER BY a.created_at DESC, a.id DESC LIMIT $per OFFSET $off");
+            $s2->execute($args);
+            json(['activity' => $s2->fetchAll(), 'total' => $total, 'page' => $page, 'per' => $per, 'types' => FELLOW_ACTIVITY_TYPES]);
+        }
         // The Fellows' end-of-day reports. Without this the whole daily-report
         // feature was write-only — Fellows are told their manager can read it.
         case $key === 'GET admin/fellow-ops/reports': {
             require_admin();
             fellow_ops_ensure_schema();
-            $rows = db()->query(
-                "SELECT r.id, r.report_date, r.numbers_json, r.wins, r.challenges, r.help_needed, r.plan,
+            $where = ['1=1'];
+            $args = [];
+            if (($fid = (int) ($_GET['fellow_user_id'] ?? 0)) > 0) { $where[] = 'r.fellow_user_id = ?'; $args[] = $fid; }
+            if (preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) ($_GET['from'] ?? '')) === 1) { $where[] = 'r.report_date >= ?'; $args[] = (string) $_GET['from']; }
+            if (preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) ($_GET['to'] ?? '')) === 1) { $where[] = 'r.report_date <= ?'; $args[] = (string) $_GET['to']; }
+            if (!empty($_GET['needs_help'])) $where[] = "r.help_needed IS NOT NULL AND r.help_needed <> ''";
+            $from = 'FROM fellow_reports r JOIN users u ON u.id = r.fellow_user_id WHERE ' . implode(' AND ', $where);
+            $cnt = db()->prepare("SELECT COUNT(*) $from");
+            $cnt->execute($args);
+            $total = (int) $cnt->fetchColumn();
+            ['per' => $per, 'page' => $page, 'offset' => $off] = page_window($_GET, 25);
+            $s = db()->prepare("SELECT r.id, r.report_date, r.numbers_json, r.wins, r.challenges, r.help_needed, r.plan,
                         r.fellow_user_id, u.full_name AS fellow_name
-                 FROM fellow_reports r JOIN users u ON u.id = r.fellow_user_id
-                 ORDER BY r.report_date DESC, u.full_name ASC LIMIT 200"
-            )->fetchAll();
-            json(['reports' => $rows]);
+                 $from ORDER BY r.report_date DESC, u.full_name ASC LIMIT $per OFFSET $off");
+            $s->execute($args);
+            json(['reports' => $s->fetchAll(), 'total' => $total, 'page' => $page, 'per' => $per]);
         }
         // School verification progress across the team, by region and by Fellow.
         case $key === 'GET admin/fellow-ops/schools': {
@@ -2653,11 +2685,25 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
         case $key === 'GET admin/fellow-ops/pipeline': {
             require_admin();
             fellow_ops_ensure_schema();
-            $rows = db()->query(
-                "SELECT o.*, u.full_name AS fellow_name FROM fellow_orgs o LEFT JOIN users u ON u.id = o.fellow_user_id
-                 WHERE o.is_demo = 0 ORDER BY o.est_value DESC, o.updated_at DESC LIMIT 500"
-            )->fetchAll();
-            json(['orgs' => $rows, 'stages' => FELLOW_STAGES]);
+            $where = ['o.is_demo = 0'];
+            $args = [];
+            if (($fid = (int) ($_GET['fellow_user_id'] ?? 0)) > 0) { $where[] = 'o.fellow_user_id = ?'; $args[] = $fid; }
+            if (in_array((string) ($_GET['stage'] ?? ''), FELLOW_STAGES, true)) { $where[] = 'o.stage = ?'; $args[] = (string) $_GET['stage']; }
+            if (($s = trim((string) ($_GET['q'] ?? ''))) !== '') {
+                $where[] = '(o.name LIKE ? OR o.category LIKE ? OR o.location LIKE ?)';
+                $like = '%' . $s . '%'; array_push($args, $like, $like, $like);
+            }
+            $from = 'FROM fellow_orgs o LEFT JOIN users u ON u.id = o.fellow_user_id WHERE ' . implode(' AND ', $where);
+            $cnt = db()->prepare("SELECT COUNT(*) AS n, COALESCE(SUM(o.est_value),0) AS value $from");
+            $cnt->execute($args);
+            $agg = $cnt->fetch() ?: [];
+            ['per' => $per, 'page' => $page, 'offset' => $off] = page_window($_GET);
+            $rows = db()->prepare("SELECT o.id, o.name, o.category, o.location, o.stage, o.est_value, o.fellow_user_id,
+                        u.full_name AS fellow_name
+                 $from ORDER BY o.est_value DESC, o.updated_at DESC LIMIT $per OFFSET $off");
+            $rows->execute($args);
+            json(['orgs' => $rows->fetchAll(), 'total' => (int) ($agg['n'] ?? 0), 'value' => (int) ($agg['value'] ?? 0),
+                'page' => $page, 'per' => $per, 'stages' => FELLOW_STAGES]);
         }
         case $key === 'POST admin/fellow-ops/task': {
             $admin = require_admin();

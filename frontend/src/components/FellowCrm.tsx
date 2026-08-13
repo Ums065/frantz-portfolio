@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { api } from '../lib/api'
 import FcIcon, { type IconName } from './FcIcon'
+import Pager from './Pager'
 
 /* Student Fellow sponsorship CRM (Phase 1a): My Day scorecard + tasks + follow-ups,
    a Prospects list with duplicate check, a Pipeline board, and an organization
@@ -156,20 +157,6 @@ const stagePct = (s: string) => {
   if (['not_interested', 'no_response', 'closed_lost'].includes(s)) return 0
   const i = STAGE_ORDER.indexOf(s)
   return i < 0 ? 0 : Math.round(((i + 1) / STAGE_ORDER.length) * 100)
-}
-
-/* One pager for every paged table in the workspace. Renders nothing when
-   everything already fits, so short lists stay uncluttered. */
-export function Pager({ page, pages, total, unit = 'rows', onPage }:
-  { page: number; pages: number; total: number; unit?: string; onPage: (p: number) => void }) {
-  if (pages <= 1) return null
-  return (
-    <div className="fc-pager">
-      <button className="btn btn--sm" disabled={page <= 1} onClick={() => onPage(page - 1)}>← Previous</button>
-      <span className="msub" style={{ fontSize: 12.5 }}>Page {page} of {pages} · {total} {unit}</span>
-      <button className="btn btn--sm" disabled={page >= pages} onClick={() => onPage(page + 1)}>Next →</button>
-    </div>
-  )
 }
 
 /* Loading placeholder shaped like the content it replaces, so the layout does

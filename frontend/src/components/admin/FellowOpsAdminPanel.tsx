@@ -4,6 +4,7 @@ import FcIcon from '../FcIcon'
 import TaskWorkspace from '../TaskWorkspace'
 import ResearchAdminPanel from './ResearchAdminPanel'
 import { FTAB_GROUPS, FTAB_LABEL, type FTab } from '../../lib/fellowAdminTabs'
+import Pager from '../Pager'
 
 /* Admin "Fellow Command Center": today's team activity, per-Fellow rollup, live
    activity feed, master pipeline, task assignment, and daily-target settings. */
@@ -22,15 +23,15 @@ export default function FellowOpsAdminPanel({ initialTab, tab: tabProp, onTab }:
   { initialTab?: FTab; tab?: FTab; onTab?: (t: FTab) => void } = {}) {
   const [summary, setSummary] = useState<Summary | null>(null)
   const [fellows, setFellows] = useState<FellowRow[]>([])
-  const [activity, setActivity] = useState<Activity[]>([])
   const [ownTab, setOwnTab] = useState<FTab>(initialTab ?? 'today')
   const controlled = tabProp !== undefined
   const tab = tabProp ?? ownTab
   const setTab = (t: FTab) => { controlled ? onTab?.(t) : setOwnTab(t) }
 
+  // The activity feed fetches its own paged data when that section is open; it
+  // used to be pulled here on every panel load whether or not it was shown.
   const load = useCallback(() => {
     api.get<{ summary: Summary; fellows: FellowRow[] }>('admin/fellow-ops/summary').then((d) => { setSummary(d.summary); setFellows(d.fellows || []) }).catch(() => {})
-    api.get<{ activity: Activity[] }>('admin/fellow-ops/activity').then((d) => setActivity(d.activity || [])).catch(() => {})
   }, [])
   useEffect(() => { load() }, [load])
 
@@ -99,17 +100,7 @@ export default function FellowOpsAdminPanel({ initialTab, tab: tabProp, onTab }:
         </>
       )}
 
-      {tab === 'activity' && (
-        <div className="admin-table-wrap">
-          <table className="admin-table">
-            <thead><tr><th>Time</th><th>Fellow</th><th>Action</th><th>Organization</th></tr></thead>
-            <tbody>{activity.length === 0 ? <tr><td colSpan={4} className="msub" style={{ padding: 16 }}>No activity yet.</td></tr> : activity.map((a, i) => (
-              <tr key={i}><td className="msub">{a.created_at?.slice(0, 16).replace('T', ' ')}</td><td>{a.fellow_name}</td>
-                <td>{label(a.type)}{a.detail ? <span className="msub"> — {a.detail}</span> : null}</td><td>{a.org_name || '—'}</td></tr>
-            ))}</tbody>
-          </table>
-        </div>
-      )}
+      {tab === 'activity' && <ActivityFeed fellows={fellows} />}
 
       {tab === 'analytics' && <AnalyticsView />}
       {/* Folded in from the old separate "Research (Fellow)" admin tab, so
@@ -117,8 +108,8 @@ export default function FellowOpsAdminPanel({ initialTab, tab: tabProp, onTab }:
       {tab === 'research' && <ResearchAdminPanel />}
       {tab === 'accounts' && <FellowAccounts fellows={fellows} onDone={load} />}
       {tab === 'schools' && <SchoolsAdmin />}
-      {tab === 'pipeline' && <PipelineAdmin />}
-      {tab === 'reports' && <ReportsAdmin />}
+      {tab === 'pipeline' && <PipelineAdmin fellows={fellows} />}
+      {tab === 'reports' && <ReportsAdmin fellows={fellows} />}
       {tab === 'proposals' && <ProposalsAdmin />}
       {tab === 'assign' && <TaskWorkspace side="admin" fellows={fellows} onChanged={load} />}
       {tab === 'targets' && <TargetsForm fellows={fellows} onDone={load} />}
@@ -340,6 +331,72 @@ function AnalyticsView() {
   )
 }
 
+/* The whole team's logged work, paged and filterable. The Today tab keeps its
+   own 60-row peek; this is the searchable record. */
+function ActivityFeed({ fellows }: { fellows: FellowRow[] }) {
+  const [rows, setRows] = useState<any[]>([])
+  const [types, setTypes] = useState<string[]>([])
+  const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(1)
+  const [who, setWho] = useState('')
+  const [type, setType] = useState('')
+  const [q, setQ] = useState('')
+  const [loading, setLoading] = useState(true)
+  const per = 50
+  const load = useCallback(() => {
+    const qs = new URLSearchParams({ page: String(page), per: String(per) })
+    if (who) qs.set('fellow_user_id', who)
+    if (type) qs.set('type', type)
+    if (q.trim()) qs.set('q', q.trim())
+    setLoading(true)
+    api.get<{ activity: any[]; total: number; types: string[] }>(`admin/fellow-ops/activity-page?${qs}`)
+      .then((d) => { setRows(d.activity || []); setTotal(d.total || 0); setTypes(d.types || []) })
+      .catch(() => {}).finally(() => setLoading(false))
+  }, [page, who, type, q])
+  useEffect(() => {
+    const t = setTimeout(load, q.trim() ? 300 : 0)
+    return () => clearTimeout(t)
+  }, [load, q])
+  const pages = Math.max(1, Math.ceil(total / per))
+  const filtersOn = !!(who || type || q.trim())
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
+        <input className="fc-input" style={{ flex: '1 1 180px' }} type="search" value={q}
+          onChange={(e) => { setQ(e.target.value); setPage(1) }} placeholder="Search notes, company or Fellow…" />
+        <select className="fc-input" style={{ width: 'auto' }} value={who} onChange={(e) => { setWho(e.target.value); setPage(1) }}>
+          <option value="" style={{ background: '#14120b' }}>Every Fellow</option>
+          {fellows.map((f) => <option key={f.id} value={f.id} style={{ background: '#14120b' }}>{f.full_name}</option>)}
+        </select>
+        <select className="fc-input" style={{ width: 'auto' }} value={type} onChange={(e) => { setType(e.target.value); setPage(1) }}>
+          <option value="" style={{ background: '#14120b' }}>Every action</option>
+          {types.map((t) => <option key={t} value={t} style={{ background: '#14120b' }}>{label(t)}</option>)}
+        </select>
+        {filtersOn && <button className="btn btn--sm" onClick={() => { setWho(''); setType(''); setQ(''); setPage(1) }}>Clear</button>}
+        <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>{total} logged</span>
+      </div>
+      {loading ? <p style={{ color: 'var(--muted)', fontSize: 13 }}>Loading activity…</p> : total === 0 ? (
+        <p style={{ color: 'var(--muted)', fontSize: 13 }}>{filtersOn ? 'Nothing matches those filters.' : 'No activity yet.'}</p>
+      ) : (<>
+        <div className="admin-table-wrap">
+          <table className="admin-table admin-table--stack">
+            <thead><tr><th>Time</th><th>Fellow</th><th>Action</th><th>Organization</th></tr></thead>
+            <tbody>{rows.map((a) => (
+              <tr key={a.id}>
+                <td data-label="Time" className="msub">{String(a.created_at).slice(0, 16).replace('T', ' ')}</td>
+                <td data-label="Fellow">{a.fellow_name}</td>
+                <td data-label="Action">{label(a.type)}{a.detail ? <span className="msub"> — {a.detail}</span> : null}</td>
+                <td data-label="Organization">{a.org_name || '—'}</td>
+              </tr>
+            ))}</tbody>
+          </table>
+        </div>
+        <Pager page={page} pages={pages} total={total} unit="entries" onPage={setPage} />
+      </>)}
+    </div>
+  )
+}
+
 /* Fellow accounts in one place: who is on the team, what they are carrying, and
    the form to add another. Fellows are admin-created, never self-registered. */
 function FellowAccounts({ fellows, onDone }: { fellows: FellowRow[]; onDone: () => void }) {
@@ -464,38 +521,57 @@ function SchoolsAdmin() {
 
 /* The master prospect list across the whole team — who owns which company and
    what it is worth. The route existed but nothing called it. */
-function PipelineAdmin() {
+function PipelineAdmin({ fellows }: { fellows: FellowRow[] }) {
   const [orgs, setOrgs] = useState<any[]>([])
+  const [stages, setStages] = useState<string[]>([])
+  const [total, setTotal] = useState(0)
+  const [value, setValue] = useState(0)
+  const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
   const [who, setWho] = useState('')
   const [stage, setStage] = useState('')
+  const [q, setQ] = useState('')
+  const per = 50
+  // Filtered and paged on the server: this list is the whole team's pipeline and
+  // was previously cut at 500 rows with no way to reach the rest.
+  const load = useCallback(() => {
+    const qs = new URLSearchParams({ page: String(page), per: String(per) })
+    if (who) qs.set('fellow_user_id', who)
+    if (stage) qs.set('stage', stage)
+    if (q.trim()) qs.set('q', q.trim())
+    setLoading(true)
+    api.get<{ orgs: any[]; total: number; value: number; stages: string[] }>(`admin/fellow-ops/pipeline?${qs}`)
+      .then((d) => { setOrgs(d.orgs || []); setTotal(d.total || 0); setValue(d.value || 0); setStages(d.stages || []) })
+      .catch(() => {}).finally(() => setLoading(false))
+  }, [page, who, stage, q])
   useEffect(() => {
-    api.get<{ orgs: any[] }>('admin/fellow-ops/pipeline')
-      .then((d) => setOrgs(d.orgs || [])).catch(() => {}).finally(() => setLoading(false))
-  }, [])
-  const names = Array.from(new Set(orgs.map((o) => o.fellow_name).filter(Boolean))).sort()
-  const stages = Array.from(new Set(orgs.map((o) => o.stage))).sort()
-  const shown = orgs.filter((o) => (!who || o.fellow_name === who) && (!stage || o.stage === stage))
-  const total = shown.reduce((n, o) => n + (Number(o.est_value) || 0), 0)
-  if (loading) return <p style={{ color: 'var(--muted)', fontSize: 13 }}>Loading prospects…</p>
-  if (orgs.length === 0) return <p style={{ color: 'var(--muted)', fontSize: 13 }}>No prospects yet. They appear here as soon as a Fellow adds one. (Sample data a Fellow loads to learn the tool is never shown here.)</p>
+    const t = setTimeout(load, q.trim() ? 300 : 0)
+    return () => clearTimeout(t)
+  }, [load, q])
+  const pages = Math.max(1, Math.ceil(total / per))
+  const filtersOn = !!(who || stage || q.trim())
+  const shown = orgs
   return (
     <div>
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
-        <label style={{ fontSize: 12, color: 'var(--muted)' }}>Fellow:&nbsp;
-          <select className="fc-input" style={{ width: 'auto' }} value={who} onChange={(e) => setWho(e.target.value)}>
-            <option value="" style={{ background: '#14120b' }}>Everyone</option>
-            {names.map((n) => <option key={n} value={n} style={{ background: '#14120b' }}>{n}</option>)}
-          </select>
-        </label>
-        <label style={{ fontSize: 12, color: 'var(--muted)' }}>Stage:&nbsp;
-          <select className="fc-input" style={{ width: 'auto' }} value={stage} onChange={(e) => setStage(e.target.value)}>
-            <option value="" style={{ background: '#14120b' }}>All stages</option>
-            {stages.map((s) => <option key={s} value={s} style={{ background: '#14120b' }}>{label(s)}</option>)}
-          </select>
-        </label>
-        <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>{shown.length} prospects · <strong style={{ color: 'var(--gold-light)' }}>{money(total)}</strong></span>
+        <input className="fc-input" style={{ flex: '1 1 180px' }} type="search" value={q}
+          onChange={(e) => { setQ(e.target.value); setPage(1) }} placeholder="Search company, category, location…" />
+        <select className="fc-input" style={{ width: 'auto' }} value={who} onChange={(e) => { setWho(e.target.value); setPage(1) }}>
+          <option value="" style={{ background: '#14120b' }}>Every Fellow</option>
+          {fellows.map((f) => <option key={f.id} value={f.id} style={{ background: '#14120b' }}>{f.full_name}</option>)}
+        </select>
+        <select className="fc-input" style={{ width: 'auto' }} value={stage} onChange={(e) => { setStage(e.target.value); setPage(1) }}>
+          <option value="" style={{ background: '#14120b' }}>All stages</option>
+          {stages.map((s) => <option key={s} value={s} style={{ background: '#14120b' }}>{label(s)}</option>)}
+        </select>
+        {filtersOn && <button className="btn btn--sm" onClick={() => { setWho(''); setStage(''); setQ(''); setPage(1) }}>Clear</button>}
+        <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>{total} prospects · <strong style={{ color: 'var(--gold-light)' }}>{money(value)}</strong></span>
       </div>
+      {loading ? <p style={{ color: 'var(--muted)', fontSize: 13 }}>Loading prospects…</p> : total === 0 ? (
+        <p style={{ color: 'var(--muted)', fontSize: 13 }}>{filtersOn
+          ? 'No prospect matches those filters.'
+          : 'No prospects yet. They appear here as soon as a Fellow adds one. (Sample data a Fellow loads to learn the tool is never shown here.)'}</p>
+      ) : (<>
       <div className="admin-table-wrap">
         <table className="admin-table admin-table--stack">
           <thead><tr><th>Organization</th><th>Fellow</th><th>Stage</th><th>Value</th><th>Location</th></tr></thead>
@@ -510,36 +586,61 @@ function PipelineAdmin() {
           ))}</tbody>
         </table>
       </div>
+      <Pager page={page} pages={pages} total={total} unit="prospects" onPage={setPage} />
+      </>)}
     </div>
   )
 }
 
 /* Fellows are told "your manager can see it now" when they submit an end-of-day
    report, so their manager has to actually be able to read them. */
-function ReportsAdmin() {
+function ReportsAdmin({ fellows }: { fellows: FellowRow[] }) {
   const [rows, setRows] = useState<any[]>([])
+  const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(1)
   const [who, setWho] = useState('')
+  const [needsHelp, setNeedsHelp] = useState(false)
+  const [from, setFrom] = useState('')
   const [loading, setLoading] = useState(true)
-  useEffect(() => {
-    api.get<{ reports: any[] }>('admin/fellow-ops/reports')
-      .then((d) => setRows(d.reports || [])).catch(() => {}).finally(() => setLoading(false))
-  }, [])
-  const names = Array.from(new Set(rows.map((r) => r.fellow_name))).sort()
-  const shown = who ? rows.filter((r) => r.fellow_name === who) : rows
+  const per = 25
+  const load = useCallback(() => {
+    const qs = new URLSearchParams({ page: String(page), per: String(per) })
+    if (who) qs.set('fellow_user_id', who)
+    if (needsHelp) qs.set('needs_help', '1')
+    if (from) qs.set('from', from)
+    setLoading(true)
+    api.get<{ reports: any[]; total: number }>(`admin/fellow-ops/reports?${qs}`)
+      .then((d) => { setRows(d.reports || []); setTotal(d.total || 0) })
+      .catch(() => {}).finally(() => setLoading(false))
+  }, [page, who, needsHelp, from])
+  useEffect(() => { load() }, [load])
+  const pages = Math.max(1, Math.ceil(total / per))
+  const filtersOn = !!(who || needsHelp || from)
+  const shown = rows
   const nums = (j: string) => { try { return JSON.parse(j || '{}') as Record<string, number> } catch { return {} } }
-  if (loading) return <p style={{ color: 'var(--muted)', fontSize: 13 }}>Loading reports…</p>
-  if (rows.length === 0) return <p style={{ color: 'var(--muted)', fontSize: 13 }}>No reports yet. Fellows write these at the end of each working day — check back this evening.</p>
   return (
     <div>
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 14 }}>
-        <label style={{ fontSize: 12, color: 'var(--muted)' }}>Fellow:&nbsp;
-          <select className="fc-input" style={{ width: 'auto' }} value={who} onChange={(e) => setWho(e.target.value)}>
-            <option value="" style={{ background: '#14120b' }}>Everyone ({rows.length})</option>
-            {names.map((n) => <option key={n} value={n} style={{ background: '#14120b' }}>{n}</option>)}
-          </select>
+        <select className="fc-input" style={{ width: 'auto' }} value={who} onChange={(e) => { setWho(e.target.value); setPage(1) }}>
+          <option value="" style={{ background: '#14120b' }}>Every Fellow</option>
+          {fellows.map((f) => <option key={f.id} value={f.id} style={{ background: '#14120b' }}>{f.full_name}</option>)}
+        </select>
+        <label style={{ fontSize: 12, color: 'var(--muted)' }}>Since&nbsp;
+          <input className="fc-input" style={{ width: 'auto' }} type="date" value={from} onChange={(e) => { setFrom(e.target.value); setPage(1) }} />
         </label>
-        <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>Newest first. Read the blockers — that is where a Fellow needs you.</span>
+        {/* The one filter a manager actually needs: who asked for help. */}
+        <label style={{ fontSize: 12.5, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <input type="checkbox" checked={needsHelp} onChange={(e) => { setNeedsHelp(e.target.checked); setPage(1) }} />
+          Only reports asking for help
+        </label>
+        {filtersOn && <button className="btn btn--sm" onClick={() => { setWho(''); setNeedsHelp(false); setFrom(''); setPage(1) }}>Clear</button>}
+        <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>{total} report{total === 1 ? '' : 's'}</span>
       </div>
+      {loading ? <p style={{ color: 'var(--muted)', fontSize: 13 }}>Loading reports…</p> : total === 0 ? (
+        <p style={{ color: 'var(--muted)', fontSize: 13 }}>{filtersOn
+          ? 'No report matches those filters.'
+          : 'No reports yet. Fellows write these at the end of each working day — check back this evening.'}</p>
+      ) : (<>
       <div style={{ display: 'grid', gap: 12 }}>
         {shown.map((r) => {
           const n = nums(r.numbers_json)
@@ -562,6 +663,8 @@ function ReportsAdmin() {
           )
         })}
       </div>
+      <Pager page={page} pages={pages} total={total} unit="reports" onPage={setPage} />
+      </>)}
     </div>
   )
 }
