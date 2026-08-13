@@ -7,6 +7,7 @@ import SheetImport from '../components/SheetImport'
 import FellowCrm, { VIEW_META, type ViewKey } from '../components/FellowCrm'
 import FcIcon, { type IconName } from '../components/FcIcon'
 import SchoolVerification from '../components/SchoolVerification'
+import StudentVerification from '../components/StudentVerification'
 import TaskWorkspace from '../components/TaskWorkspace'
 import ProfileSection from '../components/profile/ProfileSection'
 import AnnouncementsFeed, { useAnnouncementBadge } from '../components/AnnouncementsFeed'
@@ -22,13 +23,9 @@ const cardS: React.CSSProperties = { background: 'rgba(255,255,255,0.04)', borde
 const inputS: React.CSSProperties = { width: '100%', background: 'rgba(0,0,0,0.25)', border: '1px solid var(--line)', borderRadius: 9, padding: '10px 12px', color: 'var(--ivory)', fontSize: 14 }
 const labelS: React.CSSProperties = { display: 'block', fontSize: 11, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--gold-light)', margin: '0 0 5px' }
 
-interface Assignment {
-  id: number; title: string; detail: string; assign_date: string | null
-  status: string; volunteer_note: string; created_ts: number; responded_ts: number
-}
 /* One flat navigation instead of tabs-inside-tabs: the CRM's ten sections are
    addressed directly as `crm:<view>` so every destination is one click away. */
-type TabKey = 'overview' | 'profile' | 'announcements' | 'messages' | 'school-verify' | 'tasks' | ResearchCategory | `crm:${ViewKey}`
+type TabKey = 'overview' | 'profile' | 'announcements' | 'messages' | 'school-verify' | 'student-verify' | 'tasks' | ResearchCategory | `crm:${ViewKey}`
 type EntryForm = typeof EMPTY_ENTRY_FORM
 
 interface NavItem { key: TabKey; label: string; icon: IconName; hint?: string; alert?: boolean }
@@ -69,6 +66,7 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
   ] },
   { label: 'Schools', items: [
     { key: 'school-verify', label: 'Verify Schools', icon: 'building', hint: 'The master school list — confirm each school and invite it to take part.' },
+    { key: 'student-verify', label: 'Verify Students', icon: 'phone', hint: 'Call school offices to chase students who are still waiting on an approval.' },
   ] },
   { label: 'Research', items: RESEARCH_CATEGORIES.map((c) => ({ key: c.key as TabKey, label: c.tabLabel, icon: RESEARCH_ICON[c.key] ?? 'note', hint: c.blurb })) },
   { label: 'Account', items: [
@@ -106,7 +104,6 @@ export default function Fellow() {
   const [navQuery, setNavQuery] = useState('')
   const { items: annItems, unseen: annUnseen, markSeen: markAnnSeen } = useAnnouncementBadge()
   const [counts, setCounts] = useState<Record<string, number>>({})
-  const [assignments, setAssignments] = useState<Assignment[]>([])
   const [entries, setEntries] = useState<ResearchEntry[]>([])
   const [form, setForm] = useState<EntryForm>({ ...EMPTY_ENTRY_FORM })
   const [editId, setEditId] = useState<number | null>(null)
@@ -128,8 +125,9 @@ export default function Fellow() {
 
   const loadOverview = useCallback(() => {
     if (!allowed) return
-    api.get<{ counts: Record<string, number>; assignments: Assignment[] }>('fellow/overview')
-      .then((d) => { setCounts(d.counts || {}); setAssignments(d.assignments || []) })
+    // Assigned work comes from My Tasks now; only the research counts are used here.
+    api.get<{ counts: Record<string, number> }>('fellow/overview')
+      .then((d) => { setCounts(d.counts || {}) })
       .catch(() => {})
     // Overdue follow-ups drive the sidebar badge on My Day.
     if (role === 'fellow') {
@@ -209,15 +207,6 @@ export default function Fellow() {
     try { await api.del(`fellow/entry/${id}`); loadEntries(activeCat.key); loadOverview() } catch { /* ignore */ }
   }
 
-  const respondAssignment = async (id: number, action: 'accept' | 'decline' | 'complete') => {
-    let note = ''
-    if (action === 'decline') { note = window.prompt('Reason (optional):') || '' }
-    try {
-      const d = await api.put<{ assignments: Assignment[] }>(`fellow/assignment/${id}/respond`, { action, note })
-      setAssignments(d.assignments || [])
-    } catch (err) { window.fcToast?.(err instanceof Error ? err.message : 'Could not respond.') }
-  }
-
   if (loading) {
     return (
       <div className="admin-page" style={WRAP_S}>
@@ -243,7 +232,6 @@ export default function Fellow() {
     )
   }
 
-  const openAssignments = assignments.filter((a) => a.status === 'active' || a.status === 'accepted')
 
   const hour = new Date().getHours()
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
@@ -348,6 +336,7 @@ export default function Fellow() {
 
           {crmView && <FellowCrm view={crmView} onView={(v) => setTab(`crm:${v}`)} />}
           {tab === 'school-verify' && <SchoolVerification initialFilter={workFilter} />}
+          {tab === 'student-verify' && <StudentVerification />}
           {tab === 'tasks' && (
             <TaskWorkspace side="fellow" onChanged={loadOverview}
               onOpenWork={(target, filter) => { if (target === 'schools') { setWorkFilter(filter); setTab('school-verify') } }} />

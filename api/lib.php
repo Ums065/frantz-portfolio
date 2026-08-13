@@ -6276,6 +6276,96 @@ function fellow_task_post(int $taskId, int $userId, string $role, string $body, 
     } catch (Throwable $e) { /* best effort */ }
 }
 
+/* ==================== Fellow: student verification via the school ====================
+ * A Fellow chases student registrations by calling the SCHOOL — adult staff on
+ * new_school_schools. They see a student's name, participant id, grade and
+ * approval statuses, and never a minor's phone, email, address, date of birth,
+ * age or parent contact: the roster is filtered through NS_STUDENT_SAFE_KEYS,
+ * the same whitelist the teacher view already uses, rather than a second rule
+ * that could drift away from it.
+ */
+
+const FELLOW_SCHOOL_CALL_OUTCOMES = ['reached', 'left_message', 'no_answer', 'wrong_number', 'call_back', 'not_interested'];
+
+/** Log of Fellow calls to a school about its students. */
+function fellow_school_calls_ensure_schema(): void
+{
+    static $ready = false;
+    if ($ready) return;
+    try {
+        db()->exec("CREATE TABLE IF NOT EXISTS fellow_school_calls (
+            id INT AUTO_INCREMENT PRIMARY KEY, school_id INT NOT NULL, fellow_user_id INT NOT NULL,
+            spoke_to VARCHAR(160) DEFAULT NULL, outcome VARCHAR(24) NOT NULL DEFAULT 'reached',
+            note VARCHAR(1000) DEFAULT NULL, follow_up_date DATE DEFAULT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_fsc_school (school_id, created_at), INDEX idx_fsc_fellow (fellow_user_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    } catch (Throwable $e) { if (app_debug()) error_log('fellow_school_calls_ensure_schema: ' . $e->getMessage()); }
+    $ready = true;
+}
+
+/** Schools to work through, with how many of their students are still waiting on
+ *  an approval, the adult staff to ring, and when this team last called them. */
+function fellow_school_queue(array $q): array
+{
+    fellow_school_calls_ensure_schema();
+    $pending = "(SELECT COUNT(*) FROM new_school_students s WHERE s.school_id = sc.id
+        AND (s.teacher_approval_status = 'pending' OR s.parent_consent_status = 'pending'))";
+    $students = "(SELECT COUNT(*) FROM new_school_students s WHERE s.school_id = sc.id)";
+    $lastCall = "(SELECT MAX(c.created_at) FROM fellow_school_calls c WHERE c.school_id = sc.id)";
+    $where = ['1=1'];
+    $args = [];
+    if (!empty($q['pending_only'])) $where[] = "$pending > 0";
+    if (!empty($q['never_called'])) $where[] = "$lastCall IS NULL";
+    if (!empty($q['has_students'])) $where[] = "$students > 0";
+    if (trim((string) ($q['district'] ?? '')) !== '') { $where[] = 'sc.school_district = ?'; $args[] = trim((string) $q['district']); }
+    if (($s = trim((string) ($q['q'] ?? ''))) !== '') {
+        $where[] = '(sc.school_name LIKE ? OR sc.school_district LIKE ? OR sc.principal_name LIKE ?)';
+        $like = '%' . $s . '%'; array_push($args, $like, $like, $like);
+    }
+    $w = implode(' AND ', $where);
+    $cnt = db()->prepare("SELECT COUNT(*) FROM new_school_schools sc WHERE $w");
+    $cnt->execute($args);
+    $total = (int) $cnt->fetchColumn();
+    ['per' => $per, 'page' => $page, 'offset' => $off] = page_window($q, 25);
+    // Only institutional columns here — staff are adults, students are counted not listed.
+    $rows = db()->prepare("SELECT sc.id, sc.school_name, sc.school_district, sc.main_phone,
+            sc.principal_name, sc.administrator_name, sc.administrator_email, sc.administrator_phone,
+            sc.status, sc.claim_status, $students AS student_count, $pending AS pending_count, $lastCall AS last_call
+        FROM new_school_schools sc WHERE $w
+        ORDER BY pending_count DESC, last_call IS NOT NULL, last_call ASC, sc.school_name ASC
+        LIMIT $per OFFSET $off");
+    $rows->execute($args);
+    return ['schools' => $rows->fetchAll(), 'total' => $total, 'page' => $page, 'per' => $per,
+        'outcomes' => FELLOW_SCHOOL_CALL_OUTCOMES];
+}
+
+/** One school's roster for a Fellow: statuses only, never a minor's contact
+ *  details. Runs every row through the existing teacher-safe whitelist. */
+function fellow_school_students(int $schoolId): array
+{
+    fellow_school_calls_ensure_schema();
+    $sc = db()->prepare('SELECT id, school_name, school_district, main_phone, principal_name,
+            administrator_name, administrator_email, administrator_phone, status, claim_status
+        FROM new_school_schools WHERE id = ? LIMIT 1');
+    $sc->execute([$schoolId]);
+    $school = $sc->fetch();
+    if (!$school) return [];
+    $st = db()->prepare("SELECT id, full_name, participant_id, grade_level, school_id, teacher_id, school_name,
+            parent_consent_status, school_approval_status, teacher_approval_status, submission_status, overall_status,
+            created_at, updated_at
+        FROM new_school_students WHERE school_id = ? ORDER BY full_name LIMIT 500");
+    $st->execute([$schoolId]);
+    // Belt and braces: the SELECT is already narrow, and the whitelist enforces it.
+    $students = new_school_redact_rows($st->fetchAll(), NS_STUDENT_SAFE_KEYS);
+    $calls = db()->prepare("SELECT c.id, c.spoke_to, c.outcome, c.note, c.follow_up_date, c.created_at, u.full_name AS fellow_name
+        FROM fellow_school_calls c LEFT JOIN users u ON u.id = c.fellow_user_id
+        WHERE c.school_id = ? ORDER BY c.created_at DESC LIMIT 30");
+    $calls->execute([$schoolId]);
+    return ['school' => $school, 'students' => $students, 'calls' => $calls->fetchAll(),
+        'outcomes' => FELLOW_SCHOOL_CALL_OUTCOMES];
+}
+
 /** Clamp the page/per-page pair once, everywhere. A caller can ask for a big
  *  page but never an unbounded one — the whole point of paging these lists. */
 function page_window(array $q, int $default = 50, int $max = 200): array

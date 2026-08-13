@@ -1752,6 +1752,40 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             $cat = isset($_GET['category']) ? (string) $_GET['category'] : null;
             json(['entries' => research_entries_for_fellow((int) $u['id'], $cat)]);
         }
+        /* ---- Student verification: the Fellow calls the school, not the child ---- */
+        case $key === 'GET fellow/student-verify': {
+            $u = require_login();
+            if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
+            json(fellow_school_queue($_GET));
+        }
+        case $method === 'GET' && preg_match('#^fellow/student-verify/school/(\d+)$#', $route, $m) === 1: {
+            $u = require_login();
+            if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
+            $out = fellow_school_students((int) $m[1]);
+            if (!$out) json(['error' => 'School not found.'], 404);
+            json($out);
+        }
+        case $method === 'POST' && preg_match('#^fellow/student-verify/school/(\d+)/call$#', $route, $m) === 1: {
+            $u = require_login();
+            if (($u['role'] ?? '') !== 'fellow') json(['error' => 'Fellows only.'], 403);
+            fellow_school_calls_ensure_schema();
+            rate_limit('fellow_school_call', 200, 3600, (string) $u['id']);
+            $sid = (int) $m[1]; $b = body();
+            $chk = db()->prepare('SELECT school_name FROM new_school_schools WHERE id = ? LIMIT 1');
+            $chk->execute([$sid]);
+            $school = $chk->fetch();
+            if (!$school) json(['error' => 'School not found.'], 404);
+            $outcome = (string) field($b, 'outcome');
+            if (!in_array($outcome, FELLOW_SCHOOL_CALL_OUTCOMES, true)) json(['error' => 'Pick what happened on the call.'], 422);
+            $fu = trim((string) field($b, 'follow_up_date'));
+            db()->prepare('INSERT INTO fellow_school_calls (school_id, fellow_user_id, spoke_to, outcome, note, follow_up_date) VALUES (?,?,?,?,?,?)')
+                ->execute([$sid, (int) $u['id'], mb_substr(trim((string) field($b, 'spoke_to')), 0, 160) ?: null,
+                    $outcome, mb_substr(trim((string) field($b, 'note')), 0, 1000) ?: null,
+                    preg_match('/^\d{4}-\d{2}-\d{2}$/', $fu) === 1 ? $fu : null]);
+            // Counts towards the Fellow's daily call target like any other call.
+            fellow_log((int) $u['id'], null, 'call', 'School: ' . (string) $school['school_name'] . ' — ' . str_replace('_', ' ', $outcome));
+            json(['message' => 'Call logged.'], 201);
+        }
         /* ---- School verification workspace (the master school list) ---- */
         case $key === 'GET fellow/schools': {
             $u = require_login();
