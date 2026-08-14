@@ -1318,6 +1318,136 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             json(['message' => 'Payment confirmed.', 'order_no' => $orderNo, 'payment_status' => 'paid']);
         }
 
+        /* ---- Donations: same Stripe/PayPal plumbing as the store ---- */
+        case $key === 'GET donate/config': {
+            donations_ensure_schema();
+            $org = org_identity();
+            json(storefront_payment_config() + [
+                'designations' => donation_designations(),
+                'org_legal_name' => $org['org_legal_name'],
+                // Tells the UI whether receipts will be tax-complete yet.
+                'receipts_complete' => trim($org['org_ein']) !== '',
+            ]);
+        }
+        case $key === 'POST donate/checkout': {
+            rate_limit('donate_checkout', 20, 3600);
+            donations_ensure_schema();
+            $b = body();
+            $u = current_user();
+            $name = mb_substr(trim((string) field($b, 'donor_name')), 0, 160);
+            $email = require_email(field($b, 'email'));
+            $amount = round((float) ($b['amount'] ?? 0), 2);
+            $provider = (string) field($b, 'provider') ?: 'stripe';
+            if ($name === '') json(['error' => 'Please tell us your name for the receipt.'], 422);
+            if ($amount < 1) json(['error' => 'The smallest donation we can take is 1.'], 422);
+            if ($amount > 100000) json(['error' => 'For gifts above 100,000 please contact us directly.'], 422);
+            if (!in_array($provider, storefront_payment_methods(), true)) json(['error' => 'That payment method is not available.'], 503);
+            $designation = (string) field($b, 'designation');
+            if ($designation !== '' && !in_array($designation, donation_designations(), true)) $designation = '';
+
+            $currency = storefront_currency();
+            $no = 'D' . date('ymd') . strtoupper(bin2hex(random_bytes(3)));
+            db()->prepare('INSERT INTO donations (donation_no, user_id, donor_name, email, organization, donor_role,
+                    amount, currency, designation, message, is_anonymous, provider)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
+                ->execute([$no, $u['id'] ?? null, $name, $email,
+                    mb_substr(trim((string) field($b, 'organization')), 0, 200) ?: null,
+                    $u['role'] ?? null, $amount, $currency, $designation ?: null,
+                    mb_substr(trim((string) field($b, 'message')), 0, 1000) ?: null,
+                    !empty($b['is_anonymous']) ? 1 : 0, $provider]);
+            $id = (int) db()->lastInsertId();
+
+            $base = storefront_public_base_url();
+            if ($provider === 'stripe') {
+                if (!storefront_stripe_enabled()) json(['error' => 'Card payments are not configured.'], 503);
+                $res = storefront_stripe_api_request('POST', 'checkout/sessions', [
+                    'mode' => 'payment',
+                    'success_url' => $base . '/donate?donation=' . rawurlencode($no) . '&session_id={CHECKOUT_SESSION_ID}',
+                    'cancel_url' => $base . '/donate?cancelled=1',
+                    'customer_email' => $email,
+                    'client_reference_id' => $no,
+                    'line_items' => [[
+                        'quantity' => 1,
+                        'price_data' => [
+                            'currency' => $currency,
+                            'unit_amount' => (int) round($amount * 100),
+                            'product_data' => ['name' => 'Donation' . ($designation !== '' ? ' — ' . $designation : '')],
+                        ],
+                    ]],
+                ]);
+                if (!$res['ok'] || empty($res['data']['id'])) {
+                    db()->prepare("UPDATE donations SET payment_status = 'failed', payment_error = ? WHERE id = ?")
+                        ->execute([mb_substr((string) ($res['error'] ?? 'Stripe error'), 0, 500), $id]);
+                    json(['error' => 'Could not start the card payment. Please try again.'], 502);
+                }
+                db()->prepare('UPDATE donations SET payment_session_id = ? WHERE id = ?')->execute([(string) $res['data']['id'], $id]);
+                json(['donation_no' => $no, 'provider' => 'stripe', 'checkout_url' => (string) ($res['data']['url'] ?? '')], 201);
+            }
+            // PayPal: create the order, the browser approves, then we capture.
+            if (!storefront_paypal_enabled()) json(['error' => 'PayPal is not configured.'], 503);
+            $pp = storefront_paypal_create_order($amount, strtoupper($currency), $no);
+            if (!$pp['ok'] || empty($pp['id'])) {
+                db()->prepare("UPDATE donations SET payment_status = 'failed', payment_error = ? WHERE id = ?")
+                    ->execute([mb_substr((string) ($pp['error'] ?? 'PayPal error'), 0, 500), $id]);
+                json(['error' => 'Could not start the PayPal payment. Please try again.'], 502);
+            }
+            db()->prepare('UPDATE donations SET payment_session_id = ? WHERE id = ?')->execute([(string) $pp['id'], $id]);
+            json(['donation_no' => $no, 'provider' => 'paypal', 'paypal_order_id' => (string) $pp['id']], 201);
+        }
+        case $key === 'POST donate/confirm': {
+            donations_ensure_schema();
+            $b = body();
+            $no = (string) field($b, 'donation_no');
+            $sessionId = (string) field($b, 'session_id');
+            if ($no === '' || $sessionId === '') json(['error' => 'Missing payment reference.'], 422);
+            if (!storefront_stripe_enabled()) json(['error' => 'Card payments are not configured.'], 503);
+            $sess = storefront_stripe_checkout_session_detail($sessionId);
+            if (!$sess['ok']) json(['error' => 'Could not verify the payment.'], 502);
+            $d = $sess['data'] ?? [];
+            if ((string) ($d['payment_status'] ?? '') !== 'paid') json(['error' => 'Payment has not completed.', 'status' => (string) ($d['payment_status'] ?? '')], 409);
+            $res = donation_mark_paid($no, 'stripe', (string) ($d['payment_intent'] ?? $sessionId), $sessionId, [
+                'expect_session' => $sessionId,
+                'amount_minor' => isset($d['amount_total']) ? (int) $d['amount_total'] : null,
+                'currency' => (string) ($d['currency'] ?? ''),
+            ]);
+            if (!$res['already']) donation_issue_receipt($res['id']);
+            json(['message' => 'Thank you — your donation is confirmed.', 'donation_no' => $no]);
+        }
+        case $key === 'POST donate/paypal-capture': {
+            donations_ensure_schema();
+            $b = body();
+            $no = (string) field($b, 'donation_no');
+            $ppId = (string) field($b, 'paypal_order_id');
+            if ($no === '' || $ppId === '') json(['error' => 'Missing PayPal reference.'], 422);
+            if (!storefront_paypal_enabled()) json(['error' => 'PayPal is not configured.'], 503);
+            $cap = storefront_paypal_capture_order($ppId);
+            if (!$cap['ok'] || ($cap['status'] ?? '') !== 'COMPLETED') {
+                json(['error' => 'Payment has not been completed.', 'status' => $cap['status'] ?? ''], 409);
+            }
+            $capture = $cap['data']['purchase_units'][0]['payments']['captures'][0] ?? null;
+            $amtMinor = null; $cur = ''; $captureId = $ppId;
+            if (is_array($capture) && isset($capture['amount']['value'])) {
+                $amtMinor = (int) round(((float) $capture['amount']['value']) * 100);
+                $cur = (string) ($capture['amount']['currency_code'] ?? '');
+                $captureId = (string) ($capture['id'] ?? $ppId);
+            }
+            $res = donation_mark_paid($no, 'paypal', $captureId, $ppId, [
+                'expect_session' => $ppId, 'amount_minor' => $amtMinor, 'currency' => $cur,
+            ]);
+            if (!$res['already']) donation_issue_receipt($res['id']);
+            json(['message' => 'Thank you — your donation is confirmed.', 'donation_no' => $no]);
+        }
+        // A signed-in donor's own giving history.
+        case $key === 'GET donate/mine': {
+            $u = require_login();
+            donations_ensure_schema();
+            $s = db()->prepare("SELECT donation_no, receipt_no, amount, currency, designation, payment_status,
+                    paid_at, receipt_url, created_at
+                FROM donations WHERE user_id = ? ORDER BY created_at DESC LIMIT 100");
+            $s->execute([(int) $u['id']]);
+            json(['donations' => $s->fetchAll()]);
+        }
+
         case $key === 'POST order': {
             rate_limit('guest_order', 5, 3600); // anti-abuse: this path decrements stock without a payment step
             $b     = body();
@@ -2693,6 +2823,54 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
                  $from ORDER BY r.report_date DESC, u.full_name ASC LIMIT $per OFFSET $off");
             $s->execute($args);
             json(['reports' => $s->fetchAll(), 'total' => $total, 'page' => $page, 'per' => $per]);
+        }
+        /* ---- Admin: donations + the org identity that receipts depend on ---- */
+        case $key === 'GET admin/donations': {
+            require_admin();
+            donations_ensure_schema();
+            $where = ['1=1'];
+            $args = [];
+            if (in_array((string) ($_GET['status'] ?? ''), DONATION_STATUSES, true)) { $where[] = 'payment_status = ?'; $args[] = (string) $_GET['status']; }
+            if (in_array((string) ($_GET['provider'] ?? ''), ['stripe', 'paypal'], true)) { $where[] = 'provider = ?'; $args[] = (string) $_GET['provider']; }
+            if (preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) ($_GET['from'] ?? '')) === 1) { $where[] = 'DATE(created_at) >= ?'; $args[] = (string) $_GET['from']; }
+            if (preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) ($_GET['to'] ?? '')) === 1) { $where[] = 'DATE(created_at) <= ?'; $args[] = (string) $_GET['to']; }
+            if (!empty($_GET['unreceipted'])) $where[] = "payment_status = 'paid' AND receipt_sent_at IS NULL";
+            if (($q = trim((string) ($_GET['q'] ?? ''))) !== '') {
+                $where[] = '(donor_name LIKE ? OR email LIKE ? OR organization LIKE ? OR donation_no LIKE ? OR receipt_no LIKE ?)';
+                $like = '%' . $q . '%'; array_push($args, $like, $like, $like, $like, $like);
+            }
+            $w = implode(' AND ', $where);
+            $agg = db()->prepare("SELECT COUNT(*) AS n, COALESCE(SUM(CASE WHEN payment_status = 'paid' THEN amount ELSE 0 END),0) AS raised FROM donations WHERE $w");
+            $agg->execute($args);
+            $a = $agg->fetch() ?: [];
+            ['per' => $per, 'page' => $page, 'offset' => $off] = page_window($_GET);
+            $rows = db()->prepare("SELECT d.*, u.full_name AS account_name FROM donations d LEFT JOIN users u ON u.id = d.user_id
+                WHERE $w ORDER BY d.created_at DESC LIMIT $per OFFSET $off");
+            $rows->execute($args);
+            // All-time totals, independent of the filters, for the header tiles.
+            $all = db()->query("SELECT COALESCE(SUM(amount),0) AS raised, COUNT(*) AS n,
+                    COUNT(DISTINCT email) AS donors,
+                    COALESCE(AVG(amount),0) AS average
+                FROM donations WHERE payment_status = 'paid'")->fetch() ?: [];
+            json(['donations' => $rows->fetchAll(), 'total' => (int) ($a['n'] ?? 0), 'filtered_raised' => (float) ($a['raised'] ?? 0),
+                'page' => $page, 'per' => $per, 'statuses' => DONATION_STATUSES, 'all_time' => $all,
+                'org' => org_identity()]);
+        }
+        case $method === 'POST' && preg_match('#^admin/donation/(\d+)/receipt$#', $route, $m) === 1: {
+            require_admin();
+            $ok = donation_issue_receipt((int) $m[1]);
+            json($ok
+                ? ['message' => 'Receipt sent to the donor, with a copy to the office.']
+                : ['error' => 'Could not send the receipt. Only a paid donation can be receipted.'], $ok ? 200 : 422);
+        }
+        case $key === 'GET admin/org-identity': {
+            require_admin();
+            json(['org' => org_identity()]);
+        }
+        case $key === 'PUT admin/org-identity': {
+            require_admin();
+            org_identity_save(body());
+            json(['message' => 'Saved. New receipts will use these details.', 'org' => org_identity()]);
         }
         // School verification progress across the team, by region and by Fellow.
         case $key === 'GET admin/fellow-ops/schools': {

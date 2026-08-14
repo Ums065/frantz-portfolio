@@ -460,6 +460,8 @@ export default function Home() {
               <span className="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><circle cx="9" cy="8" r="3.2" /><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6" /><path d="M17 8h5M19.5 5.5v5" /></svg></span>Join the Community
             </button>
           </div>
+
+          
         </div>
         <div className="scroll-cue"><div className="mouse" /><span>Scroll</span></div>
       </section>

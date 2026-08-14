@@ -131,7 +131,7 @@ function ensure_session_version_column(): void
  * request after a deploy, db_auto_migrate() notices the stored version is behind
  * and runs every *_ensure_schema() once; afterwards it's a single cheap SELECT.
  */
-const APP_SCHEMA_VERSION = 20260814; // yyyymmdd + seq — raise on each schema change
+const APP_SCHEMA_VERSION = 20260815; // yyyymmdd + seq — raise on each schema change
 
 /**
  * One-shot, version-gated auto-migration. Runs on app bootstrap: if the DB's
@@ -167,6 +167,7 @@ function db_auto_migrate(): void
                     'ecosystem_ensure_schema', 'ecosystem_shared_ensure_schema', 'referral_ensure_schema',
                     'mail_queue_ensure_schema', 'password_reset_ensure_schema', 'research_ensure_schema',
                     'sponsor_jobs_ensure_schema', 'events_ensure_schema', 'fellow_ops_ensure_schema',
+                    'donations_ensure_schema', 'fellow_school_calls_ensure_schema',
                 ] as $fn) {
                     if (function_exists($fn)) {
                         try { $fn(); } catch (Throwable $e) { if (app_debug()) error_log("db_auto_migrate $fn: " . $e->getMessage()); }
@@ -6274,6 +6275,244 @@ function fellow_task_post(int $taskId, int $userId, string $role, string $body, 
                 mb_substr($body, 0, 160), ['task_id' => $taskId]);
         }
     } catch (Throwable $e) { /* best effort */ }
+}
+
+/* ==================== Donations ====================
+ * Online giving for anyone — a visitor, or a partner/sponsor/media/volunteer
+ * signed into their portal. Runs on the store's existing, already-verified
+ * Stripe and PayPal plumbing rather than a second integration, and issues a
+ * receipt to the donor with a copy to the admins.
+ *
+ * This is a 501(c)(3), so a donation receipt is a tax document, not a thank-you
+ * note. The organisation's legal name, EIN and address are ADMIN-ENTERED and
+ * never invented here: with the EIN missing the receipt says so plainly rather
+ * than printing something that looks official and is not.
+ */
+
+const DONATION_STATUSES = ['pending', 'paid', 'failed', 'refunded'];
+
+/** Organisation identity used on receipts, editable by an admin. */
+function org_identity(): array
+{
+    $keys = ['org_legal_name', 'org_ein', 'org_address', 'org_email', 'org_receipt_signer'];
+    $out = array_fill_keys($keys, '');
+    try {
+        $in = implode(',', array_fill(0, count($keys), '?'));
+        $s = db()->prepare("SELECT meta_key, meta_value FROM app_meta WHERE meta_key IN ($in)");
+        $s->execute($keys);
+        foreach ($s->fetchAll() as $r) $out[(string) $r['meta_key']] = (string) $r['meta_value'];
+    } catch (Throwable $e) { if (app_debug()) error_log('org_identity: ' . $e->getMessage()); }
+    // The payee name is already fixed across the mail templates; the rest must
+    // be filled in by an admin before receipts are legally complete.
+    if ($out['org_legal_name'] === '') $out['org_legal_name'] = 'TrendCatch Gives Back Inc.';
+    return $out;
+}
+
+function org_identity_save(array $b): void
+{
+    $map = [
+        'org_legal_name' => 200, 'org_ein' => 40, 'org_address' => 400,
+        'org_email' => 160, 'org_receipt_signer' => 160,
+    ];
+    $s = db()->prepare("INSERT INTO app_meta (meta_key, meta_value) VALUES (?, ?)
+        ON DUPLICATE KEY UPDATE meta_value = VALUES(meta_value), updated_at = NOW()");
+    foreach ($map as $k => $len) {
+        if (!array_key_exists($k, $b)) continue;
+        $s->execute([$k, mb_substr(trim((string) $b[$k]), 0, $len)]);
+    }
+}
+
+function donations_ensure_schema(): void
+{
+    static $ready = false;
+    if ($ready) return;
+    try {
+        db()->exec("CREATE TABLE IF NOT EXISTS donations (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            donation_no VARCHAR(24) NOT NULL UNIQUE,
+            receipt_no VARCHAR(24) DEFAULT NULL UNIQUE,
+            user_id INT DEFAULT NULL,
+            donor_name VARCHAR(160) NOT NULL,
+            email VARCHAR(160) NOT NULL,
+            organization VARCHAR(200) DEFAULT NULL,
+            donor_role VARCHAR(30) DEFAULT NULL,
+            amount DECIMAL(10,2) NOT NULL DEFAULT 0,
+            currency VARCHAR(8) NOT NULL DEFAULT 'usd',
+            designation VARCHAR(80) DEFAULT NULL,
+            message VARCHAR(1000) DEFAULT NULL,
+            is_anonymous TINYINT(1) NOT NULL DEFAULT 0,
+            provider VARCHAR(30) DEFAULT NULL,
+            payment_status ENUM('pending','paid','failed','refunded') NOT NULL DEFAULT 'pending',
+            payment_session_id VARCHAR(160) DEFAULT NULL,
+            payment_intent_id VARCHAR(160) DEFAULT NULL,
+            payment_error TEXT DEFAULT NULL,
+            paid_at TIMESTAMP NULL DEFAULT NULL,
+            receipt_url VARCHAR(300) DEFAULT NULL,
+            receipt_sent_at TIMESTAMP NULL DEFAULT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_don_status (payment_status, created_at), INDEX idx_don_user (user_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    } catch (Throwable $e) { if (app_debug()) error_log('donations_ensure_schema: ' . $e->getMessage()); }
+    $ready = true;
+}
+
+/** What a donation may be earmarked for. Kept deliberately short and true to
+ *  what the program actually funds. */
+function donation_designations(): array
+{
+    return ['Where it is needed most', 'Student scholarships', 'School impact grant', 'Educator recognition', 'Showcase night'];
+}
+
+/** Build a receipt PDF. Returns [filename, bytes]. */
+function donation_receipt_pdf(array $d): array
+{
+    require_once __DIR__ . '/simple_pdf.php';
+    $org = org_identity();
+    $pdf = new SimplePdf();
+    $pdf->title($org['org_legal_name']);
+    if ($org['org_address'] !== '') $pdf->line($org['org_address']);
+    if ($org['org_email'] !== '') $pdf->line($org['org_email']);
+    $pdf->spacer(6);
+    $pdf->heading('Official donation receipt');
+    $pdf->line('Receipt number: ' . (string) ($d['receipt_no'] ?? $d['donation_no']), true);
+    $pdf->line('Date received: ' . date('F j, Y', strtotime((string) ($d['paid_at'] ?: $d['created_at']))));
+    $pdf->spacer(4);
+
+    $pdf->heading('Donor');
+    $pdf->line((string) $d['donor_name'], true);
+    if (!empty($d['organization'])) $pdf->line((string) $d['organization']);
+    $pdf->line((string) $d['email']);
+    $pdf->spacer(4);
+
+    $pdf->heading('Contribution');
+    $pdf->line('Amount: ' . strtoupper((string) $d['currency']) . ' ' . number_format((float) $d['amount'], 2), true);
+    if (!empty($d['designation'])) $pdf->line('Designated for: ' . (string) $d['designation']);
+    $pdf->line('Paid by: ' . ucfirst((string) ($d['provider'] ?: 'card')));
+    $pdf->spacer(6);
+
+    $pdf->heading('For your tax records');
+    /* The two statements the IRS expects on a written acknowledgement: the
+       organisation's tax status with its EIN, and whether anything was given in
+       return. If the EIN has not been entered, say so rather than imply one. */
+    if (trim($org['org_ein']) !== '') {
+        $pdf->line($org['org_legal_name'] . ' is a tax-exempt organization under section 501(c)(3) of the Internal Revenue Code.');
+        $pdf->line('EIN: ' . $org['org_ein'], true);
+    } else {
+        $pdf->line('This receipt is not yet complete for tax purposes: the organization has not recorded its EIN.');
+        $pdf->line('Please contact us for a completed receipt before filing.');
+    }
+    $pdf->line('No goods or services were provided in exchange for this contribution.');
+    $pdf->line('Please keep this receipt with your tax records.');
+    $pdf->spacer(6);
+    if ($org['org_receipt_signer'] !== '') {
+        $pdf->line('With thanks,');
+        $pdf->line($org['org_receipt_signer'], true);
+    }
+    $name = 'receipt-' . preg_replace('/[^A-Za-z0-9\-]/', '', (string) ($d['receipt_no'] ?? $d['donation_no'])) . '.pdf';
+    return [$name, $pdf->output()];
+}
+
+/** Issue the receipt: store the PDF, email the donor, copy the admins. */
+function donation_issue_receipt(int $id): bool
+{
+    donations_ensure_schema();
+    $s = db()->prepare('SELECT * FROM donations WHERE id = ? LIMIT 1');
+    $s->execute([$id]);
+    $d = $s->fetch();
+    if (!$d || (string) $d['payment_status'] !== 'paid') return false;
+
+    if (empty($d['receipt_no'])) {
+        // Sequential within the year, so receipts read like records not hashes.
+        $seq = (int) db()->query("SELECT COUNT(*) FROM donations WHERE receipt_no IS NOT NULL AND YEAR(created_at) = YEAR(CURDATE())")->fetchColumn() + 1;
+        $d['receipt_no'] = 'R' . date('Y') . '-' . str_pad((string) $seq, 5, '0', STR_PAD_LEFT);
+        db()->prepare('UPDATE donations SET receipt_no = ? WHERE id = ?')->execute([$d['receipt_no'], $id]);
+    }
+
+    [$fileName, $bytes] = donation_receipt_pdf($d);
+    $dir = __DIR__ . '/uploads/receipts';
+    $url = null;
+    if ((is_dir($dir) || mkdir($dir, 0775, true) || is_dir($dir)) && file_put_contents($dir . '/' . $fileName, $bytes) !== false) {
+        $url = '/api/uploads/receipts/' . $fileName;
+        db()->prepare('UPDATE donations SET receipt_url = ? WHERE id = ?')->execute([$url, $id]);
+    }
+
+    $org = org_identity();
+    $amount = strtoupper((string) $d['currency']) . ' ' . number_format((float) $d['amount'], 2);
+    $body = "Dear " . explode(' ', (string) $d['donor_name'])[0] . ",\n\n"
+        . "Thank you for your gift of $amount to " . $org['org_legal_name'] . ".\n\n"
+        . "Your official receipt is attached, numbered " . (string) $d['receipt_no'] . ". Please keep it with your tax records.\n\n"
+        . ($d['designation'] ? "You asked that it go towards: " . (string) $d['designation'] . ".\n\n" : '')
+        . "Every dollar funds the Student Impact Challenge itself - the scholarships, the school-impact grant and the showcase night - "
+        . "rather than any one student.\n\nWith thanks,\n" . ($org['org_receipt_signer'] ?: $org['org_legal_name']) . "\nFrantzCoutard.com";
+    // mail_queue_enqueue expects filename/data/mime.
+    $attach = [['filename' => $fileName, 'data' => $bytes, 'mime' => 'application/pdf']];
+    $sent = false;
+    if (function_exists('mail_queue_enqueue')) {
+        $sent = (bool) mail_queue_enqueue('donation_receipt', (string) $d['email'], 'Your donation receipt ' . (string) $d['receipt_no'], $body, null, $attach);
+    }
+    // The admins get their own copy so finance never depends on the donor forwarding it.
+    $adminTo = trim($org['org_email']) !== '' ? $org['org_email'] : (string) env('ADMIN_EMAIL', '');
+    if ($adminTo !== '' && function_exists('mail_queue_enqueue')) {
+        mail_queue_enqueue('donation_receipt_copy', $adminTo,
+            'Donation received: ' . $amount . ' from ' . (string) $d['donor_name'],
+            "A donation was received and the receipt sent to the donor.\n\n"
+            . "Receipt: " . (string) $d['receipt_no'] . "\nDonor: " . (string) $d['donor_name'] . " <" . (string) $d['email'] . ">\n"
+            . ($d['organization'] ? "Organization: " . (string) $d['organization'] . "\n" : '')
+            . "Amount: $amount\nDesignation: " . ((string) $d['designation'] ?: 'Where it is needed most') . "\n"
+            . "Paid by: " . ucfirst((string) $d['provider']) . "\n", null, $attach);
+    }
+    try {
+        new_school_add_notification(null, 'admin', 'donation', 'Donation received: ' . $amount,
+            (string) $d['donor_name'] . ($d['organization'] ? ' (' . (string) $d['organization'] . ')' : ''), ['donation_id' => $id]);
+    } catch (Throwable $e) { /* best effort */ }
+
+    if ($sent) db()->prepare('UPDATE donations SET receipt_sent_at = NOW() WHERE id = ?')->execute([$id]);
+    return $sent;
+}
+
+/** Mark a donation paid once, verifying the provider's amount against ours. */
+function donation_mark_paid(string $donationNo, string $provider, string $intentId, string $sessionId = '', ?array $verify = null): array
+{
+    donations_ensure_schema();
+    $pdo = db();
+    $pdo->beginTransaction();
+    try {
+        $lk = $pdo->prepare('SELECT id, payment_status, payment_session_id, amount, currency FROM donations WHERE donation_no = ? LIMIT 1 FOR UPDATE');
+        $lk->execute([$donationNo]);
+        $row = $lk->fetch();
+        if (!$row) { $pdo->rollBack(); json(['error' => 'Donation not found.'], 404); }
+        if ((string) $row['payment_status'] === 'paid') { $pdo->commit(); return ['id' => (int) $row['id'], 'already' => true]; }
+
+        if ($verify !== null) {
+            // The provider's session must be the one we opened for THIS donation.
+            $expect = (string) ($verify['expect_session'] ?? '');
+            $stored = (string) ($row['payment_session_id'] ?? '');
+            if ($expect === '' || $stored === '' || !hash_equals($stored, $expect)) {
+                $pdo->rollBack();
+                json(['error' => 'Payment does not match this donation.'], 400);
+            }
+            if (array_key_exists('amount_minor', $verify) && $verify['amount_minor'] !== null) {
+                $ourMinor = (int) round(((float) $row['amount']) * 100);
+                if ((int) $verify['amount_minor'] !== $ourMinor) {
+                    $pdo->rollBack();
+                    json(['error' => 'Paid amount does not match the donation.'], 400);
+                }
+                $cur = strtoupper((string) ($verify['currency'] ?? ''));
+                if ($cur !== '' && $cur !== strtoupper((string) $row['currency'])) {
+                    $pdo->rollBack();
+                    json(['error' => 'Payment currency does not match the donation.'], 400);
+                }
+            }
+        }
+        $pdo->prepare("UPDATE donations SET payment_status = 'paid', provider = ?, payment_intent_id = ?, paid_at = NOW() WHERE id = ?")
+            ->execute([$provider, $intentId, (int) $row['id']]);
+        $pdo->commit();
+        return ['id' => (int) $row['id'], 'already' => false];
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        throw $e;
+    }
 }
 
 /* ==================== Fellow: student verification via the school ====================

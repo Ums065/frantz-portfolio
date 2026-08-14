@@ -11,6 +11,7 @@ import { statHint } from '../../lib/statHints'
 import { resolveDashboardRoute } from '../../lib/dashboardRoute'
 import ProfileSection, { AvatarPicker } from '../../components/profile/ProfileSection'
 import NotificationBell from '../../components/NotificationBell'
+import DonateForm from '../../components/DonateForm'
 
 /* Shared shell for the ecosystem role portals (Sponsor / Partner / Media /
    Volunteer). Owns the login / register / pending / wrong-role states and the
@@ -254,6 +255,52 @@ export function EcoMessages({ fetchUrl, sendUrl, sendPayload, mine, onLoaded }: 
 }
 
 /** A titled card section with an optional action on the right. */
+/* Giving from inside a portal: the form, prefilled from the account, plus this
+   organisation's own giving history with its receipts. */
+function DonatePanel({ orgName }: { orgName: string }) {
+  const [mine, setMine] = useState<any[]>([])
+  useEffect(() => { api.get<{ donations: any[] }>('donate/mine').then((d) => setMine(d.donations || [])).catch(() => {}) }, [])
+  const paid = mine.filter((d) => d.payment_status === 'paid')
+  const given = paid.reduce((n, d) => n + Number(d.amount || 0), 0)
+  return (
+    <div style={{ display: 'grid', gap: 18 }}>
+      <Section title={`Make a donation${orgName ? ' from ' + orgName : ''}`}>
+        <DonateForm compact />
+      </Section>
+      <Section title="Your giving">
+        {paid.length === 0 ? (
+          <p style={{ color: 'var(--muted)', fontSize: 13 }}>No completed donations yet. Anything you give will appear here with its receipt.</p>
+        ) : (
+          <>
+            <p style={{ color: 'var(--muted)', fontSize: 13, margin: '0 0 10px' }}>
+              You have given <strong style={{ color: 'var(--gold-light)' }}>
+                {new Intl.NumberFormat('en-US', { style: 'currency', currency: (paid[0].currency || 'usd').toUpperCase() }).format(given)}
+              </strong> across {paid.length} donation{paid.length === 1 ? '' : 's'}.
+            </p>
+            <div className="admin-table-wrap">
+              <table className="admin-table admin-table--stack">
+                <thead><tr><th>Date</th><th>Amount</th><th>Towards</th><th>Receipt</th></tr></thead>
+                <tbody>{paid.map((d) => (
+                  <tr key={d.donation_no}>
+                    <td data-label="Date">{String(d.paid_at || d.created_at).slice(0, 10)}</td>
+                    <td data-label="Amount">{new Intl.NumberFormat('en-US', { style: 'currency', currency: (d.currency || 'usd').toUpperCase() }).format(Number(d.amount))}</td>
+                    <td data-label="Towards">{d.designation || 'Where it is needed most'}</td>
+                    <td data-label="Receipt">
+                      {d.receipt_url
+                        ? <a className="btn btn--sm" href={d.receipt_url} target="_blank" rel="noreferrer">Download ↗</a>
+                        : <span style={{ color: 'var(--muted)', fontSize: 12.5 }}>{d.receipt_no || 'being issued'}</span>}
+                    </td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            </div>
+          </>
+        )}
+      </Section>
+    </div>
+  )
+}
+
 export function Section({ title, children, right }: { title: string; children: React.ReactNode; right?: React.ReactNode }) {
   return (
     <section style={S.card}>
@@ -442,9 +489,14 @@ function TabbedDashboard({ config, data, reload, logout, orgName }: { config: Po
   // profile content (Media, Volunteer) define their own and embed <ProfileSection/>
   // inside it, so there is never a duplicate "Profile" in the sidebar.
   const ownProfile = config.tabs!.some((t) => t.key === 'profile')
-  const tabs: PortalTab[] = ownProfile
+  const base: PortalTab[] = ownProfile
     ? config.tabs!
     : [...config.tabs!, { key: 'profile', label: 'Profile', render: () => <ProfileSection /> }]
+  /* Every ecosystem role can give, so the Give tab is appended here rather than
+     repeated in each role's config. */
+  const tabs: PortalTab[] = base.some((t) => t.key === 'give')
+    ? base
+    : [...base, { key: 'give', label: 'Give', render: () => <DonatePanel orgName={orgName} /> }]
   const validKeys = tabs.map((t) => t.key)
   // Remember the active tab in the URL hash so a page refresh keeps you where
   // you were (instead of snapping back to the first tab) — and the tab is

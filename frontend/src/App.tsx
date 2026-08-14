@@ -22,6 +22,7 @@ const Profile = lazy(() => import('./pages/Profile'))
 const Projects = lazy(() => import('./pages/Projects'))
 const Resources = lazy(() => import('./pages/Resources'))
 const Store = lazy(() => import('./pages/Store'))
+const Donate = lazy(() => import('./pages/Donate'))
 const Admin = lazy(() => import('./pages/Admin'))
 const Legal = lazy(() => import('./pages/Legal'))
 const ResetPassword = lazy(() => import('./pages/ResetPassword'))
@@ -130,6 +131,7 @@ export default function App() {
           <Route path="/profile" element={<RoutedPage pageKey="profile"><Profile /></RoutedPage>} />
           <Route path="/reset-password" element={<RoutedPage pageKey="reset-password"><ResetPassword /></RoutedPage>} />
           <Route path="/store" element={<Suspense fallback={<RouteLoading />}><Store /></Suspense>} />
+          <Route path="/donate" element={<Suspense fallback={<RouteLoading />}><Donate /></Suspense>} />
           <Route path="/terms" element={<RoutedPage pageKey="terms"><Legal slug="terms" /></RoutedPage>} />
           <Route path="/privacy" element={<RoutedPage pageKey="privacy"><Legal slug="privacy" /></RoutedPage>} />
           <Route path="/content-disclaimer" element={<RoutedPage pageKey="content-disclaimer"><Legal slug="content-disclaimer" /></RoutedPage>} />

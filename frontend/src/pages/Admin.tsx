@@ -20,6 +20,7 @@ const JudgesAdminPanel = lazy(() => import('../components/admin/JudgesAdminPanel
 const PartnersAdminPanel = lazy(() => import('../components/admin/PartnersAdminPanel'))
 const PressAdminPanel = lazy(() => import('../components/admin/PressAdminPanel'))
 const FellowOpsAdminPanel = lazy(() => import('../components/admin/FellowOpsAdminPanel'))
+const DonationsAdminPanel = lazy(() => import('../components/admin/DonationsAdminPanel'))
 // Section list only — the panel itself stays lazy.
 import { FTAB_GROUPS, FTAB_LABEL, FTAB_HELP, type FTab } from '../lib/fellowAdminTabs'
 const ResearchAdminPanel = lazy(() => import('../components/admin/ResearchAdminPanel'))
@@ -35,7 +36,7 @@ type TabKey =
   | 'members' | 'approvals' | 'business-requests' | 'sponsor-jobs' | 'ecosystem' | 'sponsors' | 'partners' | 'awards' | 'events' | 'blog'
   | 'testimonials' | 'media' | 'gallery' | 'community' | 'rsvps' | 'inventory'
   | 'ns-schools' | 'ns-ranking' | 'ns-submissions' | 'ns-interviews' | 'ns-chat' | 'ns-trendcatch' | 'ns-judges' | 'ns-timeline'
-  | 'research' | 'team-inbox' | 'press' | 'fellow-ops'
+  | 'research' | 'team-inbox' | 'press' | 'fellow-ops' | 'donations'
 
 interface NavItem { key: TabKey; label: string }
 const NAV_GROUPS: Array<{ group: string; items: NavItem[] }> = [
@@ -94,6 +95,7 @@ const NAV_GROUPS: Array<{ group: string; items: NavItem[] }> = [
   ] },
   { group: 'Store', items: [
     { key: 'orders', label: 'Store Orders' },
+    { key: 'donations', label: 'Donations' },
     { key: 'inventory', label: 'Products & Inventory' },
   ] },
 ]
@@ -2058,6 +2060,7 @@ export default function Admin() {
         {tab === 'press' && <PressAdminPanel />}
         {tab === 'community' && <CommunityAdmin />}
         {tab === 'rsvps' && <RsvpsAdmin />}
+        {tab === 'donations' && <DonationsAdminPanel />}
         {tab === 'inventory' && <InventoryAdmin />}
           </Suspense>
           </>)}

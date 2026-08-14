@@ -262,6 +262,7 @@ function new_school_school_rankings(): array
     unset($row);
 
     return $ranked;
+    
 }
 
 function new_school_build_student_context(array $student): array
