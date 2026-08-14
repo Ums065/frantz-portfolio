@@ -74,6 +74,12 @@ export default function PressWidget() {
 
   if (items.length === 0) return null
 
+  /* A real press page leads with one piece. The first item is the lead; the rest
+     sit in the grid beneath it. Only when nothing is filtered out, so a filtered
+     view stays an even grid. */
+  const lead = filter === 'all' && shown.length > 2 ? shown[0] : null
+  const rest = lead ? shown.slice(1) : shown
+
   const openItem = (it: PressItem) => {
     if (it.kind === 'youtube' || it.kind === 'photo') { setActive(it); return }
     if (it.url) window.open(it.url, '_blank', 'noopener')
@@ -93,7 +99,15 @@ export default function PressWidget() {
       {open && (
         <div className="press-modal" onClick={(e) => { if (e.target === e.currentTarget) close() }}
           role="dialog" aria-modal="true" aria-label="Press and media">
-          <div className="press-modal__inner">
+          {/* A soft light follows the pointer across the panel — the kind of
+              detail you feel rather than notice. Pure CSS from two variables. */}
+          <div className="press-modal__inner" onPointerMove={(e) => {
+            const el = e.currentTarget
+            const r = el.getBoundingClientRect()
+            el.style.setProperty('--mx', `${((e.clientX - r.left) / r.width) * 100}%`)
+            el.style.setProperty('--my', `${((e.clientY - r.top) / r.height) * 100}%`)
+          }}>
+            <span className="press-modal__rule" aria-hidden="true" />
             <button type="button" className="press-modal__x" ref={closeRef} onClick={close} aria-label="Close">✕</button>
 
             <header className="press-head">
@@ -150,13 +164,33 @@ export default function PressWidget() {
                     })}
                   </div>
                 )}
+                {lead && (
+                  <button type="button" className="press-lead" onClick={() => openItem(lead)} title={lead.title}>
+                    <span className="press-lead__thumb">
+                      {thumb(lead)
+                        ? <img src={thumb(lead)} alt={lead.title} onLoad={(e) => e.currentTarget.classList.add('is-loaded')} />
+                        : <span className="press-card__ph"><KindIcon kind={lead.kind} size={30} /></span>}
+                      <span className="press-card__veil" aria-hidden="true" />
+                      {(lead.kind === 'youtube' || lead.kind === 'video') && <span className="press-card__play" aria-hidden="true">▶</span>}
+                    </span>
+                    <span className="press-lead__body">
+                      <span className="press-lead__kicker"><KindIcon kind={lead.kind} />{KIND_LABEL[lead.kind] || 'Media'}</span>
+                      <span className="press-lead__title">{lead.title}</span>
+                      {lead.source_name && <span className="press-lead__src">{lead.source_name}</span>}
+                      <span className="press-lead__cta">
+                        {lead.kind === 'youtube' ? 'Watch the feature' : lead.kind === 'photo' ? 'View the photo' : 'Read the piece'} →
+                      </span>
+                    </span>
+                  </button>
+                )}
                 <div className="press-grid">
-                  {shown.map((it, i) => (
+                  {rest.map((it, i) => (
                     <button type="button" className="press-card" key={it.id} onClick={() => openItem(it)} title={it.title}
                       style={{ ['--i' as string]: String(Math.min(i, 11)) }}>
                       <span className="press-card__thumb">
                         {thumb(it)
-                          ? <img src={thumb(it)} alt={it.title} loading="lazy" />
+                          ? <img src={thumb(it)} alt={it.title} loading="lazy"
+                              onLoad={(e) => e.currentTarget.classList.add('is-loaded')} />
                           : <span className="press-card__ph"><KindIcon kind={it.kind} size={22} /></span>}
                         <span className="press-card__veil" aria-hidden="true" />
                         <span className="press-card__kind"><KindIcon kind={it.kind} />{KIND_LABEL[it.kind] || 'Media'}</span>
