@@ -523,7 +523,7 @@ function new_school_handle_route(string $method, string $route): bool
                     'subtitle' => 'Join New York\'s Largest Student Problem-Solving Movement',
                     'lead' => 'Students interview 10 local businesses, identify a community problem, develop a solution, and compete for scholarships, school grants, and statewide recognition.',
                     'registration_open' => ns_submission_open_date(),
-                    'winners_announced' => '2026-12-21',
+                    'winners_announced' => ns_winners_announced_date(),
                     'school_grant_amount' => 25000,
                     'student_scholarship_max_amount' => 10000,
                     'educator_award_label' => 'Educator Recognition Award',
@@ -4683,6 +4683,15 @@ function new_school_handle_route(string $method, string $route): bool
                 json(['error' => 'timeline must be a list of milestones.'], 422);
             }
             json(['message' => 'Timeline saved.', 'timeline' => ns_challenge_timeline_save($items)]);
+        }
+        // The winners-announced date shown on the public page.
+        case $key === 'GET admin/new-school/winners-date': {
+            require_admin();
+            json(['winners_announced' => ns_winners_announced_date()]);
+        }
+        case $key === 'PUT admin/new-school/winners-date': {
+            require_admin();
+            json(['message' => 'Winners date saved.', 'winners_announced' => ns_winners_announced_date_save((string) ($body['winners_announced'] ?? ''))]);
         }
 
         // Submission window (admin-editable open date, deadline, and open/close mode).

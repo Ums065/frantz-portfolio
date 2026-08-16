@@ -131,7 +131,7 @@ function ensure_session_version_column(): void
  * request after a deploy, db_auto_migrate() notices the stored version is behind
  * and runs every *_ensure_schema() once; afterwards it's a single cheap SELECT.
  */
-const APP_SCHEMA_VERSION = 20260815; // yyyymmdd + seq — raise on each schema change
+const APP_SCHEMA_VERSION = 20260816; // yyyymmdd + seq — raise on each schema change
 
 /**
  * One-shot, version-gated auto-migration. Runs on app bootstrap: if the DB's
@@ -3252,7 +3252,18 @@ function new_school_workflow_ensure_schema(): void
         return;
     }
     $pdo = db();
-    $pdo->exec("CREATE TABLE IF NOT EXISTS new_school_settings (setting_key VARCHAR(64) NOT NULL PRIMARY KEY, setting_value VARCHAR(255) DEFAULT NULL, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    /* setting_value is TEXT, not VARCHAR(255): some settings hold JSON (the
+       challenge timeline is well over 255 bytes). Truncating it produced invalid
+       JSON, json_decode returned null, and the page silently fell back to the
+       hardcoded defaults — so admin edits appeared to save and never showed up. */
+    $pdo->exec("CREATE TABLE IF NOT EXISTS new_school_settings (setting_key VARCHAR(64) NOT NULL PRIMARY KEY, setting_value TEXT DEFAULT NULL, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    // Existing installs were created with VARCHAR(255) — widen them in place.
+    try {
+        $t = $pdo->query("SELECT DATA_TYPE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'new_school_settings' AND COLUMN_NAME = 'setting_value'")->fetchColumn();
+        if ($t !== false && strtolower((string) $t) !== 'text') {
+            $pdo->exec("ALTER TABLE new_school_settings MODIFY setting_value TEXT DEFAULT NULL");
+        }
+    } catch (Throwable $e) { if (app_debug()) error_log('new_school_settings widen: ' . $e->getMessage()); }
     $pdo->exec("CREATE TABLE IF NOT EXISTS new_school_judge_assignments (id INT AUTO_INCREMENT PRIMARY KEY, judge_user_id INT NOT NULL, submission_id INT NOT NULL, status ENUM('assigned','recused') NOT NULL DEFAULT 'assigned', recuse_reason VARCHAR(255) DEFAULT NULL, assigned_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, UNIQUE KEY uniq_judge_assignment (judge_user_id, submission_id), KEY idx_assignment_judge (judge_user_id, status), KEY idx_assignment_submission (submission_id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
     $pdo->exec("CREATE TABLE IF NOT EXISTS new_school_judge_score_audit (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, submission_id INT NOT NULL, judge_user_id INT NOT NULL, action VARCHAR(20) NOT NULL DEFAULT 'update', old_total INT DEFAULT NULL, new_total INT DEFAULT NULL, detail TEXT DEFAULT NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, KEY idx_audit_submission (submission_id, created_at), KEY idx_audit_judge (judge_user_id, created_at)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
     $pdo->exec("CREATE TABLE IF NOT EXISTS new_school_reports (id INT AUTO_INCREMENT PRIMARY KEY, submission_id INT DEFAULT NULL, reporter_user_id INT DEFAULT NULL, reason VARCHAR(80) NOT NULL, notes TEXT DEFAULT NULL, status ENUM('open','reviewed','dismissed') NOT NULL DEFAULT 'open', created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, KEY idx_reports_status (status, created_at), KEY idx_reports_submission (submission_id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
@@ -3334,6 +3345,21 @@ function ns_anonymous_judging(): bool
 function ns_results_published(): bool
 {
     return filter_var(ns_setting_get('results_published', 'false'), FILTER_VALIDATE_BOOLEAN);
+}
+
+/** The date winners are announced, shown on the public challenge page. Was a
+ *  literal in the overview payload, so no admin control could ever change it. */
+function ns_winners_announced_date(): string
+{
+    $v = trim(ns_setting_get('winners_announced_date', ''));
+    return preg_match('/^\d{4}-\d{2}-\d{2}$/', $v) === 1 ? $v : '2027-05-12';
+}
+function ns_winners_announced_date_save(string $date): string
+{
+    $date = trim($date);
+    if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) !== 1) json(['error' => 'Use a date like 2027-05-12.'], 422);
+    ns_setting_set('winners_announced_date', $date);
+    return ns_winners_announced_date();
 }
 
 /* ================= School-internal scoring pre-round ================= */
@@ -7572,12 +7598,12 @@ function ns_challenge_timeline(): array
             if ($out) return $out;
         }
     }
+    // Shown until an admin saves their own; kept in step with the published dates.
     return [
-        ['phase' => 'Registration Opens',        'when' => 'June 27, 2026',                 'highlight' => false],
-        ['phase' => 'Community Challenge Period', 'when' => 'July – 23 November 2026',        'highlight' => false],
-        ['phase' => 'Judging & Review',           'when' => '24 November – 20 December 2026', 'highlight' => false],
-        ['phase' => 'Winners Announced',          'when' => 'December 21, 2026',              'highlight' => true],
-        ['phase' => 'Award Ceremony',             'when' => 'Early 2027',                     'highlight' => false],
+        ['phase' => 'Registration & Final Submissions Close', 'when' => 'March 31, 2027',           'highlight' => false],
+        ['phase' => 'Judging Period',                         'when' => 'April 1–30, 2027',         'highlight' => false],
+        ['phase' => '🏆 Winners Announced',                    'when' => 'May 12, 2027',             'highlight' => true],
+        ['phase' => '🎓 Awards Ceremony',                      'when' => 'Thursday, May 27, 2027',   'highlight' => false],
     ];
 }
 

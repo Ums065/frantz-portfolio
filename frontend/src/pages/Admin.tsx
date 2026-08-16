@@ -3117,13 +3117,23 @@ function TimelineAdmin() {
   const [cer, setCer] = useState<Ceremony>({ date: '', venue: '', description: '', link: '' })
   const [cerBusy, setCerBusy] = useState(false); const [cerMsg, setCerMsg] = useState(''); const [cerErr, setCerErr] = useState('')
   const [winnersPub, setWinnersPub] = useState(false)
+  const [winDate, setWinDate] = useState('')
+  const [winBusy, setWinBusy] = useState(false); const [winMsg, setWinMsg] = useState(''); const [winErr, setWinErr] = useState('')
   const [sub, setSub] = useState<'deadline' | 'winners' | 'ceremony' | 'timeline'>('deadline')
   useEffect(() => {
     api.get<{ timeline: Milestone[] }>('admin/new-school/timeline').then((d) => setRows(d.timeline || [])).catch(() => {})
     api.get<{ submission_window: SubmissionWindow }>('admin/new-school/submission-window').then((d) => setReg(d.submission_window)).catch(() => {})
     api.get<{ ceremony: Ceremony }>('admin/new-school/ceremony').then((d) => setCer(d.ceremony)).catch(() => {})
     api.get<{ settings: { winners_published: boolean } }>('admin/new-school/settings').then((d) => setWinnersPub(!!d.settings.winners_published)).catch(() => {})
+    api.get<{ winners_announced: string }>('admin/new-school/winners-date').then((d) => setWinDate(d.winners_announced || '')).catch(() => {})
   }, [])
+  const saveWinDate = async () => {
+    setWinBusy(true); setWinMsg(''); setWinErr('')
+    try {
+      const d = await api.put<{ winners_announced: string }>('admin/new-school/winners-date', { winners_announced: winDate })
+      setWinDate(d.winners_announced); setWinMsg('Saved — live on the public page.')
+    } catch (e) { setWinErr(e instanceof Error ? e.message : 'Could not save the date.') } finally { setWinBusy(false) }
+  }
   const [pendingPublish, setPendingPublish] = useState<boolean | null>(null)
   const [pubBusy, setPubBusy] = useState(false)
   const applyPublish = async () => {
@@ -3239,6 +3249,18 @@ function TimelineAdmin() {
           {winnersPub ? 'Unpublish results' : 'Publish winners & lock scoring'}
         </button>
         <p className="msub" style={{ marginTop: 10, marginBottom: 0 }}>Status: <strong style={{ color: winnersPub ? 'var(--green-bright)' : '#e08a8a' }}>{winnersPub ? 'LIVE — winners visible to everyone' : 'Hidden — winners not shown publicly'}</strong></p>
+
+        {/* The announcement date shown on the public page. It used to be a
+            literal in the API, so nothing here could change it. */}
+        <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--line)' }}>
+          <label style={fieldLabel}>Winners announced on
+            <input style={inp} type="date" value={winDate} onChange={(e) => setWinDate(e.target.value)} />
+          </label>
+          <p className="msub" style={{ margin: '6px 0 10px', fontSize: 12 }}>Shown on the public challenge page and in the key-facts strip.</p>
+          <button className="btn btn--sm" disabled={winBusy} onClick={saveWinDate}>{winBusy ? 'Saving…' : 'Save date'}</button>
+          {winMsg && <span className="msub" style={{ marginLeft: 10, color: '#8fd6a3' }}>{winMsg}</span>}
+          {winErr && <span className="msub" style={{ marginLeft: 10, color: '#ff9a9a' }}>{winErr}</span>}
+        </div>
       </div>
       )}
 
