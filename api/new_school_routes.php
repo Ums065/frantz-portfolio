@@ -527,7 +527,7 @@ function new_school_handle_route(string $method, string $route): bool
                     'school_grant_amount' => 25000,
                     'student_scholarship_max_amount' => 10000,
                     'educator_award_label' => 'Educator Recognition Award',
-                    'age_range' => '11-19',
+                    'age_range' => '10-20',
                     'grade_range' => '6-12',
                     'deadline' => ns_submission_deadline(),
                     'website' => 'FrantzCoutard.com',
@@ -556,7 +556,7 @@ function new_school_handle_route(string $method, string $route): bool
                 'teachers' => [],
                 'winners' => [],
                 'workflow' => [
-                    ['step' => 1, 'title' => 'Register', 'detail' => 'Students ages 11-19 create a challenge profile on the site.'],
+                    ['step' => 1, 'title' => 'Register', 'detail' => 'Students ages 10-20 create a challenge profile on the site.'],
                     ['step' => 2, 'title' => 'Interview 10 Local Businesses', 'detail' => 'Students meet with businesses to learn real community challenges.'],
                     ['step' => 3, 'title' => 'Identify A Community Problem', 'detail' => 'Interview notes become a clear problem statement to solve.'],
                     ['step' => 4, 'title' => 'Develop A Solution', 'detail' => 'Students build a practical plan that can make a measurable difference.'],
@@ -564,7 +564,7 @@ function new_school_handle_route(string $method, string $route): bool
                     ['step' => 6, 'title' => 'Compete For Scholarships & School Grants', 'detail' => 'Admin review publishes awards and recognition.'],
                 ],
                 'rules' => [
-                    'Students must be ages 11-19.',
+                    'Students must be ages 10-20.',
                     'Parent or guardian consent is required.',
                     'School and teacher approval must be complete before final submission.',
                     'A student must log 10 business interviews.',
@@ -1057,7 +1057,7 @@ function new_school_handle_route(string $method, string $route): bool
             if ($username === '') json(['error' => 'Student username is required.'], 422);
             if (!preg_match('/^[A-Za-z0-9._-]{3,30}$/', $username)) json(['error' => 'Student username must be 3 to 30 characters and use only letters, numbers, dots, dashes, or underscores.'], 422);
             if ($password === '' || strlen($password) < 6) json(['error' => 'Password must be at least 6 characters.'], 422);
-            if ($age < 11 || $age > 19) json(['error' => 'Students must be ages 11 to 19.'], 422);
+            if ($age < 10 || $age > 20) json(['error' => 'Students must be ages 10 to 20.'], 422);
             if ($dob === '') json(['error' => 'Date of birth is required.'], 422);
             if ($phone === '' || $homeAddress === '' || $gradeLevel === '' || ($schoolId <= 0 && $schoolName === '')) {
                 json(['error' => 'Student contact and school details are required.'], 422);
@@ -1078,8 +1078,8 @@ function new_school_handle_route(string $method, string $route): bool
                 json(['error' => 'Date of birth cannot be in the future.'], 422);
             }
             $derivedAge = (int) $dateOfBirth->diff($today)->y;
-            if ($derivedAge < 11 || $derivedAge > 19) {
-                json(['error' => 'Date of birth does not match an eligible age (11-19).'], 422);
+            if ($derivedAge < 10 || $derivedAge > 20) {
+                json(['error' => 'Date of birth does not match an eligible age (10-20).'], 422);
             }
 
             $pdo = db();

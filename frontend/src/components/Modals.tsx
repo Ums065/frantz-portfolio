@@ -48,7 +48,7 @@ const registerRoleMeta: Partial<Record<RegistrationRole, { title: string; subtit
   student: {
     title: 'Student Registration',
     subtitle: 'Register for the Community Business Impact Challenge.',
-    helper: 'Students must be 11-19 and the account is reviewed by admin before the challenge dashboard opens.',
+    helper: 'Students must be 10-20 and the account is reviewed by admin before the challenge dashboard opens.',
     button: 'Register Student',
   },
   parent: {

@@ -1491,7 +1491,7 @@ CREATE TABLE IF NOT EXISTS `sponsor_programs` (
   `school_impact_grant_amount` decimal(12,2) NOT NULL DEFAULT '25000.00',
   `student_scholarship_amount` decimal(12,2) NOT NULL DEFAULT '10000.00',
   `educator_award_label` varchar(220) NOT NULL,
-  `age_range` varchar(40) NOT NULL DEFAULT '11-19',
+  `age_range` varchar(40) NOT NULL DEFAULT '10-20',
   `grade_range` varchar(40) NOT NULL DEFAULT '6-12',
   `is_active` tinyint(1) NOT NULL DEFAULT '0',
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
@@ -1510,7 +1510,7 @@ CALL add_column_if_missing('sponsor_programs', 'winners_announced', 'date DEFAUL
 CALL add_column_if_missing('sponsor_programs', 'school_impact_grant_amount', 'decimal(12,2) NOT NULL DEFAULT ''25000.00''', 'winners_announced');
 CALL add_column_if_missing('sponsor_programs', 'student_scholarship_amount', 'decimal(12,2) NOT NULL DEFAULT ''10000.00''', 'school_impact_grant_amount');
 CALL add_column_if_missing('sponsor_programs', 'educator_award_label', 'varchar(220) NOT NULL', 'student_scholarship_amount');
-CALL add_column_if_missing('sponsor_programs', 'age_range', 'varchar(40) NOT NULL DEFAULT ''11-19''', 'educator_award_label');
+CALL add_column_if_missing('sponsor_programs', 'age_range', 'varchar(40) NOT NULL DEFAULT ''10-20''', 'educator_award_label');
 CALL add_column_if_missing('sponsor_programs', 'grade_range', 'varchar(40) NOT NULL DEFAULT ''6-12''', 'age_range');
 CALL add_column_if_missing('sponsor_programs', 'is_active', 'tinyint(1) NOT NULL DEFAULT ''0''', 'grade_range');
 CALL add_column_if_missing('sponsor_programs', 'created_at', 'timestamp NULL DEFAULT CURRENT_TIMESTAMP', 'is_active');
@@ -1839,6 +1839,13 @@ CREATE TABLE IF NOT EXISTS sponsor_application_messages (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   KEY idx_sam_app (application_id, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Eligibility widened from ages 11-19 to 10-20. The column default only applies
+-- to new rows, so rewrite the programs already stored (and the prose that
+-- repeats the range). Idempotent: matches only rows still holding the old value.
+UPDATE sponsor_programs SET age_range = '10-20' WHERE age_range = '11-19';
+UPDATE sponsor_programs SET subheadline = REPLACE(subheadline, '11–19', '10–20') WHERE subheadline LIKE '%11–19%';
+UPDATE sponsor_programs SET subheadline = REPLACE(subheadline, '11-19', '10-20') WHERE subheadline LIKE '%11-19%';
 
 DROP PROCEDURE IF EXISTS add_column_if_missing;
 SET FOREIGN_KEY_CHECKS = 1;

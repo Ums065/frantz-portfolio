@@ -626,7 +626,7 @@ const RECORD_DEFS: Record<RecordEntity, RecordDef> = {
 const participantCards = [
   {
     kicker: 'Open To',
-    title: 'Students Ages 11-19',
+    title: 'Students Ages 10-20',
     detail: 'Lead the interviews, identify a community problem, and build the final solution.',
   },
   {
@@ -720,7 +720,7 @@ const coreValues = [
 const challengeFaqItems = [
   {
     question: "Who can participate?",
-    answer: "Students ages 11-19 in grades 6-12 can join, with parent and school support where required.",
+    answer: "Students ages 10-20 in grades 6-12 can join, with parent and school support where required.",
   },
   {
     question: "What do students do?",
@@ -2102,7 +2102,7 @@ export default function NewSchool() {
   const grantAmount = Number(challenge.school_grant_amount ?? 25000)
   const scholarshipMax = Number(challenge.student_scholarship_max_amount ?? 10000)
   const educatorAwardLabel = String(challenge.educator_award_label || 'All-Inclusive Educator Vacation Award')
-  const ageRange = String(challenge.age_range || '11-19')
+  const ageRange = String(challenge.age_range || '10-20')
   const gradeRange = String(challenge.grade_range || '6-12')
   const totalAwardsLabel = String(challenge.total_awards_label || '$100,000')
   const awardHighlights = [

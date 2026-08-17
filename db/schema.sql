@@ -276,7 +276,7 @@ CREATE TABLE IF NOT EXISTS sponsor_programs (
   school_impact_grant_amount   DECIMAL(12,2) NOT NULL DEFAULT 25000.00,
   student_scholarship_amount   DECIMAL(12,2) NOT NULL DEFAULT 10000.00,
   educator_award_label         VARCHAR(220) NOT NULL,
-  age_range                    VARCHAR(40) NOT NULL DEFAULT '11-19',
+  age_range                    VARCHAR(40) NOT NULL DEFAULT '10-20',
   grade_range                  VARCHAR(40) NOT NULL DEFAULT '6-12',
   is_active                    TINYINT(1) NOT NULL DEFAULT 0,
   created_at                   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
