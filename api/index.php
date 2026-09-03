@@ -702,7 +702,44 @@ try {
             $stmt->execute([(int) $m[1]]);
             $post = $stmt->fetch();
             if (!$post) json(['error' => 'Post not found.'], 404);
+            // Counters, plus whether this visitor already called it a good read.
+            $post['engagement'] = post_engagement_for((int) $m[1], (string) ($_GET['v'] ?? ''));
             json(['post' => $post]);
+        }
+        /* ---- Blog engagement: opens, dwell time, "Good Read" ---- */
+        case $method === 'POST' && preg_match('#^posts/(\d+)/read$#', $route, $m) === 1: {
+            post_engagement_ensure_schema();
+            rate_limit('post_read_open', 120, 3600);
+            $b = body();
+            $id = (int) $m[1];
+            $exists = db()->prepare('SELECT 1 FROM posts WHERE id = ? LIMIT 1');
+            $exists->execute([$id]);
+            if (!$exists->fetchColumn()) json(['error' => 'Post not found.'], 404);
+            $readId = post_read_open($id, (string) field($b, 'visitor'), (string) field($b, 'referrer'));
+            json(['read_id' => $readId], 201);
+        }
+        // Sent by sendBeacon as the reader leaves, so it must stay cheap and quiet.
+        case $method === 'POST' && preg_match('#^posts/(\d+)/read-time$#', $route, $m) === 1: {
+            post_engagement_ensure_schema();
+            $b = body();
+            post_read_report(
+                (int) ($b['read_id'] ?? 0), (int) $m[1], (string) field($b, 'visitor'),
+                (int) ($b['seconds'] ?? 0), !empty($b['reached_end'])
+            );
+            json(['ok' => true]);
+        }
+        case $method === 'POST' && preg_match('#^posts/(\d+)/like$#', $route, $m) === 1: {
+            post_engagement_ensure_schema();
+            rate_limit('post_like', 60, 3600);
+            $id = (int) $m[1];
+            $exists = db()->prepare('SELECT 1 FROM posts WHERE id = ? LIMIT 1');
+            $exists->execute([$id]);
+            if (!$exists->fetchColumn()) json(['error' => 'Post not found.'], 404);
+            json(post_like_toggle($id, (string) field(body(), 'visitor')));
+        }
+        case $key === 'GET admin/posts/analytics': {
+            require_admin();
+            json(['posts' => post_engagement_report()]);
         }
 
         /* ---------------- FORMS ---------------- */

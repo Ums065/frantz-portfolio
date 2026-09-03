@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
-import { api, type AnalyticsPayload, type AwardRow, type CommunityCommentRow, type CommunityThreadRow, type EventItem, type EventRsvpRow, type InventoryRow, type MediaRow, type PostDetail, type ProductVisibility, type TestimonialRow, type User } from '../lib/api'
+import { api, type AnalyticsPayload, type AwardRow, type CommunityCommentRow, type CommunityThreadRow, type EventItem, type EventRsvpRow, type InventoryRow, type MediaRow, type PostDetail, type PostStat, readTime, type ProductVisibility, type TestimonialRow, type User } from '../lib/api'
 import { useAuth } from '../context/AuthContext'
 import { useSeo } from '../hooks/useSeo'
 import { useLiveRefresh } from '../hooks/useLiveRefresh'
@@ -2706,8 +2706,12 @@ function PostsAdmin() {
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
 
+  // How many opened it, how long they stayed, and who called it a good read.
+  const [stats, setStats] = useState<Record<number, PostStat>>({})
   const load = () => api.get<{ posts: PostDetail[] }>('admin/posts').then((d) => setRows(d.posts)).catch(() => {})
-  useEffect(() => { load() }, [])
+  const loadStats = () => api.get<{ posts: PostStat[] }>('admin/posts/analytics')
+    .then((d) => setStats(Object.fromEntries((d.posts || []).map((s) => [s.id, s])))).catch(() => {})
+  useEffect(() => { load(); loadStats() }, [])
   const set = (patch: Partial<PostDetail>) => setEditing((e) => (e ? { ...e, ...patch } : e))
 
   const save = async (e: React.FormEvent) => {
@@ -2732,21 +2736,40 @@ function PostsAdmin() {
         <p style={{ color: 'var(--muted)', fontSize: 13 }}>{rows.length} articles · shown on the Blog page &amp; home</p>
         <button className="btn btn--sm btn--solid" onClick={() => setEditing({ ...emptyPost })}>+ Add Article</button>
       </div>
-      <Table stack head={['', 'Title', 'Category', 'Featured', 'Published', 'Actions']}>
-        {rows.map((p) => (
+      <Table stack head={['', 'Title', 'Category', 'Readers', 'Time on page', 'Good reads', 'Published', 'Actions']}>
+        {rows.map((p) => {
+          const s = stats[p.id]
+          return (
           <tr key={p.id} style={rowS}>
-            <td style={tdS}>{p.cover_image ? <img src={p.cover_image} alt={p.title ? `${p.title} cover` : 'Post cover'} style={{ width: 52, height: 32, objectFit: 'cover', borderRadius: 4 }} /> : '—'}</td>
-            <td style={tdS} data-label="Title">{p.title}</td>
+            <td style={tdS}>{p.cover_image ? <img src={p.cover_image} alt={p.title ? `${p.title} cover` : 'Post cover'} style={{ width: 52, height: 32, objectFit: 'contain', borderRadius: 4, background: '#0b0b0b' }} /> : '—'}</td>
+            <td style={tdS} data-label="Title">{p.title}{p.is_featured ? <span style={{ color: 'var(--gold)' }}> ★</span> : null}</td>
             <td style={tdS} data-label="Category">{p.category || '—'}</td>
-            <td style={tdS} data-label="Featured">{p.is_featured ? '★' : '—'}</td>
+            <td style={tdS} data-label="Readers">
+              {s ? <><strong>{s.reads}</strong> read<div style={{ fontSize: 11.5, color: 'var(--muted)' }}>{s.readers} people · {s.opens} opens</div></> : '—'}
+            </td>
+            <td style={tdS} data-label="Time on page">
+              {s && Number(s.avg_seconds) > 0
+                ? <><strong>{readTime(Number(s.avg_seconds))}</strong> avg
+                    <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>
+                      {s.opens > 0 ? Math.round((Number(s.finished) / Number(s.opens)) * 100) : 0}% reached the end
+                    </div></>
+                : <span style={{ color: 'var(--muted)' }}>no reads yet</span>}
+            </td>
+            <td style={tdS} data-label="Good reads">{s && Number(s.likes) > 0 ? <strong style={{ color: 'var(--gold-light)' }}>{s.likes}</strong> : '—'}</td>
             <td style={tdS} data-label="Published">{p.published_at}</td>
             <td style={tdS}><div style={{ display: 'flex', gap: 6 }}>
               <button className="btn btn--sm" onClick={() => setEditing(p)}>Edit</button>
               <button className="btn btn--sm" onClick={() => remove(p.id)} style={{ borderColor: '#7a3b3b', color: '#e08a8a' }}>Delete</button>
             </div></td>
           </tr>
-        ))}
+          )
+        })}
       </Table>
+      <p style={{ color: 'var(--muted)', fontSize: 12, marginTop: 10, lineHeight: 1.6 }}>
+        Reading figures are anonymous — no account, no names, just a random id the browser keeps.
+        Time is counted only while the tab is in front of the reader, and an open under 3 seconds is
+        treated as a bounce rather than a read.
+      </p>
 
       {editing && (
         <div className="modal-overlay open" onClick={(e) => e.target === e.currentTarget && setEditing(null)}>

@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { api, type PostDetail } from '../lib/api'
 import { isSavedItem, toggleSavedItem } from '../lib/memberStorage'
 import { useSeo } from '../hooks/useSeo'
+import { GoodRead, ShareRow, useReadTracking, visitorId } from '../components/ArticleEngagement'
 
 const cover = '/assets/abstract-gold-network.webp'
 const fmt = (d: string) => new Date(d + 'T00:00:00').toLocaleString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
@@ -42,13 +43,16 @@ export default function BlogPost() {
     setPost(null)
     setNotFound(false)
     setSaved(false)
-    api.get<{ post: PostDetail }>(`posts/${id}`)
+    // The visitor id lets the server say whether THIS reader already liked it.
+    api.get<{ post: PostDetail }>(`posts/${id}?v=${encodeURIComponent(visitorId())}`)
       .then((d) => {
         setPost(d.post)
         setSaved(isSavedItem('article', String(d.post.id)))
       })
       .catch(() => setNotFound(true))
   }, [id])
+  const bodyRef = useRef<HTMLDivElement | null>(null)
+  useReadTracking(post?.id, bodyRef)
 
   const toggle = () => {
     if (!post) return
@@ -80,7 +84,8 @@ export default function BlogPost() {
                   <span className="cat">{post.category}</span><span>&bull;</span><span>{fmt(post.published_at)}</span>
                 </div>
                 <h1 className="gold-text">{post.title}</h1>
-                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', margin: '0 0 24px' }}>
+                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', margin: '0 0 20px', alignItems: 'center' }}>
+                  <GoodRead postId={post.id} initial={post.engagement} />
                   <button className={saved ? 'btn btn--sm btn--solid' : 'btn btn--sm'} type="button" onClick={toggle}>
                     {saved ? 'Saved' : 'Save Article'}
                   </button>
@@ -88,11 +93,18 @@ export default function BlogPost() {
                     Request Update
                   </button>
                 </div>
-                <div className="legacy__photo" style={{ aspectRatio: '16/7', marginBottom: 30 }}>
-                  <img src={post.cover_image || cover} alt={post.title || 'Article cover'} loading="eager" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                <ShareRow title={post.title} url={`${window.location.origin}/blog/${post.id}`} compact />
+                {/* contain, not cover: the whole picture, never a cropped one. */}
+                <div className="post-cover">
+                  <img src={post.cover_image || cover} alt={post.title || 'Article cover'} loading="eager" decoding="async" />
                 </div>
-                <div className="post-article__body">
+                <div className="post-article__body" ref={bodyRef}>
                   {(post.body || post.excerpt).split('\n\n').map((para, i) => <p key={i}>{para}</p>)}
+                </div>
+                {/* Asked for again at the end, where someone who actually read it is. */}
+                <div className="post-endbar">
+                  <GoodRead postId={post.id} initial={post.engagement} />
+                  <ShareRow title={post.title} url={`${window.location.origin}/blog/${post.id}`} />
                 </div>
               </>
             )}

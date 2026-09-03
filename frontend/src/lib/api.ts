@@ -154,6 +154,8 @@ export const api = {
     request<T>(path, { method: 'PUT', body: JSON.stringify(body) }),
   del: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
   upload,
+  /** Absolute API root, for sendBeacon and other raw fetches. */
+  base: BASE,
 }
 
 /* Records one page view for the admin Analytics traffic panel. First-party only:
@@ -238,8 +240,16 @@ export interface Post {
   published_at: string
 }
 
+export interface PostEngagement {
+  likes: number
+  liked: boolean
+  reads: number
+  readers: number
+}
+
 export interface PostDetail extends Post {
   body: string
+  engagement?: PostEngagement
 }
 
 export interface AwardRow {
@@ -614,4 +624,28 @@ export interface AuthPayload {
   verification_email_sent?: boolean
   impersonating?: boolean
   impersonator?: Impersonator | null
+}
+
+/** Per-article reading figures for the admin blog table. */
+export interface PostStat {
+  id: number
+  title: string
+  category: string | null
+  published_at: string | null
+  opens: number
+  reads: number
+  readers: number
+  avg_seconds: number
+  max_seconds: number
+  finished: number
+  likes: number
+}
+
+/** "1m 40s" / "45s" — dwell time in words rather than raw seconds. */
+export function readTime(seconds: number): string {
+  const s = Math.max(0, Math.round(seconds))
+  if (s < 60) return `${s}s`
+  const m = Math.floor(s / 60)
+  const r = s % 60
+  return r === 0 ? `${m}m` : `${m}m ${r}s`
 }

@@ -131,7 +131,7 @@ function ensure_session_version_column(): void
  * request after a deploy, db_auto_migrate() notices the stored version is behind
  * and runs every *_ensure_schema() once; afterwards it's a single cheap SELECT.
  */
-const APP_SCHEMA_VERSION = 20260816; // yyyymmdd + seq — raise on each schema change
+const APP_SCHEMA_VERSION = 20260817; // yyyymmdd + seq — raise on each schema change
 
 /**
  * One-shot, version-gated auto-migration. Runs on app bootstrap: if the DB's
@@ -167,7 +167,7 @@ function db_auto_migrate(): void
                     'ecosystem_ensure_schema', 'ecosystem_shared_ensure_schema', 'referral_ensure_schema',
                     'mail_queue_ensure_schema', 'password_reset_ensure_schema', 'research_ensure_schema',
                     'sponsor_jobs_ensure_schema', 'events_ensure_schema', 'fellow_ops_ensure_schema',
-                    'donations_ensure_schema', 'fellow_school_calls_ensure_schema',
+                    'donations_ensure_schema', 'fellow_school_calls_ensure_schema', 'post_engagement_ensure_schema',
                 ] as $fn) {
                     if (function_exists($fn)) {
                         try { $fn(); } catch (Throwable $e) { if (app_debug()) error_log("db_auto_migrate $fn: " . $e->getMessage()); }
@@ -10913,4 +10913,135 @@ function research_bulk_import(int $fellowUserId, string $category, array $rows):
         $n++;
     }
     return $n;
+}
+
+/* ==================== Blog engagement: reads, dwell time, "Good Read" ====================
+ * Three questions the blog could not answer: how many people opened an article,
+ * how long they actually stayed, and whether they liked it. Everything is keyed
+ * on a random visitor id the browser keeps in localStorage - hashed before it is
+ * stored - so no account is needed and nothing identifying is kept.
+ */
+
+/** One-way, per-install key so a stored hash cannot be matched back to a device. */
+function post_visitor_hash(string $raw): string
+{
+    $raw = trim($raw);
+    if ($raw === '' || strlen($raw) > 128) return '';
+    return hash_hmac('sha256', $raw, (string) env('APP_KEY', 'fc-blog-salt'));
+}
+
+function post_engagement_ensure_schema(): void
+{
+    static $ready = false;
+    if ($ready) return;
+    try {
+        db()->exec("CREATE TABLE IF NOT EXISTS post_reads (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            post_id INT NOT NULL,
+            visitor_hash CHAR(64) NOT NULL,
+            seconds INT NOT NULL DEFAULT 0,
+            reached_end TINYINT(1) NOT NULL DEFAULT 0,
+            referrer VARCHAR(255) DEFAULT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_reads_post (post_id, created_at),
+            INDEX idx_reads_visitor (post_id, visitor_hash)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        db()->exec("CREATE TABLE IF NOT EXISTS post_likes (
+            post_id INT NOT NULL,
+            visitor_hash CHAR(64) NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (post_id, visitor_hash)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    } catch (Throwable $e) { if (app_debug()) error_log('post_engagement_ensure_schema: ' . $e->getMessage()); }
+    $ready = true;
+}
+
+/** Open a read and return its id, so later time reports update THAT row rather
+ *  than inflating the count every few seconds. */
+function post_read_open(int $postId, string $visitor, string $referrer = ''): int
+{
+    post_engagement_ensure_schema();
+    $h = post_visitor_hash($visitor);
+    if ($h === '') return 0;
+    $s = db()->prepare('INSERT INTO post_reads (post_id, visitor_hash, referrer) VALUES (?,?,?)');
+    $s->execute([$postId, $h, mb_substr(trim($referrer), 0, 255) ?: null]);
+    return (int) db()->lastInsertId();
+}
+
+/** Report time spent. Only ever raises the figure, and is capped: a tab left
+ *  open overnight is not a two-hour read. */
+function post_read_report(int $readId, int $postId, string $visitor, int $seconds, bool $reachedEnd): void
+{
+    post_engagement_ensure_schema();
+    $h = post_visitor_hash($visitor);
+    if ($h === '' || $readId <= 0) return;
+    $seconds = max(0, min(3600, $seconds));
+    db()->prepare('UPDATE post_reads SET seconds = GREATEST(seconds, ?), reached_end = GREATEST(reached_end, ?)
+        WHERE id = ? AND post_id = ? AND visitor_hash = ?')
+        ->execute([$seconds, $reachedEnd ? 1 : 0, $readId, $postId, $h]);
+}
+
+/** Toggle a "Good Read". Returns the new state and the count. */
+function post_like_toggle(int $postId, string $visitor): array
+{
+    post_engagement_ensure_schema();
+    $h = post_visitor_hash($visitor);
+    if ($h === '') json(['error' => 'Could not register that.'], 422);
+    $chk = db()->prepare('SELECT 1 FROM post_likes WHERE post_id = ? AND visitor_hash = ? LIMIT 1');
+    $chk->execute([$postId, $h]);
+    if ($chk->fetchColumn()) {
+        db()->prepare('DELETE FROM post_likes WHERE post_id = ? AND visitor_hash = ?')->execute([$postId, $h]);
+        $liked = false;
+    } else {
+        db()->prepare('INSERT IGNORE INTO post_likes (post_id, visitor_hash) VALUES (?,?)')->execute([$postId, $h]);
+        $liked = true;
+    }
+    return ['liked' => $liked, 'likes' => post_like_count($postId)];
+}
+
+function post_like_count(int $postId): int
+{
+    post_engagement_ensure_schema();
+    $s = db()->prepare('SELECT COUNT(*) FROM post_likes WHERE post_id = ?');
+    $s->execute([$postId]);
+    return (int) $s->fetchColumn();
+}
+
+/** Public counters for one article, plus whether THIS visitor already liked it. */
+function post_engagement_for(int $postId, string $visitor = ''): array
+{
+    post_engagement_ensure_schema();
+    $h = post_visitor_hash($visitor);
+    $liked = false;
+    if ($h !== '') {
+        $s = db()->prepare('SELECT 1 FROM post_likes WHERE post_id = ? AND visitor_hash = ? LIMIT 1');
+        $s->execute([$postId, $h]);
+        $liked = (bool) $s->fetchColumn();
+    }
+    $v = db()->prepare('SELECT COUNT(*) AS reads, COUNT(DISTINCT visitor_hash) AS readers FROM post_reads WHERE post_id = ?');
+    $v->execute([$postId]);
+    $r = $v->fetch() ?: [];
+    return [
+        'likes' => post_like_count($postId),
+        'liked' => $liked,
+        'reads' => (int) ($r['reads'] ?? 0),
+        'readers' => (int) ($r['readers'] ?? 0),
+    ];
+}
+
+/** Admin: per-article opens, real reads, unique readers, dwell time, finish rate
+ *  and likes. Anything under 3 seconds is a bounce, not a read. */
+function post_engagement_report(): array
+{
+    post_engagement_ensure_schema();
+    return db()->query("SELECT p.id, p.title, p.category, p.published_at,
+            (SELECT COUNT(*) FROM post_reads r WHERE r.post_id = p.id) AS opens,
+            (SELECT COUNT(*) FROM post_reads r WHERE r.post_id = p.id AND r.seconds >= 3) AS reads,
+            (SELECT COUNT(DISTINCT r.visitor_hash) FROM post_reads r WHERE r.post_id = p.id) AS readers,
+            (SELECT COALESCE(ROUND(AVG(r.seconds)),0) FROM post_reads r WHERE r.post_id = p.id AND r.seconds >= 3) AS avg_seconds,
+            (SELECT COALESCE(MAX(r.seconds),0) FROM post_reads r WHERE r.post_id = p.id) AS max_seconds,
+            (SELECT COUNT(*) FROM post_reads r WHERE r.post_id = p.id AND r.reached_end = 1) AS finished,
+            (SELECT COUNT(*) FROM post_likes l WHERE l.post_id = p.id) AS likes
+        FROM posts p ORDER BY opens DESC, p.published_at DESC")->fetchAll();
 }

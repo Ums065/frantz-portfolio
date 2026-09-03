@@ -997,3 +997,71 @@
   .feat-event__nav { width: 36px; height: 36px; }
   .feat-event__cd-unit { min-width: 40px; }
 }
+
+/* ---- Blog: whole picture, clickable, plus sharing and "Good read" ----
+   The card image used to be aspect-ratio 16/9 with object-fit:cover, which
+   cropped every cover that was not that shape. `contain` over the existing
+   gold backdrop shows the whole picture instead. */
+.blog-card__img { display: block; cursor: pointer; }
+.blog-card__img img { object-fit: contain; transition: transform .4s cubic-bezier(.2,.7,.3,1); }
+.blog-card:hover .blog-card__img img { transform: scale(1.04); }
+.blog-card__img:focus-visible { outline: 2px solid var(--gold); outline-offset: -2px; }
+.blog-card h3 a { color: inherit; }
+.blog-card h3 a:hover { color: var(--gold-light); }
+
+/* The article's own cover: never cropped either. */
+.post-cover {
+  aspect-ratio: 16/8; margin-bottom: 30px; border-radius: 14px; overflow: hidden;
+  border: 1px solid var(--line);
+  background: radial-gradient(circle at 50% 30%, rgba(201,168,76,0.12), #0b0b0b);
+  display: flex; align-items: center; justify-content: center;
+}
+.post-cover img { width: 100%; height: 100%; object-fit: contain; }
+
+.share-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.share-row__label {
+  font-size: 10.5px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; color: var(--muted);
+}
+.share-row__btns { display: flex; gap: 7px; flex-wrap: wrap; }
+.share-btn {
+  display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 999px;
+  border: 1px solid rgba(201,168,76,.24); background: rgba(255,255,255,.02); color: var(--muted);
+  font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit;
+  transition: color .18s ease, border-color .18s ease, background .18s ease, transform .18s ease;
+}
+.share-btn:hover { color: var(--gold-light); border-color: rgba(201,168,76,.55); background: rgba(201,168,76,.07); transform: translateY(-1px); }
+.share-btn:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.share-btn--native { background: rgba(201,168,76,.12); color: var(--gold-light); border-color: rgba(201,168,76,.45); }
+/* On the cards the row has to stay small, so labels drop to icons only. */
+.share-row--compact .share-btn { padding: 6px 8px; }
+.share-row--compact .share-btn span { display: none; }
+
+.goodread {
+  display: inline-flex; align-items: center; gap: 7px; padding: 8px 15px; border-radius: 999px;
+  border: 1px solid rgba(201,168,76,.4); background: rgba(255,255,255,.02); color: var(--gold-light);
+  font-family: inherit; font-size: 12.5px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase;
+  cursor: pointer; transition: background .2s ease, border-color .2s ease, transform .2s ease;
+}
+.goodread em {
+  font-style: normal; font-size: 11px; font-weight: 900; padding: 1px 7px; border-radius: 999px;
+  background: rgba(201,168,76,.2);
+}
+.goodread:hover { background: rgba(201,168,76,.12); transform: translateY(-1px); }
+.goodread.is-on { background: var(--gold-grad); border-color: transparent; color: #1a1308; }
+.goodread.is-on em { background: rgba(0,0,0,.2); }
+.goodread:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.goodread.is-pop { animation: goodread-pop .5s cubic-bezier(.2,.7,.3,1); }
+@keyframes goodread-pop { 0% { transform: scale(1) } 40% { transform: scale(1.11) } 100% { transform: scale(1) } }
+
+.post-endbar {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+  margin-top: 34px; padding-top: 22px; border-top: 1px solid var(--line);
+}
+@media (max-width: 560px) {
+  .post-endbar { flex-direction: column; align-items: stretch; }
+  .share-row--compact .share-btn { padding: 6px 7px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .blog-card__img img, .share-btn, .goodread { transition: none; }
+  .goodread.is-pop { animation: none; }
+}
