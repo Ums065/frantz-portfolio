@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { loadStripe, type Stripe as StripeJS, type StripeElements } from '@stripe/stripe-js'
 import { api } from '../lib/api'
 import { useAuth } from '../context/AuthContext'
 
 /* Online giving, on the same Stripe and PayPal accounts the store already uses.
-   Stripe takes the card on its own hosted page and PayPal approves in a popup,
-   so no card details ever touch this form or our servers.
+   Both are confirmed right in this form (a Stripe Payment Element for cards,
+   PayPal's own inline buttons) so no card details ever touch our servers and
+   the donor never leaves the page.
    Used by the public /donate page and by the partner/sponsor/media/volunteer
    portals, where the donor's name and organisation are already known. */
 
@@ -13,6 +15,7 @@ interface Config {
   stripe_enabled?: boolean
   paypal_enabled?: boolean
   paypal_client_id?: string
+  stripe_publishable_key?: string
   currency?: string
   designations: string[]
   org_legal_name: string
@@ -24,6 +27,12 @@ const money = (n: number, cur = 'usd') => new Intl.NumberFormat('en-US', { style
 
 declare global { interface Window { paypal?: any } }
 
+let stripePromise: Promise<StripeJS | null> | null = null
+function getStripe(publishableKey: string) {
+  if (!stripePromise) stripePromise = loadStripe(publishableKey)
+  return stripePromise
+}
+
 export default function DonateForm({ compact }: { compact?: boolean } = {}) {
   const { user } = useAuth()
   const [cfg, setCfg] = useState<Config | null>(null)
@@ -34,6 +43,13 @@ export default function DonateForm({ compact }: { compact?: boolean } = {}) {
   const [err, setErr] = useState('')
   const [done, setDone] = useState('')
   const [ppReady, setPpReady] = useState(false)
+  const [stripeIntent, setStripeIntent] = useState<{ donationNo: string; clientSecret: string; amount: number } | null>(null)
+  const [payingCard, setPayingCard] = useState(false)
+  const cardMountRef = useRef<HTMLDivElement | null>(null)
+  const stripeRef = useRef<StripeJS | null>(null)
+  const elementsRef = useRef<StripeElements | null>(null)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const paymentElementRef = useRef<any>(null)
 
   useEffect(() => {
     api.get<Config>('donate/config').then(setCfg).catch(() => setErr('Could not load the donation form.'))
@@ -52,14 +68,60 @@ export default function DonateForm({ compact }: { compact?: boolean } = {}) {
   const cur = cfg?.currency || 'usd'
   const canPay = value >= 1 && f.donor_name.trim() !== '' && f.email.trim() !== ''
 
-  /* Stripe: create the donation, then hand the browser to Stripe's page. */
-  const payByCard = async () => {
+  /* Stripe: create the donation + a PaymentIntent, then confirm the card right here (no redirect). */
+  const startCardPayment = async () => {
     setBusy(true); setErr('')
     try {
-      const r = await api.post<{ checkout_url: string }>('donate/checkout', { ...f, amount: value, provider: 'stripe' })
-      if (!r.checkout_url) throw new Error('Stripe did not return a checkout page.')
-      window.location.href = r.checkout_url
-    } catch (e) { setErr(e instanceof Error ? e.message : 'Could not start the payment.'); setBusy(false) }
+      const r = await api.post<{ donation_no: string; client_secret: string }>('donate/checkout', { ...f, amount: value, provider: 'stripe' })
+      if (!r.client_secret) throw new Error('Stripe did not return a payment.')
+      setStripeIntent({ donationNo: r.donation_no, clientSecret: r.client_secret, amount: value })
+    } catch (e) { setErr(e instanceof Error ? e.message : 'Could not start the payment.') } finally { setBusy(false) }
+  }
+
+  // Mount the Stripe Payment Element as soon as we have a client secret + the card mount point.
+  useEffect(() => {
+    if (!stripeIntent || !cfg?.stripe_publishable_key) return
+    let cancelled = false
+    getStripe(cfg.stripe_publishable_key).then((stripe) => {
+      if (cancelled || !stripe || !cardMountRef.current) return
+      const elements = stripe.elements({ clientSecret: stripeIntent.clientSecret })
+      const paymentElement = elements.create('payment')
+      paymentElement.mount(cardMountRef.current)
+      stripeRef.current = stripe
+      elementsRef.current = elements
+      paymentElementRef.current = paymentElement
+    })
+    return () => {
+      cancelled = true
+      paymentElementRef.current?.unmount()
+      paymentElementRef.current = null
+      elementsRef.current = null
+    }
+  }, [stripeIntent, cfg?.stripe_publishable_key])
+
+  // Editing the amount/name/email after starting a card payment would pay the OLD
+  // values while showing the NEW ones — invalidate the in-progress intent instead.
+  useEffect(() => {
+    setStripeIntent((cur) => (cur ? null : cur))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value, f.donor_name, f.email, f.designation])
+
+  const payWithStripe = async () => {
+    if (!stripeRef.current || !elementsRef.current || !stripeIntent) return
+    setPayingCard(true); setErr('')
+    try {
+      const { error, paymentIntent } = await stripeRef.current.confirmPayment({
+        elements: elementsRef.current,
+        redirect: 'if_required',
+      })
+      if (error) throw new Error(error.message || 'Card payment failed.')
+      if (!paymentIntent || paymentIntent.status !== 'succeeded') throw new Error('Payment was not completed.')
+      const r = await api.post<{ message: string }>('donate/confirm-stripe-intent', {
+        donation_no: stripeIntent.donationNo,
+        payment_intent_id: paymentIntent.id,
+      })
+      setDone(r.message || 'Thank you — your donation is confirmed.')
+    } catch (e) { setErr(e instanceof Error ? e.message : 'Card payment failed.') } finally { setPayingCard(false) }
   }
 
   /* PayPal: load their SDK once, then approve in their popup and capture here. */
@@ -164,9 +226,18 @@ export default function DonateForm({ compact }: { compact?: boolean } = {}) {
         </div>
         <div style={{ display: 'grid', gap: 10, flex: '1 1 240px' }}>
           {cfg?.stripe_enabled && (
-            <button className="btn btn--solid" disabled={!canPay || busy} onClick={payByCard}>
-              {busy ? 'Opening secure checkout…' : 'Give by card'}
-            </button>
+            !stripeIntent ? (
+              <button className="btn btn--solid" disabled={!canPay || busy} onClick={startCardPayment}>
+                {busy ? 'Preparing secure payment…' : 'Give by card'}
+              </button>
+            ) : (
+              <div>
+                <div ref={cardMountRef} style={{ marginBottom: 12 }} />
+                <button className="btn btn--solid" disabled={payingCard} onClick={payWithStripe}>
+                  {payingCard ? 'Processing…' : `Give ${money(stripeIntent.amount, cur)} by card`}
+                </button>
+              </div>
+            )
           )}
           {cfg?.paypal_enabled && (
             <div>
@@ -184,7 +255,7 @@ export default function DonateForm({ compact }: { compact?: boolean } = {}) {
       </div>
 
       <p className="msub" style={{ fontSize: 11.5, marginTop: 10, lineHeight: 1.6 }}>
-        Card details are taken by Stripe on their own secure page and never reach our servers.
+        Card details are entered directly into Stripe's secure payment form and never reach our servers.
         {cfg && !cfg.receipts_complete && ' Your receipt will be issued immediately; the office will confirm the tax details on it.'}
       </p>
     </div>

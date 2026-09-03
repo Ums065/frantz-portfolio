@@ -1533,8 +1533,11 @@ function storefront_orders_has_column(string $column): bool
     }
 
     try {
-        $stmt = db()->prepare('SHOW COLUMNS FROM orders LIKE ?');
-        $stmt->execute([$column]);
+        $stmt = db()->prepare(
+            'SELECT 1 FROM information_schema.columns
+             WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?'
+        );
+        $stmt->execute(['orders', $column]);
         $cache[$column] = (bool) $stmt->fetch();
     } catch (Throwable $e) {
         $cache[$column] = false;
@@ -1681,6 +1684,40 @@ function storefront_stripe_checkout_session(array $items, array $order, array $c
     ];
 }
 
+/** Embedded card payment (no redirect): a PaymentIntent the browser confirms in-page via Stripe Elements. */
+function storefront_stripe_payment_intent(int $amountMinor, string $currency, array $metadata = []): array
+{
+    $payload = [
+        'amount' => $amountMinor,
+        'currency' => $currency,
+        'automatic_payment_methods[enabled]' => 'true',
+        // Card only, confirmed in-page — never hand the customer off to a redirect-based method.
+        'automatic_payment_methods[allow_redirects]' => 'never',
+    ];
+    foreach ($metadata as $k => $v) {
+        $payload["metadata[$k]"] = (string) $v;
+    }
+
+    $response = storefront_stripe_api_request('POST', '/v1/payment_intents', $payload);
+    if (!$response['ok'] || !is_array($response['data'])) {
+        $message = is_string($response['error']) && $response['error'] !== '' ? $response['error'] : 'Stripe payment could not be started.';
+        if (is_array($response['data']) && isset($response['data']['error']['message'])) {
+            $message = (string) $response['data']['error']['message'];
+        }
+        return ['ok' => false, 'error' => $message];
+    }
+
+    return [
+        'ok' => true,
+        'intent' => $response['data'],
+    ];
+}
+
+function storefront_stripe_payment_intent_detail(string $intentId): array
+{
+    return storefront_stripe_api_request('GET', '/v1/payment_intents/' . rawurlencode($intentId));
+}
+
 function storefront_stripe_checkout_session_detail(string $sessionId): array
 {
     return storefront_stripe_api_request('GET', '/v1/checkout/sessions/' . rawurlencode($sessionId) . '?expand[]=payment_intent');
@@ -1750,8 +1787,11 @@ function storefront_payment_config(): array
 {
     return [
         'methods' => storefront_payment_methods(),
+        'stripe_enabled' => storefront_stripe_enabled(),
+        'paypal_enabled' => storefront_paypal_enabled(),
         'currency' => storefront_currency(),
         'paypal_client_id' => storefront_paypal_enabled() ? storefront_paypal_client_id() : '',
+        'stripe_publishable_key' => storefront_stripe_enabled() ? trim((string) env('STRIPE_PUBLISHABLE_KEY', '')) : '',
     ];
 }
 

@@ -37,6 +37,12 @@ function load_env(string $path): void
             $last  = $val[strlen($val) - 1];
             if (($first === '"' && $last === '"') || ($first === "'" && $last === "'")) {
                 $val = substr($val, 1, -1);
+            } elseif ($first !== '"' && $first !== "'") {
+                // Unquoted value: an inline "  # comment" is not part of the value.
+                $hashPos = strpos($val, ' #');
+                if ($hashPos !== false) {
+                    $val = trim(substr($val, 0, $hashPos));
+                }
             }
         }
 

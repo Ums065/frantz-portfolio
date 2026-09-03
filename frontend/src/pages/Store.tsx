@@ -1,10 +1,19 @@
-﻿import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react'
-import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
+﻿import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
+import { Link, NavLink, useNavigate } from 'react-router-dom'
+import { loadStripe, type Stripe as StripeJS, type StripeElements } from '@stripe/stripe-js'
 import { api, type InventoryRow } from '../lib/api'
 import { useSeo } from '../hooks/useSeo'
 import { useJsonLd } from '../hooks/useJsonLd'
 import { BRAND_LOGO } from '../lib/brandAssets'
 import '../styles/store.css'
+
+declare global { interface Window { paypal?: any } }
+
+let stripePromise: Promise<StripeJS | null> | null = null
+function getStripe(publishableKey: string) {
+  if (!stripePromise) stripePromise = loadStripe(publishableKey)
+  return stripePromise
+}
 
 const LOGO = BRAND_LOGO
 const FALLBACK_IMAGE = '/assets/merch-collectible.webp'
@@ -326,7 +335,6 @@ export default function Store() {
     description: 'Admin-managed merch catalog with live, sold out, and upcoming product states.',
   })
 
-  const location = useLocation()
   const navigate = useNavigate()
   const [rows, setRows] = useState<InventoryRow[]>([])
   const [cart, setCart] = useState<CartLine[]>([])
@@ -339,8 +347,23 @@ export default function Store() {
   const [checkoutForm, setCheckoutForm] = useState<CheckoutForm>(emptyCheckoutForm)
   const [checkoutOpen, setCheckoutOpen] = useState(false)
   const [checkoutStep, setCheckoutStep] = useState<CheckoutStep>('details')
-  const [payCfg, setPayCfg] = useState<{ methods: string[]; currency: string; paypal_client_id: string }>({ methods: [], currency: 'usd', paypal_client_id: '' })
+  const [payCfg, setPayCfg] = useState<{ methods: string[]; currency: string; paypal_client_id: string; stripe_publishable_key: string }>({ methods: [], currency: 'usd', paypal_client_id: '', stripe_publishable_key: '' })
   const [provider, setProvider] = useState('')
+  const [stripeIntent, setStripeIntent] = useState<{ orderNo: string; clientSecret: string; amount: number } | null>(null)
+  const [creatingIntent, setCreatingIntent] = useState(false)
+  const [payingCard, setPayingCard] = useState(false)
+  const cardMountRef = useRef<HTMLDivElement | null>(null)
+  const stripeRef = useRef<StripeJS | null>(null)
+  const elementsRef = useRef<StripeElements | null>(null)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const paymentElementRef = useRef<any>(null)
+  const [ppReady, setPpReady] = useState(false)
+  const paypalOrderNoRef = useRef('')
+  // The PayPal Buttons instance is only ever created once (the ref node never
+  // remounts across steps), so its createOrder closure must read live values
+  // via refs rather than close over state that may go stale after "Back to Address".
+  const checkoutFormLiveRef = useRef(checkoutForm)
+  useEffect(() => { checkoutFormLiveRef.current = checkoutForm }, [checkoutForm])
   const [cartOpen, setCartOpen] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState<InventoryRow | null>(null)
   const [portraitByProduct, setPortraitByProduct] = useState<Record<string, boolean>>({})
@@ -440,47 +463,15 @@ export default function Store() {
     setCheckoutOpen(false)
     setCheckoutStep('details')
     setCartOpen(false)
+    setStripeIntent(null)
   }
 
   // Which payment providers are enabled (only those with keys configured).
   useEffect(() => {
-    api.get<{ methods: string[]; currency: string; paypal_client_id: string }>('store/payment-methods')
+    api.get<{ methods: string[]; currency: string; paypal_client_id: string; stripe_publishable_key: string }>('store/payment-methods')
       .then((cfg) => { setPayCfg(cfg); setProvider((p) => p || cfg.methods[0] || '') })
       .catch(() => {})
   }, [])
-
-  // Handle the return from a redirect provider (Stripe success, PayPal approve).
-  useEffect(() => {
-    const params = new URLSearchParams(location.search)
-    const mode = params.get('checkout')
-    const orderNo = params.get('order') || ''
-
-    if (mode === 'cancelled') {
-      setCheckoutNote('Checkout was cancelled. Your cart is still saved here.')
-      setCheckoutOpen(false)
-      setCheckoutStep('details')
-      return
-    }
-
-    let call: Promise<{ message: string; order_no: string; payment_status: string }> | null = null
-    if (mode === 'success' && params.get('session_id')) {
-      call = api.post('store/checkout/confirm', { session_id: params.get('session_id'), order_no: orderNo })
-    } else if (mode === 'paypal' && params.get('token')) {
-      call = api.post('store/checkout/paypal-capture', { order_no: orderNo, paypal_order_id: params.get('token') })
-    }
-    if (!call) return
-
-    let active = true
-    setCheckoutBusy(true)
-    setCheckoutError('')
-    call
-      .then((payload) => { if (active) finishSuccess(payload.order_no, payload.message) })
-      .catch((err) => { if (active) setCheckoutError(err instanceof Error ? err.message : 'Could not verify payment.') })
-      .finally(() => { if (active) setCheckoutBusy(false) })
-
-    return () => { active = false }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.search])
 
   useEffect(() => {
     const locked = cartOpen || checkoutOpen || !!selectedProduct
@@ -500,6 +491,8 @@ export default function Store() {
       return row ? { row, qty: line.qty } : null
     })
     .filter((item): item is { row: InventoryRow; qty: number } => Boolean(item))
+  const cartRowsLiveRef = useRef(cartRows)
+  cartRowsLiveRef.current = cartRows
 
   const subtotal = cartRows.reduce((sum, item) => sum + item.row.price * item.qty, 0)
   const shipping = subtotal >= 75 || subtotal === 0 ? 0 : 8
@@ -548,6 +541,7 @@ export default function Store() {
     if (checkoutBusy) return
     setCheckoutOpen(false)
     setCheckoutStep('details')
+    setStripeIntent(null)
   }
 
   const continueToPayment = () => {
@@ -607,33 +601,111 @@ export default function Store() {
     window.fcToast?.('Item removed from cart.')
   }
 
-  const handleCheckout = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    setCheckoutBusy(true)
+  /* Stripe: create the order + a PaymentIntent, then confirm the card in-page (no redirect). */
+  const createStripeIntent = async () => {
+    if (stripeIntent || creatingIntent) return
+    if (cartRows.length === 0) { setCheckoutError('Add at least one product before checkout.'); return }
+    setCreatingIntent(true)
     setCheckoutError('')
-    setCheckoutNote('')
-
     try {
-      if (cartRows.length === 0) {
-        throw new Error('Add at least one product before checkout.')
-      }
-      if (!provider) throw new Error('No payment method is available yet.')
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const response = await api.post<any>('store/checkout', {
+      const response = await api.post<{ order_no: string; client_secret: string; amount: number }>('store/checkout', {
         ...checkoutForm,
-        provider,
+        provider: 'stripe',
         address: combineAddress(checkoutForm),
         items: cartRows.map((item) => ({ id: item.row.product_id, qty: item.qty })),
       })
-
-      window.location.href = response.checkout_url
+      setStripeIntent({ orderNo: response.order_no, clientSecret: response.client_secret, amount: response.amount })
     } catch (err) {
       setCheckoutError(err instanceof Error ? err.message : 'Could not start checkout.')
     } finally {
-      setCheckoutBusy(false)
+      setCreatingIntent(false)
     }
   }
+
+  // Mount the Stripe Payment Element as soon as we have a client secret + the card mount point.
+  useEffect(() => {
+    if (!stripeIntent || !payCfg.stripe_publishable_key) return
+    let cancelled = false
+    getStripe(payCfg.stripe_publishable_key).then((stripe) => {
+      if (cancelled || !stripe || !cardMountRef.current) return
+      const elements = stripe.elements({ clientSecret: stripeIntent.clientSecret })
+      const paymentElement = elements.create('payment')
+      paymentElement.mount(cardMountRef.current)
+      stripeRef.current = stripe
+      elementsRef.current = elements
+      paymentElementRef.current = paymentElement
+    })
+    return () => {
+      cancelled = true
+      paymentElementRef.current?.unmount()
+      paymentElementRef.current = null
+      elementsRef.current = null
+    }
+  }, [stripeIntent, payCfg.stripe_publishable_key])
+
+  const payWithStripe = async () => {
+    if (!stripeRef.current || !elementsRef.current || !stripeIntent) return
+    setPayingCard(true)
+    setCheckoutError('')
+    try {
+      const { error, paymentIntent } = await stripeRef.current.confirmPayment({
+        elements: elementsRef.current,
+        redirect: 'if_required',
+      })
+      if (error) throw new Error(error.message || 'Card payment failed.')
+      if (!paymentIntent || paymentIntent.status !== 'succeeded') throw new Error('Payment was not completed.')
+      const res = await api.post<{ order_no: string; message: string }>('store/checkout/confirm-intent', {
+        order_no: stripeIntent.orderNo,
+        payment_intent_id: paymentIntent.id,
+      })
+      finishSuccess(res.order_no, res.message)
+    } catch (err) {
+      setCheckoutError(err instanceof Error ? err.message : 'Card payment failed.')
+    } finally {
+      setPayingCard(false)
+    }
+  }
+
+  /* PayPal: load their SDK once, then approve in their popup and capture here (no redirect). */
+  const mountStorePayPal = useCallback((node: HTMLDivElement | null) => {
+    if (!node || ppReady || !payCfg.paypal_client_id) return
+    const start = () => {
+      if (!window.paypal) return
+      setPpReady(true)
+      node.innerHTML = ''
+      window.paypal.Buttons({
+        style: { color: 'gold', shape: 'pill', label: 'pay' },
+        createOrder: async () => {
+          const form = checkoutFormLiveRef.current
+          const rows = cartRowsLiveRef.current
+          if (rows.length === 0) throw new Error('Add at least one product before checkout.')
+          const response = await api.post<{ order_no: string; paypal_order_id: string }>('store/checkout', {
+            ...form,
+            provider: 'paypal',
+            address: combineAddress(form),
+            items: rows.map((item) => ({ id: item.row.product_id, qty: item.qty })),
+          })
+          paypalOrderNoRef.current = response.order_no
+          return response.paypal_order_id
+        },
+        onApprove: async (data: { orderID: string }) => {
+          try {
+            const res = await api.post<{ order_no: string; message: string }>('store/checkout/paypal-capture', {
+              order_no: paypalOrderNoRef.current, paypal_order_id: data.orderID,
+            })
+            finishSuccess(res.order_no, res.message)
+          } catch (e) { setCheckoutError(e instanceof Error ? e.message : 'PayPal could not complete the payment.') }
+        },
+        onError: () => setCheckoutError('PayPal could not complete the payment.'),
+      }).render(node)
+    }
+    if (window.paypal) { start(); return }
+    const s = document.createElement('script')
+    s.src = `https://www.paypal.com/sdk/js?client-id=${encodeURIComponent(payCfg.paypal_client_id)}&currency=${(payCfg.currency || 'usd').toUpperCase()}&intent=capture`
+    s.onload = start
+    document.body.appendChild(s)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [payCfg, ppReady])
 
   return (
     <div className="store-page merch-preview">
@@ -929,7 +1001,7 @@ export default function Store() {
         </div>
 
         <div className="wrap">
-          <form className="checkout__body" ref={checkoutFormRef} onSubmit={handleCheckout}>
+          <form className="checkout__body" ref={checkoutFormRef} onSubmit={(e) => e.preventDefault()}>
             <div style={{ display: 'grid', gap: '24px' }}>
               <section className={`co-pane${checkoutStep === 'details' ? ' active' : ''}`}>
                 <div className="co-h">
@@ -986,6 +1058,7 @@ export default function Store() {
                       key={m}
                       className={`pay-m${provider === m ? ' active' : ''}`}
                       onClick={() => setProvider(m)}
+                      disabled={creatingIntent || payingCard}
                       style={{ cursor: 'pointer', background: 'none', font: 'inherit', color: 'inherit' }}
                     >
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 10h18" /></svg>
@@ -993,14 +1066,40 @@ export default function Store() {
                     </button>
                   ))}
                 </div>
-                <p style={{ color: 'var(--muted)', fontSize: 12.5, lineHeight: 1.7, margin: '0 0 20px' }}>
-                  Review the shipping address above, then proceed to the secure hosted payment page.
-                </p>
+
+                {provider === 'stripe' && (
+                  <div style={{ margin: '0 0 20px' }}>
+                    {!stripeIntent ? (
+                      <>
+                        <p style={{ color: 'var(--muted)', fontSize: 12.5, lineHeight: 1.7, margin: '0 0 16px' }}>
+                          Review the shipping address above, then continue to enter your card details securely below.
+                        </p>
+                        <button type="button" className="btn btn--solid" disabled={creatingIntent || cartRows.length === 0} onClick={createStripeIntent}>
+                          {creatingIntent ? 'Preparing secure payment…' : 'Continue to Card Details'}
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <div ref={cardMountRef} style={{ marginBottom: 16 }} />
+                        <button type="button" className="btn btn--solid" disabled={payingCard} onClick={payWithStripe}>
+                          {payingCard ? 'Processing…' : `Pay ${formatMoney(stripeIntent.amount)}`}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {provider === 'paypal' && (
+                  <div style={{ margin: '0 0 20px' }}>
+                    <p style={{ color: 'var(--muted)', fontSize: 12.5, lineHeight: 1.7, margin: '0 0 16px' }}>
+                      Review the shipping address above, then approve the payment with PayPal below.
+                    </p>
+                    <div ref={mountStorePayPal} />
+                  </div>
+                )}
+
                 <div className="co-actions">
-                  <button className="btn btn--ghost" type="button" onClick={() => setCheckoutStep('details')} disabled={checkoutBusy}>Back to Address</button>
-                  <button className="btn btn--solid" type="submit" disabled={checkoutBusy || cartRows.length === 0 || !provider}>
-                    {checkoutBusy ? 'Processing…' : 'Proceed to Payment'}
-                  </button>
+                  <button className="btn btn--ghost" type="button" onClick={() => { setStripeIntent(null); setCheckoutStep('details') }} disabled={checkoutBusy || creatingIntent || payingCard}>Back to Address</button>
                 </div>
               </section>
             </div>

@@ -1199,22 +1199,27 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
                 $sessionUrl = '';
 
                 if ($provider === 'stripe') {
-                    $checkout = storefront_stripe_checkout_session($normalizedItems, ['order_no' => $orderNo], $catalog, ['name' => $name, 'email' => $email]);
-                    if (!$checkout['ok']) { $pdo->rollBack(); json(['error' => (string) ($checkout['error'] ?? 'Could not create checkout session.')], 502); }
-                    $sessionId = (string) ($checkout['session']['id'] ?? '');
-                    $sessionUrl = (string) ($checkout['session']['url'] ?? '');
-                    if ($sessionId === '' || $sessionUrl === '') { $pdo->rollBack(); json(['error' => 'Stripe checkout session is missing a redirect URL.'], 502); }
-                    $response['mode'] = 'redirect';
-                    $response['checkout_url'] = $sessionUrl;
-                    $response['message'] = 'Redirecting to secure checkout.';
+                    $amountMinor = (int) round(((float) $totals['total']) * 100);
+                    $pi = storefront_stripe_payment_intent($amountMinor, $currency, ['order_no' => $orderNo]);
+                    if (!$pi['ok']) { $pdo->rollBack(); json(['error' => (string) ($pi['error'] ?? 'Could not start card payment.')], 502); }
+                    $sessionId = (string) ($pi['intent']['id'] ?? '');
+                    $clientSecret = (string) ($pi['intent']['client_secret'] ?? '');
+                    if ($sessionId === '' || $clientSecret === '') { $pdo->rollBack(); json(['error' => 'Stripe did not return a payment intent.'], 502); }
+                    $response['mode'] = 'inline';
+                    $response['client_secret'] = $clientSecret;
+                    $response['payment_intent_id'] = $sessionId;
+                    $response['amount'] = (float) $totals['total'];
+                    $response['currency'] = $currency;
+                    $response['message'] = 'Enter your card details to complete payment.';
                 } elseif ($provider === 'paypal') {
                     $pp = storefront_paypal_create_order((float) $totals['total'], $currency, $orderNo);
                     if (!$pp['ok'] || $pp['approve_url'] === '') { $pdo->rollBack(); json(['error' => (string) ($pp['error'] ?? 'PayPal order could not be created.')], 502); }
                     $sessionId = $pp['id'];
                     $sessionUrl = $pp['approve_url'];
-                    $response['mode'] = 'redirect';
+                    $response['mode'] = 'inline';
+                    $response['paypal_order_id'] = $sessionId;
                     $response['checkout_url'] = $sessionUrl;
-                    $response['message'] = 'Redirecting to PayPal.';
+                    $response['message'] = 'Approve the payment with PayPal.';
                 }
 
                 $update = $pdo->prepare('UPDATE orders SET payment_session_id = ?, payment_url = ?, payment_status = ?, updated_at = NOW() WHERE id = ?');
@@ -1279,6 +1284,38 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             $capCurrency = strtoupper((string) ($session['currency'] ?? ''));
             storefront_mark_order_paid($orderNo, 'stripe', 'stripe_checkout', $paymentIntentId !== '' ? $paymentIntentId : $sessionId, $sessionId, [
                 'expect_session' => $sessionId,
+                'amount_minor'   => $capAmtMinor,
+                'currency'       => $capCurrency,
+            ]);
+            json([
+                'message' => 'Payment confirmed.',
+                'order_no' => $orderNo,
+                'payment_status' => 'paid',
+            ]);
+        }
+
+        // Embedded card payment: confirm a PaymentIntent completed in-page (no redirect).
+        case $key === 'POST store/checkout/confirm-intent': {
+            $b = body();
+            $orderNo = field($b, 'order_no');
+            $intentId = field($b, 'payment_intent_id');
+            if ($orderNo === '' || $intentId === '') json(['error' => 'Missing payment reference.'], 422);
+            if (!storefront_stripe_enabled()) json(['error' => 'Card payments are not configured.'], 503);
+
+            storefront_ensure_orders_payment_schema();
+            $detail = storefront_stripe_payment_intent_detail($intentId);
+            if (!$detail['ok'] || !is_array($detail['data'])) {
+                json(['error' => 'Unable to verify the payment.'], 502);
+            }
+            $intent = $detail['data'];
+            if ((string) ($intent['status'] ?? '') !== 'succeeded') {
+                json(['error' => 'Payment has not been completed yet.'], 409);
+            }
+
+            $capAmtMinor = isset($intent['amount']) ? (int) $intent['amount'] : null;
+            $capCurrency = strtoupper((string) ($intent['currency'] ?? ''));
+            storefront_mark_order_paid($orderNo, 'stripe', 'stripe_payment_element', $intentId, $intentId, [
+                'expect_session' => $intentId,
                 'amount_minor'   => $capAmtMinor,
                 'currency'       => $capCurrency,
             ]);
@@ -1357,31 +1394,24 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
                     !empty($b['is_anonymous']) ? 1 : 0, $provider]);
             $id = (int) db()->lastInsertId();
 
-            $base = storefront_public_base_url();
             if ($provider === 'stripe') {
                 if (!storefront_stripe_enabled()) json(['error' => 'Card payments are not configured.'], 503);
-                $res = storefront_stripe_api_request('POST', 'checkout/sessions', [
-                    'mode' => 'payment',
-                    'success_url' => $base . '/donate?donation=' . rawurlencode($no) . '&session_id={CHECKOUT_SESSION_ID}',
-                    'cancel_url' => $base . '/donate?cancelled=1',
-                    'customer_email' => $email,
-                    'client_reference_id' => $no,
-                    'line_items' => [[
-                        'quantity' => 1,
-                        'price_data' => [
-                            'currency' => $currency,
-                            'unit_amount' => (int) round($amount * 100),
-                            'product_data' => ['name' => 'Donation' . ($designation !== '' ? ' — ' . $designation : '')],
-                        ],
-                    ]],
+                $pi = storefront_stripe_payment_intent((int) round($amount * 100), $currency, [
+                    'donation_no' => $no,
+                    'designation' => $designation,
                 ]);
-                if (!$res['ok'] || empty($res['data']['id'])) {
+                if (!$pi['ok']) {
                     db()->prepare("UPDATE donations SET payment_status = 'failed', payment_error = ? WHERE id = ?")
-                        ->execute([mb_substr((string) ($res['error'] ?? 'Stripe error'), 0, 500), $id]);
+                        ->execute([mb_substr((string) ($pi['error'] ?? 'Stripe error'), 0, 500), $id]);
                     json(['error' => 'Could not start the card payment. Please try again.'], 502);
                 }
-                db()->prepare('UPDATE donations SET payment_session_id = ? WHERE id = ?')->execute([(string) $res['data']['id'], $id]);
-                json(['donation_no' => $no, 'provider' => 'stripe', 'checkout_url' => (string) ($res['data']['url'] ?? '')], 201);
+                $intentId = (string) ($pi['intent']['id'] ?? '');
+                $clientSecret = (string) ($pi['intent']['client_secret'] ?? '');
+                if ($intentId === '' || $clientSecret === '') {
+                    json(['error' => 'Stripe did not return a payment intent.'], 502);
+                }
+                db()->prepare('UPDATE donations SET payment_session_id = ? WHERE id = ?')->execute([$intentId, $id]);
+                json(['donation_no' => $no, 'provider' => 'stripe', 'client_secret' => $clientSecret, 'payment_intent_id' => $intentId], 201);
             }
             // PayPal: create the order, the browser approves, then we capture.
             if (!storefront_paypal_enabled()) json(['error' => 'PayPal is not configured.'], 503);
@@ -1409,6 +1439,28 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
                 'expect_session' => $sessionId,
                 'amount_minor' => isset($d['amount_total']) ? (int) $d['amount_total'] : null,
                 'currency' => (string) ($d['currency'] ?? ''),
+            ]);
+            if (!$res['already']) donation_issue_receipt($res['id']);
+            json(['message' => 'Thank you — your donation is confirmed.', 'donation_no' => $no]);
+        }
+        // Embedded card payment: confirm a PaymentIntent completed in-page (no redirect).
+        case $key === 'POST donate/confirm-stripe-intent': {
+            donations_ensure_schema();
+            $b = body();
+            $no = (string) field($b, 'donation_no');
+            $intentId = (string) field($b, 'payment_intent_id');
+            if ($no === '' || $intentId === '') json(['error' => 'Missing payment reference.'], 422);
+            if (!storefront_stripe_enabled()) json(['error' => 'Card payments are not configured.'], 503);
+            $detail = storefront_stripe_payment_intent_detail($intentId);
+            if (!$detail['ok'] || !is_array($detail['data'])) json(['error' => 'Unable to verify the payment.'], 502);
+            $intent = $detail['data'];
+            if ((string) ($intent['status'] ?? '') !== 'succeeded') {
+                json(['error' => 'Payment has not been completed yet.', 'status' => (string) ($intent['status'] ?? '')], 409);
+            }
+            $res = donation_mark_paid($no, 'stripe', $intentId, $intentId, [
+                'expect_session' => $intentId,
+                'amount_minor' => isset($intent['amount']) ? (int) $intent['amount'] : null,
+                'currency' => strtoupper((string) ($intent['currency'] ?? '')),
             ]);
             if (!$res['already']) donation_issue_receipt($res['id']);
             json(['message' => 'Thank you — your donation is confirmed.', 'donation_no' => $no]);
