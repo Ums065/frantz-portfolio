@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ReadingTime, ShareButton } from '../components/ArticleEngagement'
+import { GoodReadButton, ReadingTime, ShareButton, visitorId } from '../components/ArticleEngagement'
 import Pager from '../components/Pager'
 import { api, type Post } from '../lib/api'
 import { loadSavedItems, toggleSavedItem } from '../lib/memberStorage'
@@ -26,7 +26,7 @@ export default function Blog() {
 
   useEffect(() => { window.scrollTo(0, 0); setSavedArticles(loadSavedItems('article').map((i) => i.id)) }, [])
   useEffect(() => {
-    const params = new URLSearchParams({ page: String(page), per: String(per) })
+    const params = new URLSearchParams({ page: String(page), per: String(per), v: visitorId() })
     if (cat) params.set('category', cat)
     if (q.trim()) params.set('q', q.trim())
     const t = setTimeout(() => {
@@ -116,6 +116,7 @@ export default function Blog() {
                       >
                         {saved ? 'Saved' : 'Save'}
                       </button>
+                      <GoodReadButton postId={p.id} likes={Number(p.likes) || 0} liked={!!Number(p.liked)} compact />
                       <ShareButton title={p.title} url={`${window.location.origin}/blog/${p.id}`} postId={p.id} compact align="right" />
                     </div>
                   </div>

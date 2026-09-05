@@ -240,6 +240,9 @@ export interface Post {
   published_at: string
   /** Minutes to read the body, worked out by the server - the list has no body. */
   read_minutes?: number
+  /** Good Read count, and whether THIS visitor is one of them. */
+  likes?: number
+  liked?: number | boolean
 }
 
 export interface PostEngagement {

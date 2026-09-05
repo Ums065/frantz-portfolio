@@ -338,6 +338,19 @@ export function GoodRead({ state, compact }: { state: GoodReadState; compact?: b
   )
 }
 
+/** Self-contained Good Read, for a list where each card owns its own state.
+ *  The article page uses useGoodRead directly instead, because there the same
+ *  state has to drive two buttons. */
+export function GoodReadButton({ postId, likes, liked, compact }: {
+  postId: number
+  likes?: number
+  liked?: boolean
+  compact?: boolean
+}) {
+  const state = useGoodRead(postId, { likes: likes ?? 0, liked: !!liked, reads: 0, readers: 0 })
+  return <GoodRead state={state} compact={compact} />
+}
+
 /* ---------------- Reading time ---------------- */
 
 /** Rounded-up minutes at 200 words a minute — the usual reading pace. Shown

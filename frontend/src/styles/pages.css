@@ -368,7 +368,7 @@
    BLOG & EVENTS PAGES
    ============================================================ */
 .blog-list-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; }
-.blog-card { padding: 0; overflow: hidden; display: flex; flex-direction: column; }
+.blog-card { padding: 0; display: flex; flex-direction: column; }
 .blog-card__img { aspect-ratio: 16/9; overflow: hidden; border-bottom: 1px solid var(--line); background: radial-gradient(circle at 50% 30%, rgba(201,168,76,0.12), #0b0b0b); }
 .blog-card__img img { width: 100%; height: 100%; object-fit: cover; }
 .blog-card__body { padding: 20px 20px 22px; display: flex; flex-direction: column; flex-grow: 1; }
@@ -1214,3 +1214,13 @@ a.post__img { display: grid; }
 .my-apps__role a:hover { color: var(--gold-light); }
 .my-apps__role em { display: block; font-style: normal; color: var(--muted); font-size: 12px; }
 .my-apps__note { flex: 1 1 100%; color: var(--muted); font-size: 12.5px; padding-left: 2px; }
+
+/* The card used to clip its own overflow, which was fine when it held only
+   text — but the Share menu opens out of the card and was being cut in half
+   by it. The clipping belongs on the picture, which is the only thing that
+   needs rounding, so it moved there and the card lets the menu through. */
+.blog-card { overflow: visible; }
+.blog-card__img { border-radius: 16px 16px 0 0; }
+/* The action row wraps on a narrow card; the menu still opens above the rest. */
+.blog-card .item-actions { flex-wrap: wrap; gap: 8px; row-gap: 10px; align-items: center; }
+.blog-card .share, .blog-card .goodread { flex: 0 0 auto; }

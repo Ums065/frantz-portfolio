@@ -634,8 +634,13 @@ try {
             /* Paged and filterable on the server. Called with no parameters it
                still returns everything, because the home page and the prerender
                both rely on the whole list. */
+            post_engagement_ensure_schema();
+            /* Likes travel with the list so the card can show a working Good
+               Read button. The visitor hash is bound first because it sits in
+               the SELECT list, ahead of anything in the WHERE. */
+            $vh = post_visitor_hash((string) ($_GET['v'] ?? ''));
             $where = ['1=1'];
-            $args = [];
+            $args = [$vh];
             if (($cat = trim((string) ($_GET['category'] ?? ''))) !== '') { $where[] = 'category = ?'; $args[] = $cat; }
             if (($q = trim((string) ($_GET['q'] ?? ''))) !== '') {
                 $where[] = '(title LIKE ? OR excerpt LIKE ? OR category LIKE ?)';
@@ -650,18 +655,21 @@ try {
                every article while the article itself says six. Words counted by
                spaces at 200 a minute, the same rate the front end uses. */
             $mins = "GREATEST(1, CEIL((LENGTH(body) - LENGTH(REPLACE(body, ' ', '')) + 1) / 200)) AS read_minutes";
+            $likes = "(SELECT COUNT(*) FROM post_likes l WHERE l.post_id = posts.id) AS likes,
+                      EXISTS(SELECT 1 FROM post_likes l WHERE l.post_id = posts.id AND l.visitor_hash = ?) AS liked";
+            $cols = "id, title, category, excerpt, cover_image, is_featured, published_at, $mins, $likes";
             if (!isset($_GET['page']) && !isset($_GET['per'])) {
-                $s = db()->prepare("SELECT id, title, category, excerpt, cover_image, is_featured, published_at, $mins FROM posts WHERE $w $order");
+                $s = db()->prepare("SELECT $cols FROM posts WHERE $w $order");
                 $s->execute($args);
                 $rows = $s->fetchAll();
                 json(['posts' => $rows, 'total' => count($rows), 'categories' => $cats]);
             }
             $cnt = db()->prepare("SELECT COUNT(*) FROM posts WHERE $w");
-            $cnt->execute($args);
+            // The count has no SELECT-list placeholder, so drop the visitor hash.
+            $cnt->execute(array_slice($args, 1));
             $total = (int) $cnt->fetchColumn();
             ['per' => $per, 'page' => $page, 'offset' => $off] = page_window($_GET, 12);
-            $s = db()->prepare("SELECT id, title, category, excerpt, cover_image, is_featured, published_at, $mins
-                FROM posts WHERE $w $order LIMIT $per OFFSET $off");
+            $s = db()->prepare("SELECT $cols FROM posts WHERE $w $order LIMIT $per OFFSET $off");
             $s->execute($args);
             json(['posts' => $s->fetchAll(), 'total' => $total, 'page' => $page, 'per' => $per, 'categories' => $cats]);
         }
