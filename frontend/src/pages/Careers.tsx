@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
-import { api, type CareerApplicantState, type CareerJob, type CareerJobDetail } from '../lib/api'
+import { Link, useNavigate, useParams } from 'react-router-dom'
+import { api, type CareerApplicantState, type CareerJob, type CareerJobDetail, type CareerMyApplication } from '../lib/api'
 import { useAuth } from '../context/AuthContext'
 import { useSeo } from '../hooks/useSeo'
 import Pager from '../components/Pager'
@@ -140,6 +140,8 @@ export default function Careers() {
             </div>
           )}
 
+          {user && <MyApplications />}
+
           <div className="blog-filters">
             <input className="blog-search" type="search" value={q} placeholder="Search roles, skills or place…"
               aria-label="Search roles" onChange={(e) => { setQ(e.target.value); setPage(1) }} />
@@ -201,6 +203,55 @@ export default function Careers() {
           onApplied={() => { close(); load() }} />
       )}
     </main>
+  )
+}
+
+/* ---------------- What you have applied for ---------------- */
+
+/* Status changes are emailed, but an email is easy to miss and impossible to
+   go back to. Anyone signed in can see where each of their applications
+   stands, on the same page they applied from. Hidden entirely until there is
+   something in it, so the board stays clean for a first-time visitor. */
+function MyApplications() {
+  const [rows, setRows] = useState<CareerMyApplication[]>([])
+  const [open, setOpen] = useState(false)
+
+  useEffect(() => {
+    api.get<{ applications: CareerMyApplication[] }>('careers/my-applications')
+      .then((d) => setRows(d.applications || []))
+      .catch(() => setRows([]))
+  }, [])
+
+  if (rows.length === 0) return null
+  const live = rows.filter((r) => r.status === 'submitted' || r.status === 'shortlisted').length
+
+  return (
+    <div className="glass my-apps">
+      <button type="button" className="my-apps__head" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+        <span>
+          <strong>Your applications</strong>
+          <em>{rows.length} sent{live > 0 ? ` · ${live} still open` : ''}</em>
+        </span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+          style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .2s ease' }} aria-hidden="true">
+          <path d="M6 9l6 6 6-6" />
+        </svg>
+      </button>
+      {open && (
+        <ul className="my-apps__list">
+          {rows.map((r) => (
+            <li key={r.id}>
+              <span className={`career-tag career-tag--${r.status}`}>{r.status}</span>
+              <span className="my-apps__role">
+                <Link to={`/careers/${r.job_id}`}>{r.job_title}</Link>
+                <em>{r.org_name}{r.location ? ` · ${r.location}` : ''} · sent {fmtDate(r.created_at)}</em>
+              </span>
+              {r.admin_note && <span className="my-apps__note">{r.admin_note}</span>}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   )
 }
 

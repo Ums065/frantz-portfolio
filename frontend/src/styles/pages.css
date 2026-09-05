@@ -1173,3 +1173,18 @@ a.post__img { display: grid; }
 @media (prefers-reduced-motion: reduce) {
   .career-card.is-skeleton { animation: none; }
 }
+
+/* Your own applications, folded away above the board. */
+.my-apps { border-radius: 14px; margin: 0 0 18px; overflow: hidden; }
+.my-apps__head {
+  width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 14px 18px; background: none; border: 0; color: inherit; cursor: pointer; text-align: left;
+}
+.my-apps__head strong { display: block; font-size: 14px; }
+.my-apps__head em { font-style: normal; color: var(--muted); font-size: 12.5px; }
+.my-apps__list { list-style: none; margin: 0; padding: 0 18px 14px; display: flex; flex-direction: column; gap: 12px; }
+.my-apps__list li { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.my-apps__role a { color: inherit; text-decoration: none; font-weight: 600; font-size: 14px; }
+.my-apps__role a:hover { color: var(--gold-light); }
+.my-apps__role em { display: block; font-style: normal; color: var(--muted); font-size: 12px; }
+.my-apps__note { flex: 1 1 100%; color: var(--muted); font-size: 12.5px; padding-left: 2px; }

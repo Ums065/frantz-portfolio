@@ -731,3 +731,17 @@ export interface CareerJobAdmin extends CareerJobDetail {
   applications: number
   new_applications?: number
 }
+
+/** One row of "what you have applied for", on the careers page. */
+export interface CareerMyApplication {
+  id: number
+  job_id: number
+  job_title: string
+  org_name: string
+  employment_type: string
+  location: string | null
+  status: string
+  created_at: string
+  reviewed_at: string | null
+  admin_note: string | null
+}
