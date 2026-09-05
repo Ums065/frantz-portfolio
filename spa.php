@@ -91,10 +91,19 @@ try {
         // Single blog post — pull the real title/excerpt/cover/date from the DB.
         require_once __DIR__ . '/api/config.php';
         header('Content-Type: text/html; charset=utf-8'); // config.php sets JSON; restore HTML
+        /* A draft, or an article dated in the future, is not a page yet — it
+           must 404 for a crawler rather than being indexed early. The status
+           column is checked in PHP so this still works against a database that
+           has not run the migration (no column, everything live). */
         try {
-            $stmt = db()->prepare('SELECT title, excerpt, cover_image, published_at FROM posts WHERE id = ?');
+            $stmt = db()->prepare('SELECT * FROM posts WHERE id = ?');
             $stmt->execute([(int) $m[1]]);
             $post = $stmt->fetch() ?: null;
+            if ($post) {
+                $live = (string) ($post['status'] ?? 'published') === 'published'
+                    && (empty($post['published_at']) || substr((string) $post['published_at'], 0, 10) <= date('Y-m-d'));
+                if (!$live) $post = null;
+            }
         } catch (Throwable $e) { $post = null; $dbUnavailable = true; }
         if ($post) {
             $title = (string) $post['title'];

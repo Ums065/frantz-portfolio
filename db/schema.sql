@@ -147,6 +147,9 @@ CREATE TABLE IF NOT EXISTS posts (
   body        LONGTEXT,
   cover_image VARCHAR(255) DEFAULT NULL,
   is_featured TINYINT(1) NOT NULL DEFAULT 0,
+  -- 'draft' keeps an unfinished article off the site. With status 'published'
+  -- and a future published_at, the date is the go-live moment: it is scheduled.
+  status      VARCHAR(16) NOT NULL DEFAULT 'published',
   published_at DATE,
   created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;

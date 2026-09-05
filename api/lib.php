@@ -131,7 +131,7 @@ function ensure_session_version_column(): void
  * request after a deploy, db_auto_migrate() notices the stored version is behind
  * and runs every *_ensure_schema() once; afterwards it's a single cheap SELECT.
  */
-const APP_SCHEMA_VERSION = 20260905; // yyyymmdd + seq — raise on each schema change
+const APP_SCHEMA_VERSION = 20260906; // yyyymmdd + seq — raise on each schema change
 
 /**
  * One-shot, version-gated auto-migration. Runs on app bootstrap: if the DB's
@@ -167,7 +167,7 @@ function db_auto_migrate(): void
                     'ecosystem_ensure_schema', 'ecosystem_shared_ensure_schema', 'referral_ensure_schema',
                     'mail_queue_ensure_schema', 'password_reset_ensure_schema', 'research_ensure_schema',
                     'sponsor_jobs_ensure_schema', 'events_ensure_schema', 'fellow_ops_ensure_schema',
-                    'donations_ensure_schema', 'fellow_school_calls_ensure_schema', 'post_engagement_ensure_schema', 'post_shares_ensure_schema', 'careers_ensure_schema',
+                    'donations_ensure_schema', 'fellow_school_calls_ensure_schema', 'post_engagement_ensure_schema', 'post_shares_ensure_schema', 'careers_ensure_schema', 'posts_ensure_schema',
                 ] as $fn) {
                     if (function_exists($fn)) {
                         try { $fn(); } catch (Throwable $e) { if (app_debug()) error_log("db_auto_migrate $fn: " . $e->getMessage()); }
@@ -11780,4 +11780,46 @@ function careers_notify_admins(string $subject, string $body): void
     } catch (Throwable $e) {
         if (app_debug()) error_log('careers_notify_admins: ' . $e->getMessage());
     }
+}
+
+/* ---------------- Blog: draft and scheduling ---------------- */
+
+/** Add the publishing state to a posts table that predates it. Everything
+ *  already in there was live, so it stays live — a migration must never take
+ *  a published article off the site. */
+function posts_ensure_schema(): void
+{
+    static $ready = false;
+    if ($ready) return;
+    try {
+        $pdo = db();
+        $c = $pdo->query("SELECT COUNT(*) FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'posts' AND COLUMN_NAME = 'status'");
+        if ((int) $c->fetchColumn() === 0) {
+            $pdo->exec("ALTER TABLE posts ADD COLUMN status VARCHAR(16) NOT NULL DEFAULT 'published' AFTER is_featured");
+            $pdo->exec("UPDATE posts SET status = 'published'");
+            $pdo->exec('ALTER TABLE posts ADD INDEX idx_posts_live (status, published_at)');
+        }
+    } catch (Throwable $e) {
+        if (app_debug()) error_log('posts_ensure_schema: ' . $e->getMessage());
+    }
+    $ready = true;
+}
+
+const POST_STATUSES = ['draft', 'published'];
+
+/* What the public may see. Two conditions, one meaning: the author marked it
+   published AND its date has arrived. Keeping the date as the go-live moment
+   means there is no separate "scheduled" state to fall out of step — a post
+   dated next Tuesday simply appears next Tuesday.
+   NULL dates are treated as live: they predate scheduling and were visible. */
+const POSTS_LIVE_SQL = "status = 'published' AND (published_at IS NULL OR published_at <= CURDATE())";
+
+/** Draft, Scheduled or Published — what to show the admin, worked out rather
+ *  than stored, so it cannot disagree with the row. */
+function post_state(array $post): string
+{
+    if ((string) ($post['status'] ?? 'published') !== 'published') return 'draft';
+    $d = trim((string) ($post['published_at'] ?? ''));
+    return ($d !== '' && $d !== '0000-00-00' && $d > date('Y-m-d')) ? 'scheduled' : 'published';
 }

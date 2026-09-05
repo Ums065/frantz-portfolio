@@ -68,7 +68,18 @@ foreach ($staticPages as [$path, $freq, $prio]) {
 // Published blog posts — /blog/{id}. published_at (a DATE) is the closest
 // public "last modified" value; fall back to today when it is null.
 try {
-    $rows = db()->query('SELECT id, published_at FROM posts ORDER BY published_at DESC, id DESC')->fetchAll();
+    /* Drafts and posts dated in the future are not public, so they do not
+       belong here. Written out rather than pulled from lib.php: this file only
+       loads config.php, which does not define it.
+       The fallback covers a database that has not run the migration yet — the
+       status column simply is not there, and every post was live before it. */
+    try {
+        $rows = db()->query("SELECT id, published_at FROM posts
+            WHERE status = 'published' AND (published_at IS NULL OR published_at <= CURDATE())
+            ORDER BY published_at DESC, id DESC")->fetchAll();
+    } catch (Throwable $inner) {
+        $rows = db()->query('SELECT id, published_at FROM posts ORDER BY published_at DESC, id DESC')->fetchAll();
+    }
     foreach ($rows as $r) {
         $lastmod = !empty($r['published_at']) ? substr((string) $r['published_at'], 0, 10) : $today;
         $body .= sitemap_url($base, '/blog/' . (int) $r['id'], $lastmod, 'monthly', '0.6');

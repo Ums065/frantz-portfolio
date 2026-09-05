@@ -2187,6 +2187,9 @@ CALL add_column_if_missing('fellow_targets', 'fellow_user_id', 'INT NOT NULL DEF
 -- The public careers board asks for a date of birth once and keeps it on the
 -- account, so the 18+ rule is checked against something we hold rather than
 -- whatever was typed into the last form.
+-- Blog drafts and scheduling. Existing rows were live, so they stay published.
+CALL add_column_if_missing('posts', 'status', 'VARCHAR(16) NOT NULL DEFAULT ''published''', 'is_featured');
+
 CALL add_column_if_missing('career_jobs', 'was_approved', 'TINYINT(1) NOT NULL DEFAULT 0', 'views');
 UPDATE career_jobs SET was_approved = 1 WHERE status = 'approved' AND was_approved = 0;
 

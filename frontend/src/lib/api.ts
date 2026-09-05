@@ -253,6 +253,10 @@ export interface PostEngagement {
 }
 
 export interface PostDetail extends Post {
+  /** 'draft' or 'published'. With a future published_at, published means scheduled. */
+  status?: string
+  /** Server-computed draft | scheduled | published. */
+  state?: string
   body: string
   engagement?: PostEngagement
   related?: Post[]

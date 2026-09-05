@@ -2702,7 +2702,33 @@ function EventsAdmin() {
 }
 
 /* ---------------- Blog posts management (CRUD + cover upload) ---------------- */
-const emptyPost: PostDetail = { id: 0, title: '', category: '', excerpt: '', body: '', cover_image: '', is_featured: 0, published_at: '' }
+// New articles start as drafts. Saving must not be the same act as publishing.
+const emptyPost: PostDetail = { id: 0, title: '', category: '', excerpt: '', body: '', cover_image: '', is_featured: 0, published_at: '', status: 'draft' }
+
+/* Draft / Scheduled / Published, worked out the same way the server does so the
+   badge never disagrees with what the public actually sees. */
+function postState(p: { status?: string; published_at?: string }): 'draft' | 'scheduled' | 'published' {
+  if ((p.status || 'published') !== 'published') return 'draft'
+  const d = (p.published_at || '').slice(0, 10)
+  return d && d > new Date().toISOString().slice(0, 10) ? 'scheduled' : 'published'
+}
+
+const STATE_STYLE: Record<string, React.CSSProperties> = {
+  draft: { color: 'var(--muted)', borderColor: 'rgba(255,255,255,.18)' },
+  scheduled: { color: 'var(--gold-light)', borderColor: 'rgba(201,168,76,.45)' },
+  published: { color: '#9fd39f', borderColor: 'rgba(159,211,159,.4)' },
+}
+
+function StateTag({ post }: { post: { status?: string; published_at?: string } }) {
+  const s = postState(post)
+  return (
+    <span style={{
+      display: 'inline-block', padding: '2px 9px', borderRadius: 999, border: '1px solid',
+      fontSize: 10.5, fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase',
+      ...STATE_STYLE[s],
+    }}>{s}</span>
+  )
+}
 
 /* Last 30 days at a glance. Plain bars, no chart library — one article a week
    does not need a canvas, and this stays readable when every day is zero. */
@@ -2773,6 +2799,22 @@ function PostsAdmin() {
     } catch (err) { setError(err instanceof Error ? err.message : 'Save failed.') } finally { setBusy(false) }
   }
   const remove = async (id: number) => { if (!confirm('Delete this post?')) return; await api.del(`admin/post/${id}`); load() }
+
+  /* Publish and unpublish from the row. A draft with no date gets today's,
+     otherwise publishing something written last week would quietly schedule it
+     into the past — or, worse, leave it dateless and sorted to the bottom. */
+  const publish = async (p: PostDetail) => {
+    const date = p.published_at || new Date().toISOString().slice(0, 10)
+    await api.put(`admin/post/${p.id}`, { ...p, status: 'published', published_at: date })
+    window.fcToast?.(date > new Date().toISOString().slice(0, 10) ? `Scheduled for ${date}.` : 'Published.')
+    load()
+  }
+  const unpublish = async (p: PostDetail) => {
+    if (!confirm('Take this article off the site? The link will 404 until you publish it again.')) return
+    await api.put(`admin/post/${p.id}`, { ...p, status: 'draft' })
+    window.fcToast?.('Moved back to draft.')
+    load()
+  }
   const onUpload = async (file: File) => {
     setUploading(true); setError('')
     try { const d = await api.upload<{ url: string }>('admin/upload', file); set({ cover_image: d.url }) }
@@ -2786,7 +2828,7 @@ function PostsAdmin() {
         <button className="btn btn--sm btn--solid" onClick={() => setEditing({ ...emptyPost })}>+ Add Article</button>
       </div>
       <PostTrend days={trend} />
-      <Table stack head={['', 'Title', 'Category', 'Readers', 'Time on page', 'Good reads', 'Shares', 'Published', 'Actions']}>
+      <Table stack head={['', 'Title', 'Category', 'Readers', 'Time on page', 'Good reads', 'Shares', 'State', 'Actions']}>
         {rows.map((p) => {
           const s = stats[p.id]
           return (
@@ -2814,8 +2856,12 @@ function PostsAdmin() {
                     </div></>
                 : '—'}
             </td>
-            <td style={tdS} data-label="Published">{p.published_at}</td>
-            <td style={tdS}><div style={{ display: 'flex', gap: 6 }}>
+            <td style={tdS} data-label="State"><StateTag post={p} /><div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 4 }}>{p.published_at || "no date"}</div></td>
+            <td style={tdS}><div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {/* Publishing a finished draft should not mean reopening it. */}
+              {postState(p) === 'draft'
+                ? <button className="btn btn--sm btn--solid" onClick={() => publish(p)}>Publish</button>
+                : <button className="btn btn--sm" onClick={() => unpublish(p)}>Unpublish</button>}
               <button className="btn btn--sm" onClick={() => setEditing(p)}>Edit</button>
               <button className="btn btn--sm" onClick={() => remove(p.id)} style={{ borderColor: '#7a3b3b', color: '#e08a8a' }}>Delete</button>
             </div></td>
@@ -2839,8 +2885,27 @@ function PostsAdmin() {
             <div style={{ display: 'flex', gap: 12 }}>
               <div className="field" style={{ flex: 1 }}><label>Category</label>
                 <input type="text" value={editing.category} onChange={(e) => set({ category: e.target.value })} placeholder="Featured / Tech News / My Story" /></div>
-              <div className="field" style={{ flex: 1 }}><label>Published date</label>
+              <div className="field" style={{ flex: 1 }}><label>Publish date</label>
                 <input type="date" value={editing.published_at} onChange={(e) => set({ published_at: e.target.value })} /></div>
+            </div>
+            {/* The date is the go-live moment, not a label — a published
+                article dated in the future waits until that day. */}
+            <div className="field">
+              <label>Visibility</label>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                <button type="button" className={editing.status !== 'published' ? 'btn btn--sm btn--solid' : 'btn btn--sm'}
+                  onClick={() => set({ status: 'draft' })}>Draft</button>
+                <button type="button" className={editing.status === 'published' ? 'btn btn--sm btn--solid' : 'btn btn--sm'}
+                  onClick={() => set({ status: 'published' })}>Published</button>
+                <StateTag post={editing} />
+              </div>
+              <span className="field-hint">
+                {postState(editing) === 'draft'
+                  ? 'Only you can see this. It is not on the blog, the sitemap or the home page.'
+                  : postState(editing) === 'scheduled'
+                    ? `Goes live on ${editing.published_at} — hidden from the public until then.`
+                    : 'Live on the blog. Set a future publish date to schedule it instead.'}
+              </span>
             </div>
             <div className="field"><label>Excerpt</label>
               <textarea className="fld-area" value={editing.excerpt} onChange={(e) => set({ excerpt: e.target.value })} /></div>

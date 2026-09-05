@@ -635,11 +635,15 @@ try {
                still returns everything, because the home page and the prerender
                both rely on the whole list. */
             post_engagement_ensure_schema();
+            posts_ensure_schema();
             /* Likes travel with the list so the card can show a working Good
                Read button. The visitor hash is bound first because it sits in
                the SELECT list, ahead of anything in the WHERE. */
             $vh = post_visitor_hash((string) ($_GET['v'] ?? ''));
-            $where = ['1=1'];
+            // Drafts and not-yet-due posts are not public. This is the whole
+            // point of the state: the admin can save half an article without
+            // it appearing on the site the same second.
+            $where = [POSTS_LIVE_SQL];
             $args = [$vh];
             if (($cat = trim((string) ($_GET['category'] ?? ''))) !== '') { $where[] = 'category = ?'; $args[] = $cat; }
             if (($q = trim((string) ($_GET['q'] ?? ''))) !== '') {
@@ -732,18 +736,26 @@ try {
         }
 
         case $method === 'GET' && preg_match('#^posts/(\d+)$#', $route, $m) === 1: {
+            posts_ensure_schema();
             $stmt = db()->prepare(
-                'SELECT id, title, category, excerpt, body, cover_image, is_featured, published_at FROM posts WHERE id = ?'
+                'SELECT id, title, category, excerpt, body, cover_image, is_featured, status, published_at FROM posts WHERE id = ?'
             );
             $stmt->execute([(int) $m[1]]);
             $post = $stmt->fetch();
             if (!$post) json(['error' => 'Post not found.'], 404);
+            /* An editor can open their own draft to check how it reads; to
+               anyone else it does not exist yet. Same 404 either way, so the
+               URL of an unpublished article gives nothing away. */
+            $viewer = current_user();
+            $mayPreview = in_array((string) ($viewer['role'] ?? ''), ['admin', 'super_admin', 'editor'], true);
+            if (post_state($post) !== 'published' && !$mayPreview) json(['error' => 'Post not found.'], 404);
+            $post['state'] = post_state($post);
             // Counters, plus whether this visitor already called it a good read.
             $post['engagement'] = post_engagement_for((int) $m[1], (string) ($_GET['v'] ?? ''));
             /* Somewhere to go next: same category first, then the most recent,
                so a short blog still fills the row. */
             $rel = db()->prepare("SELECT id, title, category, excerpt, cover_image, published_at
-                FROM posts WHERE id <> ?
+                FROM posts WHERE id <> ? AND " . POSTS_LIVE_SQL . "
                 ORDER BY (category = ?) DESC, published_at DESC, id DESC LIMIT 3");
             $rel->execute([(int) $m[1], (string) ($post['category'] ?? '')]);
             $post['related'] = $rel->fetchAll();
@@ -4977,21 +4989,30 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
         /* ---------------- ADMIN: POSTS CRUD ---------------- */
         case $key === 'GET admin/posts': {
             require_admin();
+            posts_ensure_schema();
             $rows = db()->query(
-                'SELECT id, title, category, excerpt, body, cover_image, is_featured, published_at
-                 FROM posts ORDER BY published_at DESC'
+                'SELECT id, title, category, excerpt, body, cover_image, is_featured, status, published_at
+                 FROM posts ORDER BY published_at DESC, id DESC'
             )->fetchAll();
+            // Draft / Scheduled / Published, worked out rather than stored.
+            foreach ($rows as &$r) $r['state'] = post_state($r);
+            unset($r);
             json(['posts' => $rows]);
         }
 
         case $key === 'POST admin/post': {
             require_admin();
+            posts_ensure_schema();
             $b = body();
             $title = field($b, 'title');
             if ($title === '') json(['error' => 'Title is required.'], 422);
+            /* New posts start as drafts unless the author says otherwise. An
+               article going live the instant Save is pressed is how half-written
+               work ends up on the site. */
+            $status = in_array(field($b, 'status'), POST_STATUSES, true) ? field($b, 'status') : 'draft';
             $stmt = db()->prepare(
-                'INSERT INTO posts (title, category, excerpt, body, cover_image, is_featured, published_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?)'
+                'INSERT INTO posts (title, category, excerpt, body, cover_image, is_featured, status, published_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
             );
             $stmt->execute([
                 $title,
@@ -5000,18 +5021,29 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
                 field($b, 'body') ?: null,
                 field($b, 'cover_image') ?: null,
                 !empty($b['is_featured']) ? 1 : 0,
+                $status,
                 field($b, 'published_at') ?: null,
             ]);
-            json(['id' => (int) db()->lastInsertId(), 'message' => 'Post created.'], 201);
+            $id = (int) db()->lastInsertId();
+            $row = ['status' => $status, 'published_at' => field($b, 'published_at')];
+            json(['id' => $id, 'state' => post_state($row), 'message' => 'Post saved.'], 201);
         }
 
         case $method === 'PUT' && preg_match('#^admin/post/(\d+)$#', $route, $m) === 1: {
             require_admin();
+            posts_ensure_schema();
             $b = body();
             $title = field($b, 'title');
             if ($title === '') json(['error' => 'Title is required.'], 422);
+            // An edit that omits the status must not silently unpublish a live
+            // article, so the stored value is the fallback, not 'draft'.
+            $cur = db()->prepare('SELECT status FROM posts WHERE id = ? LIMIT 1');
+            $cur->execute([(int) $m[1]]);
+            $status = in_array(field($b, 'status'), POST_STATUSES, true)
+                ? field($b, 'status')
+                : ((string) ($cur->fetchColumn() ?: 'published'));
             $stmt = db()->prepare(
-                'UPDATE posts SET title=?, category=?, excerpt=?, body=?, cover_image=?, is_featured=?, published_at=? WHERE id=?'
+                'UPDATE posts SET title=?, category=?, excerpt=?, body=?, cover_image=?, is_featured=?, status=?, published_at=? WHERE id=?'
             );
             $stmt->execute([
                 $title,
@@ -5020,10 +5052,11 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
                 field($b, 'body') ?: null,
                 field($b, 'cover_image') ?: null,
                 !empty($b['is_featured']) ? 1 : 0,
+                $status,
                 field($b, 'published_at') ?: null,
                 (int) $m[1],
             ]);
-            json(['message' => 'Post updated.']);
+            json(['state' => post_state(['status' => $status, 'published_at' => field($b, 'published_at')]), 'message' => 'Post updated.']);
         }
 
         case $method === 'DELETE' && preg_match('#^admin/post/(\d+)$#', $route, $m) === 1: {
