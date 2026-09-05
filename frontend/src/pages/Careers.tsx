@@ -199,7 +199,7 @@ export default function Careers() {
       </section>
 
       {openJob && (
-        <JobModal job={openJob} me={me} onClose={close}
+        <JobModal key={openJob.id} job={openJob} me={me} onClose={close}
           onApplied={() => { close(); load() }} />
       )}
     </main>

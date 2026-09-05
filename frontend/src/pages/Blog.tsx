@@ -103,7 +103,7 @@ export default function Blog() {
                     <img src={p.cover_image || cover} alt={p.title || 'Blog post cover'} loading="lazy" decoding="async" />
                   </Link>
                   <div className="blog-card__body">
-                    <div className="kicker"><span className="cat">{p.category}</span><span>&bull;</span><span>{fmt(p.published_at)}</span><span>&bull;</span><ReadingTime text={p.excerpt} /></div>
+                    <div className="kicker"><span className="cat">{p.category}</span><span>&bull;</span><span>{fmt(p.published_at)}</span><span>&bull;</span><span>{p.read_minutes ? `${p.read_minutes} min read` : <ReadingTime text={p.excerpt} />}</span></div>
                     <h3><Link to={`/blog/${p.id}`}>{p.title}</Link></h3>
                     <p>{p.excerpt}</p>
                     <div className="item-actions">

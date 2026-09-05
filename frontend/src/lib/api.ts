@@ -238,6 +238,8 @@ export interface Post {
   cover_image: string | null
   is_featured: number
   published_at: string
+  /** Minutes to read the body, worked out by the server - the list has no body. */
+  read_minutes?: number
 }
 
 export interface PostEngagement {

@@ -645,8 +645,13 @@ try {
             $order = 'ORDER BY is_featured DESC, published_at DESC, id DESC';
             $cats = db()->query("SELECT category, COUNT(*) AS n FROM posts WHERE category IS NOT NULL AND category <> '' GROUP BY category ORDER BY category")->fetchAll();
 
+            /* Reading time comes from the body, so the list has to compute it in
+               SQL — the excerpt is two lines and would say "1 min read" for
+               every article while the article itself says six. Words counted by
+               spaces at 200 a minute, the same rate the front end uses. */
+            $mins = "GREATEST(1, CEIL((LENGTH(body) - LENGTH(REPLACE(body, ' ', '')) + 1) / 200)) AS read_minutes";
             if (!isset($_GET['page']) && !isset($_GET['per'])) {
-                $s = db()->prepare("SELECT id, title, category, excerpt, cover_image, is_featured, published_at FROM posts WHERE $w $order");
+                $s = db()->prepare("SELECT id, title, category, excerpt, cover_image, is_featured, published_at, $mins FROM posts WHERE $w $order");
                 $s->execute($args);
                 $rows = $s->fetchAll();
                 json(['posts' => $rows, 'total' => count($rows), 'categories' => $cats]);
@@ -655,7 +660,7 @@ try {
             $cnt->execute($args);
             $total = (int) $cnt->fetchColumn();
             ['per' => $per, 'page' => $page, 'offset' => $off] = page_window($_GET, 12);
-            $s = db()->prepare("SELECT id, title, category, excerpt, cover_image, is_featured, published_at
+            $s = db()->prepare("SELECT id, title, category, excerpt, cover_image, is_featured, published_at, $mins
                 FROM posts WHERE $w $order LIMIT $per OFFSET $off");
             $s->execute($args);
             json(['posts' => $s->fetchAll(), 'total' => $total, 'page' => $page, 'per' => $per, 'categories' => $cats]);

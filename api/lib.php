@@ -11287,11 +11287,22 @@ function careers_applicant_state(?array $user, int $jobId = 0): array
         'can_apply' => true,
         'reason' => '',
     ];
+    // A role may ask for more than 18. Check the role's own floor, not just the
+    // board's, or the page offers an Apply button that the server then refuses.
+    $floor = CAREERS_MIN_AGE;
+    if ($jobId > 0) {
+        $j = db()->prepare('SELECT min_age FROM career_jobs WHERE id = ? LIMIT 1');
+        $j->execute([$jobId]);
+        $floor = max(CAREERS_MIN_AGE, (int) ($j->fetchColumn() ?: 0));
+    }
+
     if ($applied) { $state['can_apply'] = false; $state['reason'] = 'You have already applied for this role.'; }
-    elseif ($age !== null && $age < CAREERS_MIN_AGE) {
+    elseif ($age !== null && $age < $floor) {
         $state['can_apply'] = false;
-        $state['reason'] = 'You must be ' . CAREERS_MIN_AGE . ' or older to apply. Students under ' . CAREERS_MIN_AGE
-            . ' can look at internship opportunities inside the student dashboard instead.';
+        $state['reason'] = $floor > CAREERS_MIN_AGE
+            ? 'This role is open to applicants ' . $floor . ' and over.'
+            : 'You must be ' . CAREERS_MIN_AGE . ' or older to apply. Students under ' . CAREERS_MIN_AGE
+                . ' can look at internship opportunities inside the student dashboard instead.';
     }
     return $state;
 }
@@ -11396,7 +11407,12 @@ function careers_job_public(int $id): ?array
     $s->execute([$id]);
     $row = $s->fetch();
     if (!$row || (string) $row['status'] !== 'approved') return null;
-    try { db()->prepare('UPDATE career_jobs SET views = views + 1 WHERE id = ?')->execute([$id]); } catch (Throwable $e) { /* counting is not worth an error */ }
+    /* Hold updated_at still while counting. The column is ON UPDATE
+       CURRENT_TIMESTAMP and sitemap.php publishes it as <lastmod>, so without
+       this every single page view would tell Google the posting had changed. */
+    try {
+        db()->prepare('UPDATE career_jobs SET views = views + 1, updated_at = updated_at WHERE id = ?')->execute([$id]);
+    } catch (Throwable $e) { /* counting is not worth an error */ }
     return careers_public_row($row, true);
 }
 

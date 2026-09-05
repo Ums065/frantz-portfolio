@@ -272,7 +272,10 @@ function ApplicationsTab() {
   useEffect(() => { const t = setTimeout(load, q.trim() ? 300 : 0); return () => clearTimeout(t) }, [load, q])
 
   const mark = async (id: number, next: string) => {
-    const note = window.prompt('Anything to add for the applicant? (goes in the email — leave blank for none)') ?? ''
+    // Cancel must cancel. This used to send the decision (and the email) anyway,
+    // because a cancelled prompt returns null and null coalesced to "no note".
+    const note = window.prompt(`Mark this application ${next}? Add a note for the applicant if you want one — it goes in the email.`)
+    if (note === null) return
     await api.post(`careers/application/${id}/status`, { status: next, note })
     window.fcToast?.(`Marked ${next}.`)
     setOpen(null); load()

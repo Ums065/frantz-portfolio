@@ -129,7 +129,10 @@ function ApplicationsModal({ job, onClose }: { job: CareerJobAdmin; onClose: () 
   useEffect(() => { load() }, [load])
 
   const mark = async (id: number, status: string) => {
-    const note = window.prompt('Anything to add for the applicant? (goes in the email — leave blank for none)') ?? ''
+    // Cancel must cancel — the applicant is emailed either way, so a stray
+    // Escape key should not decide someone's application.
+    const note = window.prompt(`Mark this application ${status}? Add a note for the applicant if you want one — it goes in the email.`)
+    if (note === null) return
     await api.post(`careers/application/${id}/status`, { status, note })
     load()
   }
