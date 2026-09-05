@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { api, type PostDetail } from '../lib/api'
 import { isSavedItem, toggleSavedItem } from '../lib/memberStorage'
 import { useSeo } from '../hooks/useSeo'
-import { GoodRead, ShareRow, useReadTracking, visitorId } from '../components/ArticleEngagement'
+import { GoodRead, ReadingProgress, ReadingTime, ShareRow, useReadTracking, visitorId } from '../components/ArticleEngagement'
 
 const cover = '/assets/abstract-gold-network.webp'
 const fmt = (d: string) => new Date(d + 'T00:00:00').toLocaleString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
@@ -68,6 +68,7 @@ export default function BlogPost() {
 
   return (
     <main className="page">
+      {post && <ReadingProgress />}
       <section className="block" style={{ paddingTop: 40 }}>
         <div className="wrap">
           <article className="post-article">
@@ -82,6 +83,7 @@ export default function BlogPost() {
               <>
                 <div className="kicker" style={{ marginBottom: 10 }}>
                   <span className="cat">{post.category}</span><span>&bull;</span><span>{fmt(post.published_at)}</span>
+                  <span>&bull;</span><ReadingTime text={post.body || post.excerpt} />
                 </div>
                 <h1 className="gold-text">{post.title}</h1>
                 <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', margin: '0 0 20px', alignItems: 'center' }}>
@@ -93,7 +95,7 @@ export default function BlogPost() {
                     Request Update
                   </button>
                 </div>
-                <ShareRow title={post.title} url={`${window.location.origin}/blog/${post.id}`} compact />
+                <ShareRow title={post.title} url={`${window.location.origin}/blog/${post.id}`} postId={post.id} compact />
                 {/* contain, not cover: the whole picture, never a cropped one. */}
                 <div className="post-cover">
                   <img src={post.cover_image || cover} alt={post.title || 'Article cover'} loading="eager" decoding="async" />
@@ -104,8 +106,26 @@ export default function BlogPost() {
                 {/* Asked for again at the end, where someone who actually read it is. */}
                 <div className="post-endbar">
                   <GoodRead postId={post.id} initial={post.engagement} />
-                  <ShareRow title={post.title} url={`${window.location.origin}/blog/${post.id}`} />
+                  <ShareRow title={post.title} url={`${window.location.origin}/blog/${post.id}`} postId={post.id} />
                 </div>
+
+                {/* Somewhere to go next, rather than a dead end at the bottom. */}
+                {(post.related || []).length > 0 && (
+                  <section className="post-related">
+                    <h2>Keep reading</h2>
+                    <div className="post-related__grid">
+                      {(post.related || []).map((r) => (
+                        <Link className="post-related__card" to={`/blog/${r.id}`} key={r.id}>
+                          <span className="post-related__img">
+                            <img src={r.cover_image || cover} alt="" loading="lazy" decoding="async" />
+                          </span>
+                          <span className="post-related__cat">{r.category}</span>
+                          <span className="post-related__title">{r.title}</span>
+                        </Link>
+                      ))}
+                    </div>
+                  </section>
+                )}
               </>
             )}
           </article>

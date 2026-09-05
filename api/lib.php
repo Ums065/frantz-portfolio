@@ -131,7 +131,7 @@ function ensure_session_version_column(): void
  * request after a deploy, db_auto_migrate() notices the stored version is behind
  * and runs every *_ensure_schema() once; afterwards it's a single cheap SELECT.
  */
-const APP_SCHEMA_VERSION = 20260817; // yyyymmdd + seq — raise on each schema change
+const APP_SCHEMA_VERSION = 20260818; // yyyymmdd + seq — raise on each schema change
 
 /**
  * One-shot, version-gated auto-migration. Runs on app bootstrap: if the DB's
@@ -167,7 +167,7 @@ function db_auto_migrate(): void
                     'ecosystem_ensure_schema', 'ecosystem_shared_ensure_schema', 'referral_ensure_schema',
                     'mail_queue_ensure_schema', 'password_reset_ensure_schema', 'research_ensure_schema',
                     'sponsor_jobs_ensure_schema', 'events_ensure_schema', 'fellow_ops_ensure_schema',
-                    'donations_ensure_schema', 'fellow_school_calls_ensure_schema', 'post_engagement_ensure_schema',
+                    'donations_ensure_schema', 'fellow_school_calls_ensure_schema', 'post_engagement_ensure_schema', 'post_shares_ensure_schema',
                 ] as $fn) {
                     if (function_exists($fn)) {
                         try { $fn(); } catch (Throwable $e) { if (app_debug()) error_log("db_auto_migrate $fn: " . $e->getMessage()); }
@@ -11044,4 +11044,78 @@ function post_engagement_report(): array
             (SELECT COUNT(*) FROM post_reads r WHERE r.post_id = p.id AND r.reached_end = 1) AS finished,
             (SELECT COUNT(*) FROM post_likes l WHERE l.post_id = p.id) AS likes
         FROM posts p ORDER BY opens DESC, p.published_at DESC")->fetchAll();
+}
+
+
+/** Day-by-day opens, reads and good reads over the last N days, with every day
+ *  present (including the quiet ones) so a chart does not lie by skipping gaps. */
+function post_engagement_trend(int $days = 30): array
+{
+    post_engagement_ensure_schema();
+    $days = max(7, min(90, $days));
+    $since = date('Y-m-d', strtotime("-" . ($days - 1) . " days"));
+
+    $reads = db()->prepare("SELECT DATE(created_at) d, COUNT(*) opens,
+            SUM(seconds >= 3) reads_n, COALESCE(ROUND(AVG(NULLIF(seconds,0))),0) avg_seconds
+        FROM post_reads WHERE created_at >= ? GROUP BY d");
+    $reads->execute([$since . ' 00:00:00']);
+    $byDay = [];
+    foreach ($reads->fetchAll() as $r) $byDay[(string) $r['d']] = $r;
+
+    $likes = db()->prepare("SELECT DATE(created_at) d, COUNT(*) n FROM post_likes WHERE created_at >= ? GROUP BY d");
+    $likes->execute([$since . ' 00:00:00']);
+    $likeDay = [];
+    foreach ($likes->fetchAll() as $r) $likeDay[(string) $r['d']] = (int) $r['n'];
+
+    $out = [];
+    for ($i = 0; $i < $days; $i++) {
+        $d = date('Y-m-d', strtotime("$since +$i days"));
+        $row = $byDay[$d] ?? null;
+        $out[] = [
+            'date' => $d,
+            'opens' => (int) ($row['opens'] ?? 0),
+            'reads' => (int) ($row['reads_n'] ?? 0),
+            'avg_seconds' => (int) ($row['avg_seconds'] ?? 0),
+            'likes' => $likeDay[$d] ?? 0,
+        ];
+    }
+    return $out;
+}
+/** Which channel a share was started from, so "how do people find it" has an
+ *  answer. Counted per article per channel; the click is all we can observe —
+ *  whether the person completed the share happens outside our page. */
+function post_shares_ensure_schema(): void
+{
+    static $ready = false;
+    if ($ready) return;
+    try {
+        db()->exec("CREATE TABLE IF NOT EXISTS post_shares (
+            post_id INT NOT NULL,
+            channel VARCHAR(20) NOT NULL,
+            clicks INT NOT NULL DEFAULT 0,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (post_id, channel)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    } catch (Throwable $e) { if (app_debug()) error_log('post_shares_ensure_schema: ' . $e->getMessage()); }
+    $ready = true;
+}
+
+const POST_SHARE_CHANNELS = ['whatsapp', 'sms', 'x', 'facebook', 'linkedin', 'email', 'copy', 'native'];
+
+function post_share_record(int $postId, string $channel): void
+{
+    post_shares_ensure_schema();
+    if (!in_array($channel, POST_SHARE_CHANNELS, true)) return;
+    db()->prepare('INSERT INTO post_shares (post_id, channel, clicks) VALUES (?,?,1)
+        ON DUPLICATE KEY UPDATE clicks = clicks + 1')->execute([$postId, $channel]);
+}
+
+/** Share clicks per channel for one article, plus the total. */
+function post_shares_for(int $postId): array
+{
+    post_shares_ensure_schema();
+    $s = db()->prepare('SELECT channel, clicks FROM post_shares WHERE post_id = ? ORDER BY clicks DESC');
+    $s->execute([$postId]);
+    $rows = $s->fetchAll();
+    return ['total' => array_sum(array_column($rows, 'clicks')), 'by_channel' => $rows];
 }

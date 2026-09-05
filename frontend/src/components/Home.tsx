@@ -846,10 +846,11 @@ export default function Home() {
           <div className="blog-grid">
             {featured && (
               <article className="glass post feature reveal d1">
-                <div className="post__img"><img src={featured.cover_image || abstractNetwork} alt={featured.title || 'Featured article'} loading="lazy" decoding="async" /></div>
+                {/* The picture opens the article too - people click it first. */}
+                <Link className="post__img" to={`/blog/${featured.id}`} aria-label={`Read: ${featured.title}`}><img src={featured.cover_image || abstractNetwork} alt={featured.title || 'Featured article'} loading="lazy" decoding="async" /></Link>
                 <div className="post__body">
                   <div className="kicker"><span className="cat">{featured.category}</span><span>&bull;</span><span>{fmtMonthYear(featured.published_at)}</span></div>
-                  <h3>{featured.title}</h3>
+                  <h3><Link to={`/blog/${featured.id}`}>{featured.title}</Link></h3>
                   <p>{featured.excerpt}</p>
                   <Link className="read" to={`/blog/${featured.id}`}>Read Article <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth={2}><path d="M5 12h14M13 6l6 6-6 6" /></svg></Link>
                 </div>
@@ -857,10 +858,10 @@ export default function Home() {
             )}
             {rest.map((p, i) => (
               <article className={`glass post reveal d${i + 2}`} key={p.id}>
-                <div className="post__img"><img src={p.cover_image || (i === 0 ? signatureWordmark : brandMarks)} alt={p.title || 'Article'} loading="lazy" decoding="async" /></div>
+                <Link className="post__img" to={`/blog/${p.id}`} aria-label={`Read: ${p.title}`}><img src={p.cover_image || (i === 0 ? signatureWordmark : brandMarks)} alt={p.title || 'Article'} loading="lazy" decoding="async" /></Link>
                 <div className="post__body">
                   <div className="kicker"><span className="cat">{p.category}</span><span>&bull;</span><span>{fmtMonthYear(p.published_at)}</span></div>
-                  <h3>{p.title}</h3>
+                  <h3><Link to={`/blog/${p.id}`}>{p.title}</Link></h3>
                   <p>{p.excerpt}</p>
                   <Link className="read" to={`/blog/${p.id}`}>Read Article <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth={2}><path d="M5 12h14M13 6l6 6-6 6" /></svg></Link>
                 </div>

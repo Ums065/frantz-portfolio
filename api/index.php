@@ -631,11 +631,34 @@ try {
         }
 
         case $key === 'GET posts': {
-            $rows = db()->query(
-                'SELECT id, title, category, excerpt, cover_image, is_featured, published_at
-                 FROM posts ORDER BY is_featured DESC, published_at DESC'
-            )->fetchAll();
-            json(['posts' => $rows]);
+            /* Paged and filterable on the server. Called with no parameters it
+               still returns everything, because the home page and the prerender
+               both rely on the whole list. */
+            $where = ['1=1'];
+            $args = [];
+            if (($cat = trim((string) ($_GET['category'] ?? ''))) !== '') { $where[] = 'category = ?'; $args[] = $cat; }
+            if (($q = trim((string) ($_GET['q'] ?? ''))) !== '') {
+                $where[] = '(title LIKE ? OR excerpt LIKE ? OR category LIKE ?)';
+                $like = '%' . $q . '%'; array_push($args, $like, $like, $like);
+            }
+            $w = implode(' AND ', $where);
+            $order = 'ORDER BY is_featured DESC, published_at DESC, id DESC';
+            $cats = db()->query("SELECT category, COUNT(*) AS n FROM posts WHERE category IS NOT NULL AND category <> '' GROUP BY category ORDER BY category")->fetchAll();
+
+            if (!isset($_GET['page']) && !isset($_GET['per'])) {
+                $s = db()->prepare("SELECT id, title, category, excerpt, cover_image, is_featured, published_at FROM posts WHERE $w $order");
+                $s->execute($args);
+                $rows = $s->fetchAll();
+                json(['posts' => $rows, 'total' => count($rows), 'categories' => $cats]);
+            }
+            $cnt = db()->prepare("SELECT COUNT(*) FROM posts WHERE $w");
+            $cnt->execute($args);
+            $total = (int) $cnt->fetchColumn();
+            ['per' => $per, 'page' => $page, 'offset' => $off] = page_window($_GET, 12);
+            $s = db()->prepare("SELECT id, title, category, excerpt, cover_image, is_featured, published_at
+                FROM posts WHERE $w $order LIMIT $per OFFSET $off");
+            $s->execute($args);
+            json(['posts' => $s->fetchAll(), 'total' => $total, 'page' => $page, 'per' => $per, 'categories' => $cats]);
         }
 
         case $key === 'GET awards': {
@@ -704,6 +727,13 @@ try {
             if (!$post) json(['error' => 'Post not found.'], 404);
             // Counters, plus whether this visitor already called it a good read.
             $post['engagement'] = post_engagement_for((int) $m[1], (string) ($_GET['v'] ?? ''));
+            /* Somewhere to go next: same category first, then the most recent,
+               so a short blog still fills the row. */
+            $rel = db()->prepare("SELECT id, title, category, excerpt, cover_image, published_at
+                FROM posts WHERE id <> ?
+                ORDER BY (category = ?) DESC, published_at DESC, id DESC LIMIT 3");
+            $rel->execute([(int) $m[1], (string) ($post['category'] ?? '')]);
+            $post['related'] = $rel->fetchAll();
             json(['post' => $post]);
         }
         /* ---- Blog engagement: opens, dwell time, "Good Read" ---- */
@@ -737,9 +767,18 @@ try {
             if (!$exists->fetchColumn()) json(['error' => 'Post not found.'], 404);
             json(post_like_toggle($id, (string) field(body(), 'visitor')));
         }
+        case $method === 'POST' && preg_match('#^posts/(\d+)/share$#', $route, $m) === 1: {
+            post_shares_ensure_schema();
+            rate_limit('post_share', 120, 3600);
+            post_share_record((int) $m[1], (string) field(body(), 'channel'));
+            json(['ok' => true]);
+        }
         case $key === 'GET admin/posts/analytics': {
             require_admin();
-            json(['posts' => post_engagement_report()]);
+            $rows = post_engagement_report();
+            foreach ($rows as &$r) $r['shares'] = post_shares_for((int) $r['id']);
+            unset($r);
+            json(['posts' => $rows, 'trend' => post_engagement_trend((int) ($_GET['days'] ?? 30))]);
         }
 
         /* ---------------- FORMS ---------------- */

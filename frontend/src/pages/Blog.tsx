@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ShareRow } from '../components/ArticleEngagement'
+import { ReadingTime, ShareRow } from '../components/ArticleEngagement'
+import Pager from '../components/Pager'
 import { api, type Post } from '../lib/api'
 import { loadSavedItems, toggleSavedItem } from '../lib/memberStorage'
 import { useSeo } from '../hooks/useSeo'
@@ -15,15 +16,34 @@ export default function Blog() {
 
   useSeo({ title: 'Blog & News', description: 'Insights from Frantz Coutard on technology, entrepreneurship, and community - plus news shaping local commerce.' })
 
+  // Paged and filtered on the server, so the list stays fast as the blog grows.
+  const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(1)
+  const [cat, setCat] = useState('')
+  const [q, setQ] = useState('')
+  const [cats, setCats] = useState<{ category: string; n: number }[]>([])
+  const per = 12
+
+  useEffect(() => { window.scrollTo(0, 0); setSavedArticles(loadSavedItems('article').map((i) => i.id)) }, [])
   useEffect(() => {
-    window.scrollTo(0, 0)
-    api.get<{ posts: Post[] }>('posts')
-      .then((d) => { setPosts(Array.isArray(d.posts) ? d.posts : []); setLoadErr(false) })
-      .catch(() => { setPosts([]); setLoadErr(true) })
-    setSavedArticles(loadSavedItems('article').map((item) => item.id))
-  }, [])
+    const params = new URLSearchParams({ page: String(page), per: String(per) })
+    if (cat) params.set('category', cat)
+    if (q.trim()) params.set('q', q.trim())
+    const t = setTimeout(() => {
+      api.get<{ posts: Post[]; total: number; categories: { category: string; n: number }[] }>(`posts?${params}`)
+        .then((d) => {
+          setPosts(Array.isArray(d.posts) ? d.posts : [])
+          setTotal(d.total || 0)
+          setCats(d.categories || [])
+          setLoadErr(false)
+        })
+        .catch(() => { setPosts([]); setLoadErr(true) })
+    }, q.trim() ? 300 : 0)
+    return () => clearTimeout(t)
+  }, [page, cat, q])
 
   const safePosts = Array.isArray(posts) ? posts : []
+  const pages = Math.max(1, Math.ceil(total / per))
 
   const toggleArticle = (post: Post) => {
     const next = toggleSavedItem('article', {
@@ -56,6 +76,23 @@ export default function Blog() {
 
       <section className="block" style={{ paddingTop: 20 }}>
         <div className="wrap">
+          <div className="blog-filters">
+            <input className="blog-search" type="search" value={q}
+              onChange={(e) => { setQ(e.target.value); setPage(1) }} placeholder="Search articles…" aria-label="Search articles" />
+            <div className="blog-cats" role="tablist" aria-label="Filter by category">
+              <button type="button" role="tab" aria-selected={cat === ''}
+                className={`blog-cat${cat === '' ? ' is-active' : ''}`} onClick={() => { setCat(''); setPage(1) }}>
+                All <em>{total}</em>
+              </button>
+              {cats.map((c) => (
+                <button key={c.category} type="button" role="tab" aria-selected={cat === c.category}
+                  className={`blog-cat${cat === c.category ? ' is-active' : ''}`}
+                  onClick={() => { setCat(c.category); setPage(1) }}>
+                  {c.category} <em>{c.n}</em>
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="blog-list-grid">
             {safePosts.map((p) => {
               const saved = savedArticles.includes(String(p.id))
@@ -66,7 +103,7 @@ export default function Blog() {
                     <img src={p.cover_image || cover} alt={p.title || 'Blog post cover'} loading="lazy" decoding="async" />
                   </Link>
                   <div className="blog-card__body">
-                    <div className="kicker"><span className="cat">{p.category}</span><span>&bull;</span><span>{fmt(p.published_at)}</span></div>
+                    <div className="kicker"><span className="cat">{p.category}</span><span>&bull;</span><span>{fmt(p.published_at)}</span><span>&bull;</span><ReadingTime text={p.excerpt} /></div>
                     <h3><Link to={`/blog/${p.id}`}>{p.title}</Link></h3>
                     <p>{p.excerpt}</p>
                     <div className="item-actions">
@@ -79,14 +116,19 @@ export default function Blog() {
                       >
                         {saved ? 'Saved' : 'Save'}
                       </button>
-                      <ShareRow title={p.title} url={`${window.location.origin}/blog/${p.id}`} compact />
+                      <ShareRow title={p.title} url={`${window.location.origin}/blog/${p.id}`} compact postId={p.id} />
                     </div>
                   </div>
                 </article>
               )
             })}
           </div>
-          {safePosts.length === 0 && <p style={{ textAlign: 'center', color: 'var(--muted)' }}>No articles yet - check back soon.</p>}
+          {safePosts.length === 0 && (
+            <p style={{ textAlign: 'center', color: 'var(--muted)' }}>
+              {q.trim() || cat ? 'No article matches that. Try another word, or clear the filter.' : 'No articles yet - check back soon.'}
+            </p>
+          )}
+          <Pager page={page} pages={pages} total={total} unit="articles" onPage={(p) => { setPage(p); window.scrollTo({ top: 0, behavior: 'smooth' }) }} />
         </div>
       </section>
     </main>

@@ -250,6 +250,7 @@ export interface PostEngagement {
 export interface PostDetail extends Post {
   body: string
   engagement?: PostEngagement
+  related?: Post[]
 }
 
 export interface AwardRow {
@@ -638,6 +639,16 @@ export interface PostStat {
   avg_seconds: number
   max_seconds: number
   finished: number
+  likes: number
+  shares?: { total: number; by_channel: { channel: string; clicks: number }[] }
+}
+
+/** One day of the blog's 30-day engagement trend. */
+export interface PostTrendDay {
+  date: string
+  opens: number
+  reads: number
+  avg_seconds: number
   likes: number
 }
 

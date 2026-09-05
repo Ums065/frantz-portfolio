@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
-import { api, type AnalyticsPayload, type AwardRow, type CommunityCommentRow, type CommunityThreadRow, type EventItem, type EventRsvpRow, type InventoryRow, type MediaRow, type PostDetail, type PostStat, readTime, type ProductVisibility, type TestimonialRow, type User } from '../lib/api'
+import { api, type AnalyticsPayload, type AwardRow, type CommunityCommentRow, type CommunityThreadRow, type EventItem, type EventRsvpRow, type InventoryRow, type MediaRow, type PostDetail, type PostStat, type PostTrendDay, readTime, type ProductVisibility, type TestimonialRow, type User } from '../lib/api'
 import { useAuth } from '../context/AuthContext'
 import { useSeo } from '../hooks/useSeo'
 import { useLiveRefresh } from '../hooks/useLiveRefresh'
@@ -2699,6 +2699,46 @@ function EventsAdmin() {
 /* ---------------- Blog posts management (CRUD + cover upload) ---------------- */
 const emptyPost: PostDetail = { id: 0, title: '', category: '', excerpt: '', body: '', cover_image: '', is_featured: 0, published_at: '' }
 
+/* Last 30 days at a glance. Plain bars, no chart library — one article a week
+   does not need a canvas, and this stays readable when every day is zero. */
+function PostTrend({ days }: { days: PostTrendDay[] }) {
+  if (!days.length) return null
+  const peak = Math.max(1, ...days.map((d) => d.opens))
+  const sum = (k: 'opens' | 'reads' | 'likes') => days.reduce((n, d) => n + Number(d[k] || 0), 0)
+  const withReads = days.filter((d) => d.avg_seconds > 0)
+  const avg = withReads.length ? Math.round(withReads.reduce((n, d) => n + d.avg_seconds, 0) / withReads.length) : 0
+  const label = (iso: string) => new Date(iso + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+
+  return (
+    <div className="glass" style={{ padding: '16px 18px', borderRadius: 14, marginBottom: 18 }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20, alignItems: 'baseline', marginBottom: 12 }}>
+        <strong style={{ fontSize: 13.5 }}>Last {days.length} days</strong>
+        <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>
+          <strong style={{ color: 'var(--gold-light)' }}>{sum('opens')}</strong> opens ·{' '}
+          <strong style={{ color: 'var(--gold-light)' }}>{sum('reads')}</strong> real reads ·{' '}
+          <strong style={{ color: 'var(--gold-light)' }}>{sum('likes')}</strong> good reads
+          {avg > 0 && <> · {readTime(avg)} average on page</>}
+        </span>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 74 }}>
+        {days.map((d) => (
+          <div key={d.date} title={`${label(d.date)} — ${d.opens} opens, ${d.reads} reads, ${d.likes} good reads`}
+            style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', height: '100%', minWidth: 4 }}>
+            <div style={{
+              height: `${Math.max(d.opens ? 6 : 2, (d.opens / peak) * 100)}%`,
+              borderRadius: 3,
+              background: d.opens ? 'linear-gradient(180deg,#e6c65c,#c9a227)' : 'rgba(255,255,255,0.07)',
+            }} />
+          </div>
+        ))}
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--muted)', marginTop: 6 }}>
+        <span>{label(days[0].date)}</span><span>{label(days[days.length - 1].date)}</span>
+      </div>
+    </div>
+  )
+}
+
 function PostsAdmin() {
   const [rows, setRows] = useState<PostDetail[]>([])
   const [editing, setEditing] = useState<PostDetail | null>(null)
@@ -2708,9 +2748,13 @@ function PostsAdmin() {
 
   // How many opened it, how long they stayed, and who called it a good read.
   const [stats, setStats] = useState<Record<number, PostStat>>({})
+  const [trend, setTrend] = useState<PostTrendDay[]>([])
   const load = () => api.get<{ posts: PostDetail[] }>('admin/posts').then((d) => setRows(d.posts)).catch(() => {})
-  const loadStats = () => api.get<{ posts: PostStat[] }>('admin/posts/analytics')
-    .then((d) => setStats(Object.fromEntries((d.posts || []).map((s) => [s.id, s])))).catch(() => {})
+  const loadStats = () => api.get<{ posts: PostStat[]; trend: PostTrendDay[] }>('admin/posts/analytics')
+    .then((d) => {
+      setStats(Object.fromEntries((d.posts || []).map((s) => [s.id, s])))
+      setTrend(d.trend || [])
+    }).catch(() => {})
   useEffect(() => { load(); loadStats() }, [])
   const set = (patch: Partial<PostDetail>) => setEditing((e) => (e ? { ...e, ...patch } : e))
 
@@ -2736,7 +2780,8 @@ function PostsAdmin() {
         <p style={{ color: 'var(--muted)', fontSize: 13 }}>{rows.length} articles · shown on the Blog page &amp; home</p>
         <button className="btn btn--sm btn--solid" onClick={() => setEditing({ ...emptyPost })}>+ Add Article</button>
       </div>
-      <Table stack head={['', 'Title', 'Category', 'Readers', 'Time on page', 'Good reads', 'Published', 'Actions']}>
+      <PostTrend days={trend} />
+      <Table stack head={['', 'Title', 'Category', 'Readers', 'Time on page', 'Good reads', 'Shares', 'Published', 'Actions']}>
         {rows.map((p) => {
           const s = stats[p.id]
           return (
@@ -2756,6 +2801,14 @@ function PostsAdmin() {
                 : <span style={{ color: 'var(--muted)' }}>no reads yet</span>}
             </td>
             <td style={tdS} data-label="Good reads">{s && Number(s.likes) > 0 ? <strong style={{ color: 'var(--gold-light)' }}>{s.likes}</strong> : '—'}</td>
+            <td style={tdS} data-label="Shares">
+              {s?.shares && s.shares.total > 0
+                ? <><strong>{s.shares.total}</strong>
+                    <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>
+                      {s.shares.by_channel.slice(0, 3).map((c) => `${c.channel} ${c.clicks}`).join(' · ')}
+                    </div></>
+                : '—'}
+            </td>
             <td style={tdS} data-label="Published">{p.published_at}</td>
             <td style={tdS}><div style={{ display: 'flex', gap: 6 }}>
               <button className="btn btn--sm" onClick={() => setEditing(p)}>Edit</button>

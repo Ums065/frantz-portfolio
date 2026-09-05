@@ -111,8 +111,14 @@ const PATHS = {
   share: 'M12 16V4M8 8l4-4 4 4M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3',
 }
 
-export function ShareRow({ title, url, compact }: { title: string; url: string; compact?: boolean }) {
+export function ShareRow({ title, url, compact, postId }: { title: string; url: string; compact?: boolean; postId?: number }) {
   const [copied, setCopied] = useState(false)
+  // Which channel was used, so "how do people find it" has an answer. We can
+  // only see the click — whether they went through with it happens off-page.
+  const track = (channel: string) => {
+    if (!postId) return
+    void api.post(`posts/${postId}/share`, { channel }).catch(() => {})
+  }
   const t = encodeURIComponent(title)
   const u = encodeURIComponent(url)
   const links: { key: keyof typeof PATHS; label: string; href: string }[] = [
@@ -126,6 +132,7 @@ export function ShareRow({ title, url, compact }: { title: string; url: string; 
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(url)
+      track('copy')
       setCopied(true)
       window.fcToast?.('Link copied.')
       setTimeout(() => setCopied(false), 1800)
@@ -133,7 +140,7 @@ export function ShareRow({ title, url, compact }: { title: string; url: string; 
   }
   // On a phone, the operating system's own share sheet beats a row of icons.
   const native = async () => {
-    try { await navigator.share?.({ title, url }) } catch { /* dismissed */ }
+    try { await navigator.share?.({ title, url }); track('native') } catch { /* dismissed */ }
   }
   const canNative = typeof navigator !== 'undefined' && !!navigator.share
 
@@ -150,7 +157,8 @@ export function ShareRow({ title, url, compact }: { title: string; url: string; 
           <a key={l.key} className="share-btn" href={l.href}
             target={l.href.startsWith('http') ? '_blank' : undefined}
             rel={l.href.startsWith('http') ? 'noreferrer' : undefined}
-            title={`Share on ${l.label}`} aria-label={`Share on ${l.label}`}>
+            title={`Share on ${l.label}`} aria-label={`Share on ${l.label}`}
+            onClick={() => track(l.key)}>
             <Icon d={PATHS[l.key]} /><span>{l.label}</span>
           </a>
         ))}
@@ -203,5 +211,52 @@ export function GoodRead({ postId, initial }: { postId: number; initial?: Engage
       <span>Good read</span>
       {likes > 0 && <em>{likes}</em>}
     </button>
+  )
+}
+
+/* ---------------- Reading time ---------------- */
+
+/** Rounded-up minutes at 200 words a minute — the usual reading pace. Shown
+ *  before the click, and it is what makes the dwell figure mean anything:
+ *  "4 min read, people stay 45s" says far more than "45s". */
+export function readingMinutes(text: string): number {
+  const words = (text || '').trim().split(/\s+/).filter(Boolean).length
+  return Math.max(1, Math.ceil(words / 200))
+}
+
+export function ReadingTime({ text, className }: { text: string; className?: string }) {
+  const m = readingMinutes(text)
+  return <span className={className}>{m} min read</span>
+}
+
+/* ---------------- Reading progress ---------------- */
+
+/** A hairline that fills as the article scrolls. Reuses the same scroll the
+ *  read tracking already listens to, so it costs nothing extra. */
+export function ReadingProgress() {
+  const [pct, setPct] = useState(0)
+  useEffect(() => {
+    let frame = 0
+    const onScroll = () => {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => {
+        const h = document.documentElement.scrollHeight - window.innerHeight
+        setPct(h > 0 ? Math.min(100, Math.max(0, (window.scrollY / h) * 100)) : 0)
+      })
+    }
+    onScroll()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    window.addEventListener('resize', onScroll)
+    return () => {
+      cancelAnimationFrame(frame)
+      window.removeEventListener('scroll', onScroll)
+      window.removeEventListener('resize', onScroll)
+    }
+  }, [])
+  return (
+    <div className="read-progress" role="progressbar" aria-label="Reading progress"
+      aria-valuenow={Math.round(pct)} aria-valuemin={0} aria-valuemax={100}>
+      <span style={{ width: `${pct}%` }} />
+    </div>
   )
 }
