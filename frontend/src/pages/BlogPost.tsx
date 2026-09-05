@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { api, type PostDetail } from '../lib/api'
 import { isSavedItem, toggleSavedItem } from '../lib/memberStorage'
 import { useSeo } from '../hooks/useSeo'
-import { GoodRead, ReadingProgress, ReadingTime, ShareRow, useReadTracking, visitorId } from '../components/ArticleEngagement'
+import { GoodRead, ReadingProgress, ReadingTime, ShareButton, useGoodRead, useReadTracking, visitorId } from '../components/ArticleEngagement'
 
 const cover = '/assets/abstract-gold-network.webp'
 const fmt = (d: string) => new Date(d + 'T00:00:00').toLocaleString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
@@ -53,6 +53,8 @@ export default function BlogPost() {
   }, [id])
   const bodyRef = useRef<HTMLDivElement | null>(null)
   useReadTracking(post?.id, bodyRef)
+  // One like state for the whole article - the button appears twice.
+  const good = useGoodRead(post?.id, post?.engagement)
 
   const toggle = () => {
     if (!post) return
@@ -86,8 +88,10 @@ export default function BlogPost() {
                   <span>&bull;</span><ReadingTime text={post.body || post.excerpt} />
                 </div>
                 <h1 className="gold-text">{post.title}</h1>
-                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', margin: '0 0 20px', alignItems: 'center' }}>
-                  <GoodRead postId={post.id} initial={post.engagement} />
+                {/* Like and Share sit together, once, above the article. */}
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', margin: '0 0 22px', alignItems: 'center' }}>
+                  <GoodRead state={good} />
+                  <ShareButton title={post.title} url={`${window.location.origin}/blog/${post.id}`} postId={post.id} />
                   <button className={saved ? 'btn btn--sm btn--solid' : 'btn btn--sm'} type="button" onClick={toggle}>
                     {saved ? 'Saved' : 'Save Article'}
                   </button>
@@ -95,7 +99,6 @@ export default function BlogPost() {
                     Request Update
                   </button>
                 </div>
-                <ShareRow title={post.title} url={`${window.location.origin}/blog/${post.id}`} postId={post.id} compact />
                 {/* contain, not cover: the whole picture, never a cropped one. */}
                 <div className="post-cover">
                   <img src={post.cover_image || cover} alt={post.title || 'Article cover'} loading="eager" decoding="async" />
@@ -105,8 +108,8 @@ export default function BlogPost() {
                 </div>
                 {/* Asked for again at the end, where someone who actually read it is. */}
                 <div className="post-endbar">
-                  <GoodRead postId={post.id} initial={post.engagement} />
-                  <ShareRow title={post.title} url={`${window.location.origin}/blog/${post.id}`} postId={post.id} />
+                  <GoodRead state={good} />
+                  <ShareButton title={post.title} url={`${window.location.origin}/blog/${post.id}`} postId={post.id} align="right" />
                 </div>
 
                 {/* Somewhere to go next, rather than a dead end at the bottom. */}

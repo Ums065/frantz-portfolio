@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ReadingTime, ShareRow } from '../components/ArticleEngagement'
+import { ReadingTime, ShareButton } from '../components/ArticleEngagement'
 import Pager from '../components/Pager'
 import { api, type Post } from '../lib/api'
 import { loadSavedItems, toggleSavedItem } from '../lib/memberStorage'
@@ -116,7 +116,7 @@ export default function Blog() {
                       >
                         {saved ? 'Saved' : 'Save'}
                       </button>
-                      <ShareRow title={p.title} url={`${window.location.origin}/blog/${p.id}`} compact postId={p.id} />
+                      <ShareButton title={p.title} url={`${window.location.origin}/blog/${p.id}`} postId={p.id} compact align="right" />
                     </div>
                   </div>
                 </article>

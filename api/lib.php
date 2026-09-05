@@ -10988,6 +10988,12 @@ function post_like_toggle(int $postId, string $visitor): array
     post_engagement_ensure_schema();
     $h = post_visitor_hash($visitor);
     if ($h === '') json(['error' => 'Could not register that.'], 422);
+    // The article has to exist. Without this an id typed into the console
+    // leaves a like against nothing, and post_likes slowly fills with rows
+    // that can never be counted or cleared.
+    $ex = db()->prepare('SELECT 1 FROM posts WHERE id = ? LIMIT 1');
+    $ex->execute([$postId]);
+    if (!$ex->fetchColumn()) json(['error' => 'That article no longer exists.'], 404);
     $chk = db()->prepare('SELECT 1 FROM post_likes WHERE post_id = ? AND visitor_hash = ? LIMIT 1');
     $chk->execute([$postId, $h]);
     if ($chk->fetchColumn()) {
