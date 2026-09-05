@@ -47,6 +47,7 @@ try {
     $routes = [
         '/about' => ['About', 'Faith, family, and purpose - the story of Frantz Coutard, award-winning entrepreneur, technology innovator, and community advocate.', '/assets/awards/frantz-coutard.webp'],
         '/awards' => ['Awards & Recognition', 'Recognized by community, county, state, federal, and national organizations — from the Queens Chamber (2023) to the Presidential Lifetime Achievement Award and the U.S. Senate.', '/assets/awards/frantz-coutard.webp'],
+        '/careers' => ['Careers & Opportunities', 'Open roles across the Frantz Coutard ecosystem and our partner organisations. Apply online — open to applicants 18 and over.', null],
         '/blog' => ['Blog & News', 'Insights from Frantz Coutard on technology, entrepreneurship, and community - plus news shaping local commerce.', null],
         '/events' => ['Events', 'Where to find Frantz Coutard next - keynotes, panels, and community gatherings.', null],
         '/contact' => ['Contact', 'Get in touch with Frantz Coutard and the team for partnerships, press, speaking, and community initiatives.', '/assets/fc-logo.webp'],
@@ -73,7 +74,7 @@ try {
         '/demo', '/new-school/dashboard',
     ];
 
-    $title = null; $desc = null; $image = null; $post = null; $known = false;
+    $title = null; $desc = null; $image = null; $post = null; $job = null; $known = false;
 
     if (isset($routes[$path])) {
         [$title, $desc, $image] = $routes[$path];
@@ -94,6 +95,25 @@ try {
             $known = true;
         }
         // else: post id doesn't exist → genuine 404 (handled below)
+    } elseif (preg_match('#^/careers/(\d+)$#', $path, $m)) {
+        /* A single open role. Only an approved one is a real page: a pending,
+           declined or deleted posting must 404 rather than sit in the index
+           advertising a job nobody can apply for. */
+        require_once __DIR__ . '/api/config.php';
+        header('Content-Type: text/html; charset=utf-8'); // config.php sets JSON; restore HTML
+        try {
+            $stmt = db()->prepare("SELECT * FROM career_jobs WHERE id = ? AND status = 'approved' LIMIT 1");
+            $stmt->execute([(int) $m[1]]);
+            $job = $stmt->fetch() ?: null;
+        } catch (Throwable $e) { $job = null; }
+        if ($job) {
+            $title = (string) $job['title'] . ' — ' . (string) $job['org_name'];
+            $desc = trim((string) ($job['summary'] ?? '')) !== ''
+                ? (string) $job['summary']
+                : (string) $job['title'] . ' at ' . (string) $job['org_name']
+                    . '. Apply online — open to applicants 18 and over.';
+            $known = true;
+        }
     }
 
     // Soft-404 fix: a URL that matches no real route (the SPA's NotFound catch-all,
@@ -164,10 +184,48 @@ try {
         $html = str_replace('</head>', $ld, $html);
     }
 
+    /* Open role → JobPosting structured data. This is what lets a role appear
+       in Google's jobs results, and it has to be in the served HTML: the
+       crawler that reads it does not run our JavaScript. */
+    if ($job !== null) {
+        $body = implode("\n\n", array_filter([
+            (string) ($job['summary'] ?? ''), (string) ($job['description'] ?? ''),
+            (string) ($job['responsibilities'] ?? ''), (string) ($job['requirements'] ?? ''),
+        ]));
+        $deadline = trim((string) ($job['apply_deadline'] ?? ''));
+        $remote = (string) ($job['work_mode'] ?? '') === 'remote';
+        $loc = trim((string) ($job['location'] ?? ''));
+        $schema = array_filter([
+            '@context' => 'https://schema.org',
+            '@type' => 'JobPosting',
+            'title' => (string) $job['title'],
+            'description' => $body !== '' ? $body : (string) $job['title'],
+            'datePosted' => substr((string) $job['created_at'], 0, 10),
+            'validThrough' => $deadline !== '' && $deadline !== '0000-00-00' ? $deadline : null,
+            'employmentType' => strtoupper((string) $job['employment_type']),
+            'hiringOrganization' => ['@type' => 'Organization', 'name' => (string) $job['org_name']],
+            'jobLocationType' => $remote ? 'TELECOMMUTE' : null,
+            'jobLocation' => $loc !== ''
+                ? ['@type' => 'Place', 'address' => ['@type' => 'PostalAddress', 'addressLocality' => $loc, 'addressCountry' => 'US']]
+                : null,
+            'applicantLocationRequirements' => $remote ? ['@type' => 'Country', 'name' => 'USA'] : null,
+            'skills' => trim((string) ($job['skills'] ?? '')) ?: null,
+            'directApply' => true,
+            'url' => $canonical,
+        ], static fn($v) => $v !== null);
+        $ld = '<script type="application/ld+json">'
+            . json_encode($schema, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)
+            . '</script>' . "\n</head>";
+        $html = str_replace('</head>', $ld, $html);
+    }
+
     // Breadcrumb structured data (breadcrumb rich results). Home > [Blog >] Page.
     $crumbs = [['name' => 'Home', 'item' => SITE_URL . '/']];
     if ($post !== null) {
         $crumbs[] = ['name' => 'Blog', 'item' => SITE_URL . '/blog'];
+    }
+    if ($job !== null) {
+        $crumbs[] = ['name' => 'Careers', 'item' => SITE_URL . '/careers'];
     }
     $crumbs[] = ['name' => $title, 'item' => $canonical];
     $breadcrumb = [

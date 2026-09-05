@@ -78,6 +78,20 @@ try {
     // sitemap endpoint stays healthy for crawlers.
 }
 
+// Open roles — /careers/{id}. Only approved ones that are still taking
+// applications: a crawler should never be sent to a role nobody can apply for.
+try {
+    $rows = db()->query("SELECT id, updated_at FROM career_jobs
+        WHERE status = 'approved' AND (apply_deadline IS NULL OR apply_deadline >= CURDATE())
+        ORDER BY created_at DESC")->fetchAll();
+    foreach ($rows as $r) {
+        $lastmod = !empty($r['updated_at']) ? substr((string) $r['updated_at'], 0, 10) : $today;
+        $body .= sitemap_url($base, '/careers/' . (int) $r['id'], $lastmod, 'weekly', '0.7');
+    }
+} catch (Throwable $e) {
+    // The table may not exist yet on an old deploy — the rest still returns.
+}
+
 header('Content-Type: application/xml; charset=utf-8');
 echo '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
 echo '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' . "\n";

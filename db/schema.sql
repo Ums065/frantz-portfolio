@@ -17,6 +17,9 @@ CREATE TABLE IF NOT EXISTS users (
   avatar_url    VARCHAR(255) DEFAULT NULL,
   role          ENUM('member','vip','editor','admin','super_admin','student','parent','school','teacher','judge','business','sponsor','partner','media','volunteer') NOT NULL DEFAULT 'member',
   referred_by_code VARCHAR(24) DEFAULT NULL,
+  -- Asked once when someone applies on the public careers board, then kept, so
+  -- the 18+ rule checks something we hold rather than the last form's guess.
+  date_of_birth DATE NULL DEFAULT NULL,
   email_verified_at TIMESTAMP NULL DEFAULT NULL,
   approval_status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending',
   approval_note TEXT DEFAULT NULL,
@@ -382,6 +385,9 @@ CREATE TABLE IF NOT EXISTS ecosystem_accounts (
   details TEXT DEFAULT NULL,
   referral_code VARCHAR(24) DEFAULT NULL,
   referred_by_code VARCHAR(24) DEFAULT NULL,
+  -- Asked once when someone applies on the public careers board, then kept, so
+  -- the 18+ rule checks something we hold rather than the last form's guess.
+  date_of_birth DATE NULL DEFAULT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_eco_role (role),
@@ -687,3 +693,339 @@ CREATE TABLE IF NOT EXISTS sponsor_application_messages (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   KEY idx_sam_app (application_id, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ============================================================
+-- Tables the application had been creating only at runtime
+-- ------------------------------------------------------------
+-- Every one of these has a *_ensure_schema() function that creates it on the
+-- first request after a deploy, which is why they were never written down here.
+-- That works, but it left this file an incomplete picture of the database, so
+-- anyone reading it to understand the system saw only half of it. Written out
+-- now, self-healing columns folded in, so a fresh import matches a live site.
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS career_applications (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  job_id INT NOT NULL,
+  user_id INT NOT NULL,
+  full_name VARCHAR(160) NOT NULL,
+  email VARCHAR(190) NOT NULL,
+  phone VARCHAR(40) DEFAULT NULL,
+  date_of_birth DATE NULL DEFAULT NULL,
+  age_at_apply TINYINT DEFAULT NULL,
+  location VARCHAR(160) DEFAULT NULL,
+  cover_note TEXT DEFAULT NULL,
+  answers TEXT DEFAULT NULL,
+  resume_url VARCHAR(400) DEFAULT NULL,
+  portfolio_url VARCHAR(400) DEFAULT NULL,
+  status VARCHAR(16) NOT NULL DEFAULT 'submitted',
+  admin_note TEXT DEFAULT NULL,
+  reviewed_by_user_id INT DEFAULT NULL,
+  reviewed_at TIMESTAMP NULL DEFAULT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_career_app (job_id, user_id),
+  INDEX idx_career_app_job (job_id, status),
+  INDEX idx_career_app_user (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS career_jobs (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  posted_by_user_id INT DEFAULT NULL,
+  poster_role VARCHAR(20) NOT NULL DEFAULT 'admin',
+  org_name VARCHAR(160) NOT NULL,
+  title VARCHAR(180) NOT NULL,
+  employment_type VARCHAR(20) NOT NULL DEFAULT 'full_time',
+  work_mode VARCHAR(10) NOT NULL DEFAULT 'onsite',
+  location VARCHAR(160) DEFAULT NULL,
+  compensation VARCHAR(120) DEFAULT NULL,
+  summary VARCHAR(400) DEFAULT NULL,
+  description TEXT DEFAULT NULL,
+  responsibilities TEXT DEFAULT NULL,
+  requirements TEXT DEFAULT NULL,
+  skills VARCHAR(400) DEFAULT NULL,
+  min_age TINYINT NOT NULL DEFAULT 18,
+  questions TEXT DEFAULT NULL,
+  apply_deadline DATE NULL DEFAULT NULL,
+  status VARCHAR(16) NOT NULL DEFAULT 'pending',
+  decline_reason VARCHAR(400) DEFAULT NULL,
+  reviewed_by_user_id INT DEFAULT NULL,
+  reviewed_at TIMESTAMP NULL DEFAULT NULL,
+  views INT NOT NULL DEFAULT 0,
+  -- Records that this posting passed review once, so its owner can reopen a
+  -- closed role without it having to be reviewed again.
+  was_approved TINYINT(1) NOT NULL DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_career_status (status, created_at),
+  INDEX idx_career_poster (posted_by_user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS donations (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  donation_no VARCHAR(24) NOT NULL UNIQUE,
+  receipt_no VARCHAR(24) DEFAULT NULL UNIQUE,
+  user_id INT DEFAULT NULL,
+  donor_name VARCHAR(160) NOT NULL,
+  email VARCHAR(160) NOT NULL,
+  organization VARCHAR(200) DEFAULT NULL,
+  donor_role VARCHAR(30) DEFAULT NULL,
+  amount DECIMAL(10,2) NOT NULL DEFAULT 0,
+  currency VARCHAR(8) NOT NULL DEFAULT 'usd',
+  designation VARCHAR(80) DEFAULT NULL,
+  message VARCHAR(1000) DEFAULT NULL,
+  is_anonymous TINYINT(1) NOT NULL DEFAULT 0,
+  provider VARCHAR(30) DEFAULT NULL,
+  payment_status ENUM('pending','paid','failed','refunded') NOT NULL DEFAULT 'pending',
+  payment_session_id VARCHAR(160) DEFAULT NULL,
+  payment_intent_id VARCHAR(160) DEFAULT NULL,
+  payment_error TEXT DEFAULT NULL,
+  paid_at TIMESTAMP NULL DEFAULT NULL,
+  receipt_url VARCHAR(300) DEFAULT NULL,
+  receipt_sent_at TIMESTAMP NULL DEFAULT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_don_status (payment_status, created_at), INDEX idx_don_user (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS fellow_activities (
+  id INT AUTO_INCREMENT PRIMARY KEY, fellow_user_id INT NOT NULL, org_id INT DEFAULT NULL,
+  type VARCHAR(20) NOT NULL, detail VARCHAR(500) DEFAULT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_fa_fellow (fellow_user_id, created_at), INDEX idx_fa_org (org_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS fellow_contacts (
+  id INT AUTO_INCREMENT PRIMARY KEY, org_id INT NOT NULL,
+  name VARCHAR(160) NOT NULL, title VARCHAR(160) DEFAULT NULL, email VARCHAR(160) DEFAULT NULL,
+  phone VARCHAR(60) DEFAULT NULL, linkedin VARCHAR(255) DEFAULT NULL, is_primary TINYINT(1) NOT NULL DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, INDEX idx_fc_org (org_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS fellow_followups (
+  id INT AUTO_INCREMENT PRIMARY KEY, org_id INT NOT NULL, fellow_user_id INT NOT NULL,
+  due_date DATE NOT NULL, method VARCHAR(40) DEFAULT NULL, reason VARCHAR(255) DEFAULT NULL,
+  notes TEXT DEFAULT NULL, status VARCHAR(20) NOT NULL DEFAULT 'pending',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, done_at TIMESTAMP NULL DEFAULT NULL,
+  INDEX idx_ffu_fellow (fellow_user_id, status, due_date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS fellow_materials (
+  id INT AUTO_INCREMENT PRIMARY KEY, category VARCHAR(80) NOT NULL DEFAULT 'Sponsor Materials',
+  title VARCHAR(200) NOT NULL, description VARCHAR(400) DEFAULT NULL, url VARCHAR(500) DEFAULT NULL,
+  sort_order INT NOT NULL DEFAULT 0, is_active TINYINT(1) NOT NULL DEFAULT 1,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS fellow_meetings (
+  id INT AUTO_INCREMENT PRIMARY KEY, org_id INT NOT NULL, fellow_user_id INT NOT NULL,
+  contact_name VARCHAR(160) DEFAULT NULL, meeting_at DATETIME DEFAULT NULL, type VARCHAR(20) DEFAULT 'zoom',
+  purpose VARCHAR(255) DEFAULT NULL, notes TEXT DEFAULT NULL, outcome VARCHAR(255) DEFAULT NULL,
+  next_steps TEXT DEFAULT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_fm_fellow (fellow_user_id), INDEX idx_fm_org (org_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS fellow_module_progress (
+  id INT AUTO_INCREMENT PRIMARY KEY, fellow_user_id INT NOT NULL, module_id INT NOT NULL,
+  completed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE KEY uniq_fm (fellow_user_id, module_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS fellow_modules (
+  id INT AUTO_INCREMENT PRIMARY KEY, doc_key VARCHAR(255) NOT NULL UNIQUE,
+  category VARCHAR(60) NOT NULL DEFAULT 'Training & Playbooks', title VARCHAR(240) NOT NULL,
+  description VARCHAR(400) DEFAULT NULL, doc_url VARCHAR(500) DEFAULT NULL, video_url VARCHAR(500) DEFAULT NULL,
+  sort_order INT NOT NULL DEFAULT 0, is_active TINYINT(1) NOT NULL DEFAULT 1,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS fellow_orgs (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  is_demo TINYINT(1) NOT NULL DEFAULT 0,
+  fellow_user_id INT DEFAULT NULL,
+  created_by_user_id INT DEFAULT NULL,
+  name VARCHAR(200) NOT NULL,
+  website VARCHAR(255) DEFAULT NULL,
+  industry VARCHAR(120) DEFAULT NULL,
+  category VARCHAR(80) DEFAULT NULL,
+  org_type VARCHAR(80) DEFAULT NULL,
+  location VARCHAR(160) DEFAULT NULL,
+  territory VARCHAR(120) DEFAULT NULL,
+  priority VARCHAR(20) NOT NULL DEFAULT 'unreviewed',
+  stage VARCHAR(30) NOT NULL DEFAULT 'researching',
+  est_value INT NOT NULL DEFAULT 0,
+  fit_notes TEXT DEFAULT NULL,
+  internal_notes TEXT DEFAULT NULL,
+  name_key VARCHAR(200) DEFAULT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_fo_fellow (fellow_user_id), INDEX idx_fo_stage (stage), INDEX idx_fo_key (name_key)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS fellow_proposals (
+  id INT AUTO_INCREMENT PRIMARY KEY, org_id INT NOT NULL, fellow_user_id INT NOT NULL,
+  contact_name VARCHAR(160) DEFAULT NULL, amount INT NOT NULL DEFAULT 0, level VARCHAR(80) DEFAULT NULL,
+  status VARCHAR(24) NOT NULL DEFAULT 'draft', notes TEXT DEFAULT NULL, admin_note VARCHAR(500) DEFAULT NULL,
+  next_followup DATE DEFAULT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_fp_fellow (fellow_user_id, status), INDEX idx_fp_org (org_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS fellow_quiz_attempts (
+  id INT AUTO_INCREMENT PRIMARY KEY, fellow_user_id INT NOT NULL, score TINYINT NOT NULL DEFAULT 0,
+  passed TINYINT(1) NOT NULL DEFAULT 0, total INT NOT NULL DEFAULT 0, correct INT NOT NULL DEFAULT 0,
+  taken_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, INDEX idx_fqa (fellow_user_id, taken_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS fellow_quiz_questions (
+  id INT AUTO_INCREMENT PRIMARY KEY, question VARCHAR(600) NOT NULL, options_json TEXT NOT NULL,
+  correct_index TINYINT NOT NULL DEFAULT 0, sort_order INT NOT NULL DEFAULT 0, is_active TINYINT(1) NOT NULL DEFAULT 1,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS fellow_reports (
+  id INT AUTO_INCREMENT PRIMARY KEY, fellow_user_id INT NOT NULL, report_date DATE NOT NULL,
+  numbers_json TEXT DEFAULT NULL, wins TEXT DEFAULT NULL, challenges TEXT DEFAULT NULL,
+  help_needed TEXT DEFAULT NULL, plan TEXT DEFAULT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_fellow_day (fellow_user_id, report_date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS fellow_school_calls (
+  id INT AUTO_INCREMENT PRIMARY KEY, school_id INT NOT NULL, fellow_user_id INT NOT NULL,
+  spoke_to VARCHAR(160) DEFAULT NULL, outcome VARCHAR(24) NOT NULL DEFAULT 'reached',
+  note VARCHAR(1000) DEFAULT NULL, follow_up_date DATE DEFAULT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_fsc_school (school_id, created_at), INDEX idx_fsc_fellow (fellow_user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS fellow_targets (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  fellow_user_id INT NOT NULL DEFAULT 0, orgs INT NOT NULL DEFAULT 10, emails INT NOT NULL DEFAULT 10,
+  calls INT NOT NULL DEFAULT 5, linkedin INT NOT NULL DEFAULT 5, follow_ups INT NOT NULL DEFAULT 10,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS fellow_task_messages (
+  id INT AUTO_INCREMENT PRIMARY KEY, task_id INT NOT NULL,
+  sender_user_id INT NOT NULL, sender_role VARCHAR(20) NOT NULL,
+  body TEXT NOT NULL, attachment_url VARCHAR(500) DEFAULT NULL,
+  read_by_admin TINYINT(1) NOT NULL DEFAULT 0, read_by_fellow TINYINT(1) NOT NULL DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_ftm_task (task_id, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS fellow_task_templates (
+  id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(160) NOT NULL,
+  title VARCHAR(200) NOT NULL, instructions TEXT DEFAULT NULL,
+  priority VARCHAR(20) NOT NULL DEFAULT 'medium', due_in_days INT DEFAULT NULL,
+  work_target VARCHAR(24) DEFAULT NULL, work_filter TEXT DEFAULT NULL, target_count INT DEFAULT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS fellow_tasks (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  accepted_at TIMESTAMP NULL DEFAULT NULL,
+  submitted_at TIMESTAMP NULL DEFAULT NULL,
+  deliverable_url VARCHAR(500) DEFAULT NULL,
+  last_message_at TIMESTAMP NULL DEFAULT NULL,
+  declined_reason VARCHAR(500) DEFAULT NULL,
+  migrated_from_assignment INT DEFAULT NULL,
+  work_target VARCHAR(24) DEFAULT NULL,
+  work_filter TEXT DEFAULT NULL,
+  target_count INT DEFAULT NULL,
+  requested_by_fellow TINYINT(1) NOT NULL DEFAULT 0,
+  overdue_notified_on DATE DEFAULT NULL, fellow_user_id INT NOT NULL, assigned_by_user_id INT DEFAULT NULL,
+  title VARCHAR(200) NOT NULL, instructions TEXT DEFAULT NULL, org_id INT DEFAULT NULL,
+  due_date DATE DEFAULT NULL, priority VARCHAR(20) NOT NULL DEFAULT 'medium',
+  status VARCHAR(20) NOT NULL DEFAULT 'not_started', notes TEXT DEFAULT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, completed_at TIMESTAMP NULL DEFAULT NULL,
+  INDEX idx_ft_fellow (fellow_user_id, status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS fellow_templates (
+  id INT AUTO_INCREMENT PRIMARY KEY, kind VARCHAR(20) NOT NULL DEFAULT 'email',
+  category VARCHAR(80) DEFAULT NULL, name VARCHAR(160) NOT NULL, subject VARCHAR(240) DEFAULT NULL,
+  body TEXT DEFAULT NULL, sort_order INT NOT NULL DEFAULT 0, is_active TINYINT(1) NOT NULL DEFAULT 1,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS post_likes (
+  post_id INT NOT NULL,
+  visitor_hash CHAR(64) NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (post_id, visitor_hash)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS post_reads (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  post_id INT NOT NULL,
+  visitor_hash CHAR(64) NOT NULL,
+  seconds INT NOT NULL DEFAULT 0,
+  reached_end TINYINT(1) NOT NULL DEFAULT 0,
+  referrer VARCHAR(255) DEFAULT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_reads_post (post_id, created_at),
+  INDEX idx_reads_visitor (post_id, visitor_hash)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS post_shares (
+  post_id INT NOT NULL,
+  channel VARCHAR(20) NOT NULL,
+  clicks INT NOT NULL DEFAULT 0,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (post_id, channel)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS press_items (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  kind VARCHAR(20) NOT NULL DEFAULT 'website',
+  title VARCHAR(200) NOT NULL,
+  url VARCHAR(500) DEFAULT NULL,
+  thumbnail_url VARCHAR(500) DEFAULT NULL,
+  source_name VARCHAR(120) DEFAULT NULL,
+  sort_order INT NOT NULL DEFAULT 0,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS research_entries (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  dbn VARCHAR(20) DEFAULT NULL,
+  region VARCHAR(60) DEFAULT NULL,
+  priority VARCHAR(20) DEFAULT NULL,
+  school_type VARCHAR(80) DEFAULT NULL,
+  grades VARCHAR(40) DEFAULT NULL,
+  neighborhood VARCHAR(120) DEFAULT NULL,
+  address VARCHAR(255) DEFAULT NULL,
+  zip VARCHAR(20) DEFAULT NULL,
+  county VARCHAR(60) DEFAULT NULL,
+  district VARCHAR(120) DEFAULT NULL,
+  parent_contact VARCHAR(255) DEFAULT NULL,
+  verify_method VARCHAR(30) DEFAULT NULL,
+  verified_on DATE DEFAULT NULL,
+  outreach_status VARCHAR(24) NOT NULL DEFAULT 'not_contacted',
+  invited_at TIMESTAMP NULL DEFAULT NULL,
+  name_key VARCHAR(200) DEFAULT NULL,
+  source_file VARCHAR(160) DEFAULT NULL,
+  fellow_user_id INT NOT NULL,
+  assignment_id INT DEFAULT NULL,
+  category VARCHAR(24) NOT NULL,
+  title VARCHAR(200) NOT NULL,
+  organization VARCHAR(200) DEFAULT NULL,
+  contact_name VARCHAR(160) DEFAULT NULL,
+  email VARCHAR(200) DEFAULT NULL,
+  phone VARCHAR(60) DEFAULT NULL,
+  website VARCHAR(300) DEFAULT NULL,
+  location VARCHAR(160) DEFAULT NULL,
+  source_url VARCHAR(500) DEFAULT NULL,
+  notes TEXT DEFAULT NULL,
+  status VARCHAR(16) NOT NULL DEFAULT 'submitted',
+  admin_note TEXT DEFAULT NULL,
+  pushed_school_id INT DEFAULT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_research_fellow (fellow_user_id),
+  INDEX idx_research_cat (category),
+  INDEX idx_research_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+

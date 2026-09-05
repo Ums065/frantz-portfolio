@@ -63,6 +63,27 @@ $ok('a stranger sees none', careers_applications(['job_id' => $jobId], 999999)['
 $pub = careers_jobs_public(['q' => 'ZZ Test Role']);
 $ok('search finds it', $pub['total'] >= 1);
 
+echo "\nReview cannot be bypassed\n";
+/* An admin closing a still-unreviewed partner post must not let the partner
+   publish it themselves by reopening it. */
+db()->prepare("UPDATE career_jobs SET status = 'closed', was_approved = 0 WHERE id = ?")->execute([$jobId]);
+$row = db()->query('SELECT was_approved FROM career_jobs WHERE id = ' . $jobId)->fetch();
+$ok('a never-approved post carries was_approved = 0', (int) $row['was_approved'] === 0);
+careers_job_review($admin, $jobId, 'approved');
+$row = db()->query('SELECT status, was_approved FROM career_jobs WHERE id = ' . $jobId)->fetch();
+$ok('approving records was_approved', (int) $row['was_approved'] === 1);
+careers_job_review($admin, $jobId, 'declined', 'test');
+$row = db()->query('SELECT was_approved FROM career_jobs WHERE id = ' . $jobId)->fetch();
+$ok('and declining does not clear it', (int) $row['was_approved'] === 1);
+careers_job_review($admin, $jobId, 'approved');
+
+echo "\nWhat a hiring partner may see\n";
+$asOwner = careers_applications(['job_id' => $jobId], (int) $admin['id'])['applications'][0] ?? [];
+$ok('the poster does not receive a date of birth', !array_key_exists('date_of_birth', $asOwner));
+$ok('but does see the age', (int) ($asOwner['age_at_apply'] ?? 0) === 25);
+$asAdmin = careers_applications(['job_id' => $jobId])['applications'][0] ?? [];
+$ok('an admin still sees the date of birth', array_key_exists('date_of_birth', $asAdmin));
+
 echo "\nClosing\n";
 db()->prepare('UPDATE career_jobs SET apply_deadline = ? WHERE id = ?')->execute([date('Y-m-d', strtotime('-1 day')), $jobId]);
 $job = db()->query('SELECT * FROM career_jobs WHERE id = ' . $jobId)->fetch();

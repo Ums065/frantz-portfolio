@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import { api, type CareerApplicantState, type CareerJob, type CareerJobDetail } from '../lib/api'
 import { useAuth } from '../context/AuthContext'
 import { useSeo } from '../hooks/useSeo'
@@ -15,8 +16,38 @@ const TYPE_LABEL: Record<string, string> = {
 const MODE_LABEL: Record<string, string> = { onsite: 'On site', remote: 'Remote', hybrid: 'Hybrid' }
 const fmtDate = (d: string) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 
+/* Google reads JobPosting and can surface a role in its jobs results, but only
+   for a page that is actually about that one role — hence /careers/{id} rather
+   than a modal with no URL of its own. Fields Google treats as required:
+   title, description, datePosted, hiringOrganization, jobLocation. */
+function jobLd(j: CareerJobDetail) {
+  const body = [j.summary, j.description, j.responsibilities, j.requirements].filter(Boolean).join('\n\n')
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'JobPosting',
+    title: j.title,
+    description: body || j.title,
+    datePosted: (j.created_at || '').slice(0, 10),
+    validThrough: j.apply_deadline || undefined,
+    employmentType: (j.employment_type || '').toUpperCase(),
+    hiringOrganization: { '@type': 'Organization', name: j.org_name },
+    jobLocationType: j.work_mode === 'remote' ? 'TELECOMMUTE' : undefined,
+    jobLocation: j.location
+      ? { '@type': 'Place', address: { '@type': 'PostalAddress', addressLocality: j.location, addressCountry: 'US' } }
+      : undefined,
+    applicantLocationRequirements: j.work_mode === 'remote' ? { '@type': 'Country', name: 'USA' } : undefined,
+    skills: j.skills || undefined,
+    directApply: true,
+    url: `https://frantzcoutard.com/careers/${j.id}`,
+  }
+}
+
 export default function Careers() {
   const { user } = useAuth()
+  // /careers/{id} opens straight onto one role — a real URL people can share
+  // and search engines can index.
+  const { id: routeId } = useParams<{ id: string }>()
+  const navigate = useNavigate()
   const [jobs, setJobs] = useState<CareerJob[]>([])
   const [types, setTypes] = useState<{ employment_type: string; n: number }[]>([])
   const [total, setTotal] = useState(0)
@@ -28,9 +59,21 @@ export default function Careers() {
   const [me, setMe] = useState<CareerApplicantState | null>(null)
   const per = 12
 
-  useSeo({
+  useSeo(openJob ? {
+    title: `${openJob.title} — ${openJob.org_name}`,
+    description: openJob.summary || `${openJob.title} at ${openJob.org_name}. Apply online — open to applicants 18 and over.`,
+    type: 'article',
+    jsonLd: jobLd(openJob),
+  } : {
     title: 'Careers',
     description: 'Open roles across the Frantz Coutard ecosystem and our partner organisations. Apply online — open to applicants 18 and over.',
+    jsonLd: {
+      '@context': 'https://schema.org',
+      '@type': 'CollectionPage',
+      name: 'Careers & Opportunities',
+      description: 'Open roles across the Frantz Coutard ecosystem and its partner organisations.',
+      url: 'https://frantzcoutard.com/careers',
+    },
   })
 
   const load = useCallback(() => {
@@ -52,11 +95,18 @@ export default function Careers() {
     return () => clearTimeout(t)
   }, [load, q])
 
-  const open = (id: number) => {
-    api.get<{ job: CareerJobDetail; me: CareerApplicantState }>(`careers/${id}`)
-      .then((d) => { setOpenJob(d.job); setMe(d.me) })
-      .catch(() => window.fcToast?.('That role is no longer listed.'))
-  }
+  // Opening a role changes the URL, so it can be shared, bookmarked and indexed.
+  const open = (id: number) => navigate(`/careers/${id}`)
+  const close = () => navigate('/careers')
+
+  useEffect(() => {
+    if (!routeId) { setOpenJob(null); return }
+    let live = true
+    api.get<{ job: CareerJobDetail; me: CareerApplicantState }>(`careers/${routeId}`)
+      .then((d) => { if (live) { setOpenJob(d.job); setMe(d.me) } })
+      .catch(() => { if (live) { window.fcToast?.('That role is no longer listed.'); navigate('/careers', { replace: true }) } })
+    return () => { live = false }
+  }, [routeId, navigate])
 
   const pages = Math.max(1, Math.ceil(total / per))
 
@@ -147,8 +197,8 @@ export default function Careers() {
       </section>
 
       {openJob && (
-        <JobModal job={openJob} me={me} onClose={() => setOpenJob(null)}
-          onApplied={() => { setOpenJob(null); load() }} />
+        <JobModal job={openJob} me={me} onClose={close}
+          onApplied={() => { close(); load() }} />
       )}
     </main>
   )

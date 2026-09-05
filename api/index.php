@@ -751,6 +751,9 @@ try {
         // Sent by sendBeacon as the reader leaves, so it must stay cheap and quiet.
         case $method === 'POST' && preg_match('#^posts/(\d+)/read-time$#', $route, $m) === 1: {
             post_engagement_ensure_schema();
+            // The update can only touch a row this visitor already owns, but an
+            // endpoint with no ceiling is still a free write loop.
+            rate_limit('post_read_time', 240, 3600);
             $b = body();
             post_read_report(
                 (int) ($b['read_id'] ?? 0), (int) $m[1], (string) field($b, 'visitor'),
@@ -5064,18 +5067,29 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
         }
         case $method === 'POST' && preg_match('#^careers/job/(\d+)/close$#', $route, $m) === 1: {
             $u = require_login();
-            $s = db()->prepare('SELECT posted_by_user_id, status FROM career_jobs WHERE id = ? LIMIT 1');
+            careers_ensure_schema();
+            $s = db()->prepare('SELECT posted_by_user_id, status, was_approved FROM career_jobs WHERE id = ? LIMIT 1');
             $s->execute([(int) $m[1]]);
             $job = $s->fetch();
             if (!$job) json(['error' => 'Job not found.'], 404);
             $isAdmin = in_array((string) ($u['role'] ?? ''), ['admin', 'super_admin'], true);
             if (!$isAdmin && (int) $job['posted_by_user_id'] !== (int) $u['id']) json(['error' => 'That is not your posting.'], 403);
             $reopen = (string) field(body(), 'action') === 'reopen';
-            // Reopening puts a partner's post back through review only if it
-            // never was approved; an approved-then-closed role just reopens.
-            $next = $reopen ? ((string) $job['status'] === 'closed' ? 'approved' : (string) $job['status']) : 'closed';
+            /* Reopening must not become a way around review. A posting only goes
+               straight back to approved if an admin approved it at some point
+               (was_approved); otherwise it returns to the pending queue. Without
+               that, an admin closing a still-unreviewed partner post would let
+               the partner publish it themselves by reopening. */
+            $next = (string) $job['status'];
+            if ($reopen) {
+                if ($next === 'closed') $next = ($isAdmin || (int) $job['was_approved'] === 1) ? 'approved' : 'pending';
+            } else {
+                $next = 'closed';
+            }
             db()->prepare('UPDATE career_jobs SET status = ? WHERE id = ?')->execute([$next, (int) $m[1]]);
-            json(['message' => $reopen ? 'Job reopened.' : 'Job closed.']);
+            json(['message' => $reopen
+                ? ($next === 'pending' ? 'Reopened — an admin will review it before it goes back up.' : 'Job reopened.')
+                : 'Job closed.']);
         }
         case $method === 'GET' && preg_match('#^careers/job/(\d+)/applications$#', $route, $m) === 1: {
             $u = require_login();

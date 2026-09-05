@@ -130,10 +130,25 @@ async function discoverArticleRoutes() {
   }
 }
 
+/* Each open role too. A JobPosting only reaches Google's jobs results if the
+   crawler can read the markup without running our JavaScript. */
+async function discoverJobRoutes() {
+  try {
+    const res = await fetch(`${base}/api/careers?per=200`)
+    const data = await res.json()
+    const ids = (data?.jobs || []).map((j) => Number(j.id)).filter((n) => Number.isFinite(n) && n > 0)
+    return ids.map((id) => `/careers/${id}`)
+  } catch (e) {
+    console.warn(`  ! could not list open roles from ${API} — ${e.message}`)
+    return []
+  }
+}
+
 const articleRoutes = await discoverArticleRoutes()
-const ROUTES = [...STATIC_ROUTES, ...articleRoutes]
+const jobRoutes = await discoverJobRoutes()
+const ROUTES = [...STATIC_ROUTES, ...articleRoutes, ...jobRoutes]
 console.log(`API proxied to ${API}`)
-console.log(`${STATIC_ROUTES.length} static routes + ${articleRoutes.length} articles\n`)
+console.log(`${STATIC_ROUTES.length} static routes + ${articleRoutes.length} articles + ${jobRoutes.length} open roles\n`)
 
 let ok = 0
 let generic = 0

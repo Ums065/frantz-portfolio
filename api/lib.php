@@ -11172,6 +11172,7 @@ function careers_ensure_schema(): void
             reviewed_by_user_id INT DEFAULT NULL,
             reviewed_at TIMESTAMP NULL DEFAULT NULL,
             views INT NOT NULL DEFAULT 0,
+            was_approved TINYINT(1) NOT NULL DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             INDEX idx_career_status (status, created_at),
@@ -11202,6 +11203,15 @@ function careers_ensure_schema(): void
             INDEX idx_career_app_job (job_id, status),
             INDEX idx_career_app_user (user_id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+        /* Self-heal: an earlier deploy created career_jobs without this column. */
+        $c = $pdo->query("SELECT COUNT(*) FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'career_jobs' AND COLUMN_NAME = 'was_approved'");
+        if ((int) $c->fetchColumn() === 0) {
+            $pdo->exec('ALTER TABLE career_jobs ADD COLUMN was_approved TINYINT(1) NOT NULL DEFAULT 0');
+            // Anything already approved has, by definition, been approved once.
+            $pdo->exec("UPDATE career_jobs SET was_approved = 1 WHERE status = 'approved'");
+        }
 
         /* The date of birth lives on the user, not only on the application, so
            somebody who applies twice is not asked again — and cannot quietly
@@ -11460,7 +11470,11 @@ function careers_job_save(array $user, array $b, int $id = 0): array
     $data['posted_by_user_id'] = (int) $user['id'];
     $data['poster_role'] = $role;
     $data['status'] = $isAdmin ? 'approved' : 'pending';
-    if ($isAdmin) { $data['reviewed_by_user_id'] = (int) $user['id']; $data['reviewed_at'] = date('Y-m-d H:i:s'); }
+    if ($isAdmin) {
+        $data['reviewed_by_user_id'] = (int) $user['id'];
+        $data['reviewed_at'] = date('Y-m-d H:i:s');
+        $data['was_approved'] = 1;
+    }
     $cols = array_keys($data);
     db()->prepare('INSERT INTO career_jobs (' . implode(',', $cols) . ') VALUES (' . implode(',', array_fill(0, count($cols), '?')) . ')')
         ->execute(array_values($data));
@@ -11484,8 +11498,11 @@ function careers_job_review(array $admin, int $id, string $decision, string $rea
     $job = $s->fetch();
     if (!$job) json(['error' => 'Job not found.'], 404);
 
-    db()->prepare('UPDATE career_jobs SET status = ?, decline_reason = ?, reviewed_by_user_id = ?, reviewed_at = NOW() WHERE id = ?')
-        ->execute([$decision, mb_substr($reason, 0, 400), (int) $admin['id'], $id]);
+    // was_approved never goes back down: it records that this posting passed
+    // review once, which is what lets the poster reopen it without re-review.
+    db()->prepare('UPDATE career_jobs SET status = ?, decline_reason = ?, reviewed_by_user_id = ?, reviewed_at = NOW(),
+            was_approved = GREATEST(was_approved, ?) WHERE id = ?')
+        ->execute([$decision, mb_substr($reason, 0, 400), (int) $admin['id'], $decision === 'approved' ? 1 : 0, $id]);
 
     // Tell whoever posted it what happened — silence after a submission is
     // the fastest way to lose a partner.
@@ -11618,8 +11635,12 @@ function careers_apply(array $user, int $jobId, array $b): array
     }
     $appId = (int) db()->lastInsertId();
 
-    // Confirmation to the applicant, notification to the admin team.
-    mail_queue_enqueue('career_application_received', $email, 'We received your application',
+    /* The confirmation goes to the address on the ACCOUNT, not to whatever was
+       typed into the form. A contact address someone else owns is fine to store
+       and to reply to by hand, but sending to it on submit would turn the form
+       into a way of mailing strangers from our domain. */
+    $confirmTo = (string) ($user['email'] ?? '') ?: $email;
+    mail_queue_enqueue('career_application_received', $confirmTo, 'We received your application',
         "Hi $name,\n\nThank you for applying for {$job['title']} at {$job['org_name']}.\n\n"
         . "Your application is with the team now. We will email you when its status changes.\n\n"
         . "- The Frantz Coutard team\n");
@@ -11658,6 +11679,10 @@ function careers_applications(array $q, ?int $ownerUserId = null): array
     foreach ($rows as &$r) {
         $d = json_decode((string) $r['answers'], true);
         $r['answers'] = is_array($d) ? $d : [];
+        /* A hiring partner needs to know the person is old enough, not their
+           birthday. Age is enough to make the decision; the date itself is
+           extra personal data with no purpose outside our own audit. */
+        if ($ownerUserId !== null) unset($r['date_of_birth'], $r['reviewed_by_user_id']);
     }
     unset($r);
     return ['applications' => $rows, 'total' => $total, 'page' => $page, 'per' => $per];

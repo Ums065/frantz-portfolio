@@ -116,6 +116,7 @@ export default function App() {
           <Route path="/blog" element={<RoutedPage pageKey="blog"><Blog /></RoutedPage>} />
           <Route path="/blog/:id" element={<RoutedPage pageKey="blogpost"><BlogPost /></RoutedPage>} />
           <Route path="/careers" element={<RoutedPage pageKey="careers"><Careers /></RoutedPage>} />
+          <Route path="/careers/:id" element={<RoutedPage pageKey="careers-job"><Careers /></RoutedPage>} />
           <Route path="/events" element={<RoutedPage pageKey="events"><Events /></RoutedPage>} />
           <Route path="/media" element={<RoutedPage pageKey="media"><Media /></RoutedPage>} />
           <Route path="/contact" element={<RoutedPage pageKey="contact"><Contact /></RoutedPage>} />
