@@ -75,6 +75,12 @@ try {
     ];
 
     $title = null; $desc = null; $image = null; $post = null; $job = null; $known = false;
+    /* "The database is down" and "this page does not exist" are different
+       answers. A 404 tells a crawler to drop the URL for good; a database that
+       is briefly unreachable must not cost us every article and every open
+       role in the index. Set when a lookup FAILS, never when it simply finds
+       no row — that really is a 404. */
+    $dbUnavailable = false;
 
     if (isset($routes[$path])) {
         [$title, $desc, $image] = $routes[$path];
@@ -85,9 +91,11 @@ try {
         // Single blog post — pull the real title/excerpt/cover/date from the DB.
         require_once __DIR__ . '/api/config.php';
         header('Content-Type: text/html; charset=utf-8'); // config.php sets JSON; restore HTML
-        $stmt = db()->prepare('SELECT title, excerpt, cover_image, published_at FROM posts WHERE id = ?');
-        $stmt->execute([(int) $m[1]]);
-        $post = $stmt->fetch();
+        try {
+            $stmt = db()->prepare('SELECT title, excerpt, cover_image, published_at FROM posts WHERE id = ?');
+            $stmt->execute([(int) $m[1]]);
+            $post = $stmt->fetch() ?: null;
+        } catch (Throwable $e) { $post = null; $dbUnavailable = true; }
         if ($post) {
             $title = (string) $post['title'];
             $desc = $post['excerpt'] !== null && $post['excerpt'] !== '' ? (string) $post['excerpt'] : null;
@@ -105,7 +113,7 @@ try {
             $stmt = db()->prepare("SELECT * FROM career_jobs WHERE id = ? AND status = 'approved' LIMIT 1");
             $stmt->execute([(int) $m[1]]);
             $job = $stmt->fetch() ?: null;
-        } catch (Throwable $e) { $job = null; }
+        } catch (Throwable $e) { $job = null; $dbUnavailable = true; }
         if ($job) {
             $title = (string) $job['title'] . ' — ' . (string) $job['org_name'];
             $desc = trim((string) ($job['summary'] ?? '')) !== ''
@@ -114,6 +122,17 @@ try {
                     . '. Apply online — open to applicants 18 and over.';
             $known = true;
         }
+    }
+
+    /* Database unreachable: answer 503 with Retry-After, not 404 and not a
+       cheerful 200. 503 is the one status that says "this page is real, come
+       back later" — Google holds the URL instead of dropping it, and will not
+       index the generic shell in place of the real article or role. */
+    if ($dbUnavailable) {
+        http_response_code(503);
+        header('Retry-After: 600');
+        echo $html;
+        exit;
     }
 
     // Soft-404 fix: a URL that matches no real route (the SPA's NotFound catch-all,

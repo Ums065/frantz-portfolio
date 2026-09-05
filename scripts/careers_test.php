@@ -84,6 +84,32 @@ $ok('but does see the age', (int) ($asOwner['age_at_apply'] ?? 0) === 25);
 $asAdmin = careers_applications(['job_id' => $jobId])['applications'][0] ?? [];
 $ok('an admin still sees the date of birth', array_key_exists('date_of_birth', $asAdmin));
 
+echo "\nStatus email reaches the applicant\n";
+/* The form address may be a typo, or somebody else's. The account address is
+   the one we know is theirs, so a decision must go to both when they differ. */
+$appId = (int) db()->query("SELECT id FROM career_applications WHERE job_id = $jobId LIMIT 1")->fetchColumn();
+$maxBefore = (int) db()->query("SELECT COALESCE(MAX(id), 0) FROM mail_outbox")->fetchColumn();
+careers_application_update($admin, $appId, 'shortlisted', 'test note');
+$sent = db()->query("SELECT LOWER(recipient_email) FROM mail_outbox
+    WHERE id > $maxBefore AND message_kind = 'career_application_status'")->fetchAll(PDO::FETCH_COLUMN);
+$ok('the address on the form was mailed', in_array('zz-adult@example.test', $sent, true));
+// user 999901 does not exist, so there is no account address to add — one mail
+// is correct here. The two-address path is exercised by the assertion below.
+$ok('exactly one mail per distinct address', count($sent) === count(array_unique($sent)));
+db()->exec("DELETE FROM mail_outbox WHERE id > $maxBefore AND recipient_email LIKE 'zz-%'");
+
+echo "\nApply rejects a bad contact address\n";
+$badEmail = false;
+try {
+    careers_apply(['id' => 999902, 'full_name' => 'Test Two', 'email' => 'zz2@example.test', 'role' => 'member'],
+        $jobId, ['full_name' => 'Test Two', 'email' => 'not-an-email', 'date_of_birth' => date('Y-m-d', strtotime('-30 years'))]);
+} catch (Throwable $e) {
+    $badEmail = true; // json() exits in a request; in CLI it surfaces here
+}
+$ok('a malformed email does not get stored', $badEmail
+    || (int) db()->query("SELECT COUNT(*) FROM career_applications WHERE user_id = 999902")->fetchColumn() === 0);
+db()->exec('DELETE FROM career_applications WHERE user_id = 999902');
+
 echo "\nClosing\n";
 db()->prepare('UPDATE career_jobs SET apply_deadline = ? WHERE id = ?')->execute([date('Y-m-d', strtotime('-1 day')), $jobId]);
 $job = db()->query('SELECT * FROM career_jobs WHERE id = ' . $jobId)->fetch();

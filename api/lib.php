@@ -11625,7 +11625,10 @@ function careers_apply(array $user, int $jobId, array $b): array
 
     $name = trim((string) field($b, 'full_name')) ?: (string) ($user['full_name'] ?? '');
     $email = trim((string) field($b, 'email')) ?: (string) ($user['email'] ?? '');
-    if ($name === '' || $email === '') json(['error' => 'Name and email are required.'], 422);
+    if ($name === '') json(['error' => 'Your name is required.'], 422);
+    // Checked rather than trusted: a typo here is an applicant who never hears
+    // back, and a stored address nobody can reach is worse than no address.
+    $email = require_email($email);
 
     $row = [
         'job_id' => $jobId,
@@ -11708,8 +11711,11 @@ function careers_application_update(array $actor, int $id, string $status, strin
 {
     careers_ensure_schema();
     if (!in_array($status, CAREER_APP_STATUSES, true)) json(['error' => 'Unknown status.'], 422);
-    $s = db()->prepare('SELECT a.*, j.title AS job_title, j.org_name, j.posted_by_user_id
-        FROM career_applications a JOIN career_jobs j ON j.id = a.job_id WHERE a.id = ? LIMIT 1');
+    $s = db()->prepare('SELECT a.*, j.title AS job_title, j.org_name, j.posted_by_user_id, u.email AS account_email
+        FROM career_applications a
+        JOIN career_jobs j ON j.id = a.job_id
+        LEFT JOIN users u ON u.id = a.user_id
+        WHERE a.id = ? LIMIT 1');
     $s->execute([$id]);
     $app = $s->fetch();
     if (!$app) json(['error' => 'Application not found.'], 404);
@@ -11725,11 +11731,22 @@ function careers_application_update(array $actor, int $id, string $status, strin
         'declined' => 'was not taken forward this time',
     ];
     if (isset($said[$status])) {
-        mail_queue_enqueue('career_application_status', (string) $app['email'],
-            'Update on your application', 'Hi ' . $app['full_name'] . ",\n\n"
+        $body = 'Hi ' . $app['full_name'] . ",\n\n"
             . "Your application for {$app['job_title']} at {$app['org_name']} {$said[$status]}."
             . ($note !== '' ? "\n\nNote from the team:\n$note" : '')
-            . "\n\n- The Frantz Coutard team\n");
+            . "\n\n- The Frantz Coutard team\n";
+        /* Both addresses when they differ. The account address is the one we
+           know belongs to the applicant, so the news always reaches them; the
+           address they wrote on the form is where they asked to be contacted.
+           Sending only to the form address would mean a mistyped — or someone
+           else's — address quietly swallows the answer. */
+        $to = array_values(array_unique(array_filter([
+            strtolower(trim((string) ($app['account_email'] ?? ''))),
+            strtolower(trim((string) $app['email'])),
+        ])));
+        foreach ($to as $addr) {
+            mail_queue_enqueue('career_application_status', $addr, 'Update on your application', $body);
+        }
     }
     return ['message' => 'Application marked ' . $status . '.'];
 }
