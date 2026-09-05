@@ -26,6 +26,7 @@ import { FTAB_GROUPS, FTAB_LABEL, FTAB_HELP, type FTab } from '../lib/fellowAdmi
 const ResearchAdminPanel = lazy(() => import('../components/admin/ResearchAdminPanel'))
 const BusinessRequestsAdminPanel = lazy(() => import('../components/admin/BusinessRequestsAdminPanel'))
 const SponsorJobsAdminPanel = lazy(() => import('../components/admin/SponsorJobsAdminPanel'))
+const CareersAdminPanel = lazy(() => import('../components/admin/CareersAdminPanel'))
 const TeamInboxAdminPanel = lazy(() => import('../components/admin/TeamInboxAdminPanel'))
 import SubmissionScoresModal from '../components/admin/SubmissionScoresModal'
 
@@ -33,7 +34,7 @@ const EDU_PEOPLE_PAGE_SIZE = 10
 
 type TabKey =
   | 'overview' | 'analytics' | 'traffic' | 'requests' | 'orders' | 'subscribers' | 'contacts'
-  | 'members' | 'approvals' | 'business-requests' | 'sponsor-jobs' | 'ecosystem' | 'sponsors' | 'partners' | 'awards' | 'events' | 'blog'
+  | 'members' | 'approvals' | 'business-requests' | 'sponsor-jobs' | 'careers' | 'ecosystem' | 'sponsors' | 'partners' | 'awards' | 'events' | 'blog'
   | 'testimonials' | 'media' | 'gallery' | 'community' | 'rsvps' | 'inventory'
   | 'ns-schools' | 'ns-ranking' | 'ns-submissions' | 'ns-interviews' | 'ns-chat' | 'ns-trendcatch' | 'ns-judges' | 'ns-timeline'
   | 'research' | 'team-inbox' | 'press' | 'fellow-ops' | 'donations'
@@ -62,6 +63,7 @@ const NAV_GROUPS: Array<{ group: string; items: NavItem[] }> = [
     // Requests to act on first, then standing partner directories.
     { key: 'business-requests', label: 'Business Requests' },
     { key: 'sponsor-jobs', label: 'Sponsor Jobs' },
+    { key: 'careers', label: 'Careers Board' },
     { key: 'ecosystem', label: 'Ecosystem' },
     // Fellow work is not listed here: it has its own workspace behind the
     // Main Dashboard / Fellow Team toggle at the top. Action Center entries for
@@ -149,6 +151,7 @@ const ACTION_LABELS: Partial<Record<TabKey, string>> = {
   approvals: 'account(s) to approve',
   'business-requests': 'business request(s)',
   'sponsor-jobs': 'sponsor job(s) to review',
+  careers: 'careers posting(s) to review',
   ecosystem: 'ecosystem request(s)',
   research: 'research entr(y/ies) to review',
   // A Fellow is blocked until their proposal is answered, so surface it here
@@ -189,7 +192,7 @@ interface OrderRow {
 }
 interface Submissions {
   requests: RequestRow[]; subscribers: SubRow[]; contacts: ContactRow[]; members: MemberRow[]; orders: OrderRow[]
-  counts?: Partial<Record<'awards' | 'events' | 'blog' | 'testimonials' | 'media' | 'gallery' | 'inventory' | 'community' | 'rsvps' | 'sponsors' | 'business_requests' | 'ecosystem_requests' | 'sponsors_pending' | 'sponsor_jobs_pending' | 'internships_confirmed' | 'research_pending' | 'partner_logos_pending' | 'fellow_proposals_pending', number>>
+  counts?: Partial<Record<'awards' | 'events' | 'blog' | 'testimonials' | 'media' | 'gallery' | 'inventory' | 'community' | 'rsvps' | 'sponsors' | 'business_requests' | 'ecosystem_requests' | 'sponsors_pending' | 'sponsor_jobs_pending' | 'careers_pending' | 'internships_confirmed' | 'research_pending' | 'partner_logos_pending' | 'fellow_proposals_pending', number>>
 }
 
 interface DetailField {
@@ -839,6 +842,7 @@ export default function Admin() {
     members: pendingAccounts,
     'business-requests': data?.counts?.business_requests ?? 0,
     'sponsor-jobs': data?.counts?.sponsor_jobs_pending ?? 0,
+    careers: data?.counts?.careers_pending ?? 0,
     ecosystem: data?.counts?.ecosystem_requests ?? 0,
     research: data?.counts?.research_pending ?? 0,
     partners: data?.counts?.partner_logos_pending ?? 0,
@@ -2049,6 +2053,7 @@ export default function Admin() {
         {tab === 'partners' && <PartnersAdminPanel />}
         {tab === 'business-requests' && <BusinessRequestsAdminPanel />}
         {tab === 'sponsor-jobs' && <SponsorJobsAdminPanel />}
+        {tab === 'careers' && <CareersAdminPanel />}
         {tab === 'team-inbox' && <TeamInboxAdminPanel />}
         {tab === 'ecosystem' && <EcosystemAdminPanel />}
         {tab === 'awards' && <AwardsAdmin />}

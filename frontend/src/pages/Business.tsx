@@ -6,6 +6,7 @@ import { useSeo } from '../hooks/useSeo'
 import PasswordInput from '../components/PasswordInput'
 import ProgramDisclosure from '../components/ProgramDisclosure'
 import { resolveDashboardRoute } from '../lib/dashboardRoute'
+import CareerPostingsManager from '../components/CareerPostingsManager'
 import OfferStepper, { type OfferStage, type OfferEvent } from '../components/OfferStepper'
 import { unseenAnnCount, markAnnSeen, unseenReqCount, markReqSeen, EcoMessages, Section } from './portal/EcosystemPortal'
 import { useLiveRefresh } from '../hooks/useLiveRefresh'
@@ -111,7 +112,7 @@ interface BizDashboard {
   announcements?: BizAnn[]
 }
 
-type Tab = 'interviews' | 'solutions' | 'pipeline' | 'requests' | 'updates' | 'messages' | 'profile'
+type Tab = 'interviews' | 'solutions' | 'pipeline' | 'careers' | 'requests' | 'updates' | 'messages' | 'profile'
 
 const REQ_LABEL: Record<ReqType, string> = {
   implementation: 'Implementation Help',
@@ -148,7 +149,7 @@ export default function Business() {
   const [err, setErr] = useState('')
   // Persist the active tab in the URL hash so a refresh keeps you on it.
   const [tab, setTabState] = useState<Tab>(() => {
-    const keys: Tab[] = ['interviews', 'solutions', 'pipeline', 'requests', 'updates', 'messages', 'profile']
+    const keys: Tab[] = ['interviews', 'solutions', 'pipeline', 'careers', 'requests', 'updates', 'messages', 'profile']
     try { const h = window.location.hash.replace(/^#/, '') as Tab; return keys.includes(h) ? h : 'interviews' } catch { return 'interviews' }
   })
   const setTab = (k: Tab) => { setTabState(k); try { window.history.replaceState(null, '', `#${k}`) } catch { /* ignore */ } }
@@ -388,6 +389,7 @@ export default function Business() {
     { key: 'interviews', label: `Interviews (${interviews.length})` },
     { key: 'solutions', label: `Student Solutions (${solutionInterviews.length})` },
     { key: 'pipeline', label: `Internship Offers${offers.length ? ` (${offers.length})` : ''}` },
+    { key: 'careers', label: 'Public Careers Board' },
     { key: 'requests', label: `My Requests (${requests.length})`, badge: reqUnseen },
     { key: 'updates', label: `Updates${updatesCount ? ` (${updatesCount})` : ''}`, badge: annUnseen },
     { key: 'messages', label: 'Messages' },
@@ -536,6 +538,14 @@ export default function Business() {
                     {o.stage.key === 'confirmed' && <OfferChat base={`business/offer/${o.id}`} role="business" />}
                   </div>
                 ))}
+            </div>
+          )}
+
+          {/* The internship pipeline above is one named student at a time, with
+              parent consent. This is the public board — anyone 18 or over. */}
+          {tab === 'careers' && (
+            <div style={cardS}>
+              <CareerPostingsManager orgName={data?.profile?.business_name} />
             </div>
           )}
 

@@ -9,6 +9,7 @@ import { AuthProvider } from './context/AuthContext'
 const About = lazy(() => import('./pages/About'))
 const Awards = lazy(() => import('./pages/Awards'))
 const Blog = lazy(() => import('./pages/Blog'))
+const Careers = lazy(() => import('./pages/Careers'))
 const BlogPost = lazy(() => import('./pages/BlogPost'))
 
 const Dashboard = lazy(() => import('./pages/Dashboard'))
@@ -114,6 +115,7 @@ export default function App() {
           <Route path="/projects" element={<RoutedPage pageKey="projects"><Projects /></RoutedPage>} />
           <Route path="/blog" element={<RoutedPage pageKey="blog"><Blog /></RoutedPage>} />
           <Route path="/blog/:id" element={<RoutedPage pageKey="blogpost"><BlogPost /></RoutedPage>} />
+          <Route path="/careers" element={<RoutedPage pageKey="careers"><Careers /></RoutedPage>} />
           <Route path="/events" element={<RoutedPage pageKey="events"><Events /></RoutedPage>} />
           <Route path="/media" element={<RoutedPage pageKey="media"><Media /></RoutedPage>} />
           <Route path="/contact" element={<RoutedPage pageKey="contact"><Contact /></RoutedPage>} />

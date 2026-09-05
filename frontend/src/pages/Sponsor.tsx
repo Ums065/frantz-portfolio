@@ -3,6 +3,7 @@ import EcosystemPortal, {
   LogoUploader, RequestButton, EcoMessages, unseenAnnCount, markAnnSeen, unseenReqCount, markReqSeen, type EcoAssign, type PortalConfig,
 } from './portal/EcosystemPortal'
 import { PostJobPanel, ApplicationsPanel, type SponsorJob } from '../components/SponsorJobsManager'
+import CareerPostingsManager from '../components/CareerPostingsManager'
 
 /* Sponsor Portal — an investment portal: package + recognition, branding, live
    impact, documents (invoices/agreements), award ceremony, renewal + meeting
@@ -48,6 +49,18 @@ const config: PortalConfig = {
       badge: (data) => ((data?.job_posts as SponsorJob[]) || []).reduce((n, j) => n + (j.app_new || 0), 0),
       render: (data) => (
         <Section title="Applications"><ApplicationsPanel jobs={(data?.job_posts as SponsorJob[]) || []} /></Section>
+      ),
+    },
+    {
+      /* The student board above reaches students only. This one is the public
+         careers page, open to anyone 18 or over — a different audience, so it
+         gets its own tab rather than being folded into "Post a Job". */
+      key: 'careers',
+      label: 'Public Careers Board',
+      render: (data) => (
+        <Section title="Public careers board — open to applicants 18+">
+          <CareerPostingsManager orgName={(data?.profile as { org_name?: string })?.org_name} />
+        </Section>
       ),
     },
     {

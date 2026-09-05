@@ -44,6 +44,7 @@ $staticPages = [
     ['/blog', 'weekly', '0.8'],
     ['/winners', 'weekly', '0.8'],
     ['/awards', 'monthly', '0.7'],
+    ['/careers', 'daily', '0.8'],
     ['/events', 'weekly', '0.7'],
     ['/contact', 'monthly', '0.7'],
     ['/resources', 'monthly', '0.7'],

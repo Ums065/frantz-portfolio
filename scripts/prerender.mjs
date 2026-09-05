@@ -37,7 +37,7 @@ const API = (process.env.PRERENDER_API || 'http://localhost/frantz-portfolio/api
 // Per-article routes are discovered from the API below.
 const STATIC_ROUTES = [
   '/', '/about', '/projects', '/awards', '/events', '/blog', '/winners',
-  '/resources', '/partner', '/media', '/store', '/contact', '/donate',
+  '/resources', '/partner', '/media', '/store', '/contact', '/donate', '/careers',
   '/become-a-founding-sponsor', '/founding-sponsors',
   '/new-school', '/terms', '/privacy', '/content-disclaimer',
 ]

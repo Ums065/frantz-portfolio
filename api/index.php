@@ -3655,6 +3655,7 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
                     'research_pending'   => $countWhere("SELECT COUNT(*) FROM research_entries WHERE status = 'submitted'"),
                     'sponsors_pending'   => $countWhere("SELECT COUNT(*) FROM sponsor_applications WHERE approval_status = 'pending_review'"),
                     'sponsor_jobs_pending' => $countWhere("SELECT COUNT(*) FROM sponsor_jobs WHERE status = 'pending'"),
+                    'careers_pending' => $countWhere("SELECT COUNT(*) FROM career_jobs WHERE status = 'pending'"),
                     // Approved partner/sponsor accounts with an uploaded logo awaiting publication.
                     'partner_logos_pending' => $countWhere("SELECT COUNT(*) FROM ecosystem_accounts e JOIN users u ON u.id = e.user_id WHERE e.role IN ('partner','sponsor') AND u.approval_status = 'approved' AND e.public_listed = 0 AND e.details LIKE '%\"logo_url\":\"%' AND e.details NOT LIKE '%\"logo_url\":\"\"%'"),
                     // Sponsorship proposals a Fellow submitted for approval — the
@@ -5014,6 +5015,104 @@ Organization: " . ($organization !== '' ? $organization : '?') . "
             $stmt = db()->prepare('DELETE FROM posts WHERE id = ?');
             $stmt->execute([(int) $m[1]]);
             json(['message' => 'Post deleted.']);
+        }
+
+        /* ---------------- CAREERS: public job board ---------------- */
+        case $key === 'GET careers': {
+            $out = careers_jobs_public($_GET);
+            // The board is public; the applicant state is only added when
+            // somebody is actually signed in.
+            $out['me'] = careers_applicant_state(current_user());
+            json($out);
+        }
+        case $method === 'GET' && preg_match('#^careers/(\d+)$#', $route, $m) === 1: {
+            $job = careers_job_public((int) $m[1]);
+            if (!$job) json(['error' => 'That role is no longer listed.'], 404);
+            json(['job' => $job, 'me' => careers_applicant_state(current_user(), (int) $m[1])]);
+        }
+        case $method === 'POST' && preg_match('#^careers/(\d+)/apply$#', $route, $m) === 1: {
+            $u = require_login();
+            rate_limit('career_apply', 10, 3600);
+            json(careers_apply($u, (int) $m[1], body()), 201);
+        }
+        case $key === 'GET careers/my-applications': {
+            $u = require_login();
+            json(['applications' => careers_my_applications((int) $u['id'])]);
+        }
+        /* Uploading a CV needs a login and nothing more — an applicant is not
+           an admin, so it cannot go through admin/upload. */
+        case $key === 'POST careers/resume': {
+            require_login();
+            rate_limit('career_resume', 20, 3600);
+            json(['url' => media_store_uploaded_file('file', true), 'message' => 'Uploaded.'], 201);
+        }
+
+        /* ---------------- CAREERS: sponsor / business postings ---------------- */
+        case $key === 'GET careers/mine': {
+            $u = require_login();
+            if (!in_array((string) ($u['role'] ?? ''), CAREER_POSTER_ROLES, true)) json(['error' => 'You cannot post jobs.'], 403);
+            json(['jobs' => careers_jobs_mine((int) $u['id'])]);
+        }
+        case $key === 'POST careers/mine': {
+            $u = require_login();
+            rate_limit('career_post', 20, 3600);
+            json(careers_job_save($u, body()), 201);
+        }
+        case $method === 'PUT' && preg_match('#^careers/job/(\d+)$#', $route, $m) === 1: {
+            $u = require_login();
+            json(careers_job_save($u, body(), (int) $m[1]));
+        }
+        case $method === 'POST' && preg_match('#^careers/job/(\d+)/close$#', $route, $m) === 1: {
+            $u = require_login();
+            $s = db()->prepare('SELECT posted_by_user_id, status FROM career_jobs WHERE id = ? LIMIT 1');
+            $s->execute([(int) $m[1]]);
+            $job = $s->fetch();
+            if (!$job) json(['error' => 'Job not found.'], 404);
+            $isAdmin = in_array((string) ($u['role'] ?? ''), ['admin', 'super_admin'], true);
+            if (!$isAdmin && (int) $job['posted_by_user_id'] !== (int) $u['id']) json(['error' => 'That is not your posting.'], 403);
+            $reopen = (string) field(body(), 'action') === 'reopen';
+            // Reopening puts a partner's post back through review only if it
+            // never was approved; an approved-then-closed role just reopens.
+            $next = $reopen ? ((string) $job['status'] === 'closed' ? 'approved' : (string) $job['status']) : 'closed';
+            db()->prepare('UPDATE career_jobs SET status = ? WHERE id = ?')->execute([$next, (int) $m[1]]);
+            json(['message' => $reopen ? 'Job reopened.' : 'Job closed.']);
+        }
+        case $method === 'GET' && preg_match('#^careers/job/(\d+)/applications$#', $route, $m) === 1: {
+            $u = require_login();
+            $isAdmin = in_array((string) ($u['role'] ?? ''), ['admin', 'super_admin'], true);
+            $q = $_GET; $q['job_id'] = (int) $m[1];
+            json(careers_applications($q, $isAdmin ? null : (int) $u['id']));
+        }
+        case $method === 'POST' && preg_match('#^careers/application/(\d+)/status$#', $route, $m) === 1: {
+            $u = require_login();
+            $b = body();
+            json(careers_application_update($u, (int) $m[1], (string) field($b, 'status'), (string) field($b, 'note')));
+        }
+
+        /* ---------------- CAREERS: admin ---------------- */
+        case $key === 'GET admin/careers/jobs': {
+            require_admin();
+            json(careers_jobs_admin($_GET));
+        }
+        case $key === 'POST admin/careers/job': {
+            $a = require_admin();
+            json(careers_job_save($a, body()), 201);
+        }
+        case $method === 'PUT' && preg_match('#^admin/careers/job/(\d+)/review$#', $route, $m) === 1: {
+            $a = require_admin();
+            $b = body();
+            json(careers_job_review($a, (int) $m[1], (string) field($b, 'status'), (string) field($b, 'reason')));
+        }
+        case $method === 'DELETE' && preg_match('#^admin/careers/job/(\d+)$#', $route, $m) === 1: {
+            require_admin();
+            rate_limit('career_delete', 30, 3600);
+            db()->prepare('DELETE FROM career_applications WHERE job_id = ?')->execute([(int) $m[1]]);
+            db()->prepare('DELETE FROM career_jobs WHERE id = ?')->execute([(int) $m[1]]);
+            json(['message' => 'Job and its applications deleted.']);
+        }
+        case $key === 'GET admin/careers/applications': {
+            require_admin();
+            json(careers_applications($_GET));
         }
 
         /* ---------------- ADMIN: IMAGE UPLOAD ---------------- */

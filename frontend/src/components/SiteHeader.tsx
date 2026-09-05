@@ -40,6 +40,7 @@ export default function SiteHeader({ home = false }: { home?: boolean }) {
     { label: t('nav.about'), href: '/about', kind: 'route' },
     { label: t('nav.challenge'), href: '/new-school', kind: 'route' },
     { label: t('nav.awards'), href: '/awards', kind: 'route' },
+    { label: t('nav.careers'), href: '/careers', kind: 'route' },
     // Temporarily hidden from the header — uncomment to restore the Partners tab.
     // { label: t('nav.partners'), href: '/partner', kind: 'route' },
     ...(user ? [{ label: t('nav.dashboard'), href: dashboardHref, kind: 'route' as const }] : []),

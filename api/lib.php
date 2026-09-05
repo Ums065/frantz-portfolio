@@ -131,7 +131,7 @@ function ensure_session_version_column(): void
  * request after a deploy, db_auto_migrate() notices the stored version is behind
  * and runs every *_ensure_schema() once; afterwards it's a single cheap SELECT.
  */
-const APP_SCHEMA_VERSION = 20260818; // yyyymmdd + seq — raise on each schema change
+const APP_SCHEMA_VERSION = 20260905; // yyyymmdd + seq — raise on each schema change
 
 /**
  * One-shot, version-gated auto-migration. Runs on app bootstrap: if the DB's
@@ -167,7 +167,7 @@ function db_auto_migrate(): void
                     'ecosystem_ensure_schema', 'ecosystem_shared_ensure_schema', 'referral_ensure_schema',
                     'mail_queue_ensure_schema', 'password_reset_ensure_schema', 'research_ensure_schema',
                     'sponsor_jobs_ensure_schema', 'events_ensure_schema', 'fellow_ops_ensure_schema',
-                    'donations_ensure_schema', 'fellow_school_calls_ensure_schema', 'post_engagement_ensure_schema', 'post_shares_ensure_schema',
+                    'donations_ensure_schema', 'fellow_school_calls_ensure_schema', 'post_engagement_ensure_schema', 'post_shares_ensure_schema', 'careers_ensure_schema',
                 ] as $fn) {
                     if (function_exists($fn)) {
                         try { $fn(); } catch (Throwable $e) { if (app_debug()) error_log("db_auto_migrate $fn: " . $e->getMessage()); }
@@ -11118,4 +11118,602 @@ function post_shares_for(int $postId): array
     $s->execute([$postId]);
     $rows = $s->fetchAll();
     return ['total' => array_sum(array_column($rows, 'clicks')), 'by_channel' => $rows];
+}
+
+/* =====================================================================
+   CAREERS — the public job board
+   ---------------------------------------------------------------------
+   Separate from the two student-facing systems on purpose. A business
+   internship offer (business_requests) goes to one named child and runs
+   through parent consent; a sponsor job (sponsor_jobs) is shown only
+   inside the student dashboard with an age floor. This board is public,
+   anyone can read it, and applying needs a login and an adult age.
+   Keeping it in its own tables means none of the child-safety gating on
+   the other two can be loosened by accident from here.
+
+   Admin posts go live straight away. A sponsor or business post waits
+   for admin approval, because their name appears on the site once it is
+   published.
+   ===================================================================== */
+
+const CAREERS_MIN_AGE = 18;
+const CAREER_EMPLOYMENT_TYPES = ['full_time', 'part_time', 'contract', 'internship', 'volunteer', 'freelance'];
+const CAREER_WORK_MODES = ['onsite', 'remote', 'hybrid'];
+const CAREER_JOB_STATUSES = ['pending', 'approved', 'declined', 'closed'];
+const CAREER_APP_STATUSES = ['submitted', 'shortlisted', 'accepted', 'declined', 'withdrawn'];
+const CAREER_POSTER_ROLES = ['admin', 'super_admin', 'sponsor', 'business'];
+
+function careers_ensure_schema(): void
+{
+    static $ready = false;
+    if ($ready) return;
+    $pdo = db();
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS career_jobs (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            posted_by_user_id INT DEFAULT NULL,
+            poster_role VARCHAR(20) NOT NULL DEFAULT 'admin',
+            org_name VARCHAR(160) NOT NULL,
+            title VARCHAR(180) NOT NULL,
+            employment_type VARCHAR(20) NOT NULL DEFAULT 'full_time',
+            work_mode VARCHAR(10) NOT NULL DEFAULT 'onsite',
+            location VARCHAR(160) DEFAULT NULL,
+            compensation VARCHAR(120) DEFAULT NULL,
+            summary VARCHAR(400) DEFAULT NULL,
+            description TEXT DEFAULT NULL,
+            responsibilities TEXT DEFAULT NULL,
+            requirements TEXT DEFAULT NULL,
+            skills VARCHAR(400) DEFAULT NULL,
+            min_age TINYINT NOT NULL DEFAULT 18,
+            questions TEXT DEFAULT NULL,
+            apply_deadline DATE NULL DEFAULT NULL,
+            status VARCHAR(16) NOT NULL DEFAULT 'pending',
+            decline_reason VARCHAR(400) DEFAULT NULL,
+            reviewed_by_user_id INT DEFAULT NULL,
+            reviewed_at TIMESTAMP NULL DEFAULT NULL,
+            views INT NOT NULL DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_career_status (status, created_at),
+            INDEX idx_career_poster (posted_by_user_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+        $pdo->exec("CREATE TABLE IF NOT EXISTS career_applications (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            job_id INT NOT NULL,
+            user_id INT NOT NULL,
+            full_name VARCHAR(160) NOT NULL,
+            email VARCHAR(190) NOT NULL,
+            phone VARCHAR(40) DEFAULT NULL,
+            date_of_birth DATE NULL DEFAULT NULL,
+            age_at_apply TINYINT DEFAULT NULL,
+            location VARCHAR(160) DEFAULT NULL,
+            cover_note TEXT DEFAULT NULL,
+            answers TEXT DEFAULT NULL,
+            resume_url VARCHAR(400) DEFAULT NULL,
+            portfolio_url VARCHAR(400) DEFAULT NULL,
+            status VARCHAR(16) NOT NULL DEFAULT 'submitted',
+            admin_note TEXT DEFAULT NULL,
+            reviewed_by_user_id INT DEFAULT NULL,
+            reviewed_at TIMESTAMP NULL DEFAULT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uniq_career_app (job_id, user_id),
+            INDEX idx_career_app_job (job_id, status),
+            INDEX idx_career_app_user (user_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+        /* The date of birth lives on the user, not only on the application, so
+           somebody who applies twice is not asked again — and cannot quietly
+           give a different answer the second time. */
+        $c = $pdo->query("SELECT COUNT(*) FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'date_of_birth'");
+        if ((int) $c->fetchColumn() === 0) {
+            $pdo->exec('ALTER TABLE users ADD COLUMN date_of_birth DATE NULL DEFAULT NULL');
+        }
+    } catch (Throwable $e) {
+        if (app_debug()) error_log('careers_ensure_schema: ' . $e->getMessage());
+    }
+    $ready = true;
+}
+
+/** Whole years old today, or null when the date is unusable. */
+function careers_age_from_dob(?string $dob): ?int
+{
+    $dob = trim((string) $dob);
+    if ($dob === '' || $dob === '0000-00-00') return null;
+    try {
+        $d = new DateTimeImmutable($dob);
+    } catch (Throwable $e) {
+        return null;
+    }
+    $now = new DateTimeImmutable('today');
+    if ($d > $now) return null;
+    $age = (int) $d->diff($now)->y;
+    return ($age >= 0 && $age <= 120) ? $age : null;
+}
+
+/** The date of birth we already hold for this user, most trustworthy first.
+ *  A registered student's record was checked by a teacher, so it wins over
+ *  anything typed into a job form — a 16-year-old cannot type "18" past it. */
+function careers_known_dob(int $userId): array
+{
+    careers_ensure_schema();
+    try {
+        $s = db()->prepare('SELECT date_of_birth FROM new_school_students WHERE user_id = ? AND date_of_birth IS NOT NULL LIMIT 1');
+        $s->execute([$userId]);
+        $dob = (string) ($s->fetchColumn() ?: '');
+        if (careers_age_from_dob($dob) !== null) return ['dob' => $dob, 'source' => 'student_record'];
+    } catch (Throwable $e) { /* the student tables may not exist yet */ }
+    try {
+        $s = db()->prepare('SELECT date_of_birth FROM users WHERE id = ? LIMIT 1');
+        $s->execute([$userId]);
+        $dob = (string) ($s->fetchColumn() ?: '');
+        if (careers_age_from_dob($dob) !== null) return ['dob' => $dob, 'source' => 'profile'];
+    } catch (Throwable $e) { /* fall through */ }
+    return ['dob' => '', 'source' => ''];
+}
+
+/** What the apply form needs to know before it is drawn: can this person
+ *  apply at all, and do we still have to ask for a date of birth? */
+function careers_applicant_state(?array $user, int $jobId = 0): array
+{
+    careers_ensure_schema();
+    if (!$user) return ['logged_in' => false, 'can_apply' => false, 'needs_dob' => true, 'age' => null, 'reason' => 'Sign in to apply.'];
+    $known = careers_known_dob((int) $user['id']);
+    $age = careers_age_from_dob($known['dob']);
+    $applied = false;
+    if ($jobId > 0) {
+        $s = db()->prepare('SELECT status FROM career_applications WHERE job_id = ? AND user_id = ? LIMIT 1');
+        $s->execute([$jobId, (int) $user['id']]);
+        $applied = (string) ($s->fetchColumn() ?: '');
+    }
+    $state = [
+        'logged_in' => true,
+        'needs_dob' => $age === null,
+        'dob_locked' => $known['source'] === 'student_record',
+        'age' => $age,
+        'applied_status' => $applied ?: null,
+        'can_apply' => true,
+        'reason' => '',
+    ];
+    if ($applied) { $state['can_apply'] = false; $state['reason'] = 'You have already applied for this role.'; }
+    elseif ($age !== null && $age < CAREERS_MIN_AGE) {
+        $state['can_apply'] = false;
+        $state['reason'] = 'You must be ' . CAREERS_MIN_AGE . ' or older to apply. Students under ' . CAREERS_MIN_AGE
+            . ' can look at internship opportunities inside the student dashboard instead.';
+    }
+    return $state;
+}
+
+function careers_decode_questions($raw): array
+{
+    if (is_array($raw)) $list = $raw;
+    else {
+        $d = json_decode((string) $raw, true);
+        $list = is_array($d) ? $d : [];
+    }
+    $out = [];
+    foreach ($list as $q) {
+        $text = trim((string) (is_array($q) ? ($q['question'] ?? $q['text'] ?? '') : $q));
+        if ($text === '') continue;
+        $out[] = ['question' => mb_substr($text, 0, 240), 'required' => !is_array($q) || !empty($q['required'])];
+        if (count($out) >= 8) break; // a job form, not an exam
+    }
+    return $out;
+}
+
+/** One row shaped for the public page — never leaks the reviewer or the
+ *  decline reason, which are internal. */
+function careers_public_row(array $r, bool $withBody = false): array
+{
+    $out = [
+        'id' => (int) $r['id'],
+        'org_name' => (string) $r['org_name'],
+        'title' => (string) $r['title'],
+        'employment_type' => (string) $r['employment_type'],
+        'work_mode' => (string) $r['work_mode'],
+        'location' => (string) ($r['location'] ?? ''),
+        'compensation' => (string) ($r['compensation'] ?? ''),
+        'summary' => (string) ($r['summary'] ?? ''),
+        'skills' => (string) ($r['skills'] ?? ''),
+        'min_age' => (int) $r['min_age'],
+        'apply_deadline' => $r['apply_deadline'] ?: null,
+        'status' => (string) $r['status'],
+        'created_at' => (string) $r['created_at'],
+        'closed' => careers_job_is_closed($r),
+    ];
+    if ($withBody) {
+        $out['description'] = (string) ($r['description'] ?? '');
+        $out['responsibilities'] = (string) ($r['responsibilities'] ?? '');
+        $out['requirements'] = (string) ($r['requirements'] ?? '');
+        $out['questions'] = careers_decode_questions($r['questions'] ?? '');
+    }
+    return $out;
+}
+
+/** Closed by hand, or the deadline has passed. Checked on read AND again on
+ *  apply, so a page left open in a tab overnight cannot slip an application in. */
+function careers_job_is_closed(array $job): bool
+{
+    if ((string) $job['status'] === 'closed') return true;
+    $d = trim((string) ($job['apply_deadline'] ?? ''));
+    return $d !== '' && $d !== '0000-00-00' && $d < date('Y-m-d');
+}
+
+/** The public board: approved jobs only, newest first, with search and filters. */
+function careers_jobs_public(array $q): array
+{
+    careers_ensure_schema();
+    $where = ["status = 'approved'"];
+    $args = [];
+    $search = trim((string) ($q['q'] ?? ''));
+    if ($search !== '') {
+        $where[] = '(title LIKE ? OR org_name LIKE ? OR skills LIKE ? OR location LIKE ?)';
+        $like = '%' . $search . '%';
+        array_push($args, $like, $like, $like, $like);
+    }
+    $type = (string) ($q['type'] ?? '');
+    if (in_array($type, CAREER_EMPLOYMENT_TYPES, true)) { $where[] = 'employment_type = ?'; $args[] = $type; }
+    $mode = (string) ($q['mode'] ?? '');
+    if (in_array($mode, CAREER_WORK_MODES, true)) { $where[] = 'work_mode = ?'; $args[] = $mode; }
+    // A closed or expired role stays reachable by its own link, but drops off
+    // the list unless someone explicitly asks to see past roles.
+    if (empty($q['include_closed'])) {
+        $where[] = '(apply_deadline IS NULL OR apply_deadline >= CURDATE())';
+    }
+    $sql = 'FROM career_jobs WHERE ' . implode(' AND ', $where);
+
+    $w = page_window($q, 12); $page = $w['page']; $per = $w['per']; $off = $w['offset'];
+    $c = db()->prepare('SELECT COUNT(*) ' . $sql);
+    $c->execute($args);
+    $total = (int) $c->fetchColumn();
+
+    $s = db()->prepare('SELECT * ' . $sql . ' ORDER BY created_at DESC, id DESC LIMIT ' . (int) $per . ' OFFSET ' . (int) $off);
+    $s->execute($args);
+    $rows = array_map(static fn($r) => careers_public_row($r), $s->fetchAll());
+
+    $t = db()->query("SELECT employment_type, COUNT(*) n FROM career_jobs
+        WHERE status = 'approved' AND (apply_deadline IS NULL OR apply_deadline >= CURDATE())
+        GROUP BY employment_type ORDER BY n DESC");
+    return ['jobs' => $rows, 'total' => $total, 'page' => $page, 'per' => $per, 'types' => $t->fetchAll()];
+}
+
+function careers_job_public(int $id): ?array
+{
+    careers_ensure_schema();
+    $s = db()->prepare('SELECT * FROM career_jobs WHERE id = ? LIMIT 1');
+    $s->execute([$id]);
+    $row = $s->fetch();
+    if (!$row || (string) $row['status'] !== 'approved') return null;
+    try { db()->prepare('UPDATE career_jobs SET views = views + 1 WHERE id = ?')->execute([$id]); } catch (Throwable $e) { /* counting is not worth an error */ }
+    return careers_public_row($row, true);
+}
+
+/** Create or edit a posting. Admin posts go live; everyone else's waits for
+ *  review, and any edit by a non-admin sends it back to review. */
+function careers_job_save(array $user, array $b, int $id = 0): array
+{
+    careers_ensure_schema();
+    $role = (string) ($user['role'] ?? '');
+    $isAdmin = in_array($role, ['admin', 'super_admin'], true);
+    if (!in_array($role, CAREER_POSTER_ROLES, true)) json(['error' => 'You cannot post jobs.'], 403);
+
+    $title = trim((string) field($b, 'title'));
+    if ($title === '') json(['error' => 'Give the role a title.'], 422);
+    $org = trim((string) field($b, 'org_name'));
+    if ($org === '') $org = (string) ($user['full_name'] ?? '');
+    if ($org === '') json(['error' => 'Say which organisation is hiring.'], 422);
+
+    $type = (string) field($b, 'employment_type');
+    if (!in_array($type, CAREER_EMPLOYMENT_TYPES, true)) $type = 'full_time';
+    $mode = (string) field($b, 'work_mode');
+    if (!in_array($mode, CAREER_WORK_MODES, true)) $mode = 'onsite';
+
+    // 18 is the floor for this board and nobody can post below it — an
+    // opportunity for a younger student belongs in the student dashboard,
+    // where parent consent and the chat gates apply.
+    $minAge = (int) ($b['min_age'] ?? CAREERS_MIN_AGE);
+    $minAge = max(CAREERS_MIN_AGE, min(75, $minAge ?: CAREERS_MIN_AGE));
+
+    $deadline = trim((string) field($b, 'apply_deadline'));
+    if ($deadline !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $deadline)) $deadline = '';
+
+    $questions = careers_decode_questions($b['questions'] ?? []);
+
+    $data = [
+        'org_name' => mb_substr($org, 0, 160),
+        'title' => mb_substr($title, 0, 180),
+        'employment_type' => $type,
+        'work_mode' => $mode,
+        'location' => mb_substr(trim((string) field($b, 'location')), 0, 160),
+        'compensation' => mb_substr(trim((string) field($b, 'compensation')), 0, 120),
+        'summary' => mb_substr(trim((string) field($b, 'summary')), 0, 400),
+        'description' => trim((string) field($b, 'description')),
+        'responsibilities' => trim((string) field($b, 'responsibilities')),
+        'requirements' => trim((string) field($b, 'requirements')),
+        'skills' => mb_substr(trim((string) field($b, 'skills')), 0, 400),
+        'min_age' => $minAge,
+        'questions' => json_encode($questions, JSON_UNESCAPED_UNICODE),
+        'apply_deadline' => $deadline !== '' ? $deadline : null,
+    ];
+
+    if ($id > 0) {
+        $s = db()->prepare('SELECT * FROM career_jobs WHERE id = ? LIMIT 1');
+        $s->execute([$id]);
+        $job = $s->fetch();
+        if (!$job) json(['error' => 'Job not found.'], 404);
+        if (!$isAdmin && (int) $job['posted_by_user_id'] !== (int) $user['id']) json(['error' => 'That is not your posting.'], 403);
+        // An admin editing keeps whatever status it had; a poster editing an
+        // approved post sends it back for review, since the words changed.
+        $status = $isAdmin ? (string) $job['status'] : 'pending';
+        $set = [];
+        $args = [];
+        foreach ($data as $k => $v) { $set[] = "$k = ?"; $args[] = $v; }
+        $set[] = 'status = ?'; $args[] = $status;
+        $args[] = $id;
+        db()->prepare('UPDATE career_jobs SET ' . implode(', ', $set) . ' WHERE id = ?')->execute($args);
+        return ['id' => $id, 'status' => $status,
+            'message' => $status === 'pending' && !$isAdmin ? 'Saved — an admin will review the changes before it goes back up.' : 'Job updated.'];
+    }
+
+    $data['posted_by_user_id'] = (int) $user['id'];
+    $data['poster_role'] = $role;
+    $data['status'] = $isAdmin ? 'approved' : 'pending';
+    if ($isAdmin) { $data['reviewed_by_user_id'] = (int) $user['id']; $data['reviewed_at'] = date('Y-m-d H:i:s'); }
+    $cols = array_keys($data);
+    db()->prepare('INSERT INTO career_jobs (' . implode(',', $cols) . ') VALUES (' . implode(',', array_fill(0, count($cols), '?')) . ')')
+        ->execute(array_values($data));
+    $newId = (int) db()->lastInsertId();
+
+    if (!$isAdmin) {
+        careers_notify_admins('New job posting awaiting review',
+            ($user['full_name'] ?? 'A partner') . " submitted a job posting.\n\nRole: {$data['title']}\nOrganisation: {$data['org_name']}\n\n"
+            . "Review it under Admin -> Careers before it appears on the site.");
+    }
+    return ['id' => $newId, 'status' => $data['status'],
+        'message' => $isAdmin ? 'Job posted.' : 'Submitted — an admin will review it before it appears on the site.'];
+}
+
+function careers_job_review(array $admin, int $id, string $decision, string $reason = ''): array
+{
+    careers_ensure_schema();
+    if (!in_array($decision, CAREER_JOB_STATUSES, true)) json(['error' => 'Unknown decision.'], 422);
+    $s = db()->prepare('SELECT * FROM career_jobs WHERE id = ? LIMIT 1');
+    $s->execute([$id]);
+    $job = $s->fetch();
+    if (!$job) json(['error' => 'Job not found.'], 404);
+
+    db()->prepare('UPDATE career_jobs SET status = ?, decline_reason = ?, reviewed_by_user_id = ?, reviewed_at = NOW() WHERE id = ?')
+        ->execute([$decision, mb_substr($reason, 0, 400), (int) $admin['id'], $id]);
+
+    // Tell whoever posted it what happened — silence after a submission is
+    // the fastest way to lose a partner.
+    if ((int) $job['posted_by_user_id'] > 0 && in_array($decision, ['approved', 'declined'], true)) {
+        $u = db()->prepare('SELECT full_name, email FROM users WHERE id = ? LIMIT 1');
+        $u->execute([(int) $job['posted_by_user_id']]);
+        if ($poster = $u->fetch()) {
+            $ok = $decision === 'approved';
+            mail_queue_enqueue('career_job_review', (string) $poster['email'],
+                $ok ? 'Your job posting is live' : 'About your job posting',
+                'Hi ' . ($poster['full_name'] ?: 'there') . ",\n\n"
+                . ($ok
+                    ? "Your posting \"{$job['title']}\" is now on the careers page and open for applications."
+                    : "Your posting \"{$job['title']}\" was not published." . ($reason !== '' ? "\n\nReason: $reason" : ''))
+                . "\n\nYou can see it in your dashboard.\n");
+        }
+    }
+    return ['message' => 'Job ' . $decision . '.'];
+}
+
+/** Everything an admin sees, with the application count alongside. */
+function careers_jobs_admin(array $q): array
+{
+    careers_ensure_schema();
+    $where = [];
+    $args = [];
+    $status = (string) ($q['status'] ?? '');
+    if (in_array($status, CAREER_JOB_STATUSES, true)) { $where[] = 'j.status = ?'; $args[] = $status; }
+    $search = trim((string) ($q['q'] ?? ''));
+    if ($search !== '') { $where[] = '(j.title LIKE ? OR j.org_name LIKE ?)'; $args[] = "%$search%"; $args[] = "%$search%"; }
+    $sql = 'FROM career_jobs j' . ($where ? ' WHERE ' . implode(' AND ', $where) : '');
+
+    $w = page_window($q, 20); $page = $w['page']; $per = $w['per']; $off = $w['offset'];
+    $c = db()->prepare('SELECT COUNT(*) ' . $sql);
+    $c->execute($args);
+    $total = (int) $c->fetchColumn();
+
+    $s = db()->prepare('SELECT j.*, u.full_name AS poster_name, u.email AS poster_email,
+            (SELECT COUNT(*) FROM career_applications a WHERE a.job_id = j.id) AS applications,
+            (SELECT COUNT(*) FROM career_applications a WHERE a.job_id = j.id AND a.status = \'submitted\') AS new_applications
+        ' . str_replace('FROM career_jobs j', 'FROM career_jobs j LEFT JOIN users u ON u.id = j.posted_by_user_id', $sql)
+        . ' ORDER BY (j.status = \'pending\') DESC, j.created_at DESC LIMIT ' . (int) $per . ' OFFSET ' . (int) $off);
+    $s->execute($args);
+    $rows = $s->fetchAll();
+    foreach ($rows as &$r) { $r['questions'] = careers_decode_questions($r['questions']); $r['closed'] = careers_job_is_closed($r); }
+    unset($r);
+
+    $counts = db()->query('SELECT status, COUNT(*) n FROM career_jobs GROUP BY status')->fetchAll();
+    return ['jobs' => $rows, 'total' => $total, 'page' => $page, 'per' => $per, 'counts' => $counts];
+}
+
+/** The postings one sponsor/business owns. */
+function careers_jobs_mine(int $userId): array
+{
+    careers_ensure_schema();
+    $s = db()->prepare('SELECT j.*, (SELECT COUNT(*) FROM career_applications a WHERE a.job_id = j.id) AS applications
+        FROM career_jobs j WHERE j.posted_by_user_id = ? ORDER BY j.created_at DESC');
+    $s->execute([$userId]);
+    $rows = $s->fetchAll();
+    foreach ($rows as &$r) { $r['questions'] = careers_decode_questions($r['questions']); $r['closed'] = careers_job_is_closed($r); }
+    unset($r);
+    return $rows;
+}
+
+/** Apply. Login required, and 18 or over — both checked here, on the server,
+ *  because that is the only place a check actually holds. */
+function careers_apply(array $user, int $jobId, array $b): array
+{
+    careers_ensure_schema();
+    $s = db()->prepare('SELECT * FROM career_jobs WHERE id = ? LIMIT 1');
+    $s->execute([$jobId]);
+    $job = $s->fetch();
+    if (!$job || (string) $job['status'] !== 'approved') json(['error' => 'That role is no longer listed.'], 404);
+    if (careers_job_is_closed($job)) json(['error' => 'Applications for this role have closed.'], 422);
+
+    // Age. A student record beats anything typed in; otherwise we take the
+    // date of birth given here and keep it on the account.
+    $known = careers_known_dob((int) $user['id']);
+    $dob = $known['dob'];
+    if ($dob === '') {
+        $dob = trim((string) field($b, 'date_of_birth'));
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $dob)) json(['error' => 'Enter your date of birth.'], 422);
+    }
+    $age = careers_age_from_dob($dob);
+    if ($age === null) json(['error' => 'That date of birth does not look right.'], 422);
+    $floor = max(CAREERS_MIN_AGE, (int) $job['min_age']);
+    if ($age < $floor) {
+        json(['error' => 'You must be ' . $floor . ' or older to apply for this role.'], 403);
+    }
+    if ($known['dob'] === '') {
+        try { db()->prepare('UPDATE users SET date_of_birth = ? WHERE id = ?')->execute([$dob, (int) $user['id']]); } catch (Throwable $e) { /* not fatal */ }
+    }
+
+    // Required questions must actually be answered.
+    $questions = careers_decode_questions($job['questions']);
+    $given = $b['answers'] ?? [];
+    if (!is_array($given)) $given = [];
+    $answers = [];
+    foreach ($questions as $i => $q) {
+        $a = trim((string) ($given[$i] ?? ($given[(string) $i] ?? '')));
+        if ($q['required'] && $a === '') json(['error' => 'Please answer: ' . $q['question']], 422);
+        $answers[] = ['question' => $q['question'], 'answer' => mb_substr($a, 0, 2000)];
+    }
+
+    $name = trim((string) field($b, 'full_name')) ?: (string) ($user['full_name'] ?? '');
+    $email = trim((string) field($b, 'email')) ?: (string) ($user['email'] ?? '');
+    if ($name === '' || $email === '') json(['error' => 'Name and email are required.'], 422);
+
+    $row = [
+        'job_id' => $jobId,
+        'user_id' => (int) $user['id'],
+        'full_name' => mb_substr($name, 0, 160),
+        'email' => mb_substr($email, 0, 190),
+        'phone' => mb_substr(trim((string) field($b, 'phone')), 0, 40),
+        'date_of_birth' => $dob,
+        'age_at_apply' => $age,
+        'location' => mb_substr(trim((string) field($b, 'location')), 0, 160),
+        'cover_note' => mb_substr(trim((string) field($b, 'cover_note')), 0, 5000),
+        'answers' => json_encode($answers, JSON_UNESCAPED_UNICODE),
+        'resume_url' => mb_substr(trim((string) field($b, 'resume_url')), 0, 400),
+        'portfolio_url' => mb_substr(trim((string) field($b, 'portfolio_url')), 0, 400),
+    ];
+    try {
+        $cols = array_keys($row);
+        db()->prepare('INSERT INTO career_applications (' . implode(',', $cols) . ') VALUES (' . implode(',', array_fill(0, count($cols), '?')) . ')')
+            ->execute(array_values($row));
+    } catch (PDOException $e) {
+        if ((string) $e->getCode() === '23000') json(['error' => 'You have already applied for this role.'], 409);
+        throw $e;
+    }
+    $appId = (int) db()->lastInsertId();
+
+    // Confirmation to the applicant, notification to the admin team.
+    mail_queue_enqueue('career_application_received', $email, 'We received your application',
+        "Hi $name,\n\nThank you for applying for {$job['title']} at {$job['org_name']}.\n\n"
+        . "Your application is with the team now. We will email you when its status changes.\n\n"
+        . "- The Frantz Coutard team\n");
+    careers_notify_admins('New application: ' . $job['title'],
+        "$name applied for {$job['title']} ({$job['org_name']}).\n\nEmail: $email\nAge: $age\n\n"
+        . "Open Admin -> Careers -> Applications to read it.");
+
+    return ['id' => $appId, 'message' => 'Application sent. Check your email for the confirmation.'];
+}
+
+/** Applications, for an admin or for the sponsor/business that owns the job. */
+function careers_applications(array $q, ?int $ownerUserId = null): array
+{
+    careers_ensure_schema();
+    $where = [];
+    $args = [];
+    if ($ownerUserId !== null) { $where[] = 'j.posted_by_user_id = ?'; $args[] = $ownerUserId; }
+    $jobId = (int) ($q['job_id'] ?? 0);
+    if ($jobId > 0) { $where[] = 'a.job_id = ?'; $args[] = $jobId; }
+    $status = (string) ($q['status'] ?? '');
+    if (in_array($status, CAREER_APP_STATUSES, true)) { $where[] = 'a.status = ?'; $args[] = $status; }
+    $search = trim((string) ($q['q'] ?? ''));
+    if ($search !== '') { $where[] = '(a.full_name LIKE ? OR a.email LIKE ?)'; $args[] = "%$search%"; $args[] = "%$search%"; }
+    $sql = 'FROM career_applications a JOIN career_jobs j ON j.id = a.job_id'
+        . ($where ? ' WHERE ' . implode(' AND ', $where) : '');
+
+    $w = page_window($q, 20); $page = $w['page']; $per = $w['per']; $off = $w['offset'];
+    $c = db()->prepare('SELECT COUNT(*) ' . $sql);
+    $c->execute($args);
+    $total = (int) $c->fetchColumn();
+
+    $s = db()->prepare('SELECT a.*, j.title AS job_title, j.org_name ' . $sql
+        . ' ORDER BY (a.status = \'submitted\') DESC, a.created_at DESC LIMIT ' . (int) $per . ' OFFSET ' . (int) $off);
+    $s->execute($args);
+    $rows = $s->fetchAll();
+    foreach ($rows as &$r) {
+        $d = json_decode((string) $r['answers'], true);
+        $r['answers'] = is_array($d) ? $d : [];
+    }
+    unset($r);
+    return ['applications' => $rows, 'total' => $total, 'page' => $page, 'per' => $per];
+}
+
+function careers_application_update(array $actor, int $id, string $status, string $note = ''): array
+{
+    careers_ensure_schema();
+    if (!in_array($status, CAREER_APP_STATUSES, true)) json(['error' => 'Unknown status.'], 422);
+    $s = db()->prepare('SELECT a.*, j.title AS job_title, j.org_name, j.posted_by_user_id
+        FROM career_applications a JOIN career_jobs j ON j.id = a.job_id WHERE a.id = ? LIMIT 1');
+    $s->execute([$id]);
+    $app = $s->fetch();
+    if (!$app) json(['error' => 'Application not found.'], 404);
+    $isAdmin = in_array((string) ($actor['role'] ?? ''), ['admin', 'super_admin'], true);
+    if (!$isAdmin && (int) $app['posted_by_user_id'] !== (int) $actor['id']) json(['error' => 'That is not your posting.'], 403);
+
+    db()->prepare('UPDATE career_applications SET status = ?, admin_note = ?, reviewed_by_user_id = ?, reviewed_at = NOW() WHERE id = ?')
+        ->execute([$status, mb_substr($note, 0, 2000), (int) $actor['id'], $id]);
+
+    $said = [
+        'shortlisted' => 'has been shortlisted',
+        'accepted' => 'has been accepted',
+        'declined' => 'was not taken forward this time',
+    ];
+    if (isset($said[$status])) {
+        mail_queue_enqueue('career_application_status', (string) $app['email'],
+            'Update on your application', 'Hi ' . $app['full_name'] . ",\n\n"
+            . "Your application for {$app['job_title']} at {$app['org_name']} {$said[$status]}."
+            . ($note !== '' ? "\n\nNote from the team:\n$note" : '')
+            . "\n\n- The Frantz Coutard team\n");
+    }
+    return ['message' => 'Application marked ' . $status . '.'];
+}
+
+/** What one person has applied for — shown on their own dashboard. */
+function careers_my_applications(int $userId): array
+{
+    careers_ensure_schema();
+    $s = db()->prepare('SELECT a.id, a.status, a.created_at, a.reviewed_at, a.admin_note,
+            j.id AS job_id, j.title AS job_title, j.org_name, j.employment_type, j.location
+        FROM career_applications a JOIN career_jobs j ON j.id = a.job_id
+        WHERE a.user_id = ? ORDER BY a.created_at DESC');
+    $s->execute([$userId]);
+    return $s->fetchAll();
+}
+
+/** One mail to every admin — the team is small, so no digest needed. */
+function careers_notify_admins(string $subject, string $body): void
+{
+    try {
+        $rows = db()->query("SELECT email, full_name FROM users WHERE role IN ('admin','super_admin') AND email <> ''")->fetchAll();
+        foreach ($rows as $a) {
+            mail_queue_enqueue('career_admin_alert', (string) $a['email'], $subject, $body);
+        }
+    } catch (Throwable $e) {
+        if (app_debug()) error_log('careers_notify_admins: ' . $e->getMessage());
+    }
 }

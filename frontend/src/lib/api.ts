@@ -660,3 +660,74 @@ export function readTime(seconds: number): string {
   const r = s % 60
   return r === 0 ? `${m}m` : `${m}m ${r}s`
 }
+
+/* ---------------- Careers (public job board) ---------------- */
+
+export interface CareerJob {
+  id: number
+  org_name: string
+  title: string
+  employment_type: string
+  work_mode: string
+  location: string
+  compensation: string
+  summary: string
+  skills: string
+  min_age: number
+  apply_deadline: string | null
+  status: string
+  created_at: string
+  closed: boolean
+}
+
+export interface CareerJobDetail extends CareerJob {
+  description: string
+  responsibilities: string
+  requirements: string
+  questions: { question: string; required: boolean }[]
+}
+
+/** What the server says about the person looking at the board: whether they
+ *  are signed in, old enough, and whether they already applied. */
+export interface CareerApplicantState {
+  logged_in: boolean
+  can_apply: boolean
+  needs_dob: boolean
+  dob_locked?: boolean
+  age: number | null
+  applied_status?: string | null
+  reason: string
+}
+
+export interface CareerApplication {
+  id: number
+  job_id: number
+  job_title: string
+  org_name: string
+  user_id: number
+  full_name: string
+  email: string
+  phone: string | null
+  age_at_apply: number | null
+  location: string | null
+  cover_note: string | null
+  answers: { question: string; answer: string }[]
+  resume_url: string | null
+  portfolio_url: string | null
+  status: string
+  admin_note: string | null
+  created_at: string
+  reviewed_at: string | null
+}
+
+export interface CareerJobAdmin extends CareerJobDetail {
+  posted_by_user_id: number | null
+  poster_role: string
+  poster_name: string | null
+  poster_email: string | null
+  description: string
+  decline_reason: string | null
+  views: number
+  applications: number
+  new_applications?: number
+}
