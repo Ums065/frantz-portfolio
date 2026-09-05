@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
-import { api, type AnalyticsPayload, type AwardRow, type CommunityCommentRow, type CommunityThreadRow, type EventItem, type EventRsvpRow, type InventoryRow, type MediaRow, type PostDetail, type PostStat, type PostTrendDay, readTime, type ProductVisibility, type TestimonialRow, type User } from '../lib/api'
+import { api, type AnalyticsPayload, type AwardRow, type CommunityCommentRow, type CommunityThreadRow, type EventItem, type EventRsvpRow, type InventoryRow, type MediaRow, type PostDetail, type PostReferrer, type PostStat, type PostTrendDay, readTime, type ProductVisibility, type TestimonialRow, type User } from '../lib/api'
 import { useAuth } from '../context/AuthContext'
 import { useSeo } from '../hooks/useSeo'
 import { useLiveRefresh } from '../hooks/useLiveRefresh'
@@ -2732,7 +2732,7 @@ function StateTag({ post }: { post: { status?: string; published_at?: string } }
 
 /* Last 30 days at a glance. Plain bars, no chart library — one article a week
    does not need a canvas, and this stays readable when every day is zero. */
-function PostTrend({ days }: { days: PostTrendDay[] }) {
+function PostTrend({ days, referrers }: { days: PostTrendDay[]; referrers?: PostReferrer[] }) {
   if (!days.length) return null
   const peak = Math.max(1, ...days.map((d) => d.opens))
   const sum = (k: 'opens' | 'reads' | 'likes') => days.reduce((n, d) => n + Number(d[k] || 0), 0)
@@ -2766,6 +2766,32 @@ function PostTrend({ days }: { days: PostTrendDay[] }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--muted)', marginTop: 6 }}>
         <span>{label(days[0].date)}</span><span>{label(days[days.length - 1].date)}</span>
       </div>
+
+      {/* Where the readers came from. Recorded on every open since the start
+          and never shown until now, so the answer was there all along. */}
+      {referrers && referrers.length > 0 && (
+        <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--line)' }}>
+          <strong style={{ fontSize: 12.5, display: 'block', marginBottom: 9 }}>Where readers came from</strong>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+            {referrers.map((r) => (
+              <div key={r.source} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12.5 }}>
+                <span style={{ minWidth: 130, color: '#d8d3c6' }}>{r.source}</span>
+                <span style={{ flex: 1, height: 6, borderRadius: 999, background: 'rgba(255,255,255,0.06)' }}>
+                  <span style={{
+                    display: 'block', height: '100%', width: `${Math.max(2, r.share)}%`, borderRadius: 999,
+                    background: 'linear-gradient(90deg,#c9a227,#e6c65c)',
+                  }} />
+                </span>
+                <span style={{ color: 'var(--muted)', minWidth: 74, textAlign: 'right' }}>{r.opens} · {r.share}%</span>
+              </div>
+            ))}
+          </div>
+          <p style={{ color: 'var(--muted)', fontSize: 11.5, margin: '9px 0 0', lineHeight: 1.6 }}>
+            <strong>Direct</strong> means no referrer was sent — someone typed the address, used a bookmark, or came
+            from a mail app or messenger, which strip it. It is not "unknown traffic".
+          </p>
+        </div>
+      )}
     </div>
   )
 }
@@ -2780,11 +2806,13 @@ function PostsAdmin() {
   // How many opened it, how long they stayed, and who called it a good read.
   const [stats, setStats] = useState<Record<number, PostStat>>({})
   const [trend, setTrend] = useState<PostTrendDay[]>([])
+  const [referrers, setReferrers] = useState<PostReferrer[]>([])
   const load = () => api.get<{ posts: PostDetail[] }>('admin/posts').then((d) => setRows(d.posts)).catch(() => {})
-  const loadStats = () => api.get<{ posts: PostStat[]; trend: PostTrendDay[] }>('admin/posts/analytics')
+  const loadStats = () => api.get<{ posts: PostStat[]; trend: PostTrendDay[]; referrers: { sources: PostReferrer[] } }>('admin/posts/analytics')
     .then((d) => {
       setStats(Object.fromEntries((d.posts || []).map((s) => [s.id, s])))
       setTrend(d.trend || [])
+      setReferrers(d.referrers?.sources || [])
     }).catch(() => {})
   useEffect(() => { load(); loadStats() }, [])
   const set = (patch: Partial<PostDetail>) => setEditing((e) => (e ? { ...e, ...patch } : e))
@@ -2827,7 +2855,7 @@ function PostsAdmin() {
         <p style={{ color: 'var(--muted)', fontSize: 13 }}>{rows.length} articles · shown on the Blog page &amp; home</p>
         <button className="btn btn--sm btn--solid" onClick={() => setEditing({ ...emptyPost })}>+ Add Article</button>
       </div>
-      <PostTrend days={trend} />
+      <PostTrend days={trend} referrers={referrers} />
       <Table stack head={['', 'Title', 'Category', 'Readers', 'Time on page', 'Good reads', 'Shares', 'State', 'Actions']}>
         {rows.map((p) => {
           const s = stats[p.id]

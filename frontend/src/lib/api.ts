@@ -754,3 +754,10 @@ export interface CareerMyApplication {
   reviewed_at: string | null
   admin_note: string | null
 }
+
+/** One row of "where readers came from" — a host, or Direct. */
+export interface PostReferrer {
+  source: string
+  opens: number
+  share: number
+}

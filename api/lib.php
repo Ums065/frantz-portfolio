@@ -11823,3 +11823,45 @@ function post_state(array $post): string
     $d = trim((string) ($post['published_at'] ?? ''));
     return ($d !== '' && $d !== '0000-00-00' && $d > date('Y-m-d')) ? 'scheduled' : 'published';
 }
+
+/** Where readers came from, over the last N days.
+ *
+ *  post_reads has recorded the referrer since day one and nothing has ever
+ *  shown it, so "how do people find the blog" had a stored answer nobody
+ *  could see. Grouped by host, because the full URL is noise: forty Facebook
+ *  permalinks are one answer, "Facebook", not forty.
+ *
+ *  An empty referrer is genuinely useful and is kept as Direct — someone who
+ *  typed the address, opened a bookmark, or followed a link from a mail app
+ *  or a messenger, which strips it. Our own host is folded into "This site".
+ */
+function post_referrers(int $days = 30, int $limit = 8): array
+{
+    post_engagement_ensure_schema();
+    $days = max(1, min(365, $days));
+    $s = db()->prepare("SELECT referrer FROM post_reads WHERE created_at >= (NOW() - INTERVAL ? DAY)");
+    $s->execute([$days]);
+
+    $own = strtolower((string) parse_url((string) env('APP_URL', ''), PHP_URL_HOST));
+    $counts = [];
+    foreach ($s->fetchAll(PDO::FETCH_COLUMN) as $ref) {
+        $ref = trim((string) $ref);
+        if ($ref === '') { $label = 'Direct'; }
+        else {
+            $host = strtolower((string) parse_url($ref, PHP_URL_HOST));
+            if ($host === '') { $label = 'Direct'; }
+            else {
+                $host = preg_replace('/^www\./', '', $host);
+                $label = ($own !== '' && $host === preg_replace('/^www\./', '', $own)) ? 'This site' : $host;
+            }
+        }
+        $counts[$label] = ($counts[$label] ?? 0) + 1;
+    }
+    arsort($counts);
+    $total = array_sum($counts);
+    $out = [];
+    foreach (array_slice($counts, 0, $limit, true) as $label => $n) {
+        $out[] = ['source' => $label, 'opens' => $n, 'share' => $total > 0 ? round($n * 100 / $total) : 0];
+    }
+    return ['sources' => $out, 'total' => $total];
+}

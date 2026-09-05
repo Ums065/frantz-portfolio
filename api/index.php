@@ -806,7 +806,8 @@ try {
             $rows = post_engagement_report();
             foreach ($rows as &$r) $r['shares'] = post_shares_for((int) $r['id']);
             unset($r);
-            json(['posts' => $rows, 'trend' => post_engagement_trend((int) ($_GET['days'] ?? 30))]);
+            $days = (int) ($_GET['days'] ?? 30);
+            json(['posts' => $rows, 'trend' => post_engagement_trend($days), 'referrers' => post_referrers($days)]);
         }
 
         /* ---------------- FORMS ---------------- */
