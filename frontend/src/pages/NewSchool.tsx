@@ -3013,7 +3013,7 @@ export default function NewSchool() {
         <div className="wrap">
           <div className="ns-cta-band reveal">
             <div>
-              <span className="eyebrow">Register Today</span>
+              <span className="eyebrow">su </span>
               <h2>Students ages {ageRange} welcome · Grades {gradeRange}</h2>
               <p>Public · Private · Charter · Trade Schools. Choose your role below to get started.</p>
             </div>
