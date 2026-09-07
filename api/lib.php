@@ -11025,7 +11025,7 @@ function post_engagement_for(int $postId, string $visitor = ''): array
         $s->execute([$postId, $h]);
         $liked = (bool) $s->fetchColumn();
     }
-    $v = db()->prepare('SELECT COUNT(*) AS reads, COUNT(DISTINCT visitor_hash) AS readers FROM post_reads WHERE post_id = ?');
+    $v = db()->prepare('SELECT COUNT(*) AS `reads`, COUNT(DISTINCT visitor_hash) AS readers FROM post_reads WHERE post_id = ?');
     $v->execute([$postId]);
     $r = $v->fetch() ?: [];
     return [
@@ -11043,7 +11043,7 @@ function post_engagement_report(): array
     post_engagement_ensure_schema();
     return db()->query("SELECT p.id, p.title, p.category, p.published_at,
             (SELECT COUNT(*) FROM post_reads r WHERE r.post_id = p.id) AS opens,
-            (SELECT COUNT(*) FROM post_reads r WHERE r.post_id = p.id AND r.seconds >= 3) AS reads,
+            (SELECT COUNT(*) FROM post_reads r WHERE r.post_id = p.id AND r.seconds >= 3) AS `reads`,
             (SELECT COUNT(DISTINCT r.visitor_hash) FROM post_reads r WHERE r.post_id = p.id) AS readers,
             (SELECT COALESCE(ROUND(AVG(r.seconds)),0) FROM post_reads r WHERE r.post_id = p.id AND r.seconds >= 3) AS avg_seconds,
             (SELECT COALESCE(MAX(r.seconds),0) FROM post_reads r WHERE r.post_id = p.id) AS max_seconds,

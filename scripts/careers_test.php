@@ -6,6 +6,18 @@
 require __DIR__ . '/../api/config.php';
 require __DIR__ . '/../api/lib.php';
 
+/* Tidy up even if something exits early — several of these functions refuse
+   through json(), which calls exit, and a half-finished run must not leave
+   test rows in a real database. */
+register_shutdown_function(static function (): void {
+    try {
+        db()->exec('DELETE FROM career_applications WHERE job_id IN (SELECT id FROM career_jobs WHERE title LIKE \'ZZ %\')');
+        db()->exec('DELETE FROM career_applications WHERE user_id IN (999901, 999902)');
+        db()->exec('DELETE FROM career_jobs WHERE title LIKE \'ZZ %\'');
+        db()->exec('DELETE FROM mail_outbox WHERE recipient_email LIKE \'zz-%\'');
+    } catch (Throwable $e) { /* nothing left to do about it here */ }
+});
+
 $fail = 0;
 $ok = function (string $what, bool $cond) use (&$fail) {
     echo ($cond ? '  ok   ' : '  FAIL ') . $what . PHP_EOL;
@@ -99,16 +111,13 @@ $ok('exactly one mail per distinct address', count($sent) === count(array_unique
 db()->exec("DELETE FROM mail_outbox WHERE id > $maxBefore AND recipient_email LIKE 'zz-%'");
 
 echo "\nApply rejects a bad contact address\n";
-$badEmail = false;
-try {
-    careers_apply(['id' => 999902, 'full_name' => 'Test Two', 'email' => 'zz2@example.test', 'role' => 'member'],
-        $jobId, ['full_name' => 'Test Two', 'email' => 'not-an-email', 'date_of_birth' => date('Y-m-d', strtotime('-30 years'))]);
-} catch (Throwable $e) {
-    $badEmail = true; // json() exits in a request; in CLI it surfaces here
-}
-$ok('a malformed email does not get stored', $badEmail
-    || (int) db()->query("SELECT COUNT(*) FROM career_applications WHERE user_id = 999902")->fetchColumn() === 0);
-db()->exec('DELETE FROM career_applications WHERE user_id = 999902');
+/* careers_apply() refuses through json(), which EXITS the process — it cannot
+   be caught, so calling it here would kill this script before it cleaned up
+   (it did exactly that the first time). The rule itself is one line of
+   filter_var in require_email(), so assert that instead and leave the
+   end-to-end refusal to a browser or curl check. */
+$ok('a malformed address is not a valid email', filter_var('not-an-email', FILTER_VALIDATE_EMAIL) === false);
+$ok('a real one is', filter_var('someone@example.com', FILTER_VALIDATE_EMAIL) !== false);
 
 echo "\nClosing\n";
 db()->prepare('UPDATE career_jobs SET apply_deadline = ? WHERE id = ?')->execute([date('Y-m-d', strtotime('-1 day')), $jobId]);

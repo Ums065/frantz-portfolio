@@ -2802,46 +2802,77 @@ function PostsAdmin() {
   const [busy, setBusy] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
+  const [statsErr, setStatsErr] = useState('')
 
   // How many opened it, how long they stayed, and who called it a good read.
   const [stats, setStats] = useState<Record<number, PostStat>>({})
   const [trend, setTrend] = useState<PostTrendDay[]>([])
   const [referrers, setReferrers] = useState<PostReferrer[]>([])
-  const load = () => api.get<{ posts: PostDetail[] }>('admin/posts').then((d) => setRows(d.posts)).catch(() => {})
+  /* Both loads say when they fail. They used to swallow the error, so a broken
+     endpoint looked exactly like "no articles yet" and "no reads yet" — which
+     is how a 500 in the analytics query went unnoticed while every figure in
+     the table quietly showed a dash. */
+  const load = () => api.get<{ posts: PostDetail[] }>('admin/posts')
+    .then((d) => { setRows(d.posts || []); setError('') })
+    .catch((err) => setError(err instanceof Error ? `Could not load the articles: ${err.message}` : 'Could not load the articles.'))
   const loadStats = () => api.get<{ posts: PostStat[]; trend: PostTrendDay[]; referrers: { sources: PostReferrer[] } }>('admin/posts/analytics')
     .then((d) => {
       setStats(Object.fromEntries((d.posts || []).map((s) => [s.id, s])))
       setTrend(d.trend || [])
       setReferrers(d.referrers?.sources || [])
-    }).catch(() => {})
-  useEffect(() => { load(); loadStats() }, [])
+      setStatsErr('')
+    })
+    .catch((err) => setStatsErr(err instanceof Error ? err.message : 'Reading figures are unavailable.'))
+  const reload = () => { load(); loadStats() }
+  useEffect(() => { reload() }, [])
   const set = (patch: Partial<PostDetail>) => setEditing((e) => (e ? { ...e, ...patch } : e))
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault(); if (!editing) return
     setBusy(true); setError('')
     try {
-      if (editing.id) await api.put(`admin/post/${editing.id}`, editing)
-      else await api.post('admin/post', editing)
-      setEditing(null); load()
+      const wasNew = !editing.id
+      const r = editing.id
+        ? await api.put<{ state?: string }>(`admin/post/${editing.id}`, editing)
+        : await api.post<{ state?: string }>('admin/post', editing)
+      setEditing(null); reload()
+      // Say what actually happened. A new article saved as a draft is NOT on
+      // the site, and silence there reads as "saving is broken".
+      const state = r.state || postState(editing)
+      window.fcToast?.(state === 'draft'
+        ? `Saved as a draft — press Publish on its row to put it on the site.`
+        : state === 'scheduled'
+          ? `Saved. It goes live on ${editing.published_at}.`
+          : wasNew ? 'Published.' : 'Saved and live.')
     } catch (err) { setError(err instanceof Error ? err.message : 'Save failed.') } finally { setBusy(false) }
   }
-  const remove = async (id: number) => { if (!confirm('Delete this post?')) return; await api.del(`admin/post/${id}`); load() }
+
+  /* Every row action reports its own failure. These used to be bare awaits: a
+     rejected request threw into nothing, the row did not change, and there was
+     no way to tell a refused delete from a delete that did not fire. */
+  const act = async (fn: () => Promise<unknown>, done: string) => {
+    try { await fn(); window.fcToast?.(done); reload() }
+    catch (err) { window.fcToast?.(err instanceof Error ? err.message : 'That did not go through.') }
+  }
+  const remove = (id: number) => {
+    if (!confirm('Delete this article? Its reading figures and Good Reads go with it.')) return
+    void act(() => api.del(`admin/post/${id}`), 'Article deleted.')
+  }
 
   /* Publish and unpublish from the row. A draft with no date gets today's,
      otherwise publishing something written last week would quietly schedule it
      into the past — or, worse, leave it dateless and sorted to the bottom. */
-  const publish = async (p: PostDetail) => {
-    const date = p.published_at || new Date().toISOString().slice(0, 10)
-    await api.put(`admin/post/${p.id}`, { ...p, status: 'published', published_at: date })
-    window.fcToast?.(date > new Date().toISOString().slice(0, 10) ? `Scheduled for ${date}.` : 'Published.')
-    load()
+  const publish = (p: PostDetail) => {
+    const today = new Date().toISOString().slice(0, 10)
+    const date = p.published_at || today
+    void act(
+      () => api.put(`admin/post/${p.id}`, { ...p, status: 'published', published_at: date }),
+      date > today ? `Scheduled for ${date}.` : 'Published.',
+    )
   }
-  const unpublish = async (p: PostDetail) => {
-    if (!confirm('Take this article off the site? The link will 404 until you publish it again.')) return
-    await api.put(`admin/post/${p.id}`, { ...p, status: 'draft' })
-    window.fcToast?.('Moved back to draft.')
-    load()
+  const unpublish = (p: PostDetail) => {
+    if (!confirm('Take this article off the site? Its link will 404 until you publish it again.')) return
+    void act(() => api.put(`admin/post/${p.id}`, { ...p, status: 'draft' }), 'Moved back to draft.')
   }
   const onUpload = async (file: File) => {
     setUploading(true); setError('')
@@ -2852,9 +2883,24 @@ function PostsAdmin() {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <p style={{ color: 'var(--muted)', fontSize: 13 }}>{rows.length} articles · shown on the Blog page &amp; home</p>
-        <button className="btn btn--sm btn--solid" onClick={() => setEditing({ ...emptyPost })}>+ Add Article</button>
+        <p style={{ color: 'var(--muted)', fontSize: 13 }}>
+          {rows.length} article{rows.length === 1 ? '' : 's'} ·{' '}
+          {rows.filter((p) => postState(p) === 'published').length} live ·{' '}
+          {rows.filter((p) => postState(p) === 'draft').length} draft ·{' '}
+          {rows.filter((p) => postState(p) === 'scheduled').length} scheduled
+        </p>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn--sm" onClick={reload}>Refresh</button>
+          <button className="btn btn--sm btn--solid" onClick={() => setEditing({ ...emptyPost })}>+ Add Article</button>
+        </div>
       </div>
+      {error && <p style={{ color: '#e08a8a', fontSize: 13, margin: '0 0 12px' }}>{error}</p>}
+      {statsErr && (
+        <p style={{ color: '#e0c08a', fontSize: 12.5, margin: '0 0 12px' }}>
+          Reading figures could not be loaded ({statsErr}). The articles below are still correct — only the
+          counts and the trend are missing.
+        </p>
+      )}
       <PostTrend days={trend} referrers={referrers} />
       <Table stack head={['', 'Title', 'Category', 'Readers', 'Time on page', 'Good reads', 'Shares', 'State', 'Actions']}>
         {rows.map((p) => {
