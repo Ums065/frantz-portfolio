@@ -1281,3 +1281,66 @@ a.post__img { display: grid; }
 @media (prefers-reduced-motion: reduce) {
   .share-pop__tile { transition: none; }
 }
+
+/* --- Interview question bank (student business entry) ---
+   Folded shut by default. The form is already long, and a student who knows
+   what to ask should not have to scroll past ten prompts to reach the box. */
+.ns-qbank {
+  border: 1px solid rgba(201,168,76,.28); border-radius: 13px;
+  background: rgba(201,168,76,.05);
+}
+.ns-qbank > summary {
+  display: flex; align-items: center; gap: 10px; cursor: pointer;
+  padding: 13px 16px; list-style: none; user-select: none;
+}
+.ns-qbank > summary::-webkit-details-marker { display: none; }
+/* The arrow is drawn here so it can turn when the panel opens. */
+.ns-qbank > summary::before {
+  content: ''; width: 7px; height: 7px; flex: none;
+  border-right: 2px solid var(--gold); border-bottom: 2px solid var(--gold);
+  transform: rotate(-45deg); transition: transform .2s ease;
+}
+.ns-qbank[open] > summary::before { transform: rotate(45deg); }
+.ns-qbank > summary:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; border-radius: 12px; }
+.ns-qbank__title { font-size: 13.5px; font-weight: 700; color: var(--gold-light); }
+.ns-qbank__count {
+  margin-left: auto; font-size: 11px; font-weight: 800; padding: 2px 9px;
+  border-radius: 999px; background: rgba(201,168,76,.18); color: var(--gold-light);
+}
+.ns-qbank__lead { margin: 0 16px 12px; font-size: 12.5px; line-height: 1.6; color: var(--muted); }
+
+.ns-qbank__list { margin: 0; padding: 0 16px; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.ns-qbank__list li { counter-increment: qbank; }
+.ns-qbank__list button {
+  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+  padding: 10px 12px; border-radius: 9px; cursor: pointer;
+  background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.08);
+  color: #d8d3c6; font: inherit; font-size: 13px; line-height: 1.45;
+  transition: background .15s ease, border-color .15s ease, color .15s ease;
+}
+.ns-qbank__list button::before {
+  content: counter(qbank); flex: none; width: 21px; height: 21px; border-radius: 50%;
+  display: grid; place-items: center; font-size: 10.5px; font-weight: 800;
+  background: rgba(201,168,76,.16); color: var(--gold-light);
+}
+.ns-qbank__list button:hover { background: rgba(201,168,76,.1); border-color: rgba(201,168,76,.4); color: #fff; }
+.ns-qbank__list button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.ns-qbank__list button span { flex: 1; }
+.ns-qbank__list button em {
+  flex: none; font-style: normal; font-size: 11px; font-weight: 800; letter-spacing: .05em;
+  text-transform: uppercase; color: var(--gold); opacity: 0; transition: opacity .15s ease;
+}
+.ns-qbank__list button:hover em, .ns-qbank__list button:focus-visible em { opacity: 1; }
+
+.ns-qbank__list { counter-reset: qbank; }
+.ns-qbank__foot {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 14px 16px 16px; font-size: 12px; color: var(--muted);
+}
+/* Touch: there is no hover, so the Add label has to be there from the start. */
+@media (hover: none) {
+  .ns-qbank__list button em { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ns-qbank > summary::before, .ns-qbank__list button, .ns-qbank__list button em { transition: none; }
+}

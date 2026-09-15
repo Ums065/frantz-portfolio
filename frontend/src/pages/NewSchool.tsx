@@ -1,4 +1,5 @@
-import { useEffect, useState, type ChangeEvent, type Dispatch, type FormEvent, type ReactNode, type SetStateAction } from 'react'
+import { useEffect, useRef, useState, type ChangeEvent, type Dispatch, type FormEvent, type ReactNode, type SetStateAction } from 'react'
+import InterviewQuestions from '../components/InterviewQuestions'
 import { createPortal } from 'react-dom'
 import { Link, useLocation, useParams } from 'react-router-dom'
 import { api } from '../lib/api'
@@ -1636,6 +1637,9 @@ export default function NewSchool() {
       setScholarshipBusy(false)
     }
   }
+
+  // The question bank writes into this box.
+  const notesRef = useRef<HTMLTextAreaElement | null>(null)
 
   const submitBusiness = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -3810,8 +3814,11 @@ export default function NewSchool() {
                   <label className="ns-field"><span>Category</span><input name="business_category" required minLength={3} /></label>
                   <label className="ns-field"><span>Business Website <small className="ns-field-hint">(optional — helps the business find your visit)</small></span><input name="business_website" type="url" placeholder="https://…" /></label>
                   <label className="ns-field"><span>Date of Visit</span><input name="date_of_visit" type="date" required min={String(studentDashboard.student?.created_at || '').slice(0, 10) || undefined} max={todayInputDate()} /></label>
+                  {/* Sits right above the two written answers, because that is
+                      where a student is looking when they wonder what to ask. */}
+                  <div className="ns-field ns-field--full"><InterviewQuestions targetRef={notesRef} /></div>
                   <label className="ns-field ns-field--full"><span>Main Challenge <small className="ns-field-hint">50–500 words</small></span><textarea name="main_challenge" rows={3} required placeholder="Describe the main challenge this business faces (50–500 words)." /></label>
-                  <label className="ns-field ns-field--full"><span>Student Notes <small className="ns-field-hint">50–500 words</small></span><textarea name="student_notes" rows={3} required placeholder="Your observations and notes from the visit (50–500 words)." /></label>
+                  <label className="ns-field ns-field--full"><span>Student Notes <small className="ns-field-hint">50–500 words</small></span><textarea ref={notesRef} name="student_notes" rows={6} required placeholder="What the owner told you, in your own words (50–500 words). Use the questions above if you want a starting point." /></label>
                   <label className="ns-field ns-field--full"><span>Signature <small className="ns-field-hint">Type the business owner / manager name to verify this visit — earns 10 points</small></span><input name="signature" placeholder="Owner / manager signature" /></label>
                 </div>
                 <p className="ns-check-hint">Tick every option this business already has — leave it unticked if they don’t:</p>
