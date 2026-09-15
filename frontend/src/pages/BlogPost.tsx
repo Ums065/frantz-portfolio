@@ -4,6 +4,7 @@ import { api, type PostDetail } from '../lib/api'
 import { isSavedItem, toggleSavedItem } from '../lib/memberStorage'
 import { useSeo } from '../hooks/useSeo'
 import { GoodRead, ReadingProgress, ReadingTime, ShareButton, useGoodRead, useReadTracking, visitorId } from '../components/ArticleEngagement'
+import RichText from '../components/RichText'
 
 const cover = '/assets/abstract-gold-network.webp'
 const fmt = (d: string) => new Date(d + 'T00:00:00').toLocaleString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
@@ -104,7 +105,7 @@ export default function BlogPost() {
                   <img src={post.cover_image || cover} alt={post.title || 'Article cover'} loading="eager" decoding="async" />
                 </div>
                 <div className="post-article__body" ref={bodyRef}>
-                  {(post.body || post.excerpt).split('\n\n').map((para, i) => <p key={i}>{para}</p>)}
+                  <RichText text={post.body || post.excerpt} />
                 </div>
                 {/* Asked for again at the end, where someone who actually read it is. */}
                 <div className="post-endbar">

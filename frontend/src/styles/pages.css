@@ -1224,3 +1224,19 @@ a.post__img { display: grid; }
 /* The action row wraps on a narrow card; the menu still opens above the rest. */
 .blog-card .item-actions { flex-wrap: wrap; gap: 8px; row-gap: 10px; align-items: center; }
 .blog-card .share, .blog-card .goodread { flex: 0 0 auto; }
+
+/* Links written inside an article. Underlined rather than colour-only, so they
+   are still obviously links to a reader who cannot tell gold from cream. */
+.post-article__body a {
+  color: var(--gold-light);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+  text-decoration-color: rgba(201,168,76,.45);
+  overflow-wrap: anywhere;
+  transition: color .15s ease, text-decoration-color .15s ease;
+}
+.post-article__body a:hover { color: #f0d97a; text-decoration-color: currentColor; }
+.post-article__body a:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; border-radius: 3px; }
+/* On a card the excerpt is a teaser — a link there is marked, not shouted. */
+.blog-card__body p a { color: var(--gold-light); text-decoration: underline; text-underline-offset: 2px; overflow-wrap: anywhere; }

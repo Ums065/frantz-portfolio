@@ -2995,7 +2995,15 @@ function PostsAdmin() {
             </div>
             <div className="field"><label>Excerpt</label>
               <textarea className="fld-area" value={editing.excerpt} onChange={(e) => set({ excerpt: e.target.value })} /></div>
-            <div className="field"><label>Body (separate paragraphs with a blank line)</label>
+            <div className="field">
+              <label>Body (separate paragraphs with a blank line)</label>
+              {/* Written where the links are typed, because a linking rule
+                  nobody is told about is a linking rule nobody uses. */}
+              <span className="field-hint">
+                Web addresses become links on their own — paste <code>https://example.com</code> and it works.
+                To show words instead of the address, write <code>[read the report](https://example.com)</code>.
+                Email addresses link too.
+              </span>
               <textarea className="fld-area" style={{ minHeight: 160 }} value={editing.body} onChange={(e) => set({ body: e.target.value })} /></div>
             <div className="field"><label>Cover image</label>
               <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>

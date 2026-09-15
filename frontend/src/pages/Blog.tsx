@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { GoodReadButton, ReadingTime, ShareButton, visitorId } from '../components/ArticleEngagement'
 import Pager from '../components/Pager'
+import RichText from '../components/RichText'
 import { api, type Post } from '../lib/api'
 import { loadSavedItems, toggleSavedItem } from '../lib/memberStorage'
 import { useSeo } from '../hooks/useSeo'
@@ -105,7 +106,7 @@ export default function Blog() {
                   <div className="blog-card__body">
                     <div className="kicker"><span className="cat">{p.category}</span><span>&bull;</span><span>{fmt(p.published_at)}</span><span>&bull;</span><span>{p.read_minutes ? `${p.read_minutes} min read` : <ReadingTime text={p.excerpt} />}</span></div>
                     <h3><Link to={`/blog/${p.id}`}>{p.title}</Link></h3>
-                    <p>{p.excerpt}</p>
+                    <p><RichText text={p.excerpt} inline /></p>
                     <div className="item-actions">
                       <Link className="read" to={`/blog/${p.id}`}>Read Article <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth={2}><path d="M5 12h14M13 6l6 6-6 6" /></svg></Link>
                       <button
