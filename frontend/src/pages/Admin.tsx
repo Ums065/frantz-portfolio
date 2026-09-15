@@ -2705,12 +2705,21 @@ function EventsAdmin() {
 // New articles start as drafts. Saving must not be the same act as publishing.
 const emptyPost: PostDetail = { id: 0, title: '', category: '', excerpt: '', body: '', cover_image: '', is_featured: 0, published_at: '', status: 'draft' }
 
+/* The site's editorial day. The badge used to compare against the browser's
+   own date, which is why an article published from India read "Published"
+   while the server, on a US clock still showing yesterday, kept it off the
+   blog. Both sides answer to New York now. */
+const SITE_TZ = 'America/New_York'
+const siteToday = () => new Intl.DateTimeFormat('en-CA', {
+  timeZone: SITE_TZ, year: 'numeric', month: '2-digit', day: '2-digit',
+}).format(new Date())
+
 /* Draft / Scheduled / Published, worked out the same way the server does so the
    badge never disagrees with what the public actually sees. */
 function postState(p: { status?: string; published_at?: string }): 'draft' | 'scheduled' | 'published' {
   if ((p.status || 'published') !== 'published') return 'draft'
   const d = (p.published_at || '').slice(0, 10)
-  return d && d > new Date().toISOString().slice(0, 10) ? 'scheduled' : 'published'
+  return d && d > siteToday() ? 'scheduled' : 'published'
 }
 
 const STATE_STYLE: Record<string, React.CSSProperties> = {
@@ -2863,7 +2872,7 @@ function PostsAdmin() {
      otherwise publishing something written last week would quietly schedule it
      into the past — or, worse, leave it dateless and sorted to the bottom. */
   const publish = (p: PostDetail) => {
-    const today = new Date().toISOString().slice(0, 10)
+    const today = siteToday()
     const date = p.published_at || today
     void act(
       () => api.put(`admin/post/${p.id}`, { ...p, status: 'published', published_at: date }),
@@ -2977,8 +2986,11 @@ function PostsAdmin() {
                 {postState(editing) === 'draft'
                   ? 'Only you can see this. It is not on the blog, the sitemap or the home page.'
                   : postState(editing) === 'scheduled'
-                    ? `Goes live on ${editing.published_at} — hidden from the public until then.`
+                    ? `Goes live on ${editing.published_at} (New York time) — hidden from the public until then.`
                     : 'Live on the blog. Set a future publish date to schedule it instead.'}
+              </span>
+              <span className="field-hint">
+                Dates run on New York time, so a date is the same day for every editor wherever they are.
               </span>
             </div>
             <div className="field"><label>Excerpt</label>

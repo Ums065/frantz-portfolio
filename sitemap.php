@@ -73,10 +73,16 @@ try {
        loads config.php, which does not define it.
        The fallback covers a database that has not run the migration yet — the
        status column simply is not there, and every post was live before it. */
+    /* The date comes from PHP on the site's clock, not from MySQL's CURDATE():
+       the database session's timezone can be hours behind, which would leave
+       an article published today out of the sitemap until tomorrow. */
+    $siteToday = (new DateTimeImmutable('now', new DateTimeZone((string) env('APP_TIMEZONE', 'America/New_York'))))->format('Y-m-d');
     try {
-        $rows = db()->query("SELECT id, published_at FROM posts
-            WHERE status = 'published' AND (published_at IS NULL OR published_at <= CURDATE())
-            ORDER BY published_at DESC, id DESC")->fetchAll();
+        $s = db()->prepare("SELECT id, published_at FROM posts
+            WHERE status = 'published' AND (published_at IS NULL OR published_at <= ?)
+            ORDER BY published_at DESC, id DESC");
+        $s->execute([$siteToday]);
+        $rows = $s->fetchAll();
     } catch (Throwable $inner) {
         $rows = db()->query('SELECT id, published_at FROM posts ORDER BY published_at DESC, id DESC')->fetchAll();
     }

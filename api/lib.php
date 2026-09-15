@@ -11808,12 +11808,41 @@ function posts_ensure_schema(): void
 
 const POST_STATUSES = ['draft', 'published'];
 
+/** The timezone the site's editorial day runs on. The program is a New York
+ *  one, so "today" means today in New York — not wherever the database server
+ *  happens to sit, and not wherever the editor happens to be sitting. */
+function site_timezone(): string
+{
+    $tz = trim((string) env('APP_TIMEZONE', 'America/New_York'));
+    return $tz !== '' && in_array($tz, timezone_identifiers_list(), true) ? $tz : 'America/New_York';
+}
+
+/** Today's date on the site's clock, as Y-m-d. */
+function site_today(): string
+{
+    try {
+        return (new DateTimeImmutable('now', new DateTimeZone(site_timezone())))->format('Y-m-d');
+    } catch (Throwable $e) {
+        return date('Y-m-d');
+    }
+}
+
 /* What the public may see. Two conditions, one meaning: the author marked it
    published AND its date has arrived. Keeping the date as the go-live moment
    means there is no separate "scheduled" state to fall out of step — a post
    dated next Tuesday simply appears next Tuesday.
-   NULL dates are treated as live: they predate scheduling and were visible. */
-const POSTS_LIVE_SQL = "status = 'published' AND (published_at IS NULL OR published_at <= CURDATE())";
+   NULL dates are treated as live: they predate scheduling and were visible.
+
+   The date comes from PHP, not from MySQL's CURDATE(). CURDATE() answers in
+   whatever timezone the database session is set to, which on a US host is
+   hours behind an editor in India — so an article published "today" sat
+   invisible while the admin, reading the browser's clock, insisted it was
+   live. One clock now decides, and it is the site's.
+   The value is produced by date(), never by a request, so embedding it is safe. */
+function posts_live_sql(): string
+{
+    return "status = 'published' AND (published_at IS NULL OR published_at <= '" . site_today() . "')";
+}
 
 /** Draft, Scheduled or Published — what to show the admin, worked out rather
  *  than stored, so it cannot disagree with the row. */
@@ -11821,7 +11850,7 @@ function post_state(array $post): string
 {
     if ((string) ($post['status'] ?? 'published') !== 'published') return 'draft';
     $d = trim((string) ($post['published_at'] ?? ''));
-    return ($d !== '' && $d !== '0000-00-00' && $d > date('Y-m-d')) ? 'scheduled' : 'published';
+    return ($d !== '' && $d !== '0000-00-00' && $d > site_today()) ? 'scheduled' : 'published';
 }
 
 /** Where readers came from, over the last N days.

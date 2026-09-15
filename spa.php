@@ -100,8 +100,10 @@ try {
             $stmt->execute([(int) $m[1]]);
             $post = $stmt->fetch() ?: null;
             if ($post) {
+                // Same clock the API uses — the site's, not the server's.
+                $siteToday = (new DateTimeImmutable('now', new DateTimeZone((string) env('APP_TIMEZONE', 'America/New_York'))))->format('Y-m-d');
                 $live = (string) ($post['status'] ?? 'published') === 'published'
-                    && (empty($post['published_at']) || substr((string) $post['published_at'], 0, 10) <= date('Y-m-d'));
+                    && (empty($post['published_at']) || substr((string) $post['published_at'], 0, 10) <= $siteToday);
                 if (!$live) $post = null;
             }
         } catch (Throwable $e) { $post = null; $dbUnavailable = true; }

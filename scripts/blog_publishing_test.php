@@ -42,18 +42,34 @@ $ok('today is published', $stateOf($live) === 'published');
 $ok('no date at all is published', $stateOf($oldNull) === 'published');
 
 echo "\nWhat the public list returns\n";
-$public = db()->query('SELECT id FROM posts WHERE ' . POSTS_LIVE_SQL)->fetchAll(PDO::FETCH_COLUMN);
+$public = db()->query('SELECT id FROM posts WHERE ' . posts_live_sql())->fetchAll(PDO::FETCH_COLUMN);
 $ok('the draft is hidden', !in_array((string) $draft, array_map('strval', $public), true));
 $ok('the scheduled one is hidden', !in_array((string) $sched, array_map('strval', $public), true));
 $ok('the live one is shown', in_array((string) $live, array_map('strval', $public), true));
 $ok('the dateless one is shown', in_array((string) $oldNull, array_map('strval', $public), true));
+
+echo "\nOne clock decides, and it is the site's\n";
+/* The bug this covers: MySQL's CURDATE() answers in the database session's
+   timezone. On a US-hosted server that is hours behind an editor in India, so
+   an article published "today" was filtered out while the admin badge, reading
+   the browser's clock, said Published. Both sides use site_today() now. */
+$ok('the live filter carries no CURDATE()', strpos(posts_live_sql(), 'CURDATE') === false);
+$ok('it compares against the site date', strpos(posts_live_sql(), site_today()) !== false);
+$mysqlToday = (string) db()->query('SELECT CURDATE()')->fetchColumn();
+if ($mysqlToday !== site_today()) {
+    echo "  note  MySQL says $mysqlToday, the site says " . site_today() . " — exactly the gap this guards.\n";
+}
+$todayPost = $mk('ZZ Published today', 'published', site_today());
+$live2 = db()->query('SELECT id FROM posts WHERE ' . posts_live_sql())->fetchAll(PDO::FETCH_COLUMN);
+$ok('an article published today is public immediately',
+    in_array((string) $todayPost, array_map('strval', $live2), true));
 
 echo "\nThe day it is due\n";
 db()->prepare('UPDATE posts SET published_at = ? WHERE id = ?')->execute([$today, $sched]);
 $ok('a scheduled post goes live on its date', $stateOf($sched) === 'published');
 
 echo "\nRelated articles never leak a draft\n";
-$rel = db()->prepare('SELECT id FROM posts WHERE id <> ? AND ' . POSTS_LIVE_SQL . ' ORDER BY published_at DESC LIMIT 50');
+$rel = db()->prepare('SELECT id FROM posts WHERE id <> ? AND ' . posts_live_sql() . ' ORDER BY published_at DESC LIMIT 50');
 $rel->execute([$live]);
 $ok('no draft among them', !in_array((string) $draft, array_map('strval', $rel->fetchAll(PDO::FETCH_COLUMN)), true));
 

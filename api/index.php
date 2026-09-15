@@ -643,7 +643,7 @@ try {
             // Drafts and not-yet-due posts are not public. This is the whole
             // point of the state: the admin can save half an article without
             // it appearing on the site the same second.
-            $where = [POSTS_LIVE_SQL];
+            $where = [posts_live_sql()];
             $args = [$vh];
             if (($cat = trim((string) ($_GET['category'] ?? ''))) !== '') { $where[] = 'category = ?'; $args[] = $cat; }
             if (($q = trim((string) ($_GET['q'] ?? ''))) !== '') {
@@ -755,7 +755,7 @@ try {
             /* Somewhere to go next: same category first, then the most recent,
                so a short blog still fills the row. */
             $rel = db()->prepare("SELECT id, title, category, excerpt, cover_image, published_at
-                FROM posts WHERE id <> ? AND " . POSTS_LIVE_SQL . "
+                FROM posts WHERE id <> ? AND " . posts_live_sql() . "
                 ORDER BY (category = ?) DESC, published_at DESC, id DESC LIMIT 3");
             $rel->execute([(int) $m[1], (string) ($post['category'] ?? '')]);
             $post['related'] = $rel->fetchAll();
