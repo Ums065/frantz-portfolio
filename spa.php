@@ -39,6 +39,19 @@ header('Cache-Control: no-cache');
 try {
     // Clean request path: drop query/hash, collapse trailing slash.
     $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
+
+    /* Strip the folder the app is installed in. At the domain root that is
+       nothing and this does nothing; under /frantz-portfolio/ it is the
+       difference between reading the route as "/blog/12" and as
+       "/frantz-portfolio/blog/12" — which matched no route, so every page
+       answered 404 and got none of its meta tags. The base comes from this
+       script's own location, so it is right wherever the app is installed. */
+    $base = str_replace('\\', '/', dirname((string) ($_SERVER['SCRIPT_NAME'] ?? '')));
+    $base = '/' . trim($base, '/.');
+    if ($base !== '/' && strpos($path, $base) === 0) {
+        $path = substr($path, strlen($base));
+    }
+
     $path = '/' . trim($path, '/');
     if ($path === '/') { echo $html; exit; } // homepage: static tags are already correct
 
@@ -173,20 +186,37 @@ try {
     $t = fn(string $s) => htmlspecialchars($s, ENT_QUOTES);
 
     // Replace each known head tag by attribute, regardless of its current value.
+    /* Each entry is [pattern, the text to put in]. The text goes in through a
+       CALLBACK, never as a replacement string.
+
+       preg_replace() reads $1, ${1} and \1 inside its replacement as
+       backreferences — including inside content it was handed. A title
+       reading "Starting at $29 a Month" became "Starting at  a Month" on
+       every share card and in every search result, because PHP read the $29
+       as capture group 29, found none, and substituted nothing. "$100" lost
+       everything but the last 0. A price in a headline is not an edge case
+       for this site, and nothing about the symptom pointed at the cause.
+       A callback returns its string verbatim, so there is nothing to parse. */
     $reps = [
-        ['#<title>.*?</title>#is', '<title>' . $t($fullTitle) . '</title>'],
-        ['#(<meta\s+name="description"\s+content=")[^"]*(")#i', '${1}' . $t($descOut) . '${2}'],
-        ['#(<meta\s+property="og:title"\s+content=")[^"]*(")#i', '${1}' . $t($fullTitle) . '${2}'],
-        ['#(<meta\s+property="og:description"\s+content=")[^"]*(")#i', '${1}' . $t($descOut) . '${2}'],
-        ['#(<meta\s+property="og:image"\s+content=")[^"]*(")#i', '${1}' . $t($imgOut) . '${2}'],
-        ['#(<meta\s+property="og:url"\s+content=")[^"]*(")#i', '${1}' . $t($canonical) . '${2}'],
-        ['#(<link\s+rel="canonical"\s+href=")[^"]*(")#i', '${1}' . $t($canonical) . '${2}'],
-        ['#(<meta\s+name="twitter:title"\s+content=")[^"]*(")#i', '${1}' . $t($fullTitle) . '${2}'],
-        ['#(<meta\s+name="twitter:description"\s+content=")[^"]*(")#i', '${1}' . $t($descOut) . '${2}'],
-        ['#(<meta\s+name="twitter:image"\s+content=")[^"]*(")#i', '${1}' . $t($imgOut) . '${2}'],
+        ['#<title>.*?</title>#is', $t($fullTitle), 'title'],
+        ['#(<meta\s+name="description"\s+content=")[^"]*(")#i', $t($descOut), 'wrap'],
+        ['#(<meta\s+property="og:title"\s+content=")[^"]*(")#i', $t($fullTitle), 'wrap'],
+        ['#(<meta\s+property="og:description"\s+content=")[^"]*(")#i', $t($descOut), 'wrap'],
+        ['#(<meta\s+property="og:image"\s+content=")[^"]*(")#i', $t($imgOut), 'wrap'],
+        ['#(<meta\s+property="og:url"\s+content=")[^"]*(")#i', $t($canonical), 'wrap'],
+        ['#(<link\s+rel="canonical"\s+href=")[^"]*(")#i', $t($canonical), 'wrap'],
+        ['#(<meta\s+name="twitter:title"\s+content=")[^"]*(")#i', $t($fullTitle), 'wrap'],
+        ['#(<meta\s+name="twitter:description"\s+content=")[^"]*(")#i', $t($descOut), 'wrap'],
+        ['#(<meta\s+name="twitter:image"\s+content=")[^"]*(")#i', $t($imgOut), 'wrap'],
     ];
-    foreach ($reps as [$pattern, $replacement]) {
-        $out = preg_replace($pattern, $replacement, $html);
+    foreach ($reps as [$pattern, $value, $kind]) {
+        $out = preg_replace_callback(
+            $pattern,
+            static fn(array $m): string => $kind === 'title'
+                ? '<title>' . $value . '</title>'
+                : $m[1] . $value . $m[2],
+            $html
+        );
         if ($out !== null) $html = $out; // keep previous on regex failure
     }
 
