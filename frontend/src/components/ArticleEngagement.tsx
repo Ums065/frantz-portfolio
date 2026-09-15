@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { api } from '../lib/api'
 
 /* Sharing, the "Good Read" button, and read tracking for a blog article.
@@ -162,25 +163,20 @@ function Icon({ name, size = 17 }: { name: keyof typeof ICONS | string; size?: n
 
 interface ShareTarget { key: string; label: string; href?: string; brand?: string }
 
-export function ShareButton({ title, url, postId, compact, align = 'left' }: {
-  title: string
-  url: string
-  postId?: number
-  compact?: boolean
-  /** Which edge the menu lines up with — 'right' near the end of a row. */
-  align?: 'left' | 'right'
-}) {
-  const [open, setOpen] = useState(false)
+interface ShareTarget { key: string; label: string; href?: string; brand?: string }
+
+/** The places an article can be sent, and the two actions that are not links.
+ *  One source of truth, so the dropdown on an article page and the popup on a
+ *  card can never drift apart. */
+function useShare(title: string, url: string, postId?: number) {
   const [copied, setCopied] = useState(false)
-  const wrap = useRef<HTMLDivElement | null>(null)
-  const btn = useRef<HTMLButtonElement | null>(null)
 
   // Which channel was used, so "how do people find it" has an answer. We can
   // only see the click — whether they went through with it happens off-page.
-  const track = (channel: string) => {
+  const track = useCallback((channel: string) => {
     if (!postId) return
     void api.post(`posts/${postId}/share`, { channel }).catch(() => {})
-  }
+  }, [postId])
 
   const t = encodeURIComponent(title)
   const u = encodeURIComponent(url)
@@ -195,25 +191,7 @@ export function ShareButton({ title, url, postId, compact, align = 'left' }: {
     { key: 'email', label: 'Email', href: `mailto:?subject=${t}&body=${t}%0A%0A${u}` },
   ]
 
-  // Close on a click elsewhere or on Escape, and hand focus back to the button
-  // so a keyboard user is not dropped at the top of the page.
-  useEffect(() => {
-    if (!open) return
-    const onDown = (e: MouseEvent) => {
-      if (wrap.current && !wrap.current.contains(e.target as Node)) setOpen(false)
-    }
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { setOpen(false); btn.current?.focus() }
-    }
-    document.addEventListener('mousedown', onDown)
-    document.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('mousedown', onDown)
-      document.removeEventListener('keydown', onKey)
-    }
-  }, [open])
-
-  const copy = async () => {
+  const copy = useCallback(async () => {
     try {
       await navigator.clipboard.writeText(url)
       track('copy')
@@ -223,30 +201,139 @@ export function ShareButton({ title, url, postId, compact, align = 'left' }: {
     } catch {
       window.fcToast?.('Could not copy the link.')
     }
-    setOpen(false)
-  }
+  }, [track, url])
 
-  // On a phone the operating system's own sheet beats any menu we can draw,
-  // so it is offered — but never instead of the menu, because a browser that
+  // On a phone the operating system's own sheet beats anything we can draw,
+  // so it is offered — but never instead of the list, because a browser that
   // has navigator.share is not necessarily a phone.
-  const native = async () => {
-    setOpen(false)
+  const native = useCallback(async () => {
     try { await navigator.share?.({ title, url }); track('native') } catch { /* dismissed */ }
-  }
+  }, [title, track, url])
+
   const canNative = typeof navigator !== 'undefined' && !!navigator.share
+  return { targets, copy, copied, native, canNative, track }
+}
+
+export function ShareButton({ title, url, postId, compact, align = 'left', variant = 'menu' }: {
+  title: string
+  url: string
+  postId?: number
+  compact?: boolean
+  /** Which edge the dropdown lines up with — 'right' near the end of a row. */
+  align?: 'left' | 'right'
+  /** 'menu' drops a list under the button; 'popup' opens a centred dialog.
+   *  Cards use the popup: a dropdown inside a grid of cards either covers the
+   *  card below it or gets clipped by it, and there is no room to read. */
+  variant?: 'menu' | 'popup'
+}) {
+  const [open, setOpen] = useState(false)
+  const wrap = useRef<HTMLDivElement | null>(null)
+  const btn = useRef<HTMLButtonElement | null>(null)
+  const { targets, copy, copied, native, canNative, track } = useShare(title, url, postId)
+
+  const close = useCallback(() => { setOpen(false); btn.current?.focus() }, [])
+
+  // Escape closes both kinds; a click elsewhere closes the dropdown only,
+  // because the popup has its own backdrop for that.
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close() }
+    const onDown = (e: MouseEvent) => {
+      if (variant === 'menu' && wrap.current && !wrap.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('keydown', onKey)
+    document.addEventListener('mousedown', onDown)
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.removeEventListener('mousedown', onDown)
+    }
+  }, [close, open, variant])
+
+  // A dialog that leaves the page scrolling behind it feels broken on a phone.
+  useEffect(() => {
+    if (!open || variant !== 'popup') return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = prev }
+  }, [open, variant])
+
+  const onCopy = () => { void copy(); if (variant === 'menu') setOpen(false) }
+  const onNative = () => { setOpen(false); void native() }
+
+  const trigger = (
+    <button type="button" ref={btn} className="share__btn"
+      aria-haspopup={variant === 'popup' ? 'dialog' : 'menu'} aria-expanded={open}
+      onClick={() => setOpen((o) => !o)} title="Share this">
+      <Icon name="share" size={compact ? 15 : 17} />
+      <span>Share</span>
+    </button>
+  )
+
+  if (variant === 'popup') {
+    return (
+      <div className={`share${compact ? ' share--compact' : ''}`} ref={wrap}>
+        {trigger}
+        {open && createPortal(
+          /* Portalled to the body on purpose: the cards carry .reveal, which
+             uses a transform, and a transformed ancestor makes position:fixed
+             resolve against the card instead of the viewport — the overlay
+             would sit inside one card. */
+          <div className="modal-overlay open share-pop__overlay"
+            onClick={(e) => { if (e.target === e.currentTarget) close() }}>
+            <div className="modal share-pop" role="dialog" aria-modal="true" aria-label="Share this article">
+              <button type="button" className="close" onClick={close} aria-label="Close">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth={2}>
+                  <path d="M6 6l12 12M18 6L6 18" />
+                </svg>
+              </button>
+              <h3 className="gold-text share-pop__head">Share this article</h3>
+              <p className="share-pop__title">{title}</p>
+
+              <div className="share-pop__grid">
+                {canNative && (
+                  <button type="button" className="share-pop__tile" onClick={onNative}>
+                    <span className="share__ico"><Icon name="share" size={22} /></span>
+                    <span>Share via…</span>
+                  </button>
+                )}
+                {targets.map((s) => (
+                  <a key={s.key} className="share-pop__tile" href={s.href}
+                    target={s.href?.startsWith('http') ? '_blank' : undefined}
+                    rel={s.href?.startsWith('http') ? 'noreferrer' : undefined}
+                    onClick={() => { track(s.key); close() }}>
+                    <span className="share__ico" style={s.brand ? { color: s.brand } : undefined}>
+                      <Icon name={s.key} size={22} />
+                    </span>
+                    <span>{s.label}</span>
+                  </a>
+                ))}
+              </div>
+
+              {/* The address, visible — someone who wants to paste it somewhere
+                  we do not list can read it rather than guess. */}
+              <div className="share-pop__link">
+                <input type="text" readOnly value={url} aria-label="Article link"
+                  onFocus={(e) => e.currentTarget.select()} />
+                <button type="button" className="btn btn--sm btn--solid" onClick={onCopy}>
+                  <Icon name={copied ? 'check' : 'copy'} size={15} />
+                  <span>{copied ? 'Copied' : 'Copy'}</span>
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
+      </div>
+    )
+  }
 
   return (
     <div className={`share${compact ? ' share--compact' : ''}${align === 'right' ? ' share--right' : ''}`} ref={wrap}>
-      <button type="button" ref={btn} className="share__btn" aria-haspopup="menu" aria-expanded={open}
-        onClick={() => setOpen((o) => !o)} title="Share this">
-        <Icon name="share" size={compact ? 15 : 17} />
-        <span>Share</span>
-      </button>
-
+      {trigger}
       {open && (
         <div className="share__menu" role="menu" aria-label="Share this">
           {canNative && (
-            <button type="button" role="menuitem" className="share__item" onClick={native}>
+            <button type="button" role="menuitem" className="share__item" onClick={onNative}>
               <span className="share__ico"><Icon name="share" /></span>Share via…
             </button>
           )}
@@ -261,7 +348,7 @@ export function ShareButton({ title, url, postId, compact, align = 'left' }: {
               {s.label}
             </a>
           ))}
-          <button type="button" role="menuitem" className="share__item" onClick={copy}>
+          <button type="button" role="menuitem" className="share__item" onClick={onCopy}>
             <span className="share__ico"><Icon name={copied ? 'check' : 'copy'} /></span>
             {copied ? 'Link copied' : 'Copy link'}
           </button>

@@ -118,7 +118,7 @@ export default function Blog() {
                         {saved ? 'Saved' : 'Save'}
                       </button>
                       <GoodReadButton postId={p.id} likes={Number(p.likes) || 0} liked={!!Number(p.liked)} compact />
-                      <ShareButton title={p.title} url={`${window.location.origin}/blog/${p.id}`} postId={p.id} compact align="right" />
+                      <ShareButton title={p.title} url={`${window.location.origin}/blog/${p.id}`} postId={p.id} compact variant="popup" />
                     </div>
                   </div>
                 </article>
