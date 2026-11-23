@@ -21,13 +21,13 @@ $base = rtrim((string) env('APP_URL', 'https://frantzcoutard.com'), '/');
 $today = date('Y-m-d');
 
 /** One <url> block. $loc is a path (e.g. "/about") or "" for the homepage. */
-function sitemap_url(string $base, string $loc, string $lastmod, string $changefreq, string $priority): string
+function sitemap_url(string $base, string $loc, ?string $lastmod, string $changefreq, string $priority): string
 {
     // Homepage keeps its canonical trailing slash; other paths have none.
     $full = $loc === '' ? $base . '/' : $base . $loc;
     return "  <url>\n"
         . "    <loc>" . htmlspecialchars($full, ENT_XML1) . "</loc>\n"
-        . "    <lastmod>" . htmlspecialchars($lastmod, ENT_XML1) . "</lastmod>\n"
+        . ($lastmod !== null ? "    <lastmod>" . htmlspecialchars($lastmod, ENT_XML1) . "</lastmod>\n" : '')
         . "    <changefreq>" . $changefreq . "</changefreq>\n"
         . "    <priority>" . $priority . "</priority>\n"
         . "  </url>\n";
@@ -55,6 +55,7 @@ $staticPages = [
     ['/new-school/become-a-founding-sponsor', 'monthly', '0.5'],
     ['/new-school/founding-sponsors', 'monthly', '0.5'],
     ['/store', 'weekly', '0.6'],
+    ['/donate', 'monthly', '0.6'],
     ['/terms', 'yearly', '0.3'],
     ['/privacy', 'yearly', '0.3'],
     ['/content-disclaimer', 'yearly', '0.3'],
@@ -62,7 +63,10 @@ $staticPages = [
 
 $body = '';
 foreach ($staticPages as [$path, $freq, $prio]) {
-    $body .= sitemap_url($base, $path, $today, $freq, $prio);
+    /* No <lastmod> for these: the pages are static, and stamping every one with
+       today's date told Google they all change daily, which teaches it to ignore
+       the field (and our real article/role dates with it). */
+    $body .= sitemap_url($base, $path, null, $freq, $prio);
 }
 
 // Published blog posts — /blog/{id}. published_at (a DATE) is the closest

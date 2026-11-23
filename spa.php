@@ -55,6 +55,24 @@ try {
     $path = '/' . trim($path, '/');
     if ($path === '/') { echo $html; exit; } // homepage: static tags are already correct
 
+    /* Prefer the prerendered page for this route (dist/media/index.html, …) over
+       the bare shell. `npm run build:seo` writes one per public route, but the
+       root .htaccess never serves them directly — a route is a directory, and
+       its "real file" rule only matches files — so every route fell through to
+       this script and got the shell: an empty <div id="root">. A crawler that
+       does not run our JavaScript saw no content at all on /media or
+       /new-school. The meta rewrite below still runs on top, so titles, canonical
+       and the soft-404 / blog / careers logic are unchanged.
+       The pattern has no dot, so this cannot be pointed outside dist/. */
+    if (preg_match('#^/[A-Za-z0-9/_-]+$#', $path)) {
+        $pre = @file_get_contents(__DIR__ . '/frontend/dist' . $path . '/index.html');
+        if ($pre !== false && strlen($pre) > 2000) {
+            // The prerender already carries the page's own breadcrumb JSON-LD;
+            // the block injected below would be a duplicate of it.
+            $html = preg_replace('#<script type="application/ld\+json" data-seo="page">.*?</script>\s*#is', '', $pre) ?? $pre;
+        }
+    }
+
     // Static route → [title, description, image?]. Titles get " — Frantz Coutard"
     // appended (matching useSeo). Descriptions mirror each page's useSeo() call.
     $routes = [
@@ -62,6 +80,11 @@ try {
         '/awards' => ['Awards & Recognition', 'Recognized by community, county, state, federal, and national organizations — from the Queens Chamber (2023) to the Presidential Lifetime Achievement Award and the U.S. Senate.', '/assets/awards/frantz-coutard.webp'],
         '/careers' => ['Careers & Opportunities', 'Open roles across the Frantz Coutard ecosystem and our partner organisations. Apply online — open to applicants 18 and over.', null],
         '/blog' => ['Blog & News', 'Insights from Frantz Coutard on technology, entrepreneurship, and community - plus news shaping local commerce.', null],
+        /* /winners and /donate are real pages (and /winners is in sitemap.php), but
+           were missing here — so they answered HTTP 404 to every crawler, which
+           tells Google to drop a URL the sitemap was asking it to index. */
+        '/winners' => ['Winners', 'The students, schools, and community projects recognized in the Student Impact Challenge.', null],
+        '/donate' => ['Donate — Student Impact Challenge', 'Fund the Student Impact Challenge: scholarships, the school-impact grant and the showcase night. A program of TrendCatch Gives Back Inc., a registered 501(c)(3) nonprofit.', null],
         '/events' => ['Events', 'Where to find Frantz Coutard next - keynotes, panels, and community gatherings.', null],
         '/contact' => ['Contact', 'Get in touch with Frantz Coutard and the team for partnerships, press, speaking, and community initiatives.', '/assets/fc-logo.webp'],
         '/resources' => ['Resources & Handbooks', 'Download official handbooks, the New School program guide, and media, partnership, and sponsorship kits.', null],
@@ -83,7 +106,7 @@ try {
     // they are noindex dashboards, so we serve the shell unchanged.
     $appRoutes = [
         '/dashboard', '/profile', '/reset-password', '/admin', '/judge/dashboard',
-        '/business', '/sponsor', '/partner-portal', '/media-portal', '/volunteer',
+        '/business', '/fellow', '/sponsor', '/partner-portal', '/media-portal', '/volunteer',
         '/demo', '/new-school/dashboard',
     ];
 

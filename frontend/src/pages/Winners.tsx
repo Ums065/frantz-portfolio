@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
+import { useSeo } from '../hooks/useSeo'
 
 /* Public winners showcase. Reads the public New School overview; winners are only
    present once an admin publishes them (ns_winners_published). Before that, a
@@ -16,6 +17,10 @@ interface Winner {
 const PLACE = { first: { label: '1st Place', medal: '🥇', order: 1 }, second: { label: '2nd Place', medal: '🥈', order: 2 }, third: { label: '3rd Place', medal: '🥉', order: 3 } } as const
 
 export default function Winners() {
+  useSeo({
+    title: 'Winners',
+    description: 'The students, schools, and community projects recognized in the Student Impact Challenge.',
+  })
   const [winners, setWinners] = useState<Winner[]>([])
   const [published, setPublished] = useState(false)
   const [loading, setLoading] = useState(true)

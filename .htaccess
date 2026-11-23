@@ -24,8 +24,29 @@ Options -Indexes
   Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
 </IfModule>
 
+# Only the real domain may appear in Google. A staging or test copy of this site
+# (any other hostname) tells search engines not to index it: Google had been
+# ranking the staging copy and sending it clicks that belong to the live site.
+# noindex is deliberately used instead of a robots.txt "Disallow": a blocked
+# URL cannot be crawled, so Google would never see the noindex and the URL
+# would linger in the index. Localhost is left alone.
+<IfModule mod_setenvif.c>
+  SetEnvIfNoCase Host "^(www\.)?frantzcoutard\.com(:[0-9]+)?$" FC_PRODUCTION_HOST
+  SetEnvIfNoCase Host "^(localhost|127\.0\.0\.1)(:[0-9]+)?$" FC_PRODUCTION_HOST
+</IfModule>
+<IfModule mod_headers.c>
+  Header always set X-Robots-Tag "noindex, nofollow" env=!FC_PRODUCTION_HOST
+</IfModule>
+
 <IfModule mod_rewrite.c>
   RewriteEngine On
+
+  # One address per page: www.frantzcoutard.com and frantzcoutard.com count as
+  # two copies of the site to Google. Send www to the bare domain, straight to
+  # https, in a single hop (before the HTTPS rule below, which would otherwise
+  # add a second one).
+  RewriteCond %{HTTP_HOST} ^www\.frantzcoutard\.com$ [NC]
+  RewriteRule ^ https://frantzcoutard.com%{REQUEST_URI} [R=301,L]
 
   # M-5: force HTTPS in production. Skips localhost / 127.0.0.1 so local WAMP
   # HTTP development is not redirected.

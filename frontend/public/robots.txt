@@ -9,6 +9,12 @@ Disallow: /demo-login
 Disallow: /new-school/dashboard
 Disallow: /new-school/parent/
 Disallow: /judge/dashboard
+Disallow: /business
+Disallow: /sponsor
+Disallow: /partner-portal
+Disallow: /media-portal
+Disallow: /volunteer
+Disallow: /fellow
 Disallow: /reset-password
 Disallow: /api/
 
