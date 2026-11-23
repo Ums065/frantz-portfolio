@@ -1,10 +1,24 @@
 import { lazy, Suspense, type ReactNode, useEffect } from 'react'
-import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useParams } from 'react-router-dom'
 import { trackVisit } from './lib/api'
 import Home from './components/Home'
 import SiteLayout from './components/SiteLayout'
 import ImpersonationBanner from './components/ImpersonationBanner'
 import { AuthProvider } from './context/AuthContext'
+
+/* /register and /register/{student|parent|teacher|school} -> the challenge page's
+   registration section for that role. An unknown role falls back to student, so a
+   mistyped or mis-printed link still lands on a working registration form. */
+function RegisterShortcut() {
+  const { role } = useParams()
+  const valid = ['student', 'parent', 'teacher', 'school']
+  const pick = role && valid.includes(role.toLowerCase()) ? role.toLowerCase() : 'student'
+  const { search } = useLocation()
+  const extra = new URLSearchParams(search)
+  extra.delete('register')
+  const rest = extra.toString()
+  return <Navigate to={`/new-school?register=${pick}${rest ? `&${rest}` : ''}#registration`} replace />
+}
 
 const About = lazy(() => import('./pages/About'))
 const Awards = lazy(() => import('./pages/Awards'))
@@ -125,6 +139,10 @@ export default function App() {
           <Route path="/become-a-founding-sponsor" element={<RoutedPage pageKey="become-a-founding-sponsor"><FoundingSponsor /></RoutedPage>} />
           <Route path="/founding-sponsors" element={<RoutedPage pageKey="founding-sponsors"><FoundingSponsors /></RoutedPage>} />
           <Route path="/new-school" element={<RoutedPage pageKey="new-school"><NewSchool /></RoutedPage>} />
+          {/* Short, printable entry points for flyers and QR codes. They land on the
+              challenge page with that role's registration form already open. */}
+          <Route path="/register" element={<RegisterShortcut />} />
+          <Route path="/register/:role" element={<RegisterShortcut />} />
           <Route path="/winners" element={<RoutedPage pageKey="winners"><Winners /></RoutedPage>} />
           <Route path="/new-school/become-a-founding-sponsor" element={<RoutedPage pageKey="new-school-become-a-founding-sponsor"><FoundingSponsor /></RoutedPage>} />
           <Route path="/new-school/founding-sponsors" element={<RoutedPage pageKey="new-school-founding-sponsors"><FoundingSponsors /></RoutedPage>} />

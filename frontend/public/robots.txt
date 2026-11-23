@@ -15,6 +15,7 @@ Disallow: /partner-portal
 Disallow: /media-portal
 Disallow: /volunteer
 Disallow: /fellow
+Disallow: /register
 Disallow: /reset-password
 Disallow: /api/
 

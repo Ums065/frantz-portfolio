@@ -232,12 +232,12 @@ const homeChallengeTabs: HomeChallengeTab[] = [
     badge: '01',
     eyebrow: 'What It Is',
     heading: 'Students build solutions that matter.',
-    detail: 'Students ages 10-20 interview 10 local businesses, identify a community problem, and create a final project with measurable impact.',
-    points: ['10 local business interviews', 'Parent consent and school approval', 'Final project submission', 'Live rankings and progress tracking'],
+    detail: 'Students ages 10-20 complete 10 interviews with local businesses, government agencies and community leaders, identify a community problem, and create a final project with measurable impact.',
+    points: ['10 local interviews: businesses, agencies, leaders', 'Parent consent and teacher approval', 'Final project submission', 'Live rankings and progress tracking'],
     stats: [
       { label: 'Ages', value: '10-20' },
       { label: 'Grades', value: 'Elementary–College' },
-      { label: 'Interviews', value: '10 businesses' },
+      { label: 'Local interviews', value: '10' },
       { label: 'Submission', value: 'Final project' },
     ],
     cards: [

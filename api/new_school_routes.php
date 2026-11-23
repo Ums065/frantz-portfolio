@@ -521,7 +521,7 @@ function new_school_handle_route(string $method, string $route): bool
                 'challenge' => [
                     'title' => 'WHAT PROBLEM WILL YOU SOLVE?',
                     'subtitle' => 'Join New York\'s Largest Student Problem-Solving Movement',
-                    'lead' => 'Students interview 10 local businesses, identify a community problem, develop a solution, and compete for scholarships, school grants, and statewide recognition.',
+                    'lead' => 'Students complete 10 interviews with local businesses, government agencies and community leaders, identify a community problem, develop a solution, and compete for scholarships, school grants, and statewide recognition.',
                     'registration_open' => ns_submission_open_date(),
                     'winners_announced' => ns_winners_announced_date(),
                     'school_grant_amount' => 25000,
@@ -557,7 +557,7 @@ function new_school_handle_route(string $method, string $route): bool
                 'winners' => [],
                 'workflow' => [
                     ['step' => 1, 'title' => 'Register', 'detail' => 'Students ages 10-20 create a challenge profile on the site.'],
-                    ['step' => 2, 'title' => 'Interview 10 Local Businesses', 'detail' => 'Students meet with businesses to learn real community challenges.'],
+                    ['step' => 2, 'title' => 'Complete 10 Local Interviews', 'detail' => 'Students meet with businesses, government agencies and community leaders to learn real community challenges.'],
                     ['step' => 3, 'title' => 'Identify A Community Problem', 'detail' => 'Interview notes become a clear problem statement to solve.'],
                     ['step' => 4, 'title' => 'Develop A Solution', 'detail' => 'Students build a practical plan that can make a measurable difference.'],
                     ['step' => 5, 'title' => 'Submit Your Project', 'detail' => 'The final video and written summary are uploaded for review.'],
@@ -566,14 +566,14 @@ function new_school_handle_route(string $method, string $route): bool
                 'rules' => [
                     'Students must be ages 10-20.',
                     'Parent or guardian consent is required.',
-                    'School and teacher approval must be complete before final submission.',
-                    'A student must log 10 business interviews.',
+                    'Teacher approval must be complete before final submission.',
+                    'A student must log 10 interviews with local businesses, government agencies or community leaders.',
                     'Every approval stores time, name, and digital signature.',
                 ],
                 'prizes' => [
-                    ['place' => 'First', 'amount' => 2500, 'label' => 'Scholarship Award'],
-                    ['place' => 'Second', 'amount' => 1500, 'label' => 'Scholarship Award'],
-                    ['place' => 'Third', 'amount' => 1000, 'label' => 'Scholarship Award'],
+                    ['place' => 'First', 'amount' => 5000, 'label' => 'Student Scholarship'],
+                    ['place' => 'Second', 'amount' => 3000, 'label' => 'Student Scholarship'],
+                    ['place' => 'Third', 'amount' => 2000, 'label' => 'Student Scholarship'],
                 ],
                 'submission_requirements' => [
                     'Video length up to 1 minute and 30 seconds',

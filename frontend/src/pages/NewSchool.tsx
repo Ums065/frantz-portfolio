@@ -737,7 +737,7 @@ const challengeFaqItems = [
   },
   {
     question: "What do students do?",
-    answer: "They interview local businesses, identify a real community problem, and build a solution that creates measurable impact.",
+    answer: "They interview local businesses, government agencies and community leaders, identify a real community problem, and build a solution that creates measurable impact.",
   },
   {
     question: "Do parents and schools need to approve?",
@@ -1300,7 +1300,7 @@ const movementSteps = [
   },
   {
     badge: '②',
-    title: 'Interview 10 Local Businesses',
+    title: 'Complete 10 Local Interviews',
     detail: 'Collect real feedback from the community and document each visit.',
   },
   {
@@ -3821,9 +3821,9 @@ export default function NewSchool() {
 
               <form className="glass ns-form ns-form--compact reveal in" id="business-interviews" onSubmit={submitBusiness} hidden={dashboardTab !== 'activity' || !studentDashboard.scholarship?.completed}>
                 <div className="ns-form__head">
-                  <span className="eyebrow">Business Entry</span>
-                  <h3>Log a local business</h3>
-                  <p>Students add 10 businesses before the final submission unlocks.</p>
+                  <span className="eyebrow">Interview Entry</span>
+                  <h3>Log a local interview</h3>
+                  <p>Students log 10 interviews — local businesses, government agencies or community leaders — before the final submission unlocks.</p>
                 </div>
                 <div className="ns-field-grid">
                   <label className="ns-field"><span>Visit Number</span><input name="visit_number" type="number" min="1" max="10" placeholder="Auto if blank" /></label>
@@ -3831,7 +3831,7 @@ export default function NewSchool() {
                   <label className="ns-field"><span>Owner / Manager</span><input name="owner_name" required minLength={3} /></label>
                   <label className="ns-field"><span>Phone Number</span><input name="business_phone" type="tel" inputMode="numeric" required minLength={7} /></label>
                   <label className="ns-field"><span>Business Address</span><input name="business_address" required minLength={3} /></label>
-                  <label className="ns-field"><span>Category</span><input name="business_category" required minLength={3} /></label>
+                  <label className="ns-field"><span>Category</span><input name="business_category" required minLength={3} placeholder="e.g. Restaurant, City agency, Community leader" /></label>
                   <label className="ns-field"><span>Business Website <small className="ns-field-hint">(optional — helps the business find your visit)</small></span><input name="business_website" type="url" placeholder="https://…" /></label>
                   <label className="ns-field"><span>Date of Visit</span><input name="date_of_visit" type="date" required min={String(studentDashboard.student?.created_at || '').slice(0, 10) || undefined} max={todayInputDate()} /></label>
                   {/* Sits right above the two written answers, because that is

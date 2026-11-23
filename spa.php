@@ -107,7 +107,7 @@ try {
     $appRoutes = [
         '/dashboard', '/profile', '/reset-password', '/admin', '/judge/dashboard',
         '/business', '/fellow', '/sponsor', '/partner-portal', '/media-portal', '/volunteer',
-        '/demo', '/new-school/dashboard',
+        '/demo', '/new-school/dashboard', '/register',
     ];
 
     $title = null; $desc = null; $image = null; $post = null; $job = null; $known = false;
@@ -121,7 +121,7 @@ try {
     if (isset($routes[$path])) {
         [$title, $desc, $image] = $routes[$path];
         $known = true;
-    } elseif (in_array($path, $appRoutes, true) || preg_match('#^/new-school/parent/#', $path)) {
+    } elseif (in_array($path, $appRoutes, true) || preg_match('#^/new-school/parent/#', $path) || preg_match('#^/register/[A-Za-z0-9_-]+$#', $path)) {
         $known = true; // valid app route, no meta injection
     } elseif (preg_match('#^/blog/(\d+)$#', $path, $m)) {
         // Single blog post — pull the real title/excerpt/cover/date from the DB.
