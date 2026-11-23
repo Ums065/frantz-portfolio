@@ -43,22 +43,39 @@ $staticPages = [
     ['/about', 'monthly', '0.8'],
     ['/projects', 'monthly', '0.8'],
     ['/blog', 'weekly', '0.8'],
-    ['/winners', 'weekly', '0.8'],
     ['/awards', 'monthly', '0.7'],
-    ['/careers', 'daily', '0.8'],
     ['/events', 'weekly', '0.7'],
     ['/contact', 'monthly', '0.7'],
     ['/resources', 'monthly', '0.7'],
     ['/partner', 'monthly', '0.7'],
     ['/media', 'monthly', '0.6'],
     ['/new-school/become-a-founding-sponsor', 'monthly', '0.5'],
-    ['/new-school/founding-sponsors', 'monthly', '0.5'],
-    ['/store', 'weekly', '0.6'],
-    ['/donate', 'monthly', '0.6'],
     ['/terms', 'yearly', '0.3'],
     ['/privacy', 'yearly', '0.3'],
-    ['/content-disclaimer', 'yearly', '0.3'],
 ];
+
+/* Pages that only earn a place once they have real content (audit: "hold until useful").
+   Each is added when the data exists, so it appears by itself the day it becomes useful and
+   never has to be remembered. They stay reachable for visitors either way. */
+$conditional = [];
+try {
+    if (strtolower((string) db()->query("SELECT setting_value FROM new_school_settings WHERE setting_key = 'winners_published' LIMIT 1")->fetchColumn()) === 'true') {
+        $conditional[] = ['/winners', 'weekly', '0.8'];
+    }
+} catch (Throwable $e) { /* table missing on an old deploy: hold */ }
+try {
+    if ((int) db()->query("SELECT COUNT(*) FROM career_jobs WHERE status = 'approved' AND (apply_deadline IS NULL OR apply_deadline >= CURDATE())")->fetchColumn() > 0) {
+        $conditional[] = ['/careers', 'daily', '0.8'];
+    }
+} catch (Throwable $e) { /* hold */ }
+try {
+    if ((int) db()->query("SELECT COUNT(*) FROM sponsor_applications WHERE approval_status = 'published'")->fetchColumn() > 0) {
+        $conditional[] = ['/new-school/founding-sponsors', 'monthly', '0.5'];
+    }
+} catch (Throwable $e) { /* hold */ }
+// /store and /donate wait for a real catalog / working giving flow; /content-disclaimer is
+// a legal link that stays accessible but is not a search destination.
+$staticPages = array_merge($staticPages, $conditional);
 
 $body = '';
 foreach ($staticPages as [$path, $freq, $prio]) {

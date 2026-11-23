@@ -47,7 +47,7 @@ export const RESOURCES: ResourceDoc[] = [
   {
     label: 'New School Program Guide',
     url: '/docs/new_school_functionality.pdf',
-    description: 'How the New School program works — roles, workflow, and dashboards for principals, teachers, students, and parents.',
+    description: 'How the New School program works — roles, workflow, and dashboards for principals, teachers, students, and parents. An older edition: some dates and figures may be out of date. For current dates, ages, awards and entry steps use the Official Rules page (/rules).',
     category: 'newschool',
     newSchool: true,
   },
@@ -73,13 +73,13 @@ export const RESOURCES: ResourceDoc[] = [
   {
     label: 'Founding Sponsor Kit',
     url: '/docs/founding_sponsor_kit.pdf',
-    description: 'Founding sponsor benefits, tiers, and how sponsorship supports students and schools.',
+    description: 'Founding sponsor benefits, tiers, and how sponsorship supports students and schools. An older edition: dates and prize figures may be out of date; the sponsor page (/new-school/become-a-founding-sponsor) is current.',
     category: 'partnership',
   },
   {
     label: 'Founding Sponsor Media Kit',
     url: '/docs/founding_sponsor_media_kit.pdf',
-    description: 'Media-ready overview for prospective founding sponsors.',
+    description: 'Media-ready overview for prospective founding sponsors (PDF, about 41 MB). An older edition: dates and prize figures may be out of date; the sponsor page (/new-school/become-a-founding-sponsor) is current.',
     category: 'partnership',
   },
 ]

@@ -14,7 +14,7 @@ const TYPE_LABEL: Record<string, string> = {
   internship: 'Internship', volunteer: 'Volunteer', freelance: 'Freelance',
 }
 const MODE_LABEL: Record<string, string> = { onsite: 'On site', remote: 'Remote', hybrid: 'Hybrid' }
-const fmtDate = (d: string) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+const fmtDate = (d: string) => new Date(/^\d{4}-\d{2}-\d{2}$/.test(d) ? d + 'T00:00:00' : d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 
 /* Google reads JobPosting and can surface a role in its jobs results, but only
    for a page that is actually about that one role — hence /careers/{id} rather

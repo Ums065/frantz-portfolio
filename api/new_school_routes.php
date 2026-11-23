@@ -2931,6 +2931,69 @@ function new_school_handle_route(string $method, string $route): bool
             ]);
         }
 
+        /* Student work (videos, written summaries, scholarship documents) is private by default:
+           api/.htaccess sends /api/uploads/new_school/<file> here instead of letting Apache serve
+           the file to anyone who has the link. A signed-in participant or reviewer can open it;
+           a signed-out visitor, or a sponsor/partner/community account, cannot. Names are random
+           (64-bit), so a link is also unguessable. */
+        case $method === 'GET' && preg_match('#^new-school/file/([A-Za-z0-9._-]+)$#', $route, $fm) === 1: {
+            $u = current_user();
+            if (!$u) json(['error' => 'Please sign in to view this file.'], 401);
+            if (!in_array((string) ($u['role'] ?? ''), ['admin', 'super_admin', 'editor', 'judge', 'school', 'teacher', 'student', 'parent'], true)) {
+                json(['error' => 'You do not have access to this file.'], 403);
+            }
+            // The front controller strips dots from the route, so "ns-doc-<hex>.png" arrives as
+            // "ns-doc-<hex>png". Rebuild the real name from a strict pattern (never from raw input).
+            if (preg_match('/^ns-(video|doc)-([a-f0-9]{16})(mp4|webm|mov|mkv|pdf|docx|doc|jpg|png|webp|txt)$/', $fm[1], $nm) !== 1) {
+                json(['error' => 'File not found.'], 404);
+            }
+            $fname = 'ns-' . $nm[1] . '-' . $nm[2] . '.' . $nm[3];
+            $path = __DIR__ . '/uploads/new_school/' . $fname;
+            if (!is_file($path)) json(['error' => 'File not found.'], 404);
+            $mimeByExt = [
+                'mp4' => 'video/mp4', 'webm' => 'video/webm', 'mov' => 'video/quicktime', 'mkv' => 'video/x-matroska',
+                'pdf' => 'application/pdf', 'doc' => 'application/msword',
+                'docx' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                'jpg' => 'image/jpeg', 'png' => 'image/png', 'webp' => 'image/webp', 'txt' => 'text/plain; charset=utf-8',
+            ];
+            $ext = strtolower(pathinfo($fname, PATHINFO_EXTENSION));
+            $size = (int) filesize($path);
+            $start = 0; $end = $size - 1; $status = 200;
+            // Browsers need byte ranges to play and seek video.
+            if (isset($_SERVER['HTTP_RANGE']) && preg_match('/^bytes=(\d*)-(\d*)$/', (string) $_SERVER['HTTP_RANGE'], $rm) === 1 && ($rm[1] !== '' || $rm[2] !== '')) {
+                if ($rm[1] === '') { $start = max(0, $size - (int) $rm[2]); }
+                else { $start = (int) $rm[1]; if ($rm[2] !== '') $end = min($end, (int) $rm[2]); }
+                if ($start > $end || $start >= $size) {
+                    http_response_code(416);
+                    header('Content-Range: bytes */' . $size);
+                    exit;
+                }
+                $status = 206;
+            }
+            http_response_code($status);
+            header('Content-Type: ' . ($mimeByExt[$ext] ?? 'application/octet-stream'));
+            header('X-Content-Type-Options: nosniff');
+            header('Cache-Control: private, max-age=0, must-revalidate');
+            header('Content-Disposition: inline; filename="' . $fname . '"');
+            header('X-Robots-Tag: noindex');
+            header('Accept-Ranges: bytes');
+            if ($status === 206) header('Content-Range: bytes ' . $start . '-' . $end . '/' . $size);
+            header('Content-Length: ' . ($end - $start + 1));
+            if (function_exists('session_write_close')) @session_write_close(); // do not hold the session lock while streaming
+            $fh = fopen($path, 'rb');
+            if ($fh === false) exit;
+            fseek($fh, $start);
+            $left = $end - $start + 1;
+            while ($left > 0 && !feof($fh)) {
+                $chunk = fread($fh, min(8192 * 16, $left));
+                if ($chunk === false || $chunk === '') break;
+                echo $chunk;
+                $left -= strlen($chunk);
+            }
+            fclose($fh);
+            exit;
+        }
+
         case $key === 'POST new-school/upload': {
             // M-2: this endpoint is reachable by the (pre-account) parent-consent flow, so
             // it cannot require login; rate-limit per IP to stop anonymous upload flooding.

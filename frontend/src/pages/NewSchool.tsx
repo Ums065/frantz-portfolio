@@ -732,23 +732,23 @@ const coreValues = [
 const challengeFaqItems = [
   {
     question: "Who can participate?",
-    answer: "Students ages 10-20, from elementary school through college, can join, with parent and school support where required.",
+    answer: "Students ages 10-20, from elementary school through college. Students under 18 need a parent or guardian to give consent; ages 18-20 sign up on their own.",
   },
   {
     question: "What do students do?",
-    answer: "They interview local businesses, government agencies and community leaders, identify a real community problem, and build a solution that creates measurable impact.",
+    answer: "They interview 10 people from local businesses, public agencies or community organizations, choose one local problem, and propose a solution. The final video and written summary are due by March 31, 2027 (11:59 PM Eastern).",
   },
   {
-    question: "Do parents and schools need to approve?",
-    answer: "Yes. The workflow is built around the correct approvals and consent steps before a student can move forward.",
+    question: "Who has to approve what?",
+    answer: "Every student needs their teacher's approval before submitting. Students under 18 also need a parent or guardian's consent. A school's leader approves its teachers. The Official Rules page (/rules) has the full list.",
   },
   {
     question: "What can students win?",
-    answer: "Schools can earn impact grants, students can win scholarships, and outstanding educators can receive the educator award.",
+    answer: "Student scholarships of $5,000 / $3,000 / $2,000, school impact grants of $15,000 / $7,500 / $2,500, and an educator award (the first-place educator wins an all-expense vacation for two).",
   },
   {
     question: "How do I begin?",
-    answer: "Choose the correct registration role at the top of the page, then follow the workflow through the dashboard.",
+    answer: "Choose \"Start as a Student\" (or your role) at the top of the page, then follow the steps in your dashboard. Read the Official Rules at /rules first if you like.",
   },
 ] as const
 interface JobOffer {

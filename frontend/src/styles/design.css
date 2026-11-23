@@ -4289,3 +4289,18 @@ section#challenge .challenge-features .ns-gain p {
   .fc-journey li { flex:1 1 100%; }
   .fc-empty { padding:28px 16px; }
 }
+
+/* Skip link: off-screen until a keyboard user tabs to it. */
+.skip-link {
+  position: absolute;
+  left: 12px;
+  top: -60px;
+  z-index: 10000;
+  padding: 10px 16px;
+  border-radius: 8px;
+  background: var(--gold, #d4af37);
+  color: #111;
+  font-weight: 700;
+  text-decoration: none;
+}
+.skip-link:focus { top: 12px; outline: 2px solid #fff; outline-offset: 2px; }

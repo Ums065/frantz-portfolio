@@ -13,7 +13,7 @@ const FAQ_SHARED: FaqItem[] = [
 
 export const DASHBOARD_FAQ: Record<string, FaqItem[]> = {
   student: [
-    { q: 'When can I submit my project?', a: 'After your teacher approves you and you’ve logged your business interviews, the final project unlocks in the Activity tab.' },
+    { q: 'When can I submit my project?', a: 'After your teacher approves you and you’ve logged 10 interviews (local businesses, public agencies or community organizations), the final project unlocks in the Activity tab.' },
     { q: 'What is my 8-digit code for?', a: 'It’s your unique student ID. Share it only with your parent/guardian so they can link to you.' },
     { q: 'How do points work?', a: 'You earn points from interviews and submissions, plus bonus points the admin awards when your project is approved.' },
     ...FAQ_SHARED,
@@ -60,7 +60,7 @@ export const DASHBOARD_GUIDE: Record<string, RoleGuide> = {
         'After you confirm, your teacher gives the final approval.',
       ] },
       { title: 'Activity', intro: 'Where the work happens.', points: [
-        'Log your business interviews — aim for 10 to unlock the final project.',
+        'Log 10 interviews with people from local businesses, public agencies or community organizations to unlock the final project.',
         'Submit your final project (problem, solution, video + written summary) to the admin.',
         'Admin reviews your project, scores it, and awards bonus points.',
       ] },

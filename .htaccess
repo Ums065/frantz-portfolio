@@ -30,6 +30,15 @@ Options -Indexes
 # noindex is deliberately used instead of a robots.txt "Disallow": a blocked
 # URL cannot be crawled, so Google would never see the noindex and the URL
 # would linger in the index. Localhost is left alone.
+# Older editions of the program/sponsor PDFs stay downloadable (printed material links to
+# them) but must not be searchable while their dates and prize figures are out of date.
+# A crawlable X-Robots-Tag on these four files only - never on the HTML pages.
+<IfModule mod_headers.c>
+  <FilesMatch "^(new_school_functionality|founding_sponsor_kit|founding_sponsor_media_kit|leave_it_better_media_kit_2026)\.pdf$">
+    Header set X-Robots-Tag "noindex"
+  </FilesMatch>
+</IfModule>
+
 <IfModule mod_setenvif.c>
   SetEnvIfNoCase Host "^(www\.)?frantzcoutard\.com(:[0-9]+)?$" FC_PRODUCTION_HOST
   SetEnvIfNoCase Host "^(localhost|127\.0\.0\.1)(:[0-9]+)?$" FC_PRODUCTION_HOST

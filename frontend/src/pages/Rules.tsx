@@ -113,6 +113,9 @@ export default function Rules() {
             <ul>
               <li>Only verified entries are ranked: approved by a teacher, with 10 logged interviews and a complete submission.</li>
               <li>Each school’s top three entries go forward to the judges. Judges score every entry with a scoring rubric and the final ranking is reviewed by the organizer before winners are announced.</li>
+              <li><strong>Final score</strong> = the entry’s automatic points (interviews, materials and submission) + any admin bonus + the average of the judges’ scores. Higher is better.</li>
+              <li><strong>Ties</strong> are broken in this order: automatic points, then performance score, then number of interviews, then whether a final project was submitted, then name (A–Z).</li>
+              <li>School and teacher boards rank by the number of submitted projects, then teacher-approved students, then number of students.</li>
               <li>Entries that break these rules (for example copied work, or interviews that were not done) can be disqualified.</li>
             </ul>
           </section>

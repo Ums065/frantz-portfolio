@@ -51,6 +51,23 @@ export default function SiteLayout({ children, home = false }: { children: React
 
   return (
     <>
+      {/* Keyboard users jump past the navigation. Pages differ in their wrapper, so it looks for the
+          page's <main> and falls back to the first content block. */}
+      <a
+        className="skip-link"
+        href="#main-content"
+        onClick={(e) => {
+          e.preventDefault()
+          const target = document.querySelector<HTMLElement>('main, .ns-page, section.block')
+          if (target) {
+            target.setAttribute('tabindex', '-1')
+            target.focus({ preventScroll: true })
+            target.scrollIntoView({ block: 'start' })
+          }
+        }}
+      >
+        Skip to main content
+      </a>
       <SiteHeader home={home} />
       {children}
       <SiteFooter />

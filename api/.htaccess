@@ -10,6 +10,11 @@ Options -Indexes
 
 RewriteEngine On
 
+# Student work is private by default: files in uploads/new_school/ are NOT handed out by
+# Apache. They go through the API, which requires a signed-in participant or reviewer
+# (see GET new-school/file/<name>). Must come before the "real file" rule below.
+RewriteRule ^uploads/new_school/([A-Za-z0-9._-]+)$ index.php?r=new-school/file/$1 [QSA,L]
+
 # Route everything (that isn't a real file/dir) to the front controller.
 # No hardcoded RewriteBase: relative substitution resolves to this directory,
 # so the API works whether mounted at the domain root (/api/) or a subfolder

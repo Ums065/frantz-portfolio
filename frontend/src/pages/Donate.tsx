@@ -20,6 +20,14 @@ export default function Donate() {
   const cancelled = params.get('cancelled')
   const [state, setState] = useState<'idle' | 'confirming' | 'done' | 'failed'>(donationNo && sessionId ? 'confirming' : 'idle')
   const [msg, setMsg] = useState('')
+  // Is online giving actually switched on? Until we know (or if it is off) the page makes no
+  // card / receipt promises.
+  const [online, setOnline] = useState<boolean | null>(null)
+  useEffect(() => {
+    api.get<{ methods?: string[] }>('donate/config')
+      .then((c) => setOnline(Array.isArray(c.methods) && c.methods.length > 0))
+      .catch(() => setOnline(false))
+  }, [])
 
   useEffect(() => {
     if (!donationNo || !sessionId) return
@@ -60,7 +68,7 @@ export default function Donate() {
           {msg} If you were charged, contact the office and we will sort it out — nothing is lost.
         </div>
       )}
-      {cancelled && state === 'idle' && (
+      {cancelled && state === 'idle' && online && (
         <p className="msub" style={{ textAlign: 'center', marginTop: 22 }}>
           That payment was cancelled — nothing was charged. You are welcome to try again below.
         </p>
@@ -82,7 +90,7 @@ export default function Donate() {
         </ul>
         <p className="msub" style={{ fontSize: 12.5, lineHeight: 1.7 }}>
           Donations are made payable to TrendCatch Gives Back Inc. and are tax-deductible to the extent allowed by law.
-          Card payments are processed by Stripe and PayPal; card details never reach our servers.
+          {online && ' Card payments are processed by Stripe and PayPal; card details never reach our servers.'}
         </p>
       </section>
     </main>

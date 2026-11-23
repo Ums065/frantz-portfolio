@@ -105,6 +105,20 @@ export default function DonateForm({ compact }: { compact?: boolean } = {}) {
     )
   }
 
+  // No payment provider is configured: say so plainly instead of showing a form (and a
+  // promised receipt) that cannot work. Contact is the honest way to give for now.
+  if (cfg && !(cfg.methods && cfg.methods.length)) {
+    return (
+      <div className="fc-empty">
+        <h4>Online giving is not open yet</h4>
+        <p className="msub">
+          We are not taking online donations right now, and no payment is taken on this page.
+          To give to the Student Impact Challenge, please <a href="/contact">contact us</a> and we will send you giving instructions.
+        </p>
+      </div>
+    )
+  }
+
   return (
     <div className="don-form">
       {!compact && (

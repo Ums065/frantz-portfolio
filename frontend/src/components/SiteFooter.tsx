@@ -41,6 +41,8 @@ export default function SiteFooter() {
               <li><Link to="/new-school">Challenge</Link></li>
               <li><Link to="/store">Merchandise</Link></li>
               <li><Link to="/blog">Blog &amp; News</Link></li>
+              <li><Link to="/partner">Our Partners</Link></li>
+              <li><Link to="/contact">Contact</Link></li>
             </ul>
           </div>
 

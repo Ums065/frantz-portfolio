@@ -99,7 +99,10 @@ function formatMoney(value: number) {
 
 function formatLongDate(value: string | null) {
   if (!value) return 'To be announced'
-  const date = new Date(value)
+  // A bare YYYY-MM-DD is a calendar day. new Date('2027-05-12') is midnight UTC, which prints as
+  // May 11 in New York - the cause of the "May 11" the sponsor pages showed. Read it as local.
+  const ymd = /^(\d{4})-(\d{2})-(\d{2})/.exec(value)
+  const date = ymd ? new Date(Number(ymd[1]), Number(ymd[2]) - 1, Number(ymd[3])) : new Date(value)
   if (Number.isNaN(date.getTime())) return value
   return new Intl.DateTimeFormat('en-US', {
     month: 'long',

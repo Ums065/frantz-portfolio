@@ -819,28 +819,27 @@ export default function Store() {
               </section>
             ) : null}
 
+            {/* Customer-facing only: no admin / payment-configuration wording on the public page. */}
             <section className="store-note" id="checkout">
               <div>
-                <span className="section__eyebrow">Checkout Popup</span>
-                <h2>Shipping Details And Payment Stay In One Popup</h2>
-                <p>Open checkout from the cart drawer to complete address entry and payment review in the same overlay. The final payment still hands off to Stripe Checkout securely.</p>
+                <span className="section__eyebrow">Checkout</span>
+                {payCfg.methods.length > 0 ? (
+                  <>
+                    <h2>Add to cart, then check out securely</h2>
+                    <p>Add what you like to your cart. At checkout you enter shipping details and pay through our secure payment partner.</p>
+                  </>
+                ) : (
+                  <>
+                    <h2>Online checkout is not open yet</h2>
+                    <p>We are not taking online orders right now. Questions about an item? Use the contact page and we will help.</p>
+                  </>
+                )}
               </div>
-              <div className="note-actions">
-                <button className="btn btn--ghost" type="button" onClick={scrollToCheckout}>Open Checkout Popup</button>
-                <button className="btn btn--solid" type="button" onClick={openCart}>Open Cart Drawer</button>
-              </div>
-            </section>
-
-            <section className="store-note">
-              <div>
-                <span className="section__eyebrow">Admin Managed</span>
-                <h2>Product Copy Now Lives in Dashboard</h2>
-                <p>Each product can now store tagline, card description, long detail copy, feature highlights, specs, shipping note, stock, and visibility from the admin inventory editor.</p>
-              </div>
-              <div className="note-actions">
-                <button className="btn btn--ghost" type="button" onClick={scrollToCheckout}>Open Checkout Popup</button>
-                <button className="btn btn--solid" type="button" onClick={openCart}>Open Cart Drawer</button>
-              </div>
+              {payCfg.methods.length > 0 && (
+                <div className="note-actions">
+                  <button className="btn btn--solid" type="button" onClick={openCart}>Open Cart</button>
+                </div>
+              )}
             </section>
           </>
         ) : null}

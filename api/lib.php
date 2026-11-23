@@ -1059,9 +1059,19 @@ function gallery_user_submissions(int $userId): array
 }
 
 /** Record one page view. Best-effort: callers swallow errors so tracking never breaks a page. */
+/** Analytics must never hold a secret: drop the query string and fragment (reset tokens,
+ *  ?student=...) and mask the parent-consent QR token in /new-school/parent/<token>. */
+function analytics_redact_url(string $url): string
+{
+    $url = trim($url);
+    $url = preg_split('/[?#]/', $url, 2)[0] ?? '';
+    return preg_replace('#(/new-school/parent/)[A-Za-z0-9]+#i', '$1:token', $url) ?? '';
+}
+
 function site_visits_record(string $path, string $visitorToken, ?string $referrer, ?string $userAgent, ?int $userId = null): void
 {
-    $path = trim($path);
+    $path = analytics_redact_url($path);
+    if ($referrer !== null && $referrer !== '') $referrer = analytics_redact_url($referrer);
     $visitorToken = trim($visitorToken);
     if ($path === '' || $visitorToken === '') {
         return;
@@ -3676,7 +3686,24 @@ function partner_seed_defaults(): void
         partner_setting_set('cta_title', 'Stronger Together');
         partner_setting_set('cta_text', 'Join the growing network of organizations that are helping us create opportunities, inspire students, and build stronger communities.');
         partner_setting_set('cta_button_label', 'Partner With Us');
-        partner_setting_set('cta_button_link', '/new-school/become-a-founding-sponsor');
+        partner_setting_set('cta_button_link', '/contact');
+    }
+    /* One-time: "Partner With Us" is a partnership inquiry, not Challenge sponsorship. It was
+       seeded pointing at the founding-sponsor application, which sent general partners into the
+       Challenge's sponsor form. Move it to the contact page only if it still has that old
+       default; an admin who chose another link keeps it. Recorded in app_meta. */
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS app_meta (meta_key VARCHAR(64) NOT NULL PRIMARY KEY, meta_value VARCHAR(255) DEFAULT NULL, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        $done = $pdo->query("SELECT meta_value FROM app_meta WHERE meta_key = 'partner_cta_to_contact' LIMIT 1")->fetchColumn();
+        if (!$done) {
+            $cur = (string) partner_setting_get('cta_button_link', '');
+            if (in_array(rtrim($cur, '/'), ['/become-a-founding-sponsor', '/new-school/become-a-founding-sponsor'], true)) {
+                partner_setting_set('cta_button_link', '/contact');
+            }
+            $pdo->exec("INSERT INTO app_meta (meta_key, meta_value) VALUES ('partner_cta_to_contact', '1') ON DUPLICATE KEY UPDATE meta_value = '1'");
+        }
+    } catch (Throwable $e) {
+        if (app_debug()) error_log('partner cta migration: ' . $e->getMessage());
     }
 }
 
@@ -3696,7 +3723,7 @@ function partner_page_payload(): array
             'title' => partner_setting_get('cta_title', 'Partner With Us'),
             'text' => partner_setting_get('cta_text', ''),
             'button_label' => partner_setting_get('cta_button_label', 'Become a Partner'),
-            'button_link' => partner_setting_get('cta_button_link', '/new-school/become-a-founding-sponsor'),
+            'button_link' => partner_setting_get('cta_button_link', '/contact'),
         ],
     ];
 }

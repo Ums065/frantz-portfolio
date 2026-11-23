@@ -585,6 +585,7 @@ export default function ChallengeRegistration({ tag, onTagChange, token, showCom
             <span className="eyebrow">Step 1</span>
             <h3>Student Registration</h3>
             <p>Creates the participant profile. Ages 10-17 also get a QR code and student ID for parent consent; ages 18-20 register on their own.</p>
+            <p className="ns-field-hint"><strong>What happens next:</strong> your teacher approves you (and, if you are under 18, your parent or guardian gives consent). While you wait you can already start your interviews. <a href="/rules">Official Rules</a> · <a href="/contact">Need help?</a></p>
           </div>
           <div className="ns-field-grid">
             {referralCode && <div className="ns-alert ns-alert--info ns-field--full">You&apos;re joining with a friend&apos;s invite — once your teacher approves you, your friend earns points. 🎉</div>}
@@ -707,6 +708,7 @@ export default function ChallengeRegistration({ tag, onTagChange, token, showCom
             <span className="eyebrow">Step 2</span>
             <h3>Parent Consent via Student ID</h3>
             <p>Parent can use the 8-digit student ID or the QR link, then select the approved school teacher for review.</p>
+            <p className="ns-field-hint"><strong>What happens next:</strong> your child confirms you in their dashboard, then their teacher approves your access. Until then you will see "pending". <a href="/rules">Official Rules</a> · <a href="/contact">Need help?</a></p>
           </div>
           <div className="ns-field-grid">
             <label className="ns-field ns-field--full">
@@ -815,6 +817,7 @@ export default function ChallengeRegistration({ tag, onTagChange, token, showCom
             <span className="eyebrow">Step 3</span>
             <h3>School Registration</h3>
             <p>Creates the school account and approval workspace.</p>
+            <p className="ns-field-hint"><strong>What happens next:</strong> a TrendCatch admin reviews and approves your school. Until then teachers and students cannot register under it — you can sign in and wait. <a href="/rules">Official Rules</a> · <a href="/contact">Need help?</a></p>
           </div>
           <div className="ns-field-grid">
             <label className="ns-field ns-field--full"><span>School Name</span><input name="school_name" /><FieldError msg={schoolErr.school_name} /></label>
@@ -846,6 +849,7 @@ export default function ChallengeRegistration({ tag, onTagChange, token, showCom
             <span className="eyebrow">Step 4</span>
             <h3>Teacher Registration</h3>
             <p>Links a teacher to a school for tracking, approval, and leaderboard scoring.</p>
+            <p className="ns-field-hint"><strong>What happens next:</strong> your school's approvers confirm you. Until then you can sign in but cannot approve students yet. <a href="/rules">Official Rules</a> · <a href="/contact">Need help?</a></p>
           </div>
           <div className="ns-field-grid">
             <label className="ns-field ns-field--full"><span>Teacher Full Name</span><input name="teacher_full_name" /><FieldError msg={teacherErr.teacher_full_name} /></label>
