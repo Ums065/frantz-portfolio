@@ -22,7 +22,7 @@ npm run seed:new-school
 
 ## 2. Student Registration
 
-- Register a new student with age 11 to 19.
+- Register a new student aged 10 to 20 (also try 9 and 21: both must be rejected).
 - Confirm the participant ID is generated.
 - Confirm the QR consent preview renders locally.
 - Confirm the student status tracker shows the expected steps.

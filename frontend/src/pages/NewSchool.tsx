@@ -52,9 +52,21 @@ const asArray = <T,>(value: unknown): T[] => (Array.isArray(value) ? (value as T
 const formatMoney = (amount: any) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(Number(amount || 0))
 
+/* A bare "2027-05-12" is a calendar date, not a moment. new Date('2027-05-12')
+   reads it as midnight UTC, which in New York is the evening of May 11 — so the
+   winner date printed one day early, and the deadline did too. Build it in local
+   time instead; anything that is not a plain date goes through unchanged. */
+const parseCalendarDate = (value: string, endOfDay = false) => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim())
+  if (!m) return new Date(value)
+  return endOfDay
+    ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 23, 59, 59)
+    : new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+}
+
 const formatDateLabel = (value?: string) => {
   if (!value) return 'To be announced'
-  const date = new Date(value)
+  const date = parseCalendarDate(value)
   if (Number.isNaN(date.getTime())) return value
   return new Intl.DateTimeFormat('en-US', {
     month: 'short',
@@ -65,7 +77,7 @@ const formatDateLabel = (value?: string) => {
 
 const formatLongDateLabel = (value?: string) => {
   if (!value) return 'To be announced'
-  const date = new Date(value)
+  const date = parseCalendarDate(value)
   if (Number.isNaN(date.getTime())) return value
   return new Intl.DateTimeFormat('en-US', {
     month: 'long',
@@ -100,8 +112,8 @@ const getChallengeProgressPercent = (challenge: Record<string, any>, students: n
     if (Number.isFinite(ratio) && ratio > 0) return Math.min(100, ratio)
   }
 
-  const start = new Date(String(challenge.registration_open || '2026-06-27'))
-  const end = new Date(String(challenge.winners_announced || '2026-12-21'))
+  const start = parseCalendarDate(String(challenge.registration_open || '2026-06-27'))
+  const end = parseCalendarDate(String(challenge.winners_announced || '2027-05-12'))
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end.getTime() <= start.getTime()) return 0
 
   const now = Date.now()
@@ -721,7 +733,7 @@ const coreValues = [
 const challengeFaqItems = [
   {
     question: "Who can participate?",
-    answer: "Students ages 10-20 in grades 6-12 can join, with parent and school support where required.",
+    answer: "Students ages 10-20, from elementary school through college, can join, with parent and school support where required.",
   },
   {
     question: "What do students do?",
@@ -2085,13 +2097,21 @@ export default function NewSchool() {
   const liveWinners = firstPositive(summary.winners, winners.length)
   const deadlineLabel = formatDateLabel(challenge.deadline)
   const registrationOpenLabel = formatLongDateLabel(challenge.registration_open || '2026-06-27')
-  const winnersAnnouncedLabel = formatLongDateLabel(challenge.winners_announced || '2026-12-21')
-  const deadlineDate = challenge.deadline ? new Date(challenge.deadline) : null
+  const winnersAnnouncedLabel = formatLongDateLabel(challenge.winners_announced || '2027-05-12')
+  /* The deadline day is still open until it ends: count to 23:59:59 local on that
+     date, not to midnight at its start, so the last day reads "1 day left" rather
+     than "0", and the page never calls it passed while it is still the deadline. */
+  const deadlineDate = challenge.deadline ? parseCalendarDate(String(challenge.deadline), true) : null
+  // Whole calendar days from today to the deadline date: 0 means "the deadline is today".
   const deadlineDays = deadlineDate && !Number.isNaN(deadlineDate.getTime())
-    ? Math.max(0, Math.ceil((deadlineDate.getTime() - Date.now()) / 86400000))
+    ? (() => {
+        const now = new Date()
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+        const dueStart = new Date(deadlineDate.getFullYear(), deadlineDate.getMonth(), deadlineDate.getDate()).getTime()
+        return Math.max(0, Math.round((dueStart - todayStart) / 86400000))
+      })()
     : null
-  // Past = more than a day after the deadline (the "deadline passed" notices take over then).
-  const deadlinePast = !!(deadlineDate && !Number.isNaN(deadlineDate.getTime()) && Date.now() > deadlineDate.getTime() + 86400000)
+  const deadlinePast = !!(deadlineDate && !Number.isNaN(deadlineDate.getTime()) && Date.now() > deadlineDate.getTime())
   const scholarshipsAwarded = winners.reduce((total: number, winner: any) => total + Number(winner.scholarship_amount || 0), 0)
   const challengeProgressPercent = getChallengeProgressPercent(challenge, liveStudents, liveSubmissions)
   const movementStats: Array<{ label: string; value: string | number }> = [
@@ -2107,7 +2127,7 @@ export default function NewSchool() {
   const scholarshipMax = Number(challenge.student_scholarship_max_amount ?? 10000)
   const educatorAwardLabel = String(challenge.educator_award_label || 'All-Inclusive Educator Vacation Award')
   const ageRange = String(challenge.age_range || '10-20')
-  const gradeRange = String(challenge.grade_range || '6-12')
+  const gradeRange = String(challenge.grade_range || 'Elementary–College')
   const totalAwardsLabel = String(challenge.total_awards_label || '$100,000')
   const awardHighlights = [
     { amount: formatMoney(grantAmount), label: 'School Impact Grant', detail: '1st $15,000 · 2nd $7,500 · 3rd $2,500 — plus additional prizes.' },
@@ -2129,7 +2149,7 @@ export default function NewSchool() {
     `Up to ${formatMoney(scholarshipMax)} Student Scholarships`,
     educatorAwardLabel,
     `Ages ${ageRange}`,
-    `Grades ${gradeRange}`,
+    `Grades: ${gradeRange}`,
     `Registration Opens: ${registrationOpenLabel}`,
     `Winners Announced: ${winnersAnnouncedLabel}`,
   ]
@@ -2823,7 +2843,7 @@ export default function NewSchool() {
           <div className="ns-eligibility reveal">
             <div className="ns-eligibility__pills">
               <span className="ns-pill ns-pill--solid">Ages {ageRange}</span>
-              <span className="ns-pill ns-pill--solid">Grades {gradeRange}</span>
+              <span className="ns-pill ns-pill--solid">Grades: {gradeRange}</span>
             </div>
             <div className="ns-eligibility__pills">
               {schoolTypeChips.map((type) => (<span className="ns-pill" key={type}>{type}</span>))}
@@ -3018,7 +3038,7 @@ export default function NewSchool() {
           <div className="ns-cta-band reveal">
             <div>
               <span className="eyebrow">su </span>
-              <h2>Students ages {ageRange} welcome · Grades {gradeRange}</h2>
+              <h2>Students ages {ageRange} welcome · {gradeRange}</h2>
               <p>Public · Private · Charter · Trade Schools. Choose your role below to get started.</p>
             </div>
           </div>

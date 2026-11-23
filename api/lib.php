@@ -1965,7 +1965,7 @@ function sponsor_ensure_schema(): void
             student_scholarship_amount DECIMAL(12,2) NOT NULL DEFAULT 10000.00,
             educator_award_label VARCHAR(220) NOT NULL,
             age_range VARCHAR(40) NOT NULL DEFAULT '10-20',
-            grade_range VARCHAR(40) NOT NULL DEFAULT '6-12',
+            grade_range VARCHAR(40) NOT NULL DEFAULT 'Elementary–College',
             is_active TINYINT(1) NOT NULL DEFAULT 0,
             created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -2067,12 +2067,12 @@ function sponsor_seed_defaults(): void
         'Support New York’s Next Generation of Problem Solvers',
         'Help students ages 10–20 develop leadership, entrepreneurship, communication, and problem-solving skills while creating positive change in their communities.',
         '2026-06-25',
-        '2026-12-22',
+        '2027-05-12',
         25000,
         10000,
         'All-Inclusive Educator Recognition Award',
         '10-20',
-        '6-12',
+        'Elementary–College',
     ]);
 
     $programStmt = $pdo->prepare(
@@ -2129,12 +2129,12 @@ function sponsor_current_program(): array
         'headline' => 'Support New York’s Next Generation of Problem Solvers',
         'subheadline' => 'Help students ages 10–20 develop leadership, entrepreneurship, communication, and problem-solving skills while creating positive change in their communities.',
         'registration_opens' => '2026-06-25',
-        'winners_announced' => '2026-12-22',
+        'winners_announced' => '2027-05-12',
         'school_impact_grant_amount' => 25000,
         'student_scholarship_amount' => 10000,
         'educator_award_label' => 'All-Inclusive Educator Recognition Award',
         'age_range' => '10-20',
-        'grade_range' => '6-12',
+        'grade_range' => 'Elementary–College',
         'is_active' => 1,
     ];
 }
@@ -3317,6 +3317,25 @@ function new_school_workflow_ensure_schema(): void
         UNIQUE KEY uniq_internal_reviewer (submission_id, reviewer_user_id),
         KEY idx_internal_submission (submission_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+    /* One-time: move the saved submission deadline off the old 2026-08-25.
+       The deadline lives in this table, so changing the code default alone left
+       every install that had ever saved (or been seeded with) 2026-08-25 showing
+       "0 days", phase=judging and "submissions closed" months before the
+       published March 31, 2027 close. Runs once, recorded in app_meta, and only
+       touches a row that is missing or still holds the old value — a date an
+       admin chose on purpose is left alone, and so is any change made later. */
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS app_meta (meta_key VARCHAR(64) NOT NULL PRIMARY KEY, meta_value VARCHAR(255) DEFAULT NULL, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        $done = $pdo->query("SELECT meta_value FROM app_meta WHERE meta_key = 'ns_deadline_moved_2027' LIMIT 1")->fetchColumn();
+        if ($done === false) {
+            $cur = $pdo->query("SELECT setting_value FROM new_school_settings WHERE setting_key = 'submission_deadline' LIMIT 1")->fetchColumn();
+            if ($cur === false || $cur === null || trim((string) $cur) === '' || trim((string) $cur) === '2026-08-25') {
+                $pdo->prepare("INSERT INTO new_school_settings (setting_key, setting_value) VALUES ('submission_deadline', '2027-03-31') ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_at = NOW()")->execute();
+            }
+            $pdo->exec("INSERT INTO app_meta (meta_key, meta_value) VALUES ('ns_deadline_moved_2027', '1') ON DUPLICATE KEY UPDATE meta_value = '1'");
+        }
+    } catch (Throwable $e) { if (app_debug()) error_log('ns deadline move: ' . $e->getMessage()); }
     $ready = true;
 }
 
@@ -3491,7 +3510,7 @@ function ns_submission_open_date(): string
 }
 function ns_submission_deadline(): string
 {
-    return ns_setting_get('submission_deadline', '2026-08-25');
+    return ns_setting_get('submission_deadline', '2027-03-31');
 }
 function ns_submission_mode(): string
 {
@@ -7598,11 +7617,17 @@ function ns_challenge_timeline(): array
             if ($out) return $out;
         }
     }
-    // Shown until an admin saves their own; kept in step with the published dates.
+    /* Shown until an admin saves their own. The close and winner dates are read
+       from the same settings the countdown and the overview use, so the default
+       timeline can no longer say one thing while the countdown says another. */
+    $fmt = static function (string $ymd, string $fallback): string {
+        $d = DateTimeImmutable::createFromFormat('!Y-m-d', $ymd);
+        return $d ? $d->format('F j, Y') : $fallback;
+    };
     return [
-        ['phase' => 'Registration & Final Submissions Close', 'when' => 'March 31, 2027',           'highlight' => false],
+        ['phase' => 'Registration & Final Submissions Close', 'when' => $fmt(ns_submission_deadline(), 'March 31, 2027'), 'highlight' => false],
         ['phase' => 'Judging Period',                         'when' => 'April 1–30, 2027',         'highlight' => false],
-        ['phase' => '🏆 Winners Announced',                    'when' => 'May 12, 2027',             'highlight' => true],
+        ['phase' => '🏆 Winners Announced',                    'when' => $fmt(ns_winners_announced_date(), 'May 12, 2027'), 'highlight' => true],
         ['phase' => '🎓 Awards Ceremony',                      'when' => 'Thursday, May 27, 2027',   'highlight' => false],
     ];
 }

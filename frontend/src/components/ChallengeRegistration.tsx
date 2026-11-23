@@ -226,7 +226,7 @@ export default function ChallengeRegistration({ tag, onTagChange, token, showCom
       first_name: vMinChars(value(fd, 'first_name'), 2, 'First name'),
       last_name: vMinChars(value(fd, 'last_name'), 2, 'Last name'),
       student_username: vUsername(value(fd, 'student_username')),
-      date_of_birth: !dob ? REQUIRED_MSG : !age ? 'Enter a valid date of birth.' : age < 11 || age > 19 ? 'Student must be between 11 and 19 years old.' : '',
+      date_of_birth: !dob ? REQUIRED_MSG : !age ? 'Enter a valid date of birth.' : age < 10 || age > 20 ? 'Student must be between 10 and 20 years old.' : '',
       email: vEmail(value(fd, 'email')),
       password: vPassword(password),
       confirm_password: !confirmPassword ? REQUIRED_MSG : password !== confirmPassword ? 'Passwords do not match.' : '',
@@ -596,7 +596,7 @@ export default function ChallengeRegistration({ tag, onTagChange, token, showCom
             <label className="ns-field"><span>Last Name</span><input name="last_name" /><FieldError msg={studentErr.last_name} /></label>
             <label className="ns-field"><span>Create a Username <span className="ns-field-hint">(must be unique)</span></span><input name="student_username" autoComplete="off" /><FieldError msg={studentErr.student_username} /></label>
             <label className="ns-field"><span>Date of Birth <span className="ns-field-hint">(MM-DD-YYYY)</span></span><input name="date_of_birth" type="date" value={studentDob} onChange={(e) => setStudentDob(e.target.value)} /><FieldError msg={studentErr.date_of_birth} /></label>
-            <label className="ns-field"><span>Age</span><input name="age" type="number" min="11" max="19" value={ageFromDob(studentDob)} readOnly title="Auto-calculated from date of birth" /></label>
+            <label className="ns-field"><span>Age</span><input name="age" type="number" min="10" max="20" value={ageFromDob(studentDob)} readOnly title="Auto-calculated from date of birth" /></label>
             <label className="ns-field"><span>Email</span><input name="email" type="email" /><FieldError msg={studentErr.email} /></label>
             <label className="ns-field"><span>Create a Password</span><PasswordField name="password" /><FieldError msg={studentErr.password} /></label>
             <label className="ns-field"><span>Confirm Password</span><PasswordField name="confirm_password" /><FieldError msg={studentErr.confirm_password} /></label>
@@ -677,7 +677,7 @@ export default function ChallengeRegistration({ tag, onTagChange, token, showCom
             <label className="ns-field ns-field--full"><span>Parent Email <span className="ns-field-hint">(optional)</span></span><input name="parent_email" type="email" /><FieldError msg={studentErr.parent_email} /></label>
             <label className="ns-check ns-field--full">
               <input name="student_acknowledgement" type="checkbox" />
-              <span>I confirm this student is between 11 and 19 and understands parent consent is required before submission.</span>
+              <span>I confirm this student is between 10 and 20 and understands parent consent is required before submission.</span>
             </label>
             <FieldError msg={studentErr.student_acknowledgement} full />
           </div>

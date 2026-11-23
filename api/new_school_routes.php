@@ -528,7 +528,7 @@ function new_school_handle_route(string $method, string $route): bool
                     'student_scholarship_max_amount' => 10000,
                     'educator_award_label' => 'Educator Recognition Award',
                     'age_range' => '10-20',
-                    'grade_range' => '6-12',
+                    'grade_range' => 'Elementary–College',
                     'deadline' => ns_submission_deadline(),
                     'website' => 'FrantzCoutard.com',
                     'timeline' => ns_challenge_timeline(),

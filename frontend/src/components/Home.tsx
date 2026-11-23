@@ -236,7 +236,7 @@ const homeChallengeTabs: HomeChallengeTab[] = [
     points: ['10 local business interviews', 'Parent consent and school approval', 'Final project submission', 'Live rankings and progress tracking'],
     stats: [
       { label: 'Ages', value: '10-20' },
-      { label: 'Grades', value: '6-12' },
+      { label: 'Grades', value: 'Elementary–College' },
       { label: 'Interviews', value: '10 businesses' },
       { label: 'Submission', value: 'Final project' },
     ],

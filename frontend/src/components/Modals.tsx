@@ -223,8 +223,8 @@ const validateRegisterForm = (form: RegisterFormState, termsAccepted: boolean) =
         throw new Error('Student username must be 3 to 30 characters and use only letters, numbers, dots, dashes, or underscores.')
       }
       const age = Number(form.age)
-      if (!Number.isInteger(age) || age < 11 || age > 19) {
-        throw new Error('Age must be between 11 and 19.')
+      if (!Number.isInteger(age) || age < 10 || age > 20) {
+        throw new Error('Age must be between 10 and 20.')
       }
       if (!form.dateOfBirth) {
         throw new Error('Date of birth is required.')

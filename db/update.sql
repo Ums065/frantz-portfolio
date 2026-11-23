@@ -1846,6 +1846,12 @@ CREATE TABLE IF NOT EXISTS sponsor_application_messages (
 UPDATE sponsor_programs SET age_range = '10-20' WHERE age_range = '11-19';
 UPDATE sponsor_programs SET subheadline = REPLACE(subheadline, '11–19', '10–20') WHERE subheadline LIKE '%11–19%';
 UPDATE sponsor_programs SET subheadline = REPLACE(subheadline, '11-19', '10-20') WHERE subheadline LIKE '%11-19%';
+-- Grade copy follows the flyer ("elementary through college"), not "6-12", and the
+-- winner date is the published May 12, 2027, not the stale 2026-12-22.
+UPDATE sponsor_programs SET grade_range = 'Elementary–College' WHERE grade_range = '6-12';
+UPDATE sponsor_programs SET winners_announced = '2027-05-12' WHERE winners_announced = '2026-12-22';
+-- Submission deadline: the old 2026-08-25 closes the challenge months early.
+UPDATE new_school_settings SET setting_value = '2027-03-31' WHERE setting_key = 'submission_deadline' AND setting_value = '2026-08-25';
 
 
 -- ============================================================
