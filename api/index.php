@@ -445,7 +445,10 @@ try {
         case $key === 'GET events': {
             events_ensure_schema();
             $rows = db()->query(
-                'SELECT e.id, e.title, e.location, e.role, e.event_date, e.is_past,
+                // is_past: the admin flag OR the event (its end date, if it has one) is before
+                // today - an event never keeps reading "Upcoming" just because nobody flipped the flag.
+                'SELECT e.id, e.title, e.location, e.role, e.event_date,
+                        (e.is_past = 1 OR COALESCE(e.end_date, e.event_date) < CURDATE()) AS is_past,
                         e.image_url, e.description, e.is_featured, e.badge_label,
                         e.event_time, e.end_date, e.cta_label, e.cta_url, e.publish_at,
                         e.video_url, e.gallery_images, e.accent,
@@ -453,6 +456,8 @@ try {
                          WHERE r.event_id = e.id AND r.status IN ("going", "maybe", "interested")) AS rsvp_count
                  FROM events e ORDER BY e.event_date ASC'
             )->fetchAll();
+            foreach ($rows as &$evRow) { $evRow['is_past'] = (int) $evRow['is_past']; }
+            unset($evRow);
             json(['events' => $rows]);
         }
 

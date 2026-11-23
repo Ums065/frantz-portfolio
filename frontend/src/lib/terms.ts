@@ -6,7 +6,7 @@ export const CHALLENGE_TERMS_VERSION = 'Interim Terms v1 – June 2026'
 export const WEBSITE_TERMS_VERSION = 'Interim Website Terms v1'
 export const TERMS_EFFECTIVE_DATE = 'June 27, 2026'
 
-const ORG = 'Frantz Coutard, Trend Catch Network, Inc., TrendCatch Gives Back, sponsors, or any affiliated organization'
+const ORG = 'Frantz Coutard, TREND CATCH NETWORK INC., TrendCatch Gives Back Inc., sponsors, or any affiliated organization'
 
 export type TermsKind = 'student' | 'parent' | 'teacher' | 'school' | 'website'
 

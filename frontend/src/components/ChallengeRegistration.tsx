@@ -233,9 +233,10 @@ export default function ChallengeRegistration({ tag, onTagChange, token, showCom
       phone_number: vPhone(value(fd, 'phone_number'), false),
       ...validateAddress(fd),
       grade_level: vRequired(value(fd, 'grade_level')),
-      parent_name: vMinChars(value(fd, 'parent_name'), 3, 'Parent name'),
-      parent_phone: vPhone(value(fd, 'parent_phone')),
-      parent_email: optionalEmail(value(fd, 'parent_email')),
+      // Under 18: a parent/guardian's contact is required. 18-20 are adults: parent fields are not asked.
+      parent_name: age >= 18 ? '' : vMinChars(value(fd, 'parent_name'), 3, 'Parent name'),
+      parent_phone: age >= 18 ? '' : vPhone(value(fd, 'parent_phone')),
+      parent_email: age >= 18 ? '' : optionalEmail(value(fd, 'parent_email')),
       student_acknowledgement: checked(fd, 'student_acknowledgement') ? '' : 'Please confirm the participation acknowledgement.',
     }
     if (studentEduMode) {
@@ -301,7 +302,6 @@ export default function ChallengeRegistration({ tag, onTagChange, token, showCom
     event.preventDefault()
     const form = event.currentTarget
     const fd = new FormData(form)
-    const governmentId = fileValue(fd, 'government_id_file')
     const errs: FieldErrors = {
       participant_id: !value(fd, 'participant_id').trim()
         ? REQUIRED_MSG
@@ -313,17 +313,16 @@ export default function ChallengeRegistration({ tag, onTagChange, token, showCom
       phone_number: vPhone(value(fd, 'phone_number')),
       email: vEmail(value(fd, 'email')),
       password: vPassword(value(fd, 'password')),
-      ...validateAddress(fd),
       digital_signature: vMinChars(value(fd, 'digital_signature'), 3, 'Signature'),
       consent_checked: checked(fd, 'consent_checked') ? '' : 'You must give consent to continue.',
-      government_id_file: governmentId && governmentId.size > MAX_DOC_BYTES ? 'Government ID must be 5 MB or smaller.' : '',
     }
     const clean = pruneErrors(errs)
     if (Object.keys(clean).length) { setParentErr(clean); focusFirstError(form, clean); return }
     setParentErr({})
     setBusy('parent')
     try {
-      const governmentIdUrl = await uploadIfPresent(governmentId)
+      // No home address and no government-ID upload for parents: consent needs a name,
+      // contact, relationship and signature, nothing more (data minimisation).
       const payload = {
         token: value(fd, 'token') || token || parentLink?.token || '',
         participant_id: value(fd, 'participant_id'),
@@ -331,10 +330,7 @@ export default function ChallengeRegistration({ tag, onTagChange, token, showCom
         relationship_to_student: value(fd, 'relationship_to_student'),
         phone_number: value(fd, 'phone_number'),
         email: value(fd, 'email'),
-        home_address: joinAddress(fd),
-        zip_code: value(fd, 'addr_zip'),
         password: value(fd, 'password'),
-        government_id_url: governmentIdUrl,
         consent_checked: checked(fd, 'consent_checked'),
         digital_signature: value(fd, 'digital_signature'),
         preferred_contact_method: value(fd, 'preferred_contact_method'),
@@ -588,7 +584,7 @@ export default function ChallengeRegistration({ tag, onTagChange, token, showCom
           <div className="ns-form__head">
             <span className="eyebrow">Step 1</span>
             <h3>Student Registration</h3>
-            <p>Creates the participant profile and QR code for parent consent.</p>
+            <p>Creates the participant profile. Ages 10-17 also get a QR code and student ID for parent consent; ages 18-20 register on their own.</p>
           </div>
           <div className="ns-field-grid">
             {referralCode && <div className="ns-alert ns-alert--info ns-field--full">You&apos;re joining with a friend&apos;s invite — once your teacher approves you, your friend earns points. 🎉</div>}
@@ -672,12 +668,27 @@ export default function ChallengeRegistration({ tag, onTagChange, token, showCom
               </>
             )}
             <label className="ns-field"><span>Grade Level</span><input name="grade_level" placeholder="9th Grade" /><FieldError msg={studentErr.grade_level} /></label>
-            <label className="ns-field"><span>Parent Name</span><input name="parent_name" /><FieldError msg={studentErr.parent_name} /></label>
-            <label className="ns-field"><span>Parent Phone</span><input type="tel" name="parent_phone" /><FieldError msg={studentErr.parent_phone} /></label>
-            <label className="ns-field ns-field--full"><span>Parent Email <span className="ns-field-hint">(optional)</span></span><input name="parent_email" type="email" /><FieldError msg={studentErr.parent_email} /></label>
+            {Number(ageFromDob(studentDob)) >= 18 ? (
+              <div className="ns-alert ns-alert--info ns-field--full">
+                You are 18 or older, so you register on your own — no parent or guardian details are needed.
+              </div>
+            ) : (
+              <>
+                <div className="ns-field--full ns-field-hint" style={{ marginTop: 4 }}>
+                  Students under 18 need a parent or guardian to give consent. We ask for their contact so we can reach them; they confirm with the student ID or QR link.
+                </div>
+                <label className="ns-field"><span>Parent Name</span><input name="parent_name" /><FieldError msg={studentErr.parent_name} /></label>
+                <label className="ns-field"><span>Parent Phone</span><input type="tel" name="parent_phone" /><FieldError msg={studentErr.parent_phone} /></label>
+                <label className="ns-field ns-field--full"><span>Parent Email <span className="ns-field-hint">(optional)</span></span><input name="parent_email" type="email" /><FieldError msg={studentErr.parent_email} /></label>
+              </>
+            )}
             <label className="ns-check ns-field--full">
               <input name="student_acknowledgement" type="checkbox" />
-              <span>I confirm this student is between 10 and 20 and understands parent consent is required before submission.</span>
+              <span>
+                {Number(ageFromDob(studentDob)) >= 18
+                  ? 'I confirm I am between 18 and 20 and will take part on my own behalf.'
+                  : 'I confirm this student is between 10 and 17 and that a parent or guardian must give consent.'}
+              </span>
             </label>
             <FieldError msg={studentErr.student_acknowledgement} full />
           </div>
@@ -744,7 +755,6 @@ export default function ChallengeRegistration({ tag, onTagChange, token, showCom
                 <option value="text">Text</option>
               </select>
             </label>
-            <AddressFields errs={parentErr} />
             <label className="ns-field ns-field--full">
               <span>Select School</span>
               <select
@@ -784,11 +794,6 @@ export default function ChallengeRegistration({ tag, onTagChange, token, showCom
                 Search and select the student&apos;s approved school to reveal teacher options.
               </div>
             )}
-            <label className="ns-field ns-field--full">
-              <span>Government ID Upload <span className="ns-field-hint">(optional, max 5 MB)</span></span>
-              <input name="government_id_file" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" />
-              <FieldError msg={parentErr.government_id_file} />
-            </label>
             <label className="ns-field ns-field--full">
               <span>Type your full name</span>
               <input name="digital_signature" placeholder="Your full name" />

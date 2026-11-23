@@ -160,8 +160,8 @@ export default function SiteHeader({ home = false }: { home?: boolean }) {
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
               </button>
               <div className="nav-dropdown__menu" role="menu" aria-label="Founding Sponsor menu">
-                <Link to="/become-a-founding-sponsor" onClick={closeDesktopSponsorMenu} role="menuitem">Become A Founding Sponsor</Link>
-                <Link to="/founding-sponsors" onClick={closeDesktopSponsorMenu} role="menuitem">Founding Sponsors</Link>
+                <Link to="/new-school/become-a-founding-sponsor" onClick={closeDesktopSponsorMenu} role="menuitem">Become A Founding Sponsor</Link>
+                <Link to="/new-school/founding-sponsors" onClick={closeDesktopSponsorMenu} role="menuitem">Founding Sponsors</Link>
               </div>
             </div>
             <span className="nav__indicator" aria-hidden="true" />
@@ -187,8 +187,8 @@ export default function SiteHeader({ home = false }: { home?: boolean }) {
                   </div>
                   <Link to={dashboardHref} onClick={closeMenu}>{t('nav.dashboard')}</Link>
                   <Link to="/profile" onClick={closeMenu}>{t('cta.profile')}</Link>
-                  <Link to="/become-a-founding-sponsor" onClick={closeMenu}>{t('cta.foundingSponsor')}</Link>
-                  <Link to="/founding-sponsors" onClick={closeMenu}>{t('cta.foundingSponsors')}</Link>
+                  <Link to="/new-school/become-a-founding-sponsor" onClick={closeMenu}>{t('cta.foundingSponsor')}</Link>
+                  <Link to="/new-school/founding-sponsors" onClick={closeMenu}>{t('cta.foundingSponsors')}</Link>
                   <button
                     type="button"
                     onClick={async () => {
@@ -245,8 +245,8 @@ export default function SiteHeader({ home = false }: { home?: boolean }) {
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
             </button>
             <div className={`mobile-menu__group-links${mobileSponsorOpen ? ' open' : ''}`}>
-              <Link to="/become-a-founding-sponsor" onClick={() => { closeMenu(); closeMobileSponsorMenu() }}>Become A Founding Sponsor</Link>
-              <Link to="/founding-sponsors" onClick={() => { closeMenu(); closeMobileSponsorMenu() }}>Founding Sponsors</Link>
+              <Link to="/new-school/become-a-founding-sponsor" onClick={() => { closeMenu(); closeMobileSponsorMenu() }}>Become A Founding Sponsor</Link>
+              <Link to="/new-school/founding-sponsors" onClick={() => { closeMenu(); closeMobileSponsorMenu() }}>Founding Sponsors</Link>
             </div>
           </div>
           <div className="mcta">

@@ -56,6 +56,17 @@ Options -Indexes
   RewriteCond %{HTTP_HOST} !^127\.0\.0\.1
   RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L]
 
+  # One URL per page: /media/ and /media are two copies to Google (both answered
+  # 200 with their own canonical). Redirect the trailing-slash form to the bare path.
+  # Skips real folders at the web root and the API.
+  RewriteCond %{REQUEST_URI} !^/api/
+  RewriteCond %{DOCUMENT_ROOT}%{REQUEST_URI} !-d
+  RewriteRule ^(.+)/$ /$1 [R=301,L]
+
+  # The founding-sponsor pages are one program; /new-school/... is the canonical address.
+  RewriteRule ^become-a-founding-sponsor$ /new-school/become-a-founding-sponsor [R=301,L]
+  RewriteRule ^founding-sponsors$ /new-school/founding-sponsors [R=301,L]
+
   # Root URL should open the built SPA.
   RewriteRule ^$ frontend/dist/index.html [L]
 

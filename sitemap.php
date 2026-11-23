@@ -39,6 +39,7 @@ function sitemap_url(string $base, string $loc, ?string $lastmod, string $change
 $staticPages = [
     ['', 'weekly', '1.0'],
     ['/new-school', 'weekly', '0.9'],
+    ['/rules', 'monthly', '0.8'],
     ['/about', 'monthly', '0.8'],
     ['/projects', 'monthly', '0.8'],
     ['/blog', 'weekly', '0.8'],
@@ -50,8 +51,6 @@ $staticPages = [
     ['/resources', 'monthly', '0.7'],
     ['/partner', 'monthly', '0.7'],
     ['/media', 'monthly', '0.6'],
-    ['/become-a-founding-sponsor', 'monthly', '0.6'],
-    ['/founding-sponsors', 'monthly', '0.6'],
     ['/new-school/become-a-founding-sponsor', 'monthly', '0.5'],
     ['/new-school/founding-sponsors', 'monthly', '0.5'],
     ['/store', 'weekly', '0.6'],

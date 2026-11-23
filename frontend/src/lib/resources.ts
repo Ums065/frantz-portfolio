@@ -54,7 +54,7 @@ export const RESOURCES: ResourceDoc[] = [
   {
     label: 'Leave It Better Media Kit 2026',
     url: '/docs/leave_it_better_media_kit_2026.pdf',
-    description: 'Program overview, mission, and key facts about the Leave It Better Than You Found It challenge.',
+    description: 'Program overview and mission (PDF, about 47 MB). This kit is being updated: for current ages (10–20), dates, awards and entry steps, use the Official Rules page (/rules).',
     category: 'newschool',
     newSchool: true,
   },

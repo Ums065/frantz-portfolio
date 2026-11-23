@@ -66,6 +66,17 @@ type VisionNode = {
   kind: 'schools' | 'stores' | 'restaurants' | 'businesses' | 'network' | 'opportunity'
 }
 
+/** "Launching October 3, 2026" stops reading as future once that day has passed: it becomes
+ *  the neutral "Launch date: October 3, 2026" (we don't claim a launch happened, only when it was due). */
+function launchTag(tag: string): string {
+  const m = tag.match(/^Launching\s+(.+)$/i)
+  if (!m) return tag
+  const when = new Date(m[1])
+  if (Number.isNaN(when.getTime())) return tag
+  when.setHours(23, 59, 59, 999)
+  return when.getTime() < Date.now() ? `Launch date: ${m[1]}` : tag
+}
+
 const ventureCards: VentureCard[] = [
   {
     title: 'Frantz Coutard',
@@ -233,7 +244,7 @@ const homeChallengeTabs: HomeChallengeTab[] = [
     eyebrow: 'What It Is',
     heading: 'Students build solutions that matter.',
     detail: 'Students ages 10-20 complete 10 interviews with local businesses, government agencies and community leaders, identify a community problem, and create a final project with measurable impact.',
-    points: ['10 local interviews: businesses, agencies, leaders', 'Parent consent and teacher approval', 'Final project submission', 'Live rankings and progress tracking'],
+    points: ['10 local interviews: businesses, agencies, leaders', 'Teacher approval (and parent consent for students under 18)', 'Final video and written summary by March 31, 2027', 'Live rankings and progress tracking'],
     stats: [
       { label: 'Ages', value: '10-20' },
       { label: 'Grades', value: 'Elementary–College' },
@@ -255,11 +266,16 @@ const homeChallengeTabs: HomeChallengeTab[] = [
     eyebrow: 'What Students Win',
     heading: 'Scholarships, school grants, and educator recognition.',
     detail: 'The challenge rewards effort, leadership, and real-world impact with scholarships, school grants, and public recognition.',
-    points: ['Student scholarships up to $10,000', 'School impact grant up to $25,000', 'Educator award and public recognition', 'Winner announcements and leaderboard visibility'],
+    points: [
+      'Student scholarships: $10,000 in total (1st $5,000 · 2nd $3,000 · 3rd $2,000)',
+      'School impact grants: $25,000 in total (1st $15,000 · 2nd $7,500 · 3rd $2,500)',
+      'Educator award: 1st place wins an all-expense vacation for two',
+      'Winner announcements and public recognition',
+    ],
     stats: [
       { label: 'Prize Pool', value: '$100K+' },
-      { label: 'Student Max', value: '$10K' },
-      { label: 'School Grant', value: '$25K' },
+      { label: 'Student scholarships', value: '$10K total' },
+      { label: 'School grants', value: '$25K total' },
       { label: 'Results', value: 'Live ranking' },
     ],
     cards: [
@@ -416,7 +432,7 @@ export default function Home() {
     : galleryItems.map((item, index) => ({ ...item, key: `gallery-static-${index}` }))
 
   return (
-    <>
+    <main id="main-content">
       <section className="hero" id="home">
         <div className="hero__ghost"><img src={portrait} alt="" decoding="async" /></div>
         <canvas id="particles" />
@@ -453,9 +469,9 @@ export default function Home() {
           <p className="hero__mission">Building technology that connects businesses, communities, and opportunity.</p>
 
           <div className="hero__ctas">
-            <button className="btn" data-toast="Vision reel coming soon.">Watch the Vision</button>
-            <button className="btn btn--solid" onClick={() => document.getElementById('speaking')?.scrollIntoView()}>Book Frantz to Speak</button>
-            <Link className="btn" to="/new-school">Student Impact Challenge</Link>
+            {/* "Watch the Vision" removed until an approved reel exists (it only showed a coming-soon toast). */}
+            <Link className="btn btn--solid" to="/new-school">Student Impact Challenge: See the Rules &amp; Enter</Link>
+            <button className="btn" onClick={() => document.getElementById('speaking')?.scrollIntoView()}>Book Frantz to Speak</button>
             <button className="btn" data-auth="register">
               <span className="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><circle cx="9" cy="8" r="3.2" /><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6" /><path d="M17 8h5M19.5 5.5v5" /></svg></span>Join the Community
             </button>
@@ -554,6 +570,9 @@ export default function Home() {
                     <li key={point}><Check />{point}</li>
                   ))}
                 </ul>
+                <p style={{ margin: '14px 0 0' }}>
+                  <Link className="read" to="/rules">See the rules and enter &rarr;</Link>
+                </p>
                 <div className="challenge-actions">
                   {challengeRegisterRoles.map((role, i) => (
                     <Link
@@ -610,7 +629,7 @@ export default function Home() {
                       <span key={`${project.title}-${item}`}>{item}</span>
                     ))}
                   </div>
-                  <span className="tag">{project.tag}</span>
+                  <span className="tag">{launchTag(project.tag)}</span>
                 </div>
               </article>
             ))}
@@ -782,7 +801,7 @@ export default function Home() {
               <h3>Media Kit</h3>
               <p>Download official bios, high-resolution photography, brand assets, and fact sheets for Frantz Coutard and TrendCatch.</p>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                <a className="btn btn--solid" href="/docs/media_kit.pdf" download>Download Media Kit</a>
+                <a className="btn btn--solid" href="/docs/media_kit.pdf" download>Download Media Kit (PDF, about 42 MB)</a>
                 <button className="btn" data-request="Media Kit Request">Request Media Kit</button>
               </div>
             </article>
@@ -1050,7 +1069,7 @@ export default function Home() {
           <div className="partners-cta reveal" style={{ display: 'flex', flexWrap: 'wrap', gap: 10, justifyContent: 'center' }}>
             <Link className="btn" to="/partner">View All Partners{partnersWithLogo.length > 0 ? ` (${partnersWithLogo.length})` : ''}</Link>
             <button className="btn btn--solid" data-request="Partnership / Collaboration Inquiry">Become a Partner</button>
-            <a className="btn" href="/docs/partnership_kit.pdf" download>Download Partnership Kit</a>
+            <a className="btn" href="/docs/partnership_kit.pdf" download>Download Partnership Kit (PDF, about 32 MB)</a>
           </div>
         </div>
         {partnerLightbox && (
@@ -1113,6 +1132,6 @@ export default function Home() {
       <div className="wrap"><div className="sec-divider" /></div>
 
       <ContactSection />
-    </>
+    </main>
   )
 }

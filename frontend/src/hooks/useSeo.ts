@@ -106,7 +106,8 @@ export function useSeo({ title, description, image, imageAlt, type, keywords, pu
     const img = absoluteUrl(image || DEFAULT_IMAGE)
     const ogType = type || 'website'
     // Canonical is the clean path (no query string / hash) on the production origin.
-    const canonical = SITE_URL + window.location.pathname
+    // "/media/" and "/media" are one page: strip the trailing slash (the homepage keeps "/").
+    const canonical = SITE_URL + (window.location.pathname.replace(/\/+$/, '') || '/')
 
     document.title = fullTitle
     setMeta('name', 'description', desc)

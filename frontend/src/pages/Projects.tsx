@@ -87,7 +87,7 @@ export default function Projects() {
               <h3>Partnership Inquiry</h3>
               <p>Bring sponsorships, collaborations, or strategic support to one of the flagship projects.</p>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                <a className="btn btn--solid" href="/docs/partnership_kit.pdf" download>Download Partnership Kit</a>
+                <a className="btn btn--solid" href="/docs/partnership_kit.pdf" download>Download Partnership Kit (PDF, about 32 MB)</a>
                 <button className="btn" data-request="Partnership / Collaboration Inquiry">Request Details</button>
               </div>
             </article>

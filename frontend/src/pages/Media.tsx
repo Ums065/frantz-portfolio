@@ -89,12 +89,29 @@ export default function Media() {
         sort_order: index + 1,
       }))
 
-  const featured = items.find((item) => item.is_featured) || items[0]
+  // Exact duplicates (same title + link) collapse to one card.
+  const seen = new Set<string>()
+  const uniqueItems = items.filter((item) => {
+    const k = `${(item.title || '').trim().toLowerCase()}|${(item.link_url || '').trim().toLowerCase()}`
+    if (seen.has(k)) return false
+    seen.add(k)
+    return true
+  })
+  const featured = uniqueItems.find((item) => item.is_featured) || uniqueItems[0]
   const galleryImages = galleryItems.filter((item) => item.media_kind === 'image')
   const galleryVideos = galleryItems.filter((item) => item.media_kind === 'video')
 
+  // Internal paths that are not real pages. "/community" answered HTTP 404, so a card
+  // pointing there (or nowhere) shows a request button instead of a dead-end link.
+  const DEAD_PATHS = new Set(['/community', '/#community', '#'])
   const renderLink = (url: string | null | undefined, label: string) => {
-    const href = url || '/blog'
+    const raw = (url || '').trim()
+    if (!raw || DEAD_PATHS.has(raw.replace(/\/+$/, ''))) {
+      return <button className="read" type="button" data-request="Media Asset Request">Request this asset</button>
+    }
+    const href = raw
+    // A generic route is labelled for what it is, not as an "asset".
+    if (href === '/blog') label = 'Read the Blog'
     if (isAsset(href)) {
       return (
         <a className="read" href={href} download>
@@ -129,6 +146,11 @@ export default function Media() {
           <p className="page-hero__lead reveal in d1" style={{ margin: '0 auto' }}>
             A focused place for producers, journalists, and partners to find the right assets fast.
           </p>
+          <p className="reveal in d1" style={{ margin: '12px auto 0', fontSize: 14, color: 'var(--muted)', maxWidth: 640 }}>
+            This is the public <strong>Media Center</strong> for Frantz Coutard. Accredited press with an account can use the{' '}
+            <Link to="/media-portal">Media Portal (sign in)</Link>. For the Student Impact Challenge, see the{' '}
+            <Link to="/rules">Official Rules</Link>. Media kit questions: use <strong>Request Media Kit</strong> below.
+          </p>
         </div>
       </section>
 
@@ -157,7 +179,7 @@ export default function Media() {
               <div className="action__ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6}><path d="M12 3v12M7 10l5 5 5-5" /><path d="M5 21h14" /></svg></div>
               <h3>Download Media Kit</h3>
               <p>Grab the official downloadable kit with bio notes, story context, and speaking topics.</p>
-              <a className="btn btn--solid" href={mediaKitUrl} download>Download Kit</a>
+              <a className="btn btn--solid" href={mediaKitUrl} download>Download Kit (PDF, about 42 MB)</a>
             </article>
           </div>
         </div>
@@ -172,7 +194,7 @@ export default function Media() {
             <p className="sub">Highlights from the growing media archive.</p>
           </div>
           <div className="blog-list-grid media-list">
-            {(featured ? [featured, ...items.filter((item) => item.id !== featured.id)] : items).map((item) => (
+            {(featured ? [featured, ...uniqueItems.filter((item) => item !== featured)] : uniqueItems).map((item) => (
               <article className="glass blog-card reveal" key={item.id}>
                 <div className="blog-card__img"><img src={item.image || '/assets/abstract-gold-network.webp'} alt={item.title || 'Media asset'} loading="lazy" decoding="async" /></div>
                 <div className="blog-card__body">
@@ -189,6 +211,8 @@ export default function Media() {
         </div>
       </section>
 
+      {/* The library only appears once there are approved, credited assets. */}
+      {(galleryImages.length > 0 || galleryVideos.length > 0) && (<>
       <div className="wrap"><div className="sec-divider" /></div>
 
       <section className="block">
@@ -216,9 +240,7 @@ export default function Media() {
                 </div>
               ))}
             </div>
-          ) : (
-            <p className="sponsor-note">No approved gallery photos yet.</p>
-          )}
+          ) : null}
           {galleryVideos.length > 0 && (
             <div className="blog-list-grid media-list" style={{ marginTop: 24 }}>
               {galleryVideos.map((item) => (
@@ -243,6 +265,7 @@ export default function Media() {
           )}
         </div>
       </section>
+      </>)}
 
       <div className="wrap"><div className="sec-divider" /></div>
 

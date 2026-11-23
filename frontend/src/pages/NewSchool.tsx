@@ -107,11 +107,10 @@ const firstPositive = (...values: Array<unknown>) => {
 }
 
 const getChallengeProgressPercent = (challenge: Record<string, any>, students: number, submissions: number) => {
-  if (students > 0 && submissions > 0) {
-    const ratio = Math.round((submissions / students) * 100)
-    if (Number.isFinite(ratio) && ratio > 0) return Math.min(100, ratio)
-  }
-
+  // Time elapsed between registration opening and the winners date. It used to flip to a
+  // submissions/students ratio once anyone submitted, which made one public number mean
+  // two different things (and read as an unexplained "47% momentum"). Now it is only the timeline.
+  void students; void submissions
   const start = parseCalendarDate(String(challenge.registration_open || '2026-06-27'))
   const end = parseCalendarDate(String(challenge.winners_announced || '2027-05-12'))
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end.getTime() <= start.getTime()) return 0
@@ -1402,13 +1401,15 @@ export default function NewSchool() {
     title: isDashboardRoute ? 'New School Dashboard' : '1st Annual Student Impact Challenge',
     description: isDashboardRoute
       ? 'Private role dashboard for approved students, parents, schools, teachers, and admins.'
-      : 'Leave It Better Than You Found It. Students interview local businesses, identify a community problem, build a solution, and compete for over $100,000 in cash, scholarships, school grants, and prizes.',
+      : 'Leave It Better Than You Found It. Ages 10-20, elementary school through college: interview 10 local people, choose one problem, propose a solution, and compete for scholarships and school grants. Entries close March 31, 2027.',
+    image: '/assets/challenge-poster.webp',
+    imageAlt: 'Student Impact Challenge poster',
     noindex: isDashboardRoute,
   })
 
   const accountApprovalStatus = (user?.approval_status || 'approved').toString()
   const hasApprovedChallengeAccess = !user || isAdminRole(user.role) || accountApprovalStatus === 'approved'
-  const dashboardHref = user ? resolveDashboardRoute(user.role) : '/new-school?register=student#registration'
+  const dashboardHref = user ? resolveDashboardRoute(user.role) : '/new-school'
 
   const showNotice = (tone: 'success' | 'error' | 'info', text: string) => {
     setNotice({ tone, text })
@@ -1625,6 +1626,12 @@ export default function NewSchool() {
       window.requestAnimationFrame(() => {
         document.getElementById('registration')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
       })
+      // Keyboard / screen-reader users land on the heading of the form that just opened.
+      const focusTimer = window.setTimeout(() => {
+        const heading = document.querySelector<HTMLElement>('#registration form:not([hidden]) .ns-form__head h3')
+        if (heading) { heading.setAttribute('tabindex', '-1'); heading.focus({ preventScroll: true }) }
+      }, 350)
+      return () => window.clearTimeout(focusTimer)
     }
   }, [location.search, isDashboardRoute])
 
@@ -2130,8 +2137,8 @@ export default function NewSchool() {
   const gradeRange = String(challenge.grade_range || 'Elementary–College')
   const totalAwardsLabel = String(challenge.total_awards_label || '$100,000')
   const awardHighlights = [
-    { amount: formatMoney(grantAmount), label: 'School Impact Grant', detail: '1st $15,000 · 2nd $7,500 · 3rd $2,500 — plus additional prizes.' },
-    { amount: `Up to ${formatMoney(scholarshipMax)}`, label: 'Student Scholarships', detail: '1st $5,000 · 2nd $3,000 · 3rd $2,000 — plus additional prizes.' },
+    { amount: `${formatMoney(grantAmount)} total`, label: 'School Impact Grants', detail: 'Split across three schools: 1st $15,000 · 2nd $7,500 · 3rd $2,500.' },
+    { amount: `${formatMoney(scholarshipMax)} total`, label: 'Student Scholarships', detail: 'Split across three students: 1st $5,000 · 2nd $3,000 · 3rd $2,000.' },
     { amount: educatorAwardLabel, label: 'Educator Award', detail: '1st place: an all-expense vacation for two — plus additional prizes.' },
   ]
   const timelineMilestones = (Array.isArray(challenge.timeline) && challenge.timeline.length)
@@ -2646,27 +2653,41 @@ export default function NewSchool() {
         </div>
         <div className="wrap ns-hero__grid-wrap">
           <div className="ns-hero__copy reveal">
-            <p className="eyebrow">Frantz Coutard Presents · 1st Annual</p>
+            <p className="eyebrow">Student Impact Challenge · 1st Annual</p>
             <h1 className="ns-hero__headline">
               <span className="ns-hero__headline-kicker">Student</span>
               <span className="ns-hero__headline-main gold-text">Impact Challenge</span>
             </h1>
             <p className="ns-hero__script">Leave It Better Than You Found It.</p>
             <p className="ns-lead">
-              {challenge.lead || `Students interview local businesses, solve a real community problem, and compete for over ${totalAwardsLabel} in scholarships, school grants, and recognition.`}
+              Ages {ageRange.replace('-', '–')}, elementary school through college. Solve a problem in your community.
             </p>
             <div className="ns-hero__register">
-              <span className="ns-hero__register-label">Get started — register as</span>
+              <span className="ns-hero__register-label">Start here</span>
               <div className="ns-hero__register-grid">
-                <button className="btn btn--solid" type="button" data-auth="register" data-role="student">Student</button>
-                <button className="btn" type="button" data-auth="register" data-role="parent">Parent</button>
-                <button className="btn" type="button" data-auth="register" data-role="school">School</button>
-                <button className="btn" type="button" data-auth="register" data-role="teacher">Teacher</button>
+                <button className="btn btn--solid" type="button" data-auth="register" data-role="student">Start as a Student</button>
+                <button className="btn" type="button" data-auth="register" data-role="parent">Give Parent Consent</button>
+                <button className="btn" type="button" data-auth="register" data-role="school">Register Your School</button>
+                <button className="btn" type="button" data-auth="register" data-role="teacher">Join as an Educator</button>
+                {!user && <button className="btn" type="button" data-auth="login">Sign In</button>}
               </div>
               <div className="ns-hero__links">
+                <Link className="ns-hero__how" to="/rules">See the rules and enter →</Link>
                 <a className="ns-hero__how" href="#workflow">See how it works ↓</a>
-                <a className="btn btn--sm" href="/docs/leave_it_better_media_kit_2026.pdf" download>⬇ Download Media Kit 2026</a>
               </div>
+            </div>
+            {/* Dates + the three steps, right under the entry buttons so nobody has to scroll past
+                prizes or sponsors to learn what to do and by when. */}
+            <div className="glass" style={{ padding: '16px 18px', marginTop: 18, maxWidth: 560 }}>
+              <strong className="gold-text">How it works</strong>
+              <ol style={{ margin: '8px 0 10px', paddingLeft: 20, lineHeight: 1.6 }}>
+                <li>Complete 10 interviews</li>
+                <li>Choose one problem</li>
+                <li>Submit your solution</li>
+              </ol>
+              <p style={{ margin: 0, fontSize: 14, color: 'var(--muted)' }}>
+                Entries close <strong>{formatLongDateLabel(challenge.deadline || '2027-03-31')}</strong> (11:59 PM Eastern) · Winners announced <strong>{winnersAnnouncedLabel}</strong>
+              </p>
             </div>
             {notice && <div className={`ns-alert ns-alert--${notice.tone}`}>{notice.text}</div>}
             {token && parentLink?.student && (
@@ -2742,7 +2763,7 @@ export default function NewSchool() {
         <div className="wrap">
           <div className="ns-section__head reveal">
             <span className="eyebrow">The Movement So Far</span>
-            <h2>Live challenge momentum, updated in real time.</h2>
+            <h2>Live challenge totals, updated in real time.</h2>
             <p>Schools, students, interviews, and community problems tracked as the movement grows across New York.</p>
           </div>
 
@@ -2760,8 +2781,8 @@ export default function NewSchool() {
               <span className="eyebrow">Live Snapshot</span>
               <div className="ns-snapshot__progress">
                 <div className="ns-award__head">
-                  <strong>Challenge Momentum</strong>
-                  <span>{challengeProgressPercent}%</span>
+                  <strong>Challenge timeline</strong>
+                  <span>{challengeProgressPercent}% of the season elapsed</span>
                 </div>
                 <div className="ns-award__bar">
                   <span style={{ width: `${challengeProgressPercent}%` }} />
@@ -2786,21 +2807,9 @@ export default function NewSchool() {
                   <span>{topSchool.submissions || 0} subs</span>
                 </div>
               )}
-              {topTeacher && (
-                <div className="ns-winner-row">
-                  <strong>Top Teacher</strong>
-                  <em>{topTeacher.label}</em>
-                  <span>{topTeacher.students || 0} students</span>
-                </div>
-              )}
-              {topStudent && (
-                <div className="ns-winner-row">
-                  <strong>Top Student</strong>
-                  <em>{topStudent.label}</em>
-                  <span>{topStudent.interview_count || 0} interviews</span>
-                </div>
-              )}
-              {!latestWinner && !topSchool && !topStudent && (
+              {/* No named "Top Teacher" / "Top Student" rows on the public page: children and
+                  teachers are shown only as anonymous ranks or aggregate counts. */}
+              {!latestWinner && !topSchool && (
                 <div className="ns-winner-row">
                   <strong>Current Status</strong>
                   <em>{liveSchools} schools - {liveStudents} students</em>
@@ -3075,9 +3084,18 @@ export default function NewSchool() {
               <p>Approved accounts can move from public information into live tracking, approvals, rankings, and private records from the dashboard.</p>
             </div>
             <div className="ns-hero__actions">
-              <Link className="btn btn--solid" to={dashboardHref}>Open Dashboard</Link>
-              <button className="btn" type="button" data-auth="login">Member Login</button>
+              {user ? (
+                <Link className="btn btn--solid" to={dashboardHref}>Open Dashboard</Link>
+              ) : (
+                <>
+                  {/* Signed out: a real sign-in (the login modal routes to the right dashboard
+                      for the account's role), not the student sign-up form. */}
+                  <button className="btn btn--solid" type="button" data-auth="login">Sign in to open your dashboard</button>
+                  <button className="btn" type="button" data-auth="register" data-role="student">New here? Register</button>
+                </>
+              )}
             </div>
+            {!user && <p className="ns-muted" style={{ margin: '12px 0 0', flexBasis: '100%' }}>Forgot your password? Choose “Sign in”, then “Forgot password?” to get a reset link by email.</p>}
           </div>
         </div>
       </section>
@@ -3484,9 +3502,20 @@ export default function NewSchool() {
                 <div className="ns-dashboard-callout">
                   <div className="ns-dashboard-callout__head">
                     <strong>Next milestone</strong>
-                    <span>{studentDashboard.can_submit ? 'Ready to submit' : 'Build momentum'}</span>
+                    <span>{(() => {
+                      // One explicit status, in plain words: submitted / ready / what is still pending.
+                      const st = studentDashboard.student || {}
+                      const sub = String(st.submission_status || '').toLowerCase()
+                      if (sub === 'submitted' || sub === 'complete') return 'Submitted'
+                      if (studentDashboard.can_submit) return 'Ready to submit'
+                      const pending: string[] = []
+                      if (Number(st.age) < 18 && String(st.parent_consent_status || '').toLowerCase() !== 'approved') pending.push('Consent pending')
+                      if (String(st.teacher_approval_status || '').toLowerCase() !== 'approved') pending.push('Teacher approval pending')
+                      if (Number(studentDashboard.interview_count || 0) < 10) pending.push(`Interviews ${Number(studentDashboard.interview_count || 0)}/10`)
+                      return pending.join(' · ') || 'In progress'
+                    })()}</span>
                   </div>
-                  <p>{studentDashboard.can_submit ? 'Your final submission is unlocked. Use the activity tab to send the project.' : 'Complete approvals and interviews to unlock the final project.'}</p>
+                  <p>{studentDashboard.can_submit ? 'Your final submission is unlocked. Use the activity tab to send the project.' : 'Final submission unlocks after your teacher approves you and you log 10 interviews. Under 18? Your parent/guardian also needs to give consent.'}</p>
                 </div>
                 <div className="ns-progress-block">
                   <div className="ns-progress-block__top">
@@ -3902,7 +3931,7 @@ export default function NewSchool() {
                     </div>
                     {!canStudentSubmit && (studentDashboard.submissions_open === false
                       ? <div className="ns-alert ns-alert--info">The challenge deadline has passed — final project submissions are closed.</div>
-                      : <div className="ns-alert ns-alert--info">Final submission stays locked until parent consent, teacher approval, and 10 business interviews are complete.</div>)}
+                      : <div className="ns-alert ns-alert--info">Final submission stays locked until your teacher approves you and you have logged 10 interviews. (Under 18? Your parent/guardian also needs to give consent.)</div>)}
                     <TermsAgreement kind="website" idPrefix="ns-submission" hideSignature signatureName="" onSignatureChange={() => {}} onAcceptedChange={setSubmissionTermsOk} />
                     <p className="ns-check-hint">Heads up — your final project can be submitted only once and can’t be edited afterward.</p>
                     <button className="btn btn--solid" type="submit" disabled={busy === 'submission' || !canStudentSubmit || !submissionTermsOk}>

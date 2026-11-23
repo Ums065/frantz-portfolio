@@ -33,6 +33,7 @@ const FoundingSponsors = lazy(() => import('./pages/FoundingSponsors'))
 const Media = lazy(() => import('./pages/Media'))
 const NewSchool = lazy(() => import('./pages/NewSchool'))
 const Winners = lazy(() => import('./pages/Winners'))
+const Rules = lazy(() => import('./pages/Rules'))
 const Profile = lazy(() => import('./pages/Profile'))
 const Projects = lazy(() => import('./pages/Projects'))
 const Resources = lazy(() => import('./pages/Resources'))
@@ -136,13 +137,16 @@ export default function App() {
           <Route path="/contact" element={<RoutedPage pageKey="contact"><Contact /></RoutedPage>} />
           <Route path="/resources" element={<RoutedPage pageKey="resources"><Resources /></RoutedPage>} />
 
-          <Route path="/become-a-founding-sponsor" element={<RoutedPage pageKey="become-a-founding-sponsor"><FoundingSponsor /></RoutedPage>} />
-          <Route path="/founding-sponsors" element={<RoutedPage pageKey="founding-sponsors"><FoundingSponsors /></RoutedPage>} />
+          {/* The sponsor pages are one program. /new-school/... is the canonical address; the
+              old top-level paths still work (printed kits link to them) and redirect. */}
+          <Route path="/become-a-founding-sponsor" element={<Navigate to="/new-school/become-a-founding-sponsor" replace />} />
+          <Route path="/founding-sponsors" element={<Navigate to="/new-school/founding-sponsors" replace />} />
           <Route path="/new-school" element={<RoutedPage pageKey="new-school"><NewSchool /></RoutedPage>} />
           {/* Short, printable entry points for flyers and QR codes. They land on the
               challenge page with that role's registration form already open. */}
           <Route path="/register" element={<RegisterShortcut />} />
           <Route path="/register/:role" element={<RegisterShortcut />} />
+          <Route path="/rules" element={<RoutedPage pageKey="rules"><Rules /></RoutedPage>} />
           <Route path="/winners" element={<RoutedPage pageKey="winners"><Winners /></RoutedPage>} />
           <Route path="/new-school/become-a-founding-sponsor" element={<RoutedPage pageKey="new-school-become-a-founding-sponsor"><FoundingSponsor /></RoutedPage>} />
           <Route path="/new-school/founding-sponsors" element={<RoutedPage pageKey="new-school-founding-sponsors"><FoundingSponsors /></RoutedPage>} />

@@ -530,6 +530,10 @@ function new_school_handle_route(string $method, string $route): bool
                     'age_range' => '10-20',
                     'grade_range' => 'Elementary–College',
                     'deadline' => ns_submission_deadline(),
+                    // The cutoff is the END of the deadline date on the New York clock (site_today()).
+                    'timezone' => site_timezone(),
+                    'cutoff_note' => 'Registration and final submissions close at 11:59 PM Eastern Time on the deadline date.',
+                    'rules_version' => 'SIC-2026-11-23',
                     'website' => 'FrantzCoutard.com',
                     'timeline' => ns_challenge_timeline(),
                     'submissions_open' => ns_submissions_open(),
@@ -565,7 +569,7 @@ function new_school_handle_route(string $method, string $route): bool
                 ],
                 'rules' => [
                     'Students must be ages 10-20.',
-                    'Parent or guardian consent is required.',
+                    'Students under 18 need a parent or guardian to give consent; students 18-20 register on their own.',
                     'Teacher approval must be complete before final submission.',
                     'A student must log 10 interviews with local businesses, government agencies or community leaders.',
                     'Every approval stores time, name, and digital signature.',
@@ -620,7 +624,7 @@ function new_school_handle_route(string $method, string $route): bool
                     : [];
 
                 $payload['summary'] = new_school_public_summary();
-                $payload['leaderboards'] = new_school_public_leaderboards();
+                $payload['leaderboards'] = new_school_public_leaderboards(true);
             } catch (Throwable $e) {
                 if (app_debug()) {
                     error_log('new-school overview fallback: ' . $e->getMessage());
@@ -882,10 +886,15 @@ function new_school_handle_route(string $method, string $route): bool
         }
 
         case preg_match('#^GET new-school/parent/([a-f0-9]+)$#i', $key, $m) === 1: {
+            // Unauthenticated: throttle token guessing, and answer a bad link with a helpful
+            // message that says nothing about any student.
+            rate_limit('ns_parent_link_lookup', 40, 3600);
             $student = new_school_fetch_student_by_token($m[1]);
             if (!$student) {
-                json(['error' => 'Invalid parent consent link.'], 404);
+                json(['error' => 'This consent link is not valid or is no longer active. Check that you copied the whole link, or ask the student for their student ID or a new link.'], 404);
             }
+            $nameParts = preg_split('/\s+/', trim((string) $student['full_name'])) ?: [];
+            $maskedName = count($nameParts) > 1 ? $nameParts[0] . ' ' . mb_substr((string) end($nameParts), 0, 1) . '.' : (string) ($nameParts[0] ?? '');
             $school = !empty($student['school_id'])
                 ? new_school_fetch_school_by_id((int) $student['school_id'])
                 : new_school_fetch_school_by_name((string) ($student['school_name'] ?? ''));
@@ -900,7 +909,7 @@ function new_school_handle_route(string $method, string $route): bool
                 'token' => $m[1],
                 'student' => [
                     'id' => (int) $student['id'],
-                    'full_name' => (string) $student['full_name'],
+                    'full_name' => $maskedName,
                     'participant_id' => (string) $student['participant_id'],
                     'qr_url' => (string) ($student['qr_url'] ?? ''),
                     'school_id' => (int) ($student['school_id'] ?? 0),
@@ -921,10 +930,9 @@ function new_school_handle_route(string $method, string $route): bool
                     'school_id' => (int) ($teacher['school_id'] ?? 0),
                     'status' => (string) $teacher['status'],
                 ] : null,
+                // A parent already linked? Say so (the link is used) without naming them.
                 'parent' => $existingParent ? [
                     'id' => (int) $existingParent['id'],
-                    'parent_full_name' => (string) ($existingParent['parent_full_name'] ?? ''),
-                    'relationship_to_student' => (string) ($existingParent['relationship_to_student'] ?? ''),
                     'link_status' => (string) ($existingParent['link_status'] ?? ''),
                 ] : null,
                 'status_tracker' => new_school_status_tracker($student, new_school_student_interview_count((int) $student['id'])),
@@ -966,9 +974,17 @@ function new_school_handle_route(string $method, string $route): bool
                 }
             }
 
+            // Anonymous callers only need to recognise their child: first name + last initial.
+            $displayName = (string) $student['full_name'];
+            if (!$authorized) {
+                $parts = preg_split('/\s+/', trim($displayName)) ?: [];
+                $displayName = count($parts) > 1
+                    ? $parts[0] . ' ' . mb_substr((string) end($parts), 0, 1) . '.'
+                    : (string) ($parts[0] ?? '');
+            }
             $payload = ['student' => [
                 'id' => (int) $student['id'],
-                'full_name' => (string) $student['full_name'],
+                'full_name' => $displayName,
                 'participant_id' => (string) $student['participant_id'],
             ]];
 
@@ -1062,12 +1078,7 @@ function new_school_handle_route(string $method, string $route): bool
             if ($phone === '' || $homeAddress === '' || $gradeLevel === '' || ($schoolId <= 0 && $schoolName === '')) {
                 json(['error' => 'Student contact and school details are required.'], 422);
             }
-            if ($parentName === '' || $parentPhone === '') {
-                json(['error' => 'Parent name and phone are required.'], 422);
-            }
             $phone = require_phone($phone, 'Student phone number');
-            $parentName = require_name_field($parentName, 'Parent / Guardian name', 3);
-            $parentPhone = require_phone($parentPhone, 'Parent phone number');
 
             $dateOfBirth = date_create($dob);
             if (!$dateOfBirth) {
@@ -1081,6 +1092,17 @@ function new_school_handle_route(string $method, string $route): bool
             if ($derivedAge < 10 || $derivedAge > 20) {
                 json(['error' => 'Date of birth does not match an eligible age (10-20).'], 422);
             }
+            $age = $derivedAge; // the date of birth is the truth, not a client-sent number
+
+            // Consent rule (one rule, form and server): under 18 needs a parent/guardian's
+            // contact and consent; 18-20 are adults who register on their own, so parent
+            // fields are optional for them (validated only if they chose to give them).
+            $isAdultStudent = $derivedAge >= 18;
+            if (!$isAdultStudent && ($parentName === '' || $parentPhone === '')) {
+                json(['error' => 'Parent name and phone are required for students under 18.'], 422);
+            }
+            if ($parentName !== '') $parentName = require_name_field($parentName, 'Parent / Guardian name', 3);
+            if ($parentPhone !== '') $parentPhone = require_phone($parentPhone, 'Parent phone number');
 
             $pdo = db();
             $registerMode = field($body, 'register_mode');
@@ -1235,10 +1257,12 @@ function new_school_handle_route(string $method, string $route): bool
                 'student',
                 'registration',
                 'Student registration complete',
-                'Your challenge profile is ready. Use the QR link to open the parent consent flow.',
+                $isAdultStudent
+                    ? 'Your challenge profile is ready. You are 18 or older, so no parent consent is needed. Next: your teacher approves you, then you complete your interviews.'
+                    : 'Your challenge profile is ready. Share the QR link or your student ID with your parent/guardian so they can give consent.',
                 ['participant_id' => $participantId, 'school_name' => $studentSchool, 'qr_url' => $qrUrl]
             );
-            new_school_add_notification(
+            if (!$isAdultStudent) new_school_add_notification(
                 $studentId,
                 'parent',
                 'registration',
@@ -1268,7 +1292,9 @@ function new_school_handle_route(string $method, string $route): bool
             record_registration_terms((int) $user['id'], $fullName, $email, 'student', field($body, 'terms_signature'), $body);
 
             json([
-                'message' => 'Student registration submitted for admin approval.',
+                'message' => $isAdultStudent
+                    ? 'Your profile is ready. You are 18 or older, so no parent consent is needed. Next: your teacher approves you.'
+                    : 'Your profile is ready. Your student ID is ' . $participantId . ' — give it (or your QR link, in your dashboard) to your parent/guardian so they can give consent.',
                 'user' => login_user($user),
                 'student' => $student,
                 'qr_token' => $qrToken,
@@ -1302,7 +1328,8 @@ function new_school_handle_route(string $method, string $route): bool
                 json(['error' => 'Student unique platform ID or QR token is required.'], 422);
             }
             if (!$student) json(['error' => 'Student not found.'], 404);
-            if ($relationship === '' || $phone === '' || $homeAddress === '' || $signature === '') {
+            $governmentIdUrl = ''; // no longer collected: not needed for consent (data minimisation)
+            if ($relationship === '' || $phone === '' || $signature === '') {
                 json(['error' => 'Parent consent form is incomplete.'], 422);
             }
             $phone = require_phone($phone, 'Phone number');
@@ -2825,21 +2852,31 @@ function new_school_handle_route(string $method, string $route): bool
                         expected_impact, video_url, written_url, ai_note, ai_url, community_note, community_url, submission_date, status
                      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), "submitted")'
                 );
-                $insert->execute([
-                    (int) $student['id'],
-                    $sourceBusinessId > 0 ? $sourceBusinessId : null,
-                    $problemIdentified,
-                    $whyItMatters,
-                    $proposedSolution,
-                    $howItHelps,
-                    $expectedImpact,
-                    $videoUrl,
-                    $writtenUrl,
-                    $aiNote !== '' ? $aiNote : null,
-                    $aiUrl !== '' ? $aiUrl : null,
-                    $communityNote !== '' ? $communityNote : null,
-                    $communityUrl !== '' ? $communityUrl : null,
-                ]);
+                try {
+                    $insert->execute([
+                        (int) $student['id'],
+                        $sourceBusinessId > 0 ? $sourceBusinessId : null,
+                        $problemIdentified,
+                        $whyItMatters,
+                        $proposedSolution,
+                        $howItHelps,
+                        $expectedImpact,
+                        $videoUrl,
+                        $writtenUrl,
+                        $aiNote !== '' ? $aiNote : null,
+                        $aiUrl !== '' ? $aiUrl : null,
+                        $communityNote !== '' ? $communityNote : null,
+                        $communityUrl !== '' ? $communityUrl : null,
+                    ]);
+                } catch (PDOException $e) {
+                    // A double-click / retry racing the first request: student_id is UNIQUE, so the
+                    // database refuses the second row. Answer like the normal "already submitted"
+                    // case instead of a 500, and never create a duplicate entry.
+                    if ((string) $e->getCode() === '23000') {
+                        json(['error' => 'You have already submitted your final project. Submissions are one-time only and cannot be changed.'], 409);
+                    }
+                    throw $e;
+                }
                 $submissionId = (int) $pdo->lastInsertId();
             }
 

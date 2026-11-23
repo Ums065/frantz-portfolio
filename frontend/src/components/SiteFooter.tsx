@@ -62,6 +62,8 @@ export default function SiteFooter() {
         </div>
 
         <nav className="footer__legal" aria-label="Legal">
+          <Link to="/rules">Official Rules</Link>
+          <span aria-hidden="true">|</span>
           <Link to="/terms">Terms of Use</Link>
           <span aria-hidden="true">|</span>
           <Link to="/privacy">Privacy Notice</Link>

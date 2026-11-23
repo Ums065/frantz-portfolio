@@ -38,8 +38,7 @@ const API = (process.env.PRERENDER_API || 'http://localhost/frantz-portfolio/api
 const STATIC_ROUTES = [
   '/', '/about', '/projects', '/awards', '/events', '/blog', '/winners',
   '/resources', '/partner', '/media', '/store', '/contact', '/donate', '/careers',
-  '/become-a-founding-sponsor', '/founding-sponsors',
-  '/new-school', '/new-school/become-a-founding-sponsor', '/new-school/founding-sponsors', '/terms', '/privacy', '/content-disclaimer',
+  '/new-school', '/rules', '/new-school/become-a-founding-sponsor', '/new-school/founding-sponsors', '/terms', '/privacy', '/content-disclaimer',
 ]
 
 const MIME = {

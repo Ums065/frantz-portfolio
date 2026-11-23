@@ -3485,7 +3485,7 @@ function ns_auto_release_due(): void
 {
     try {
         new_school_workflow_ensure_schema();
-        if (date('Y-m-d') <= ns_submission_deadline()) return; // only after the deadline (judging phase)
+        if (site_today() <= ns_submission_deadline()) return; // only after the deadline (judging phase)
         $pdo = db();
         $schools = $pdo->query(
             "SELECT DISTINCT s.school_id
@@ -3528,7 +3528,7 @@ function ns_submissions_open(): bool
         return false;
     }
     // auto: today must fall within [open date, deadline] inclusive (YYYY-MM-DD compares lexically).
-    $today = date('Y-m-d');
+    $today = site_today();
     return $today >= ns_submission_open_date() && $today <= ns_submission_deadline();
 }
 
@@ -3544,7 +3544,7 @@ function ns_challenge_phase(): string
     if (ns_winners_published()) {
         return 'results';
     }
-    if (date('Y-m-d') > ns_submission_deadline()) {
+    if (site_today() > ns_submission_deadline()) {
         return 'judging';
     }
     return 'challenge';
@@ -3676,7 +3676,7 @@ function partner_seed_defaults(): void
         partner_setting_set('cta_title', 'Stronger Together');
         partner_setting_set('cta_text', 'Join the growing network of organizations that are helping us create opportunities, inspire students, and build stronger communities.');
         partner_setting_set('cta_button_label', 'Partner With Us');
-        partner_setting_set('cta_button_link', '/become-a-founding-sponsor');
+        partner_setting_set('cta_button_link', '/new-school/become-a-founding-sponsor');
     }
 }
 
@@ -3696,7 +3696,7 @@ function partner_page_payload(): array
             'title' => partner_setting_get('cta_title', 'Partner With Us'),
             'text' => partner_setting_get('cta_text', ''),
             'button_label' => partner_setting_get('cta_button_label', 'Become a Partner'),
-            'button_link' => partner_setting_get('cta_button_link', '/become-a-founding-sponsor'),
+            'button_link' => partner_setting_get('cta_button_link', '/new-school/become-a-founding-sponsor'),
         ],
     ];
 }
@@ -9051,7 +9051,12 @@ function new_school_fetch_students_for_teacher(array $teacher): array
     return $stmt->fetchAll();
 }
 
-function new_school_public_leaderboards(): array
+/**
+ * Top-10 boards. $anonymize = true is the signed-out public view: it never carries a
+ * child's or a teacher's name (or the principal's) - only an anonymous rank label, the
+ * school (an institution) and the counts. Signed-in dashboards keep the named rows.
+ */
+function new_school_public_leaderboards(bool $anonymize = false): array
 {
     $students = db()->query(
         'SELECT s.id, s.full_name AS label, s.grade_level, s.teacher_id, s.school_id, s.parent_consent_status, s.school_approval_status,
@@ -9067,7 +9072,7 @@ function new_school_public_leaderboards(): array
     )->fetchAll();
     $students = array_slice(new_school_rank_students($students), 0, 10);
 
-    return [
+    $boards = [
         'schools' => db()->query(
             'SELECT sc.id, sc.school_name AS label, sc.principal_name,
                     COUNT(DISTINCT st.id) AS students,
@@ -9099,6 +9104,35 @@ function new_school_public_leaderboards(): array
         )->fetchAll(),
         'students' => $students,
     ];
+
+    if ($anonymize) {
+        $anonStudents = [];
+        foreach ($boards['students'] as $i => $r) {
+            $anonStudents[] = [
+                'id' => (int) ($r['id'] ?? 0),
+                'label' => 'Student #' . ($i + 1),
+                'school_name' => $r['school_name'] ?? null,
+                'rank_position' => $r['rank_position'] ?? ($i + 1),
+                'final_score' => $r['final_score'] ?? null,
+                'student_points' => $r['student_points'] ?? null,
+                'interview_count' => (int) ($r['interview_count'] ?? 0),
+            ];
+        }
+        $boards['students'] = $anonStudents;
+        $boards['teachers'] = array_map(static fn(array $r, int $i): array => [
+            'id' => (int) ($r['id'] ?? 0),
+            'label' => 'Teacher #' . ($i + 1),
+            'school_name' => $r['school_name'] ?? null,
+            'students' => (int) ($r['students'] ?? 0),
+            'submissions' => (int) ($r['submissions'] ?? 0),
+        ], $boards['teachers'], array_keys($boards['teachers']));
+        $boards['schools'] = array_map(static function (array $r): array {
+            unset($r['principal_name']);
+            return $r;
+        }, $boards['schools']);
+    }
+
+    return $boards;
 }
 
 function new_school_fetch_winner_by_student_id(int $studentId): ?array
